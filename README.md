@@ -36,11 +36,13 @@ O projeto `ViverApp.Api` possui um `UserSecretsId`. Foram transferidas para o ar
 - `PagBank:SandboxUrl`;
 - `PagBank:TokenSandbox`;
 - `PagBank:ProductionUrl`;
-- `PagBank:TokenProduction`.
+- `PagBank:TokenProduction`;
+- `SmsBarato:ApiKey` e `SmsBarato:BaseUrl`;
+- `Smtp:Host`, `Smtp:Port`, `Smtp:User` e `Smtp:Password`.
 
 As connection strings de Azure não foram copiadas. Nenhum valor secreto deve ser incluído no repositório, em exemplos, logs, testes ou documentação.
 
-O banco legado `viverappmobile` será somente leitura. A aplicação web usará um banco novo chamado `viverappweb`, governado por migrations SQL e consumido pelo EF Core em abordagem DB-First. A criação desse banco pertence à Fase 2 e não foi antecipada nesta fundação.
+O banco legado `viverappmobile` é somente leitura. A aplicação web usa o banco novo `viverappweb`, criado na Fase 2 e governado por migrations SQL antes do scaffold DB-First. As migrations `0001`, `0002` e `0003` estão aplicadas e o modelo EF foi gerado exclusivamente desse schema.
 
 Para conferir somente os nomes configurados, sem compartilhar valores:
 
@@ -50,4 +52,4 @@ dotnet user-secrets list --project src/ViverApp.Api/ViverApp.Api.csproj
 
 ## Estado atual
 
-A Fase 1 está documentada no [índice de descoberta](docs/fase-01/README.md). O próximo passo possível é revisar e aprovar essas decisões. A Fase 2 não deve começar na mesma branch nem sem uma solicitação explícita.
+As Fases 1 e 2 estão concluídas e documentadas nos respectivos índices: [descoberta e arquitetura](docs/fase-01/README.md) e [persistência DB-First](docs/fase-02/README.md).

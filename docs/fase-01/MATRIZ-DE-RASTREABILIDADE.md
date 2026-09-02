@@ -6,12 +6,12 @@ Esta matriz registra intenção funcional. “Redesenhar” significa preservar 
 |---|---|---|---|---:|---|
 | MAP-001 | Login/Register MAUI + `AuthController` | login por e-mail/telefone | Identidade | 4 | Redesenhar |
 | MAP-002 | `AuthController` | senha AES/ECB reversível | Identidade | 4 | Substituir por hash e migrador temporário |
-| MAP-003 | `AuthController` | confirmação por e-mail/SMS | Identidade + Comunicação | 4/11 | Manter somente e-mail; redesenhar com token único |
+| MAP-003 | `AuthController` | confirmação por e-mail/SMS | Identidade + Comunicação | 4/11 | Manter ambos; redesenhar com token único, hash e uso único |
 | MAP-004 | `AuthController` | refresh JWT persistido | Sessões | 4 | Substituir por cookie/BFF e sessões revogáveis |
 | MAP-005 | Requisito do proprietário | login Google | Identidade | 4 | Implementar; legado permitido não contém evidência |
 | MAP-006 | `UserController` | usuários e aprovação | Perfis + Administração | 4/5/14 | Separar conta, perfil, papel e workflow |
 | MAP-007 | `DoctorPropsController` | CRM/título/especialidade/limites | Profissionais | 5 | Redesenhar |
-| MAP-008 | `ClinicController` | clínica e endereço | Clínicas | 5 | Manter conceito, remover premissa de ID fixo |
+| MAP-008 | `ClinicController` | clínica e endereço | Clínica | 5 | Redesenhar como cadastro singleton da clínica única |
 | MAP-009 | `AppointmentController` | serviço, tipo, duração, preço, online | Catálogo | 5 | Renomear e normalizar |
 | MAP-010 | `SpecialtysDoctorController` | serviço/especialidade por médico | Profissionais + Catálogo | 5 | Redesenhar relação |
 | MAP-011 | `AvailabilityClinicController` | agenda recorrente da clínica | Disponibilidade | 5/7 | Redesenhar com timezone/constraints |
@@ -31,7 +31,7 @@ Esta matriz registra intenção funcional. “Redesenhar” significa preservar 
 | MAP-025 | `ScheduleAttachmentsController` | anexos no B2 | Documentos | 10 | Migrar para R2 privado |
 | MAP-026 | `B2StorageService` | nomes públicos e credenciais em código | Documentos | 10 | Descartar implementação e rotacionar segredo |
 | MAP-027 | `EmailWorker` | fila SMTP por polling | Comunicação | 11 | Hosted service + outbox/delivery |
-| MAP-028 | `SmsWorker` | fila SMS | Comunicação | — | Remover; SMS não faz parte do novo produto |
+| MAP-028 | `SmsWorker` | fila SMS | Comunicação | 11 | Manter via SMSBarato com outbox, claim atômico e idempotência |
 | MAP-029 | `NotificationWorker` | Firebase push | Comunicação | — | Remover; Firebase/push não fazem parte do novo produto |
 | MAP-030 | `NotificationController` | caixa/notificações por CRUD | Comunicação | 11 | Separar comando, entrega e leitura |
 | MAP-031 | `VideoHub` | sinalização WebRTC anônima | Vídeo | 12 | Reimplementar autenticado na API |
@@ -50,7 +50,7 @@ Esta matriz registra intenção funcional. “Redesenhar” significa preservar 
 | Módulo novo | Itens da matriz |
 |---|---|
 | Identidade e Acesso | MAP-001 a MAP-006 |
-| Clínicas, Catálogo e Profissionais | MAP-007 a MAP-014, MAP-038 |
+| Clínica, Catálogo e Profissionais | MAP-007 a MAP-014, MAP-038 |
 | Agendamentos e Encontro Clínico | MAP-015 a MAP-020, MAP-039 |
 | Pagamentos e Benefícios | MAP-021 a MAP-024, MAP-040 |
 | Documentos | MAP-024 a MAP-026 |

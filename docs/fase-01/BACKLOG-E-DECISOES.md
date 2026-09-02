@@ -29,9 +29,9 @@
 | DEC-001 | Resolvida: legado `viverappmobile`; novo `viverappweb` | confirmado pelo proprietário | resolvida em 2026-09-02 |
 | DEC-002 | Qual será a estratégia de convivência com o MAUI? | define compatibilidade de API e cutover | Fase 1/antes da 5 |
 | DEC-003 | Onde estão configuração e comportamento do login Google atual? | não aparecem nas fontes permitidas | antes da Fase 4 |
-| DEC-004 | Uma pessoa pode ter múltiplos papéis? | afeta identidade, CPF, UX e schema | antes da Fase 2 |
-| DEC-005 | O sistema continuará com uma clínica ou será multi-clínica? | legado usa frequentemente clínica ID 1 | antes da Fase 2 |
-| DEC-006 | A quais clínicas cada gestor/médico pertence? | autorização e isolamento dependem disso | antes da Fase 2 |
+| DEC-004 | Resolvida: cada conta possui exatamente um papel | confirmado pelo proprietário | resolvida em 2026-09-02 |
+| DEC-005 | Resolvida: o sistema atende exatamente uma clínica | confirmado pelo proprietário | resolvida em 2026-09-02 |
+| DEC-006 | Resolvida: médicos e gestores pertencem à clínica única | não haverá vínculo multiclínica | resolvida em 2026-09-02 |
 | DEC-007 | Quem pode criar/editar paciente e relatório médico? | risco de takeover e sigilo profissional | antes das Fases 4/8 |
 | DEC-008 | Premium é vitalício, assinatura ou revalidação periódica? | afeta schema, preço e PagBank | antes da Fase 2/13 |
 | DEC-009 | Quais regras exatas de cancelamento, reagendamento e no-show? | máquina de estados e financeiro | antes da Fase 7 |
@@ -51,7 +51,7 @@
 - SignalR dentro da API e WebRTC no browser;
 - Blazor Interactive Server com autenticação de servidor/cookie;
 - MySQL 8.0.41 e EF DB-First a partir de `viverappweb`;
-- somente e-mail como canal externo; SMS, Firebase e push serão removidos;
+- e-mail e SMSBarato como canais externos; Firebase e push serão removidos;
 - migrations SQL versionadas antes do scaffold;
 - outbox/inbox para efeitos externos;
 - Cloudflare R2 privado para documentos e CDN apenas para conteúdo público;

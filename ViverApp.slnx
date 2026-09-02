@@ -3,4 +3,10 @@
     <Project Path="src/ViverApp.Api/ViverApp.Api.csproj" />
     <Project Path="src/ViverApp.Web/ViverApp.Web.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/ViverApp.Database/ViverApp.Database.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ViverApp.Persistence.IntegrationTests/ViverApp.Persistence.IntegrationTests.csproj" />
+  </Folder>
 </Solution>

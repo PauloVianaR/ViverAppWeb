@@ -1,0 +1,108 @@
+[CmdletBinding()]
+param(
+    [switch]$NoBuild
+)
+
+$ErrorActionPreference = 'Stop'
+$repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\', '/')
+$projectPath = Join-Path $repositoryRoot 'src\ViverApp.Api\ViverApp.Api.csproj'
+$generatedRoot = [IO.Path]::GetFullPath(
+    (Join-Path $repositoryRoot 'src\ViverApp.Api\Infrastructure\Persistence\Generated'))
+$stagingRoot = [IO.Path]::GetFullPath(
+    (Join-Path $repositoryRoot 'src\ViverApp.Api\Infrastructure\Persistence\.ScaffoldStaging'))
+$expectedPrefix = [IO.Path]::GetFullPath(
+    (Join-Path $repositoryRoot 'src\ViverApp.Api\Infrastructure\Persistence')) + [IO.Path]::DirectorySeparatorChar
+
+foreach ($safePath in @($generatedRoot, $stagingRoot)) {
+    if (-not $safePath.StartsWith($expectedPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Um diretório de scaffold foi resolvido fora de Infrastructure/Persistence.'
+    }
+}
+
+if (Test-Path -LiteralPath $stagingRoot) {
+    Remove-Item -LiteralPath $stagingRoot -Recurse -Force
+}
+
+$tables = @(
+    'roles',
+    'clinic',
+    'accounts',
+    'account_addresses',
+    'external_logins',
+    'auth_sessions',
+    'account_challenges',
+    'patient_profiles',
+    'doctor_profiles',
+    'specialties',
+    'doctor_specialties',
+    'appointment_types',
+    'clinic_weekly_hours',
+    'doctor_weekly_hours',
+    'holidays',
+    'appointments',
+    'appointment_documents',
+    'payments',
+    'premium_plans',
+    'premium_memberships',
+    'outbox_messages',
+    'audit_events',
+    'application_settings',
+    'idempotency_records'
+)
+
+$arguments = @(
+    'tool', 'run', 'dotnet-ef', '--',
+    'dbcontext', 'scaffold',
+    'Name=ConnectionStrings:LocalConnection',
+    'MySql.EntityFrameworkCore',
+    '--project', $projectPath,
+    '--startup-project', $projectPath,
+    '--configuration', 'Release',
+    '--context', 'ViverAppDbContext',
+    '--context-dir', 'Infrastructure/Persistence/.ScaffoldStaging',
+    '--output-dir', 'Infrastructure/Persistence/.ScaffoldStaging/Entities',
+    '--namespace', 'ViverApp.Api.Infrastructure.Persistence.Generated.Entities',
+    '--context-namespace', 'ViverApp.Api.Infrastructure.Persistence.Generated',
+    '--no-onconfiguring',
+    '--force'
+)
+
+if ($NoBuild) {
+    $arguments += '--no-build'
+}
+
+foreach ($table in $tables) {
+    $arguments += @('--table', $table)
+}
+
+Push-Location $repositoryRoot
+try {
+    & dotnet @arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "O scaffold DB-First falhou com exit code $LASTEXITCODE."
+    }
+
+    $stagedContext = Join-Path $stagingRoot 'ViverAppDbContext.cs'
+    $stagedEntities = Join-Path $stagingRoot 'Entities'
+    if (-not (Test-Path -LiteralPath $stagedContext -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $stagedEntities -PathType Container)) {
+        throw 'O scaffold terminou sem gerar o contexto e as entidades esperadas.'
+    }
+
+    $entityCount = (Get-ChildItem -LiteralPath $stagedEntities -Filter '*.cs' -File).Count
+    if ($entityCount -ne $tables.Count) {
+        throw "O scaffold gerou $entityCount entidades; eram esperadas $($tables.Count)."
+    }
+
+    if (Test-Path -LiteralPath $generatedRoot) {
+        Remove-Item -LiteralPath $generatedRoot -Recurse -Force
+    }
+
+    Move-Item -LiteralPath $stagingRoot -Destination $generatedRoot
+}
+finally {
+    Pop-Location
+    if (Test-Path -LiteralPath $stagingRoot) {
+        Remove-Item -LiteralPath $stagingRoot -Recurse -Force
+    }
+}

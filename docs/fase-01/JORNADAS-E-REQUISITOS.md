@@ -10,7 +10,7 @@
 | Gestor | operar agenda/pacientes/pagamentos em nome da clínica dentro de seu escopo |
 | Administrador | aprovar cadastros, configurar operação, auditar e acompanhar indicadores |
 | PagBank | hospedar checkout e notificar mudanças financeiras |
-| Provedor de e-mail | entregar mensagens transacionais por SMTP/API de e-mail |
+| Provedores de comunicação | entregar mensagens transacionais por e-mail e SMSBarato |
 | Cloudflare R2/CDN | armazenar e entregar objetos conforme sua classificação |
 
 ## 2. Jornada de acesso
@@ -84,12 +84,12 @@
 
 ## 5. Jornada do gestor
 
-O legado mostra capacidades próximas às do médico e algumas administrativas: gerir pacientes, criar agendamentos, cancelar/reagendar e confirmar pagamento presencial. O vínculo entre gestor e clínica não está modelado de forma clara.
+O legado mostra capacidades próximas às do médico e algumas administrativas: gerir pacientes, criar agendamentos, cancelar/reagendar e confirmar pagamento presencial. No novo produto, todo gestor pertence implicitamente à clínica única.
 
 | ID | Requisito |
 |---|---|
-| MGR-001 | Todo gestor deve possuir escopo explícito de uma ou mais clínicas. |
-| MGR-002 | Acesso a pacientes, médicos, agendas e pagamentos deve ser filtrado pelo escopo. |
+| MGR-001 | Todo gestor deve possuir exatamente o papel Gestor e operar somente na clínica única. |
+| MGR-002 | Acesso a pacientes, médicos, agendas e pagamentos deve ser filtrado por papel, ownership e vínculo profissional/paciente. |
 | MGR-003 | Criação/edição de paciente em nome da clínica deve ser auditada e evitar takeover. |
 | MGR-004 | Confirmação de pagamento presencial exige permissão específica e trilha financeira. |
 | MGR-005 | Ações clínicas sensíveis que pertencem somente ao médico devem ser separadas por política. |
@@ -178,7 +178,7 @@ stateDiagram-v2
 ## 8. Regras descobertas que precisam de confirmação
 
 - e-mail e telefone parecem únicos globalmente; CPF parece único por tipo de usuário;
-- conta pode ter somente um `usertype`, embora uma pessoa possa precisar de múltiplos papéis;
+- cada conta terá exatamente um papel entre Paciente, Médico, Gestor e Administrador;
 - pacientes criam agendamento pendente, enquanto médico/gestor criam confirmado;
 - pagamentos presenciais podem ser confirmados por gestor/admin;
 - premium aparenta ser vitalício quando aprovado;

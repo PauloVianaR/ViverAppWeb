@@ -1,0 +1,71 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
+
+public partial class Account
+{
+    public ulong Id { get; set; }
+
+    public string RoleCode { get; set; } = null!;
+
+    public string StatusCode { get; set; } = null!;
+
+    public string FullName { get; set; } = null!;
+
+    public string? Email { get; set; }
+
+    public string? NormalizedEmail { get; set; }
+
+    public string? PhoneE164 { get; set; }
+
+    public string? PasswordHash { get; set; }
+
+    public bool EmailVerified { get; set; }
+
+    public bool PhoneVerified { get; set; }
+
+    public string? PreferredRecoveryChannel { get; set; }
+
+    public byte[] SecurityStamp { get; set; } = null!;
+
+    public ushort FailedLoginCount { get; set; }
+
+    public DateTime? LockoutEndUtc { get; set; }
+
+    public DateTime? LastLoginAtUtc { get; set; }
+
+    public DateTime CreatedAtUtc { get; set; }
+
+    public DateTime UpdatedAtUtc { get; set; }
+
+    public ulong RowVersion { get; set; }
+
+    public virtual AccountAddress? AccountAddress { get; set; }
+
+    public virtual ICollection<AccountChallenge> AccountChallenges { get; set; } = new List<AccountChallenge>();
+
+    public virtual ICollection<ApplicationSetting> ApplicationSettings { get; set; } = new List<ApplicationSetting>();
+
+    public virtual ICollection<Appointment> AppointmentCanceledByAccounts { get; set; } = new List<Appointment>();
+
+    public virtual ICollection<Appointment> AppointmentCreatedByAccounts { get; set; } = new List<Appointment>();
+
+    public virtual ICollection<AppointmentDocument> AppointmentDocuments { get; set; } = new List<AppointmentDocument>();
+
+    public virtual ICollection<Appointment> AppointmentPatientAccounts { get; set; } = new List<Appointment>();
+
+    public virtual ICollection<AuditEvent> AuditEvents { get; set; } = new List<AuditEvent>();
+
+    public virtual ICollection<AuthSession> AuthSessions { get; set; } = new List<AuthSession>();
+
+    public virtual DoctorProfile? DoctorProfile { get; set; }
+
+    public virtual ICollection<ExternalLogin> ExternalLogins { get; set; } = new List<ExternalLogin>();
+
+    public virtual PatientProfile? PatientProfile { get; set; }
+
+    public virtual ICollection<PremiumMembership> PremiumMemberships { get; set; } = new List<PremiumMembership>();
+
+    public virtual Role RoleCodeNavigation { get; set; } = null!;
+}

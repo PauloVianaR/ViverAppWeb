@@ -1,0 +1,988 @@
+﻿using System;
+using System.Collections.Generic;
+using Microsoft.EntityFrameworkCore;
+using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
+
+namespace ViverApp.Api.Infrastructure.Persistence.Generated;
+
+public partial class ViverAppDbContext : DbContext
+{
+    public ViverAppDbContext(DbContextOptions<ViverAppDbContext> options)
+        : base(options)
+    {
+    }
+
+    public virtual DbSet<Account> Accounts { get; set; }
+
+    public virtual DbSet<AccountAddress> AccountAddresses { get; set; }
+
+    public virtual DbSet<AccountChallenge> AccountChallenges { get; set; }
+
+    public virtual DbSet<ApplicationSetting> ApplicationSettings { get; set; }
+
+    public virtual DbSet<Appointment> Appointments { get; set; }
+
+    public virtual DbSet<AppointmentDocument> AppointmentDocuments { get; set; }
+
+    public virtual DbSet<AppointmentType> AppointmentTypes { get; set; }
+
+    public virtual DbSet<AuditEvent> AuditEvents { get; set; }
+
+    public virtual DbSet<AuthSession> AuthSessions { get; set; }
+
+    public virtual DbSet<Clinic> Clinics { get; set; }
+
+    public virtual DbSet<ClinicWeeklyHour> ClinicWeeklyHours { get; set; }
+
+    public virtual DbSet<DoctorProfile> DoctorProfiles { get; set; }
+
+    public virtual DbSet<DoctorSpecialty> DoctorSpecialties { get; set; }
+
+    public virtual DbSet<DoctorWeeklyHour> DoctorWeeklyHours { get; set; }
+
+    public virtual DbSet<ExternalLogin> ExternalLogins { get; set; }
+
+    public virtual DbSet<Holiday> Holidays { get; set; }
+
+    public virtual DbSet<IdempotencyRecord> IdempotencyRecords { get; set; }
+
+    public virtual DbSet<OutboxMessage> OutboxMessages { get; set; }
+
+    public virtual DbSet<PatientProfile> PatientProfiles { get; set; }
+
+    public virtual DbSet<Payment> Payments { get; set; }
+
+    public virtual DbSet<PremiumMembership> PremiumMemberships { get; set; }
+
+    public virtual DbSet<PremiumPlan> PremiumPlans { get; set; }
+
+    public virtual DbSet<Role> Roles { get; set; }
+
+    public virtual DbSet<Specialty> Specialties { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Account>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("accounts");
+
+            entity.HasIndex(e => new { e.RoleCode, e.StatusCode }, "ix_accounts_role_status");
+
+            entity.HasIndex(e => e.NormalizedEmail, "ux_accounts_normalized_email").IsUnique();
+
+            entity.HasIndex(e => e.PhoneE164, "ux_accounts_phone_e164").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.Email)
+                .HasMaxLength(254)
+                .HasColumnName("email");
+            entity.Property(e => e.EmailVerified).HasColumnName("email_verified");
+            entity.Property(e => e.FailedLoginCount).HasColumnName("failed_login_count");
+            entity.Property(e => e.FullName)
+                .HasMaxLength(200)
+                .HasColumnName("full_name");
+            entity.Property(e => e.LastLoginAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("last_login_at_utc");
+            entity.Property(e => e.LockoutEndUtc)
+                .HasMaxLength(6)
+                .HasColumnName("lockout_end_utc");
+            entity.Property(e => e.NormalizedEmail)
+                .HasMaxLength(254)
+                .HasColumnName("normalized_email");
+            entity.Property(e => e.PasswordHash)
+                .HasMaxLength(512)
+                .HasColumnName("password_hash");
+            entity.Property(e => e.PhoneE164)
+                .HasMaxLength(16)
+                .HasColumnName("phone_e164");
+            entity.Property(e => e.PhoneVerified).HasColumnName("phone_verified");
+            entity.Property(e => e.PreferredRecoveryChannel)
+                .HasMaxLength(10)
+                .HasColumnName("preferred_recovery_channel");
+            entity.Property(e => e.RoleCode)
+                .HasMaxLength(20)
+                .HasColumnName("role_code");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.SecurityStamp)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("security_stamp");
+            entity.Property(e => e.StatusCode)
+                .HasMaxLength(30)
+                .HasDefaultValueSql("'pending_confirmation'")
+                .HasColumnName("status_code");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.RoleCodeNavigation).WithMany(p => p.Accounts)
+                .HasForeignKey(d => d.RoleCode)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_accounts_role");
+        });
+
+        modelBuilder.Entity<AccountAddress>(entity =>
+        {
+            entity.HasKey(e => e.AccountId).HasName("PRIMARY");
+
+            entity.ToTable("account_addresses");
+
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.City)
+                .HasMaxLength(100)
+                .HasColumnName("city");
+            entity.Property(e => e.Complement)
+                .HasMaxLength(100)
+                .HasColumnName("complement");
+            entity.Property(e => e.District)
+                .HasMaxLength(100)
+                .HasColumnName("district");
+            entity.Property(e => e.Number)
+                .HasMaxLength(20)
+                .HasColumnName("number");
+            entity.Property(e => e.PostalCode)
+                .HasMaxLength(8)
+                .IsFixedLength()
+                .HasColumnName("postal_code");
+            entity.Property(e => e.StateCode)
+                .HasMaxLength(2)
+                .IsFixedLength()
+                .HasColumnName("state_code");
+            entity.Property(e => e.Street)
+                .HasMaxLength(200)
+                .HasColumnName("street");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.Account).WithOne(p => p.AccountAddress)
+                .HasForeignKey<AccountAddress>(d => d.AccountId)
+                .HasConstraintName("fk_account_addresses_account");
+        });
+
+        modelBuilder.Entity<AccountChallenge>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("account_challenges");
+
+            entity.HasIndex(e => new { e.AccountId, e.PurposeCode, e.CreatedAtUtc }, "ix_account_challenges_account_purpose");
+
+            entity.Property(e => e.Id)
+                .HasMaxLength(16)
+                .IsFixedLength()
+                .HasColumnName("id");
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.AttemptCount).HasColumnName("attempt_count");
+            entity.Property(e => e.ChannelCode)
+                .HasMaxLength(10)
+                .HasColumnName("channel_code");
+            entity.Property(e => e.ConsumedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("consumed_at_utc");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.DestinationHash)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("destination_hash");
+            entity.Property(e => e.ExpiresAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("expires_at_utc");
+            entity.Property(e => e.MaxAttempts)
+                .HasDefaultValueSql("'5'")
+                .HasColumnName("max_attempts");
+            entity.Property(e => e.PurposeCode)
+                .HasMaxLength(30)
+                .HasColumnName("purpose_code");
+            entity.Property(e => e.SecretHash)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("secret_hash");
+
+            entity.HasOne(d => d.Account).WithMany(p => p.AccountChallenges)
+                .HasForeignKey(d => d.AccountId)
+                .HasConstraintName("fk_account_challenges_account");
+        });
+
+        modelBuilder.Entity<ApplicationSetting>(entity =>
+        {
+            entity.HasKey(e => e.SettingKey).HasName("PRIMARY");
+
+            entity.ToTable("application_settings");
+
+            entity.HasIndex(e => e.UpdatedByAccountId, "fk_application_settings_updater");
+
+            entity.Property(e => e.SettingKey)
+                .HasMaxLength(100)
+                .HasColumnName("setting_key");
+            entity.Property(e => e.Description)
+                .HasMaxLength(500)
+                .HasColumnName("description");
+            entity.Property(e => e.IsSecret).HasColumnName("is_secret");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+            entity.Property(e => e.UpdatedByAccountId).HasColumnName("updated_by_account_id");
+            entity.Property(e => e.ValueJson)
+                .HasColumnType("json")
+                .HasColumnName("value_json");
+
+            entity.HasOne(d => d.UpdatedByAccount).WithMany(p => p.ApplicationSettings)
+                .HasForeignKey(d => d.UpdatedByAccountId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_application_settings_updater");
+        });
+
+        modelBuilder.Entity<Appointment>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("appointments");
+
+            entity.HasIndex(e => e.CanceledByAccountId, "fk_appointments_canceler");
+
+            entity.HasIndex(e => e.CreatedByAccountId, "fk_appointments_creator");
+
+            entity.HasIndex(e => e.AppointmentTypeId, "fk_appointments_type");
+
+            entity.HasIndex(e => new { e.PatientAccountId, e.StatusCode, e.StartsAtUtc }, "ix_appointments_patient_status");
+
+            entity.HasIndex(e => new { e.StatusCode, e.StartsAtUtc }, "ix_appointments_status_start");
+
+            entity.HasIndex(e => new { e.DoctorAccountId, e.StartsAtUtc }, "ux_appointments_doctor_start").IsUnique();
+
+            entity.HasIndex(e => new { e.PatientAccountId, e.StartsAtUtc }, "ux_appointments_patient_start").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AppointmentTypeId).HasColumnName("appointment_type_id");
+            entity.Property(e => e.CanceledAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("canceled_at_utc");
+            entity.Property(e => e.CanceledByAccountId).HasColumnName("canceled_by_account_id");
+            entity.Property(e => e.CancellationReason)
+                .HasMaxLength(500)
+                .HasColumnName("cancellation_reason");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.CreatedByAccountId).HasColumnName("created_by_account_id");
+            entity.Property(e => e.CurrencyCode)
+                .HasMaxLength(3)
+                .HasDefaultValueSql("'BRL'")
+                .IsFixedLength()
+                .HasColumnName("currency_code");
+            entity.Property(e => e.DoctorAccountId).HasColumnName("doctor_account_id");
+            entity.Property(e => e.EndsAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("ends_at_utc");
+            entity.Property(e => e.ModalityCode)
+                .HasMaxLength(20)
+                .HasColumnName("modality_code");
+            entity.Property(e => e.PatientAccountId).HasColumnName("patient_account_id");
+            entity.Property(e => e.PriceAmount)
+                .HasPrecision(13)
+                .HasColumnName("price_amount");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.StartsAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("starts_at_utc");
+            entity.Property(e => e.StatusCode)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'pending'")
+                .HasColumnName("status_code");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.AppointmentType).WithMany(p => p.Appointments)
+                .HasForeignKey(d => d.AppointmentTypeId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointments_type");
+
+            entity.HasOne(d => d.CanceledByAccount).WithMany(p => p.AppointmentCanceledByAccounts)
+                .HasForeignKey(d => d.CanceledByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointments_canceler");
+
+            entity.HasOne(d => d.CreatedByAccount).WithMany(p => p.AppointmentCreatedByAccounts)
+                .HasForeignKey(d => d.CreatedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointments_creator");
+
+            entity.HasOne(d => d.DoctorAccount).WithMany(p => p.Appointments)
+                .HasForeignKey(d => d.DoctorAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointments_doctor");
+
+            entity.HasOne(d => d.PatientAccount).WithMany(p => p.AppointmentPatientAccounts)
+                .HasForeignKey(d => d.PatientAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointments_patient");
+        });
+
+        modelBuilder.Entity<AppointmentDocument>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("appointment_documents");
+
+            entity.HasIndex(e => e.UploadedByAccountId, "fk_appointment_documents_uploader");
+
+            entity.HasIndex(e => new { e.AppointmentId, e.CreatedAtUtc }, "ix_appointment_documents_appointment");
+
+            entity.HasIndex(e => e.ObjectKey, "ux_appointment_documents_object_key").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.AvailableAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("available_at_utc");
+            entity.Property(e => e.CategoryCode)
+                .HasMaxLength(30)
+                .HasColumnName("category_code");
+            entity.Property(e => e.ContentType)
+                .HasMaxLength(127)
+                .HasColumnName("content_type");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.ObjectKey)
+                .HasMaxLength(512)
+                .HasColumnName("object_key");
+            entity.Property(e => e.OriginalFileName)
+                .HasMaxLength(255)
+                .HasColumnName("original_file_name");
+            entity.Property(e => e.Sha256)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("sha256");
+            entity.Property(e => e.SizeBytes).HasColumnName("size_bytes");
+            entity.Property(e => e.StatusCode)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'pending_scan'")
+                .HasColumnName("status_code");
+            entity.Property(e => e.UploadedByAccountId).HasColumnName("uploaded_by_account_id");
+
+            entity.HasOne(d => d.Appointment).WithMany(p => p.AppointmentDocuments)
+                .HasForeignKey(d => d.AppointmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointment_documents_appointment");
+
+            entity.HasOne(d => d.UploadedByAccount).WithMany(p => p.AppointmentDocuments)
+                .HasForeignKey(d => d.UploadedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointment_documents_uploader");
+        });
+
+        modelBuilder.Entity<AppointmentType>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("appointment_types");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.Description)
+                .HasMaxLength(500)
+                .HasColumnName("description");
+            entity.Property(e => e.DisplayOrder).HasColumnName("display_order");
+            entity.Property(e => e.DurationMinutes).HasColumnName("duration_minutes");
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.ModalityCode)
+                .HasMaxLength(20)
+                .HasColumnName("modality_code");
+            entity.Property(e => e.Name)
+                .HasMaxLength(120)
+                .HasColumnName("name");
+            entity.Property(e => e.PriceAmount)
+                .HasPrecision(13)
+                .HasColumnName("price_amount");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+        });
+
+        modelBuilder.Entity<AuditEvent>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("audit_events");
+
+            entity.HasIndex(e => new { e.ActorAccountId, e.OccurredAtUtc }, "ix_audit_events_actor_time");
+
+            entity.HasIndex(e => e.CorrelationId, "ix_audit_events_correlation");
+
+            entity.HasIndex(e => new { e.EntityType, e.EntityId, e.OccurredAtUtc }, "ix_audit_events_entity");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ActorAccountId).HasColumnName("actor_account_id");
+            entity.Property(e => e.CorrelationId).HasColumnName("correlation_id");
+            entity.Property(e => e.DataJson)
+                .HasColumnType("json")
+                .HasColumnName("data_json");
+            entity.Property(e => e.EntityId)
+                .HasMaxLength(100)
+                .HasColumnName("entity_id");
+            entity.Property(e => e.EntityType)
+                .HasMaxLength(100)
+                .HasColumnName("entity_type");
+            entity.Property(e => e.EventCode)
+                .HasMaxLength(100)
+                .HasColumnName("event_code");
+            entity.Property(e => e.IpAddressHash)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("ip_address_hash");
+            entity.Property(e => e.OccurredAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("occurred_at_utc");
+
+            entity.HasOne(d => d.ActorAccount).WithMany(p => p.AuditEvents)
+                .HasForeignKey(d => d.ActorAccountId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_audit_events_actor");
+        });
+
+        modelBuilder.Entity<AuthSession>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("auth_sessions");
+
+            entity.HasIndex(e => new { e.AccountId, e.ExpiresAtUtc }, "ix_auth_sessions_account_expiry");
+
+            entity.HasIndex(e => e.RefreshTokenHash, "ux_auth_sessions_refresh_hash").IsUnique();
+
+            entity.Property(e => e.Id)
+                .HasMaxLength(16)
+                .IsFixedLength()
+                .HasColumnName("id");
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.ExpiresAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("expires_at_utc");
+            entity.Property(e => e.IpAddressHash)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("ip_address_hash");
+            entity.Property(e => e.LastSeenAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("last_seen_at_utc");
+            entity.Property(e => e.RefreshTokenHash)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("refresh_token_hash");
+            entity.Property(e => e.RevokeReasonCode)
+                .HasMaxLength(30)
+                .HasColumnName("revoke_reason_code");
+            entity.Property(e => e.RevokedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("revoked_at_utc");
+            entity.Property(e => e.UserAgentHash)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("user_agent_hash");
+
+            entity.HasOne(d => d.Account).WithMany(p => p.AuthSessions)
+                .HasForeignKey(d => d.AccountId)
+                .HasConstraintName("fk_auth_sessions_account");
+        });
+
+        modelBuilder.Entity<Clinic>(entity =>
+        {
+            entity.HasKey(e => e.SingletonId).HasName("PRIMARY");
+
+            entity.ToTable("clinic");
+
+            entity.HasIndex(e => e.TaxId, "ux_clinic_tax_id").IsUnique();
+
+            entity.Property(e => e.SingletonId)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("singleton_id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.DisplayName)
+                .HasMaxLength(120)
+                .HasColumnName("display_name");
+            entity.Property(e => e.Email)
+                .HasMaxLength(254)
+                .HasColumnName("email");
+            entity.Property(e => e.LegalName)
+                .HasMaxLength(200)
+                .HasColumnName("legal_name");
+            entity.Property(e => e.PhoneE164)
+                .HasMaxLength(16)
+                .HasColumnName("phone_e164");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.TaxId)
+                .HasMaxLength(14)
+                .IsFixedLength()
+                .HasColumnName("tax_id");
+            entity.Property(e => e.TimezoneName)
+                .HasMaxLength(64)
+                .HasDefaultValueSql("'America/Sao_Paulo'")
+                .HasColumnName("timezone_name");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+        });
+
+        modelBuilder.Entity<ClinicWeeklyHour>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("clinic_weekly_hours");
+
+            entity.HasIndex(e => new { e.DayOfWeek, e.StartTime, e.EndTime }, "ux_clinic_weekly_hours").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.DayOfWeek).HasColumnName("day_of_week");
+            entity.Property(e => e.EndTime)
+                .HasColumnType("time")
+                .HasColumnName("end_time");
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.StartTime)
+                .HasColumnType("time")
+                .HasColumnName("start_time");
+        });
+
+        modelBuilder.Entity<DoctorProfile>(entity =>
+        {
+            entity.HasKey(e => e.AccountId).HasName("PRIMARY");
+
+            entity.ToTable("doctor_profiles");
+
+            entity.HasIndex(e => new { e.LicenseStateCode, e.LicenseNumber }, "ux_doctor_profiles_license").IsUnique();
+
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.Biography)
+                .HasColumnType("text")
+                .HasColumnName("biography");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.DefaultAppointmentDurationMinutes)
+                .HasDefaultValueSql("'30'")
+                .HasColumnName("default_appointment_duration_minutes");
+            entity.Property(e => e.LicenseNumber)
+                .HasMaxLength(30)
+                .HasColumnName("license_number");
+            entity.Property(e => e.LicenseStateCode)
+                .HasMaxLength(2)
+                .IsFixedLength()
+                .HasColumnName("license_state_code");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.Account).WithOne(p => p.DoctorProfile)
+                .HasForeignKey<DoctorProfile>(d => d.AccountId)
+                .HasConstraintName("fk_doctor_profiles_account");
+        });
+
+        modelBuilder.Entity<DoctorSpecialty>(entity =>
+        {
+            entity.HasKey(e => new { e.DoctorAccountId, e.SpecialtyId }).HasName("PRIMARY");
+
+            entity.ToTable("doctor_specialties");
+
+            entity.HasIndex(e => e.SpecialtyId, "ix_doctor_specialties_specialty");
+
+            entity.Property(e => e.DoctorAccountId).HasColumnName("doctor_account_id");
+            entity.Property(e => e.SpecialtyId).HasColumnName("specialty_id");
+            entity.Property(e => e.IsPrimary).HasColumnName("is_primary");
+
+            entity.HasOne(d => d.DoctorAccount).WithMany(p => p.DoctorSpecialties)
+                .HasForeignKey(d => d.DoctorAccountId)
+                .HasConstraintName("fk_doctor_specialties_doctor");
+
+            entity.HasOne(d => d.Specialty).WithMany(p => p.DoctorSpecialties)
+                .HasForeignKey(d => d.SpecialtyId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_doctor_specialties_specialty");
+        });
+
+        modelBuilder.Entity<DoctorWeeklyHour>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("doctor_weekly_hours");
+
+            entity.HasIndex(e => new { e.DoctorAccountId, e.DayOfWeek, e.StartTime, e.EndTime, e.ValidFrom }, "ux_doctor_weekly_hours").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.DayOfWeek).HasColumnName("day_of_week");
+            entity.Property(e => e.DoctorAccountId).HasColumnName("doctor_account_id");
+            entity.Property(e => e.EndTime)
+                .HasColumnType("time")
+                .HasColumnName("end_time");
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.StartTime)
+                .HasColumnType("time")
+                .HasColumnName("start_time");
+            entity.Property(e => e.ValidFrom)
+                .HasColumnType("date")
+                .HasColumnName("valid_from");
+            entity.Property(e => e.ValidUntil)
+                .HasColumnType("date")
+                .HasColumnName("valid_until");
+
+            entity.HasOne(d => d.DoctorAccount).WithMany(p => p.DoctorWeeklyHours)
+                .HasForeignKey(d => d.DoctorAccountId)
+                .HasConstraintName("fk_doctor_weekly_hours_doctor");
+        });
+
+        modelBuilder.Entity<ExternalLogin>(entity =>
+        {
+            entity.HasKey(e => new { e.ProviderCode, e.ProviderSubject }).HasName("PRIMARY");
+
+            entity.ToTable("external_logins");
+
+            entity.HasIndex(e => new { e.AccountId, e.ProviderCode }, "ux_external_logins_account_provider").IsUnique();
+
+            entity.Property(e => e.ProviderCode)
+                .HasMaxLength(32)
+                .HasColumnName("provider_code");
+            entity.Property(e => e.ProviderSubject).HasColumnName("provider_subject");
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.LastUsedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("last_used_at_utc");
+            entity.Property(e => e.LinkedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("linked_at_utc");
+            entity.Property(e => e.ProviderEmail)
+                .HasMaxLength(254)
+                .HasColumnName("provider_email");
+
+            entity.HasOne(d => d.Account).WithMany(p => p.ExternalLogins)
+                .HasForeignKey(d => d.AccountId)
+                .HasConstraintName("fk_external_logins_account");
+        });
+
+        modelBuilder.Entity<Holiday>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("holidays");
+
+            entity.HasIndex(e => new { e.HolidayDate, e.Name }, "ux_holidays_date_name").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.EndTime)
+                .HasColumnType("time")
+                .HasColumnName("end_time");
+            entity.Property(e => e.HolidayDate)
+                .HasColumnType("date")
+                .HasColumnName("holiday_date");
+            entity.Property(e => e.Name)
+                .HasMaxLength(120)
+                .HasColumnName("name");
+            entity.Property(e => e.StartTime)
+                .HasColumnType("time")
+                .HasColumnName("start_time");
+        });
+
+        modelBuilder.Entity<IdempotencyRecord>(entity =>
+        {
+            entity.HasKey(e => new { e.ScopeCode, e.IdempotencyKey }).HasName("PRIMARY");
+
+            entity.ToTable("idempotency_records");
+
+            entity.HasIndex(e => e.ExpiresAtUtc, "ix_idempotency_records_expiry");
+
+            entity.Property(e => e.ScopeCode)
+                .HasMaxLength(50)
+                .HasColumnName("scope_code");
+            entity.Property(e => e.IdempotencyKey)
+                .HasMaxLength(100)
+                .HasColumnName("idempotency_key");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.ExpiresAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("expires_at_utc");
+            entity.Property(e => e.RequestHash)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("request_hash");
+            entity.Property(e => e.ResponseBodyJson)
+                .HasColumnType("json")
+                .HasColumnName("response_body_json");
+            entity.Property(e => e.ResponseStatusCode).HasColumnName("response_status_code");
+        });
+
+        modelBuilder.Entity<OutboxMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("outbox_messages");
+
+            entity.HasIndex(e => new { e.StatusCode, e.NextAttemptAtUtc, e.LeaseUntilUtc }, "ix_outbox_messages_claim");
+
+            entity.HasIndex(e => e.IdempotencyKey, "ux_outbox_messages_idempotency").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AttemptCount).HasColumnName("attempt_count");
+            entity.Property(e => e.ChannelCode)
+                .HasMaxLength(10)
+                .HasColumnName("channel_code");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.IdempotencyKey).HasColumnName("idempotency_key");
+            entity.Property(e => e.LastErrorCode)
+                .HasMaxLength(100)
+                .HasColumnName("last_error_code");
+            entity.Property(e => e.LeaseOwner)
+                .HasMaxLength(100)
+                .HasColumnName("lease_owner");
+            entity.Property(e => e.LeaseUntilUtc)
+                .HasMaxLength(6)
+                .HasColumnName("lease_until_utc");
+            entity.Property(e => e.MaxAttempts)
+                .HasDefaultValueSql("'5'")
+                .HasColumnName("max_attempts");
+            entity.Property(e => e.NextAttemptAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("next_attempt_at_utc");
+            entity.Property(e => e.PayloadJson)
+                .HasColumnType("json")
+                .HasColumnName("payload_json");
+            entity.Property(e => e.Recipient)
+                .HasMaxLength(254)
+                .HasColumnName("recipient");
+            entity.Property(e => e.SentAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("sent_at_utc");
+            entity.Property(e => e.StatusCode)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'pending'")
+                .HasColumnName("status_code");
+            entity.Property(e => e.TemplateKey)
+                .HasMaxLength(100)
+                .HasColumnName("template_key");
+        });
+
+        modelBuilder.Entity<PatientProfile>(entity =>
+        {
+            entity.HasKey(e => e.AccountId).HasName("PRIMARY");
+
+            entity.ToTable("patient_profiles");
+
+            entity.HasIndex(e => e.TaxId, "ux_patient_profiles_tax_id").IsUnique();
+
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.BirthDate)
+                .HasColumnType("date")
+                .HasColumnName("birth_date");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.PreferredName)
+                .HasMaxLength(120)
+                .HasColumnName("preferred_name");
+            entity.Property(e => e.TaxId)
+                .HasMaxLength(11)
+                .IsFixedLength()
+                .HasColumnName("tax_id");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.Account).WithOne(p => p.PatientProfile)
+                .HasForeignKey<PatientProfile>(d => d.AccountId)
+                .HasConstraintName("fk_patient_profiles_account");
+        });
+
+        modelBuilder.Entity<Payment>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("payments");
+
+            entity.HasIndex(e => new { e.StatusCode, e.CreatedAtUtc }, "ix_payments_status_created");
+
+            entity.HasIndex(e => e.AppointmentId, "ux_payments_appointment").IsUnique();
+
+            entity.HasIndex(e => e.IdempotencyKey, "ux_payments_idempotency_key").IsUnique();
+
+            entity.HasIndex(e => new { e.ProviderCode, e.ProviderCheckoutId }, "ux_payments_provider_checkout").IsUnique();
+
+            entity.HasIndex(e => new { e.ProviderCode, e.ProviderTransactionId }, "ux_payments_provider_transaction").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Amount)
+                .HasPrecision(13)
+                .HasColumnName("amount");
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.CanceledAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("canceled_at_utc");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.CurrencyCode)
+                .HasMaxLength(3)
+                .HasDefaultValueSql("'BRL'")
+                .IsFixedLength()
+                .HasColumnName("currency_code");
+            entity.Property(e => e.IdempotencyKey).HasColumnName("idempotency_key");
+            entity.Property(e => e.PaidAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("paid_at_utc");
+            entity.Property(e => e.ProviderCheckoutId)
+                .HasMaxLength(100)
+                .HasColumnName("provider_checkout_id");
+            entity.Property(e => e.ProviderCode)
+                .HasMaxLength(20)
+                .HasColumnName("provider_code");
+            entity.Property(e => e.ProviderStatusCode)
+                .HasMaxLength(50)
+                .HasColumnName("provider_status_code");
+            entity.Property(e => e.ProviderTransactionId)
+                .HasMaxLength(100)
+                .HasColumnName("provider_transaction_id");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.StatusCode)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'pending'")
+                .HasColumnName("status_code");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.Appointment).WithOne(p => p.Payment)
+                .HasForeignKey<Payment>(d => d.AppointmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_payments_appointment");
+        });
+
+        modelBuilder.Entity<PremiumMembership>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("premium_memberships");
+
+            entity.HasIndex(e => e.PremiumPlanId, "fk_premium_memberships_plan");
+
+            entity.HasIndex(e => new { e.AccountId, e.StatusCode, e.EndsAtUtc }, "ix_premium_memberships_account_status");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.EndsAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("ends_at_utc");
+            entity.Property(e => e.PremiumPlanId).HasColumnName("premium_plan_id");
+            entity.Property(e => e.StartsAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("starts_at_utc");
+            entity.Property(e => e.StatusCode)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'pending'")
+                .HasColumnName("status_code");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.Account).WithMany(p => p.PremiumMemberships)
+                .HasForeignKey(d => d.AccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_premium_memberships_account");
+
+            entity.HasOne(d => d.PremiumPlan).WithMany(p => p.PremiumMemberships)
+                .HasForeignKey(d => d.PremiumPlanId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_premium_memberships_plan");
+        });
+
+        modelBuilder.Entity<PremiumPlan>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("premium_plans");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AppointmentDiscountPercent)
+                .HasPrecision(5)
+                .HasColumnName("appointment_discount_percent");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.Name)
+                .HasMaxLength(120)
+                .HasColumnName("name");
+            entity.Property(e => e.PriceAmount)
+                .HasPrecision(13)
+                .HasColumnName("price_amount");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+            entity.Property(e => e.ValidityDays).HasColumnName("validity_days");
+        });
+
+        modelBuilder.Entity<Role>(entity =>
+        {
+            entity.HasKey(e => e.Code).HasName("PRIMARY");
+
+            entity.ToTable("roles");
+
+            entity.Property(e => e.Code)
+                .HasMaxLength(20)
+                .HasColumnName("code");
+            entity.Property(e => e.DisplayName)
+                .HasMaxLength(50)
+                .HasColumnName("display_name");
+            entity.Property(e => e.IsPrivileged).HasColumnName("is_privileged");
+        });
+
+        modelBuilder.Entity<Specialty>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("specialties");
+
+            entity.HasIndex(e => e.NormalizedName, "ux_specialties_normalized_name").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.Name)
+                .HasMaxLength(120)
+                .HasColumnName("name");
+            entity.Property(e => e.NormalizedName)
+                .HasMaxLength(120)
+                .HasColumnName("normalized_name");
+        });
+
+        OnModelCreatingPartial(modelBuilder);
+    }
+
+    partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
+}

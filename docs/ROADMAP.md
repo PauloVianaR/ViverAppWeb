@@ -9,7 +9,7 @@ O roteiro evita um “big bang”: cada fase deve entregar um incremento verific
 ## Decisões iniciais
 
 1. **Arquitetura:** monólito modular. `ViverApp.Web` e `ViverApp.Api` são processos separados; regras de negócio serão agrupadas por módulos e não por camadas genéricas globais.
-2. **Workers:** e-mail e rotinas agendadas entram inicialmente na API como hosted services sobre uma fila/outbox persistida no MySQL. Firebase, push e SMS não fazem parte do novo produto. O módulo será extraível se volume, disponibilidade ou escalabilidade justificarem outro processo.
+2. **Workers:** e-mail, SMS via SMSBarato e rotinas agendadas entram inicialmente na API como hosted services sobre uma fila/outbox persistida no MySQL. Firebase e push não fazem parte do novo produto. O módulo será extraível se volume, disponibilidade ou escalabilidade justificarem outro processo.
 3. **Vídeo:** o hub de sinalização SignalR entra na API. A mídia WebRTC continua ponto a ponto quando adequado, com STUN/TURN e autorização de salas. Estado de presença não dependerá de dicionário estático em memória.
 4. **Autenticação web:** padrão BFF/cookie seguro para o navegador. Credenciais e tokens sensíveis permanecem no servidor; não serão armazenados no storage do browser.
 5. **Persistência:** Entity Framework Core DB-First para a nova aplicação, exclusivamente em MySQL 8.0.41. `viverappmobile` é uma referência estritamente somente leitura; `viverappweb` será o banco novo e a única fonte dos models EF e contratos web. O schema novo evoluirá por migrations SQL obrigatórias, executadas antes de cada novo scaffold.
@@ -46,7 +46,7 @@ Cada fase deve:
 
 ## Fase 1 — Descoberta funcional, riscos e arquitetura executável
 
-**Estado:** implementação documental concluída em `codex/fase-01-descoberta`; aguardando revisão e aprovação antes de qualquer Fase 2.
+**Estado:** concluída e incorporada à `main` do repositório Web.
 
 **Objetivo:** transformar o comportamento espalhado pelo MAUI/API/workers/hub em requisitos confiáveis antes de portar código.
 
@@ -68,6 +68,8 @@ Cada fase deve:
 
 ## Fase 2 — Banco DB-First, modelo de domínio e baseline de dados
 
+**Estado:** concluída em `codex/fase-02-banco-db-first`; integração à `main` autorizada pelo proprietário.
+
 **Objetivo:** criar persistência segura sem perder nem corromper o banco local existente.
 
 **Entregas:**
@@ -84,7 +86,7 @@ Cada fase deve:
 - testes de integração contra MySQL 8.0.41 real, nunca SQLite como substituto;
 - plano de reconciliação e migração de dados legados.
 
-**Saída:** migrations SQL listadas e aplicadas em `viverappweb`, scaffold DB-First reproduzido, schema validado, rollback ensaiado, `viverappmobile` comprovadamente inalterado e zero uso de Azure/SQL Server.
+**Saída:** migrations SQL listadas e aplicadas em `viverappweb`, scaffold DB-First reproduzido, schema e scripts de rollback validados, `viverappmobile` comprovadamente inalterado e zero uso de Azure/SQL Server. Ensaio destrutivo de rollback não é exigido.
 
 ## Fase 3 — Fundação de segurança, privacidade e observabilidade
 
@@ -105,7 +107,7 @@ Cada fase deve:
 
 **Saída:** checklist de segurança automatizado e threat model atualizado.
 
-## Fase 4 — Identidade, login Google e autorização
+## Fase 4 — Identidade, login Google/e-mail/SMS e autorização
 
 **Objetivo:** substituir a autenticação legada por identidade moderna e políticas por perfil.
 
@@ -115,9 +117,10 @@ Cada fase deve:
 - senhas com hash adaptativo, salgado e versionado (preferência inicial: Argon2id após validação da biblioteca; fallback documentado para o hasher robusto do Identity);
 - remoção completa de criptografia reversível para novas credenciais;
 - migrador temporário e auditado para converter as senhas AES/ECB legadas em hash, com backup, relatório de falhas, descarte posterior da chave e redefinição forçada quando necessário;
-- recuperação por token curto de uso único; nunca enviar senha temporária em texto claro;
+- login local por e-mail ou telefone, com senha armazenada somente como hash, além do login Google;
+- confirmação e recuperação por código curto, de uso único e armazenado como hash, enviado por e-mail ou SMSBarato; nunca enviar senha temporária em texto claro;
 - Google OpenID Connect/OAuth 2.0 com `state`, `nonce`, PKCE quando aplicável, e-mail verificado e vínculo explícito de conta para impedir account takeover;
-- roles/policies para Paciente, Médico, Gestor e Administrador, sempre com checagem de ownership na API;
+- exatamente um papel por conta entre Paciente, Médico, Gestor e Administrador, com policies e checagem de ownership na API;
 - MFA obrigatório para administrador, priorizando passkeys/WebAuthn e oferecendo TOTP/recovery codes conforme suporte;
 - gestão de dispositivos/sessões, rotação, revogação e eventos de segurança;
 - testes para brute force, enumeração, CSRF, fixation, redirect indevido, privilege escalation e vínculo Google.
@@ -181,7 +184,7 @@ Cada fase deve:
 - gestão de disponibilidade e modalidades;
 - lista autorizada de pacientes vinculados;
 - conclusão de consulta, relatório médico e regras de visibilidade;
-- controles de acesso por clínica/vínculo e trilha de auditoria;
+- controles de acesso por papel, ownership e vínculo profissional/paciente, sem tenancy ou multiclínica, e trilha de auditoria;
 - adaptação de fluxos densos para desktop/tablet sem prejudicar mobile.
 
 **Saída:** médico e gestor só acessam dados permitidos e toda alteração crítica é auditada.
@@ -221,17 +224,17 @@ Cada fase deve:
 
 **Saída:** 100% dos objetos reconciliados e acesso privado comprovado antes de desligar o storage antigo.
 
-## Fase 11 — E-mail e jobs dentro da API
+## Fase 11 — E-mail, SMS e jobs dentro da API
 
 **Objetivo:** substituir os workers separados por processamento durável e observável.
 
 **Entregas:**
 
-- transactional outbox no MySQL para e-mail e eventos internos;
+- transactional outbox no MySQL para e-mail, SMS e eventos internos;
 - hosted services modulares com claim atômico, idempotência, backoff com jitter, dead-letter e reprocessamento administrativo;
 - coordenação segura para múltiplas instâncias da API, sem duplicidade por memória local;
 - templates versionados e seguros, preferências/consentimento e supressão;
-- provedor de e-mail encapsulado e substituível;
+- provedores de e-mail e SMSBarato encapsulados e substituíveis;
 - scheduler persistido para lembretes e manutenção;
 - métricas de fila, latência, falha e alertas; payloads sensíveis redigidos;
 - testes de crash entre envio e confirmação, concorrência e indisponibilidade do provedor.
@@ -276,7 +279,7 @@ Cada fase deve:
 
 **Entregas:**
 
-- gestão de usuários, clínicas, agendamentos, premium e notificações;
+- gestão de usuários, da clínica única, agendamentos, premium e notificações;
 - MFA obrigatório, step-up authentication para ações críticas e sessões administrativas curtas;
 - segregação de funções e dupla confirmação para ações de alto impacto;
 - dashboards calculados no servidor com consultas limitadas e dados minimizados;
@@ -360,7 +363,7 @@ Cada fase deve:
 - provedor de hospedagem da API/Blazor/MySQL fora do Azure;
 - domínio e plano Cloudflare;
 - estratégia de convivência ou corte do app MAUI;
-- provedores definitivos de e-mail e TURN;
+- provedor definitivo de TURN e eventual substituição futura, se necessária, do SMTP ou SMSBarato já adotados;
 - necessidade de gravação de chamadas (recomendação inicial: não gravar);
 - política LGPD, prazos de retenção e responsáveis administrativos;
 - estratégia de recuperação para contas cujo segredo legado não possa ser migrado com segurança.

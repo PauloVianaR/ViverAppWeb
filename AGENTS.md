@@ -36,7 +36,8 @@ Estas regras valem para toda a árvore `ViverAppWeb`. O texto normativo usa **DE
 - O Blazor NÃO DEVE acessar o banco diretamente nem conter regras de negócio autoritativas. Toda operação de negócio deve passar por contratos/casos de uso da API.
 - Novos recursos DEVEM ser organizados por capacidade de negócio, com contratos explícitos, validação na fronteira e baixa dependência entre módulos.
 - Workers incorporados à API DEVEM usar abstrações próprias, processamento durável, idempotência e coordenação distribuída. Eles NÃO DEVEM depender de memória local para garantir entrega única.
-- O único canal de comunicação externa da nova aplicação é e-mail. Firebase, push e SMS pertencem somente ao inventário legado e NÃO DEVEM ser implementados, configurados ou migrados sem nova autorização expressa.
+- Os canais de comunicação externa permitidos são e-mail e SMS via SMSBarato, inclusive para login e recuperação de conta. Firebase e push pertencem somente ao legado e NÃO DEVEM ser implementados, configurados ou migrados sem nova autorização expressa.
+- Cada conta DEVE possuir exatamente um papel entre Paciente, Médico, Gestor e Administrador. O produto atende exatamente uma clínica; não devem existir tenant, seletor de clínica ou vínculo multiclínica.
 - O SignalR/WebRTC PODE residir na API, mas autenticação, autorização de sala e estado distribuído são obrigatórios antes de produção.
 
 ## 5. Banco de dados e migrations
@@ -64,7 +65,7 @@ Estas regras valem para toda a árvore `ViverAppWeb`. O texto normativo usa **DE
 
 - Segredos NUNCA DEVEM ser gravados no Git, `appsettings*.json`, código, scripts, documentação, exemplos, URLs, logs ou snapshots de teste.
 - Desenvolvimento local DEVE usar .NET User Secrets. Produção DEVE usar variáveis de ambiente ou um gerenciador de segredos aprovado.
-- Chaves do PagBank, credenciais do MySQL, OAuth, SMTP, Cloudflare e chaves criptográficas DEVEM permanecer apenas no backend.
+- Chaves do PagBank, credenciais do MySQL, OAuth, SMTP, SMSBarato, Cloudflare e chaves criptográficas DEVEM permanecer apenas no backend.
 - O agente NÃO DEVE imprimir valores secretos. Diagnósticos podem mostrar somente nomes de chaves e presença/ausência.
 - Credenciais encontradas em histórico, artefatos publicados ou arquivos versionados DEVEM ser tratadas como potencialmente comprometidas e gerar recomendação de rotação; o agente não pode rotacioná-las sem autorização.
 
@@ -109,6 +110,6 @@ Estas regras valem para toda a árvore `ViverAppWeb`. O texto normativo usa **DE
 ## 11. Limites de autonomia
 
 - O agente PODE criar e editar arquivos dentro de `ViverAppWeb`, executar builds/testes e aplicar migrations locais requeridas pela fase.
-- O agente NÃO DEVE publicar em produção, comprar domínio, alterar DNS/CDN/WAF, enviar e-mails reais, disparar cobranças, criar usuários externos ou acessar dados de produção sem autorização explícita.
+- O agente NÃO DEVE publicar em produção, comprar domínio, alterar DNS/CDN/WAF, enviar e-mails ou SMS reais, disparar cobranças, criar usuários externos ou acessar dados de produção sem autorização explícita.
 - O agente NÃO DEVE executar ações destrutivas, limpar banco, apagar dados, redefinir Git ou remover arquivos do usuário sem alvo exato, backup quando aplicável e autorização.
 - Dúvidas que alterem produto, custo, provedor, modelo de dados ou segurança DEVEM ser registradas como decisão pendente e levadas ao usuário antes da implementação.

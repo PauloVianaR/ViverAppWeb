@@ -14,7 +14,7 @@ Somente estas fontes foram consultadas:
 
 - `ViverAppMobileNew` para jornadas, comandos, navegação e uso da API no MAUI;
 - `ViverAppApi` para endpoints e regras existentes;
-- `ViverAppEmailWorker` para inventariar os fluxos legados de e-mail, SMS e push; somente e-mail seguirá para o novo produto;
+- `ViverAppEmailWorker` para inventariar os fluxos legados de e-mail, SMS e push; e-mail e SMSBarato seguirão para o novo produto, sem Firebase/push;
 - `ViverAppVideoHub` para sinalização WebRTC/SignalR;
 - `ViverApp.Shared` para o scaffold DB-First e contratos legados.
 

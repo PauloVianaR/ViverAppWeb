@@ -13,7 +13,7 @@ flowchart LR
     DB[(viverappweb<br/>MySQL 8.0.41)]
     PAG[PagBank]
     R2[Cloudflare R2]
-    COM[Provedor<br/>E-mail]
+    COM[Provedores<br/>E-mail / SMSBarato]
     RTC[STUN/TURN]
 
     P --> WEB
@@ -42,7 +42,7 @@ flowchart TB
     HUB[SignalR Hub]
     MYSQL[(viverappweb)]
     OBJ[(R2 privado)]
-    EXT[PagBank / SMTP / TURN]
+    EXT[PagBank / SMTP / SMSBarato / TURN]
 
     CF --> WEB
     CF --> API
@@ -64,7 +64,7 @@ flowchart TB
 |---|---|---|
 | Identidade e Acesso | contas, logins externos, hash, MFA, sessões, papéis/policies | decidir regras clínicas ou financeiras |
 | Perfis e Credenciamento | dados pessoais mínimos, perfil profissional, aprovação | armazenar senha/tokens de provedor |
-| Clínicas e Catálogo | clínicas, serviços, especialidades e configurações tipadas | criar agendamento sem passar pelo módulo de agenda |
+| Clínica e Catálogo | clínica singleton, serviços, especialidades e configurações tipadas | criar agendamento sem passar pelo módulo de agenda |
 | Disponibilidade e Agendamentos | slots, reservas, conflitos e ciclo do agendamento | confiar em slot/preço enviados pelo browser |
 | Encontro Clínico | início/fim, relatório, feedback e vínculo de documentos | expor dado clínico fora do escopo |
 | Pagamentos | checkout, tentativas, eventos, ledger e reconciliação | receber cartão ou aceitar status do cliente |

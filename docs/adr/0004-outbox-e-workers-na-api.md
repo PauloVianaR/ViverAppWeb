@@ -9,7 +9,7 @@ Os workers legados consultam tabelas por polling e possuem garantias desiguais c
 
 ## Decisão
 
-Hospedar inicialmente e-mail e rotinas agendadas como `BackgroundService` modulares dentro da API. Toda solicitação assíncrona será persistida numa outbox na mesma transação da mudança de negócio. Firebase, push e SMS não serão migrados para o novo produto.
+Hospedar inicialmente e-mail, SMS via SMSBarato e rotinas agendadas como `BackgroundService` modulares dentro da API. Toda solicitação assíncrona será persistida numa outbox na mesma transação da mudança de negócio. Firebase e push não serão migrados para o novo produto.
 
 O processamento terá claim atômico, lease com expiração, chave de idempotência, tentativas limitadas, backoff com jitter, dead-letter, reprocessamento auditado e métricas. Nenhum controle de exclusão dependerá apenas de memória local.
 

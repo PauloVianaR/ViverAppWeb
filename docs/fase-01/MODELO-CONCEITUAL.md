@@ -7,7 +7,7 @@ Este documento define linguagem e fronteiras, não tabelas, classes C# ou contra
 | Área | Conceitos principais | Invariantes iniciais |
 |---|---|---|
 | Identidade | Conta, CredencialLocal, LoginExterno, Papel, Permissão, Sessão, FatorMFA | login externo único por issuer/subject; papel nunca vem do cliente; sessão revogável |
-| Pessoa/Perfil | Pessoa, Contato, Endereço, PerfilPaciente, PerfilProfissional, VínculoGestor | uma pessoa pode ter múltiplos papéis; CPF/e-mail normalizados por política a confirmar |
+| Pessoa/Perfil | Conta, Contato, Endereço, PerfilPaciente, PerfilProfissional | cada conta possui exatamente um papel; CPF/e-mail/telefone normalizados |
 | Clínica/Catálogo | Clínica, Especialidade, ServiçoClínico, OfertaProfissional | preço/duração/modalidade têm vigência e validação |
 | Disponibilidade | RegraRecorrente, Exceção, Feriado, Slot | timezone explícito; intervalos válidos e não sobrepostos |
 | Agendamento | Agendamento, ReservaDeSlot, HistóricoDeStatus | transição válida; nenhum médico ocupa slots sobrepostos |
@@ -24,15 +24,12 @@ Este documento define linguagem e fronteiras, não tabelas, classes C# ou contra
 ```mermaid
 erDiagram
     PERSON ||--|| ACCOUNT : owns
-    ACCOUNT ||--o{ ACCOUNT_ROLE : has
-    ROLE ||--o{ ACCOUNT_ROLE : grants
+    ROLE ||--o{ ACCOUNT : classifies
     ACCOUNT ||--o{ EXTERNAL_LOGIN : uses
     ACCOUNT ||--o{ SESSION : opens
     ACCOUNT ||--o{ MFA_CREDENTIAL : secures
     PERSON ||--o| PATIENT_PROFILE : may_have
     PERSON ||--o| PROFESSIONAL_PROFILE : may_have
-    PERSON ||--o{ CLINIC_MEMBERSHIP : works_at
-    CLINIC ||--o{ CLINIC_MEMBERSHIP : includes
     PROFESSIONAL_PROFILE ||--o{ PROFESSIONAL_OFFERING : provides
     SERVICE_OFFERING ||--o{ PROFESSIONAL_OFFERING : is_offered_by
     PROFESSIONAL_PROFILE ||--o{ AVAILABILITY_RULE : defines
@@ -53,12 +50,13 @@ erDiagram
     OUTBOX_MESSAGE ||--o{ DELIVERY_ATTEMPT : produces
 ```
 
-Nomes são provisórios e poderão ser traduzidos ao padrão físico acordado na Fase 2. A relação expressa intenção, não cardinalidade final aprovada.
+Nomes são conceituais. As cardinalidades aprovadas e o modelo DB-First da Fase 2 prevalecem sobre este diagrama.
 
 ## 3. Separações deliberadas em relação ao legado
 
 - `user` não será uma tabela que mistura identidade, papel, preferências, endereço e perfil profissional; tokens Firebase/push não serão migrados;
-- uma conta poderá ter mais de um papel somente se a política de negócio aprovar; a estrutura não dependerá de inteiro enviado no login;
+- cada conta terá exatamente um papel entre Paciente, Médico, Gestor e Administrador; o papel nunca dependerá de inteiro arbitrário enviado no login;
+- o sistema atenderá uma única clínica, sem tenant, associação multiclínica ou seletor de clínica;
 - refresh tokens/sessões não serão guardados em texto claro quando um identificador derivado for suficiente;
 - serviço clínico não será confundido com “appointment”; agendamento é outro agregado;
 - estado de pagamento não será reduzido a presença de uma linha e flag `paidonline`;
@@ -95,10 +93,8 @@ Os contratos da API deverão:
 | Financeira | pagamento, autorização parcial, status, reembolso | integridade, idempotência, segregação e retenção legal |
 | Autenticação | hash, sessão, MFA, recovery code, OAuth subject | hashing/proteção forte, jamais em logs ou analytics |
 
-## 6. Questões para o schema físico
+## 6. Questões restantes para o domínio
 
-- pessoa pode acumular papéis ou haverá contas separadas?
-- quantas clínicas existem e como gestor/médico se vinculam a elas?
 - CPF deve ser único por pessoa, por papel ou globalmente?
 - serviço, especialidade e tipo de atendimento são três conceitos distintos?
 - preço pertence ao serviço, à oferta do profissional, à clínica ou a uma tabela de vigência?

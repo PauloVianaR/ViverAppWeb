@@ -11,7 +11,7 @@ Este é um levantamento técnico preliminar, não parecer jurídico nem pentest.
 3. agenda, vínculo com profissional e demais dados que possam revelar cuidado de saúde;
 4. relatórios médicos, anexos e documento de plano de saúde;
 5. valores, pagamentos, autorizações, reembolsos e webhooks;
-6. chaves PagBank, MySQL, R2, OAuth, SMTP e TURN; credenciais legadas de SMS/Firebase devem ser desativadas, não migradas;
+6. chaves PagBank, MySQL, R2, OAuth, SMTP, SMSBarato e TURN; credenciais Firebase devem ser desativadas, não migradas;
 7. permissões administrativas e trilha de auditoria;
 8. disponibilidade do sistema, agenda e filas.
 
@@ -64,7 +64,7 @@ Valores secretos não são reproduzidos neste documento.
 | SEC-017 | Média/Alta | CORS da API aceita qualquer origem; hub aceita qualquer origem com credenciais em produção | chamadas cross-origin e sequestro de contexto | mesma origem e allowlist exata |
 | SEC-018 | Média/Alta | endpoints listam entidades/coleções completas | excesso de dados, DoS e mass assignment | contratos mínimos, paginação e limites |
 | SEC-019 | Média/Alta | cálculo de slot/desconto/preço acontece no MAUI | adulteração e inconsistência | cálculo autoritativo transacional na API |
-| SEC-020 | Média/Alta | workers legados de e-mail/push não possuem claim uniforme/atômico | duplicidade ou perda em múltiplas instâncias | novo worker somente de e-mail com outbox, lease/claim atômico e idempotência; remover push |
+| SEC-020 | Média/Alta | workers legados de e-mail/SMS/push não possuem claim uniforme/atômico | duplicidade ou perda em múltiplas instâncias | novos workers de e-mail/SMS com outbox, lease/claim atômico e idempotência; remover push |
 | SEC-021 | Média | estado do hub está apenas em memória | presença inconsistente e perda em restart | backplane/estado distribuído com TTL |
 | SEC-022 | Média | devtools e permissões de mídia automáticas são configuráveis no cliente | exposição e consentimento insuficiente | consentimento explícito e devtools fora de produção |
 | SEC-023 | Média | licença de componente aparece literal no MAUI | abuso/licenciamento | rotacionar/revalidar; não copiar para web |
@@ -160,7 +160,7 @@ Para cada finalidade, o proprietário/controlador deverá validar base legal, tr
 | criar/segurar conta | contato, identificadores e hash | operação/Google se escolhido | definir | base legal e prazo |
 | prestar atendimento | perfil, agenda e registro clínico | paciente/profissional/clínica | definir com assessoria | sigilo e obrigação profissional |
 | cobrar | identificador, valor e estado | PagBank/financeiro | definir legal/fiscal | política de reembolso |
-| entregar comunicação | e-mail, preferência e template | SMTP | curta e definida | consentimento/opt-out |
+| entregar comunicação | e-mail/telefone, preferência e template | SMTP/SMSBarato | curta e definida | consentimento/opt-out |
 | analisar premium | identificação e documento | equipe autorizada | definir | necessidade do documento |
 | proteger/auditar | IP, ator, evento e correlação | segurança/operação | proporcional | política de acesso |
 

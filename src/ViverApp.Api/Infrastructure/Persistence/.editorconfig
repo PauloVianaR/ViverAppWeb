@@ -1,0 +1,6 @@
+[Generated/**/*.cs]
+# O provider oficial do MySQL gera DbSet sem inicializador; o EF os inicializa em runtime.
+dotnet_diagnostic.CS8618.severity = none
+
+[Generated/ViverAppDbContext.cs]
+dotnet_diagnostic.CS8618.severity = none

@@ -6,7 +6,7 @@
 |---|---|---|
 | `ViverAppMobileNew` | UI MAUI, navegação, estado local, chamadas HTTP, cálculo de agenda, checkout e WebRTC | Redesenhar em Blazor; mover regras autoritativas para a API |
 | `ViverAppApi` | CRUDs, autenticação JWT, regras de agenda/premium/pagamento e Backblaze B2 | Reescrever como ASP.NET Core API modular |
-| `ViverAppEmailWorker` | Polling de filas MySQL para SMTP, SMS e Firebase push | Migrar somente e-mail para hosted service durável; remover SMS/Firebase/push |
+| `ViverAppEmailWorker` | Polling de filas MySQL para SMTP, SMS e Firebase push | Migrar e-mail e SMSBarato para hosted services duráveis; remover Firebase/push |
 | `ViverAppVideoHub` | Hub SignalR para sinalização e contagem de sala em memória | Módulo de vídeo autenticado dentro da API |
 | `ViverApp.Shared` | Entidades DB-First e DTOs compartilhados entre cliente e servidor | Não reutilizar; gerar persistência a partir de `viverappweb` e criar contratos próprios |
 
@@ -14,7 +14,7 @@
 
 | Perfil | Áreas observadas |
 |---|---|
-| Não autenticado | login por e-mail/telefone, cadastro, recuperação, confirmação por e-mail/SMS no legado; novo produto usará somente e-mail |
+| Não autenticado | login por e-mail/telefone, cadastro, recuperação e confirmação por e-mail/SMS; ambos serão mantidos no novo produto |
 | Paciente | início, novo agendamento, agenda/histórico, pagamento, perfil/premium, chamada online |
 | Médico | início, agenda, pacientes, histórico, perfil/disponibilidade, agendamento para paciente, chamada online |
 | Gestor | início, agenda, pacientes, histórico, perfil, agendamento e confirmação de pagamento |
@@ -30,7 +30,7 @@ A API possui 111 endpoints sob `api/v1`, distribuídos em 17 controllers.
 |---|---|---|
 | `Auth` | modo do app, descoberta de tipo, cadastro, confirmações, login, refresh, senha e tokens | Redesenhar integralmente com Identity, Google, hash, MFA e políticas |
 | `User` | listar usuários/médicos, detalhes, criar, editar e excluir | Separar identidade, perfil, papéis e administração |
-| `Clinic` | CRUD da clínica | Módulo Clínicas |
+| `Clinic` | CRUD da clínica | Módulo Clínica singleton |
 | `Appointment` | catálogo de serviços/tipos de atendimento | Renomear conceitualmente para oferta/serviço clínico |
 | `AvailabilityClinic` | horários recorrentes da clínica | Agenda/Disponibilidade |
 | `AvailabilityDoctor` | horários recorrentes e semanais de médicos | Agenda/Disponibilidade |
@@ -85,7 +85,7 @@ O legado usa IDs/enum para:
 - permissão de chamadas online;
 - permissão e prazo de cancelamento;
 - horizonte máximo de agendamento;
-- notificação por e-mail/push no legado; somente e-mail será mantido;
+- notificação por e-mail/push no legado; e-mail e SMS serão mantidos, sem push;
 - ambiente de produção;
 - duração padrão de consulta, exame e cirurgia;
 - intervalo entre atendimentos;
@@ -134,7 +134,7 @@ Destino: SignalR dentro da API, sala ligada a agendamento autorizado, grant efê
 | PagBank Checkout | criar checkout, redirecionar e receber webhook | Reimplementar conforme documentação oficial vigente na Fase 9 |
 | Backblaze B2/S3 | documentos premium e anexos | Migrar para Cloudflare R2 na Fase 10 |
 | SMTP | confirmação, recuperação e mensagens | Encapsular provedor e usar outbox |
-| SMS Barato | confirmação e recuperação | Remover; SMS não faz parte do novo produto |
+| SMS Barato | confirmação e recuperação | Manter com segredo externo, limites, retry e auditoria |
 | Firebase Cloud Messaging | push Android | Remover; Firebase/push não fazem parte do novo produto |
 | OpenCEP | preenchimento de endereço | Chamada pelo backend com validação/cache/timeout |
 | Google Maps/Apple Maps/WhatsApp | links externos no cliente | Gerar links seguros e consentidos na UI |
@@ -144,7 +144,7 @@ Destino: SignalR dentro da API, sala ligada a agendamento autorizado, grant efê
 ## 10. Configuração encontrada, sem valores
 
 - API: JWT, três connection strings, URLs/tokens PagBank e logging;
-- worker legado: database, SMTP, OneSignal/Firebase, SMS, polling e concorrência; migrar somente SMTP/e-mail;
+- worker legado: database, SMTP, OneSignal/Firebase, SMS, polling e concorrência; migrar SMTP/e-mail e SMSBarato, sem push;
 - VideoHub: logging e hosts;
 - MAUI: URLs de API/hub/PagBank, versão, localhost e devtools.
 
