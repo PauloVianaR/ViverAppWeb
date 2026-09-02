@@ -5,9 +5,11 @@ Reimplementação web do ViverApp em .NET 10, composta inicialmente por:
 - `ViverApp.Web`: Blazor Web App com interatividade Server;
 - `ViverApp.Api`: ASP.NET Core Web API;
 - `docs/ROADMAP.md`: plano completo e incremental da reimplementação;
+- `docs/fase-01/`: descoberta funcional, riscos, arquitetura e backlog;
+- `docs/adr/`: decisões arquiteturais duráveis;
 - `AGENTS.md`: regras obrigatórias para agentes de IA.
 
-Esta fase cria somente a fundação compilável. Ainda não há domínio, persistência, autenticação, integrações, workers ou regras de negócio.
+As Fases 0 e 1 criaram a fundação compilável e documentaram o legado. Ainda não há domínio, persistência, autenticação, integrações, workers ou regras de negócio implementados.
 
 ## Pré-requisitos
 
@@ -36,7 +38,7 @@ O projeto `ViverApp.Api` possui um `UserSecretsId`. Foram transferidas para o ar
 
 As connection strings de Azure não foram copiadas. Nenhum valor secreto deve ser incluído no repositório, em exemplos, logs, testes ou documentação.
 
-O banco legado `vivermobileapp` será somente leitura. A aplicação web usará um banco novo chamado `viverwebapp`, governado por migrations SQL e consumido pelo EF Core em abordagem DB-First. A criação desse banco pertence à Fase 2 e não foi antecipada nesta fundação.
+O banco legado `viverappmobile` será somente leitura. A aplicação web usará um banco novo chamado `viverappweb`, governado por migrations SQL e consumido pelo EF Core em abordagem DB-First. A criação desse banco pertence à Fase 2 e não foi antecipada nesta fundação.
 
 Para conferir somente os nomes configurados, sem compartilhar valores:
 
@@ -44,6 +46,6 @@ Para conferir somente os nomes configurados, sem compartilhar valores:
 dotnet user-secrets list --project src/ViverApp.Api/ViverApp.Api.csproj
 ```
 
-## Próximo passo
+## Estado atual
 
-Executar a Fase 1 do [roteiro](docs/ROADMAP.md): descoberta funcional, mapa de dados e requisitos, threat modeling e decisões de arquitetura antes de portar código legado.
+A Fase 1 está documentada no [índice de descoberta](docs/fase-01/README.md). O próximo passo possível é revisar e aprovar essas decisões. A Fase 2 não deve começar na mesma branch nem sem uma solicitação explícita.

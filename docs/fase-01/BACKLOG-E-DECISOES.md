@@ -1,0 +1,79 @@
+# Backlog priorizado e decisões pendentes
+
+## 1. Backlog por risco e dependência
+
+| Prioridade | Epic | Resultado | Fase |
+|---|---|---|---:|
+| P0 | Confirmar bancos e acesso seguro | `viverappmobile` somente leitura; `viverappweb` como único alvo de escrita | 2 |
+| P0 | Rotação de credenciais expostas | B2/Firebase/JWT/certificado/licença e demais segredos invalidados conforme aplicável | 2–4/10/11 |
+| P0 | Baseline de segurança | deny-by-default, policies, antiforgery, CSP, CORS, rate limit e logs seguros | 3 |
+| P0 | Identidade segura | hash, migração, Google, MFA admin e sessões | 4 |
+| P0 | Proteção de dados sensíveis | classificação, R2 privado, ownership e auditoria | 3/10 |
+| P0 | Pagamento íntegro | cálculo servidor, webhook autêntico, idempotência e reconciliação | 9 |
+| P0 | Agendamento concorrente | slot autoritativo e constraint/transação anti-double-booking | 7 |
+| P1 | Dados mestres | clínica, catálogo, profissionais e disponibilidade | 5 |
+| P1 | Design system responsivo | shell e componentes WCAG 2.2 AA | 6 |
+| P1 | Jornada paciente | agenda, histórico, cancelamento/reagendamento e avaliação | 7 |
+| P1 | Médico e gestor | operação clínica com escopo explícito | 8 |
+| P1 | Workers duráveis | outbox, retry, dead-letter e métricas | 11 |
+| P1 | Vídeo seguro | grant de sala, SignalR e TURN | 12 |
+| P1 | Premium/financeiro | workflow e documentos protegidos | 13 |
+| P1 | Administração | segregação, step-up, analytics e auditoria | 14 |
+| P2 | Hardening e performance | load/chaos/DAST/pentest/SLO | 15 |
+| P2 | Infra e lançamento | Cloudflare, CI/CD, rollback e cutover | 16–17 |
+
+## 2. Decisões pendentes do proprietário
+
+| ID | Decisão necessária | Motivo | Prazo limite |
+|---|---|---|---|
+| DEC-001 | Resolvida: legado `viverappmobile`; novo `viverappweb` | confirmado pelo proprietário | resolvida em 2026-09-02 |
+| DEC-002 | Qual será a estratégia de convivência com o MAUI? | define compatibilidade de API e cutover | Fase 1/antes da 5 |
+| DEC-003 | Onde estão configuração e comportamento do login Google atual? | não aparecem nas fontes permitidas | antes da Fase 4 |
+| DEC-004 | Uma pessoa pode ter múltiplos papéis? | afeta identidade, CPF, UX e schema | antes da Fase 2 |
+| DEC-005 | O sistema continuará com uma clínica ou será multi-clínica? | legado usa frequentemente clínica ID 1 | antes da Fase 2 |
+| DEC-006 | A quais clínicas cada gestor/médico pertence? | autorização e isolamento dependem disso | antes da Fase 2 |
+| DEC-007 | Quem pode criar/editar paciente e relatório médico? | risco de takeover e sigilo profissional | antes das Fases 4/8 |
+| DEC-008 | Premium é vitalício, assinatura ou revalidação periódica? | afeta schema, preço e PagBank | antes da Fase 2/13 |
+| DEC-009 | Quais regras exatas de cancelamento, reagendamento e no-show? | máquina de estados e financeiro | antes da Fase 7 |
+| DEC-010 | Qual timezone operacional da clínica e há atendimento em outros fusos? | slots, lembretes e auditoria | antes da Fase 2/7 |
+| DEC-011 | Haverá gravação de videochamada? | alto impacto LGPD/custo; recomendação inicial é não | antes da Fase 12 |
+| DEC-012 | Quais provedores finais de hospedagem, MySQL, e-mail e TURN? | custo, resiliência e contratos | antes das fases correspondentes |
+| DEC-013 | Qual domínio/plano Cloudflare será adquirido? | WAF, R2 custom domain e DNS | antes da Fase 10/16 |
+| DEC-014 | Quais prazos de retenção para registros clínicos, anexos, financeiro, auditoria e contas? | schema, lifecycle e LGPD | antes da Fase 2/10 |
+| DEC-015 | Quem é controlador, operador e encarregado LGPD? | registro de tratamento/incidentes/direitos | antes de staging com dados reais |
+| DEC-016 | Qual política para contas cuja senha legada não puder ser migrada? | segurança e suporte | antes da Fase 4 |
+| DEC-017 | Quais KPIs administrativos continuam úteis? | evitar migrar analytics incorretos/excessivos | antes da Fase 14 |
+
+## 3. Recomendações técnicas já adotadas
+
+- monólito modular com Web e API separados;
+- hosted services dentro da API, extraíveis;
+- SignalR dentro da API e WebRTC no browser;
+- Blazor Interactive Server com autenticação de servidor/cookie;
+- MySQL 8.0.41 e EF DB-First a partir de `viverappweb`;
+- somente e-mail como canal externo; SMS, Firebase e push serão removidos;
+- migrations SQL versionadas antes do scaffold;
+- outbox/inbox para efeitos externos;
+- Cloudflare R2 privado para documentos e CDN apenas para conteúdo público;
+- lançamento incremental com reconciliação, não reescrita big bang.
+
+## 4. Spike obrigatório por integração
+
+Antes de implementar cada integração, a fase correspondente deve confirmar documentação e contratos vigentes:
+
+- Google: projeto OAuth, tela de consentimento, redirect URIs, vínculo e escopos mínimos;
+- PagBank: homologação, token produção, SHA-256 do webhook, estados e idempotência;
+- Cloudflare: conta, região/jurisdição, R2, custom domain, WAF e cache;
+- comunicação: SLA, opt-out, LGPD, sandbox e webhook de entrega;
+- TURN: provedor, regiões, credenciais temporárias e custo de relay.
+
+## 5. Critério de priorização
+
+1. impedir perda/exposição/elevação de privilégio;
+2. firmar identidade, dados e invariantes;
+3. entregar jornada clínica principal;
+4. integrar dinheiro, documentos, comunicação e vídeo;
+5. expandir backoffice/analytics;
+6. otimizar e operar em produção.
+
+Esse backlog não autoriza iniciar a Fase 2. Cada item só entra em execução quando sua fase for solicitada em branch própria.

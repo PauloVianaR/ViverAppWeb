@@ -9,10 +9,10 @@ O roteiro evita um “big bang”: cada fase deve entregar um incremento verific
 ## Decisões iniciais
 
 1. **Arquitetura:** monólito modular. `ViverApp.Web` e `ViverApp.Api` são processos separados; regras de negócio serão agrupadas por módulos e não por camadas genéricas globais.
-2. **Workers:** e-mail, SMS, notificações e rotinas agendadas entram inicialmente na API como hosted services sobre uma fila/outbox persistida no MySQL. O módulo será extraível se volume, disponibilidade ou escalabilidade justificarem outro processo.
+2. **Workers:** e-mail e rotinas agendadas entram inicialmente na API como hosted services sobre uma fila/outbox persistida no MySQL. Firebase, push e SMS não fazem parte do novo produto. O módulo será extraível se volume, disponibilidade ou escalabilidade justificarem outro processo.
 3. **Vídeo:** o hub de sinalização SignalR entra na API. A mídia WebRTC continua ponto a ponto quando adequado, com STUN/TURN e autorização de salas. Estado de presença não dependerá de dicionário estático em memória.
 4. **Autenticação web:** padrão BFF/cookie seguro para o navegador. Credenciais e tokens sensíveis permanecem no servidor; não serão armazenados no storage do browser.
-5. **Persistência:** Entity Framework Core DB-First para a nova aplicação, exclusivamente em MySQL 8.0.41. `vivermobileapp` é uma referência estritamente somente leitura; `viverwebapp` será o banco novo e a única fonte dos models EF e contratos web. O schema novo evoluirá por migrations SQL obrigatórias, executadas antes de cada novo scaffold.
+5. **Persistência:** Entity Framework Core DB-First para a nova aplicação, exclusivamente em MySQL 8.0.41. `viverappmobile` é uma referência estritamente somente leitura; `viverappweb` será o banco novo e a única fonte dos models EF e contratos web. O schema novo evoluirá por migrations SQL obrigatórias, executadas antes de cada novo scaffold.
 6. **Armazenamento:** migrar anexos do mecanismo legado compatível com S3/B2 para Cloudflare R2, servidos por domínio próprio/CDN com URLs assinadas quando o conteúdo não for público.
 7. **Segurança:** controles serão parte de cada fase, não uma revisão tardia. A Fase 3 estabelece a base transversal antes das funcionalidades sensíveis.
 
@@ -46,6 +46,8 @@ Cada fase deve:
 
 ## Fase 1 — Descoberta funcional, riscos e arquitetura executável
 
+**Estado:** implementação documental concluída em `codex/fase-01-descoberta`; aguardando revisão e aprovação antes de qualquer Fase 2.
+
 **Objetivo:** transformar o comportamento espalhado pelo MAUI/API/workers/hub em requisitos confiáveis antes de portar código.
 
 **Entregas:**
@@ -62,25 +64,27 @@ Cada fase deve:
 
 **Saída:** backlog priorizado, diagramas e decisões aprovadas; nenhuma portabilidade cega de código legado.
 
+**Artefatos:** [índice da Fase 1](fase-01/README.md) e [ADRs](adr/README.md).
+
 ## Fase 2 — Banco DB-First, modelo de domínio e baseline de dados
 
 **Objetivo:** criar persistência segura sem perder nem corromper o banco local existente.
 
 **Entregas:**
 
-- inventário somente leitura e backup restaurável de referência do schema `vivermobileapp`, sem qualquer alteração nesse banco;
-- criação do banco novo `viverwebapp` na conexão local, validando MySQL 8.0.41 e o nome do alvo antes de executar DDL;
+- inventário somente leitura e backup restaurável de referência do schema `viverappmobile`, sem qualquer alteração nesse banco;
+- criação do banco novo `viverappweb` na conexão local, validando MySQL 8.0.41 e o nome do alvo antes de executar DDL;
 - desenho da nova estrutura sem obrigação de reproduzir tabelas, nomes ou problemas do legado;
 - módulos/entidades iniciais, convenções de nomes, UTC, precisão monetária e concorrência otimista;
-- runner de migrations SQL versionadas, com histórico no próprio `viverwebapp`;
-- primeira migration/baseline SQL aplicada exclusivamente em `viverwebapp`;
-- scaffold DB-First reproduzível do `DbContext` e das entidades a partir de `viverwebapp`, usando provedor compatível com MySQL 8.0.41 e versão explícita;
+- runner de migrations SQL versionadas, com histórico no próprio `viverappweb`;
+- primeira migration/baseline SQL aplicada exclusivamente em `viverappweb`;
+- scaffold DB-First reproduzível do `DbContext` e das entidades a partir de `viverappweb`, usando provedor compatível com MySQL 8.0.41 e versão explícita;
 - models e contratos novos baseados exclusivamente no novo schema, sem reutilizar classes de `ViverApp.Shared`;
 - seeds apenas para dados de referência, idempotentes e versionados;
 - testes de integração contra MySQL 8.0.41 real, nunca SQLite como substituto;
 - plano de reconciliação e migração de dados legados.
 
-**Saída:** migrations SQL listadas e aplicadas em `viverwebapp`, scaffold DB-First reproduzido, schema validado, rollback ensaiado, `vivermobileapp` comprovadamente inalterado e zero uso de Azure/SQL Server.
+**Saída:** migrations SQL listadas e aplicadas em `viverappweb`, scaffold DB-First reproduzido, schema validado, rollback ensaiado, `viverappmobile` comprovadamente inalterado e zero uso de Azure/SQL Server.
 
 ## Fase 3 — Fundação de segurança, privacidade e observabilidade
 
@@ -217,17 +221,17 @@ Cada fase deve:
 
 **Saída:** 100% dos objetos reconciliados e acesso privado comprovado antes de desligar o storage antigo.
 
-## Fase 11 — Notificações, e-mail, SMS e jobs dentro da API
+## Fase 11 — E-mail e jobs dentro da API
 
 **Objetivo:** substituir os workers separados por processamento durável e observável.
 
 **Entregas:**
 
-- transactional outbox no MySQL para e-mail, SMS, notificações in-app/push e eventos;
+- transactional outbox no MySQL para e-mail e eventos internos;
 - hosted services modulares com claim atômico, idempotência, backoff com jitter, dead-letter e reprocessamento administrativo;
 - coordenação segura para múltiplas instâncias da API, sem duplicidade por memória local;
 - templates versionados e seguros, preferências/consentimento e supressão;
-- provedores de e-mail/SMS/push encapsulados e substituíveis;
+- provedor de e-mail encapsulado e substituível;
 - scheduler persistido para lembretes e manutenção;
 - métricas de fila, latência, falha e alertas; payloads sensíveis redigidos;
 - testes de crash entre envio e confirmação, concorrência e indisponibilidade do provedor.
@@ -356,7 +360,7 @@ Cada fase deve:
 - provedor de hospedagem da API/Blazor/MySQL fora do Azure;
 - domínio e plano Cloudflare;
 - estratégia de convivência ou corte do app MAUI;
-- provedor definitivo de e-mail, SMS, push e TURN;
+- provedores definitivos de e-mail e TURN;
 - necessidade de gravação de chamadas (recomendação inicial: não gravar);
 - política LGPD, prazos de retenção e responsáveis administrativos;
 - estratégia de recuperação para contas cujo segredo legado não possa ser migrado com segurança.
