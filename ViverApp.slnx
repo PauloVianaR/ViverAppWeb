@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ViverApp.Api/ViverApp.Api.csproj" />
+    <Project Path="src/ViverApp.Web/ViverApp.Web.csproj" />
+  </Folder>
+</Solution>

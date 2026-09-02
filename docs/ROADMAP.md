@@ -1,0 +1,362 @@
+# Roteiro de reimplementação do ViverApp
+
+## Visão do produto
+
+Reescrever o ecossistema atual como uma aplicação web segura, responsiva e operável, mantendo o legado apenas como fonte de requisitos. O destino é uma solution .NET 10 com Blazor, ASP.NET Core API, MySQL 8.0.41, processamento assíncrono durável, SignalR/WebRTC, PagBank e Cloudflare R2/CDN.
+
+O roteiro evita um “big bang”: cada fase deve entregar um incremento verificável em branch própria, com build, testes, migrations aplicadas e critérios de saída satisfeitos.
+
+## Decisões iniciais
+
+1. **Arquitetura:** monólito modular. `ViverApp.Web` e `ViverApp.Api` são processos separados; regras de negócio serão agrupadas por módulos e não por camadas genéricas globais.
+2. **Workers:** e-mail, SMS, notificações e rotinas agendadas entram inicialmente na API como hosted services sobre uma fila/outbox persistida no MySQL. O módulo será extraível se volume, disponibilidade ou escalabilidade justificarem outro processo.
+3. **Vídeo:** o hub de sinalização SignalR entra na API. A mídia WebRTC continua ponto a ponto quando adequado, com STUN/TURN e autorização de salas. Estado de presença não dependerá de dicionário estático em memória.
+4. **Autenticação web:** padrão BFF/cookie seguro para o navegador. Credenciais e tokens sensíveis permanecem no servidor; não serão armazenados no storage do browser.
+5. **Persistência:** Entity Framework Core DB-First para a nova aplicação, exclusivamente em MySQL 8.0.41. `vivermobileapp` é uma referência estritamente somente leitura; `viverwebapp` será o banco novo e a única fonte dos models EF e contratos web. O schema novo evoluirá por migrations SQL obrigatórias, executadas antes de cada novo scaffold.
+6. **Armazenamento:** migrar anexos do mecanismo legado compatível com S3/B2 para Cloudflare R2, servidos por domínio próprio/CDN com URLs assinadas quando o conteúdo não for público.
+7. **Segurança:** controles serão parte de cada fase, não uma revisão tardia. A Fase 3 estabelece a base transversal antes das funcionalidades sensíveis.
+
+## Regras de passagem entre fases
+
+Cada fase deve:
+
+- começar em `codex/fase-NN-descricao` fora de `main`/`master`;
+- executar apenas uma fase por branch e parar sem antecipar a seguinte;
+- registrar critérios de aceite e decisões arquiteturais relevantes;
+- consultar CodeGraph primeiro quando `.codegraph/` existir;
+- compilar sem warnings e executar todos os testes afetados;
+- criar, revisar e **aplicar todas** as migrations pendentes no MySQL 8.0.41;
+- não incluir segredo nem mudança em qualquer projeto legado;
+- atualizar este roteiro quando uma descoberta alterar dependências ou escopo.
+
+## Fase 0 — Fundação da solution
+
+**Objetivo:** criar a base vazia e as regras de trabalho.
+
+**Escopo:**
+
+- solution `ViverApp.slnx` em .NET 10;
+- Blazor Web App com interatividade Server;
+- ASP.NET Core Web API sem endpoints de negócio;
+- SDK fixado, warnings como erros, ignores locais, documentação e `AGENTS.md`;
+- `UserSecretsId` na API;
+- transferência segura apenas de `LocalConnection` e da seção PagBank; exclusão das strings Azure.
+
+**Saída:** restore e build bem-sucedidos; nenhum pacote ou feature de negócio; nenhum segredo no repositório.
+
+## Fase 1 — Descoberta funcional, riscos e arquitetura executável
+
+**Objetivo:** transformar o comportamento espalhado pelo MAUI/API/workers/hub em requisitos confiáveis antes de portar código.
+
+**Entregas:**
+
+- mapa de jornadas por perfil: paciente, médico, gestor e administrador;
+- inventário de endpoints, tabelas, telas, regras, jobs, integrações e arquivos;
+- matriz “legado → módulo/caso de uso novo”, marcando manter, corrigir ou remover;
+- glossário do domínio e estados válidos de agendamento, pagamento e usuário premium;
+- classificação LGPD dos dados, retenção, consentimento e bases legais a validar;
+- threat model com fronteiras de confiança e riscos STRIDE/OWASP;
+- ADRs para autenticação, módulos, fila/outbox, vídeo, armazenamento e implantação;
+- estratégia de testes e ambientes;
+- levantamento específico da experiência de login Google existente, inclusive configurações externas que não estejam visíveis no código atual.
+
+**Saída:** backlog priorizado, diagramas e decisões aprovadas; nenhuma portabilidade cega de código legado.
+
+## Fase 2 — Banco DB-First, modelo de domínio e baseline de dados
+
+**Objetivo:** criar persistência segura sem perder nem corromper o banco local existente.
+
+**Entregas:**
+
+- inventário somente leitura e backup restaurável de referência do schema `vivermobileapp`, sem qualquer alteração nesse banco;
+- criação do banco novo `viverwebapp` na conexão local, validando MySQL 8.0.41 e o nome do alvo antes de executar DDL;
+- desenho da nova estrutura sem obrigação de reproduzir tabelas, nomes ou problemas do legado;
+- módulos/entidades iniciais, convenções de nomes, UTC, precisão monetária e concorrência otimista;
+- runner de migrations SQL versionadas, com histórico no próprio `viverwebapp`;
+- primeira migration/baseline SQL aplicada exclusivamente em `viverwebapp`;
+- scaffold DB-First reproduzível do `DbContext` e das entidades a partir de `viverwebapp`, usando provedor compatível com MySQL 8.0.41 e versão explícita;
+- models e contratos novos baseados exclusivamente no novo schema, sem reutilizar classes de `ViverApp.Shared`;
+- seeds apenas para dados de referência, idempotentes e versionados;
+- testes de integração contra MySQL 8.0.41 real, nunca SQLite como substituto;
+- plano de reconciliação e migração de dados legados.
+
+**Saída:** migrations SQL listadas e aplicadas em `viverwebapp`, scaffold DB-First reproduzido, schema validado, rollback ensaiado, `vivermobileapp` comprovadamente inalterado e zero uso de Azure/SQL Server.
+
+## Fase 3 — Fundação de segurança, privacidade e observabilidade
+
+**Objetivo:** estabelecer controles transversais antes de expor funcionalidades.
+
+**Entregas:**
+
+- HTTPS/HSTS, cookies `Secure`/`HttpOnly`/`SameSite`, antiforgery e CORS por allowlist;
+- CSP com nonces/hashes, Permissions-Policy, proteção de framing, MIME sniffing e referrer policy;
+- rate limiting por endpoint/identidade/IP, limites de payload e timeout/cancelamento;
+- validação central, Problem Details, encoding contextual e proteção a XSS, SQL injection, SSRF, path traversal e mass assignment;
+- honeypot em formulários públicos como sinal complementar, sem substituir rate limiting/CAPTCHA adaptativo;
+- bloqueio progressivo, detecção de abuso e respostas sem enumeração de contas;
+- auditoria imutável para ações críticas e logs estruturados com correlação e redação de PII/segredos;
+- health/readiness checks sem revelar detalhes; métricas, tracing e alertas;
+- varredura de dependências, SAST, secret scanning e baseline de testes OWASP;
+- política de backup, retenção, restauração e resposta a incidentes.
+
+**Saída:** checklist de segurança automatizado e threat model atualizado.
+
+## Fase 4 — Identidade, login Google e autorização
+
+**Objetivo:** substituir a autenticação legada por identidade moderna e políticas por perfil.
+
+**Entregas:**
+
+- ASP.NET Core Identity adaptado ao MySQL, sessões revogáveis e confirmação de contato;
+- senhas com hash adaptativo, salgado e versionado (preferência inicial: Argon2id após validação da biblioteca; fallback documentado para o hasher robusto do Identity);
+- remoção completa de criptografia reversível para novas credenciais;
+- migrador temporário e auditado para converter as senhas AES/ECB legadas em hash, com backup, relatório de falhas, descarte posterior da chave e redefinição forçada quando necessário;
+- recuperação por token curto de uso único; nunca enviar senha temporária em texto claro;
+- Google OpenID Connect/OAuth 2.0 com `state`, `nonce`, PKCE quando aplicável, e-mail verificado e vínculo explícito de conta para impedir account takeover;
+- roles/policies para Paciente, Médico, Gestor e Administrador, sempre com checagem de ownership na API;
+- MFA obrigatório para administrador, priorizando passkeys/WebAuthn e oferecendo TOTP/recovery codes conforme suporte;
+- gestão de dispositivos/sessões, rotação, revogação e eventos de segurança;
+- testes para brute force, enumeração, CSRF, fixation, redirect indevido, privilege escalation e vínculo Google.
+
+**Saída:** matriz de autorização coberta por testes e nenhuma senha reversível restante no novo sistema.
+
+## Fase 5 — Cadastros e configuração clínica
+
+**Objetivo:** reconstruir os dados mestres usados pelas jornadas.
+
+**Entregas:**
+
+- usuários e perfis profissionais;
+- clínica, especialidades, tipos de atendimento e feriados;
+- disponibilidade da clínica e de médicos;
+- aprovação/status de profissionais e regras administrativas;
+- APIs versionadas, paginação, filtros, validação e auditoria;
+- primeiras telas responsivas de manutenção conforme o design system da Fase 6.
+
+**Saída:** CRUDs autorizados por política, sem exposição direta de entidades EF.
+
+## Fase 6 — Design system e shell web responsivo
+
+**Objetivo:** redesenhar a experiência MAUI para web, preservando a identidade útil sem copiar limitações mobile.
+
+**Entregas:**
+
+- inventário visual do XAML, marca, cores, tipografia e iconografia;
+- tokens, componentes reutilizáveis e documentação de estados;
+- navegação adaptativa: celular, tablet, notebook, desktop largo e zoom de 200%;
+- shells específicos por perfil com menus e densidade adequados, sem confiar na UI para autorização;
+- layouts para tabelas/filtros no desktop e cartões/ações no mobile;
+- loading, skeleton, vazio, erro, offline/degradação e sessão expirada;
+- WCAG 2.2 AA, teclado, leitor de tela, foco, contraste e redução de movimento;
+- testes visuais e de acessibilidade nos breakpoints acordados.
+
+**Saída:** biblioteca visual aprovada e páginas-base prontas para receber os fluxos.
+
+## Fase 7 — Agenda e agendamento do paciente
+
+**Objetivo:** entregar a jornada principal de descoberta e marcação.
+
+**Entregas:**
+
+- busca/filtro de profissionais, especialidades, modalidade e disponibilidade;
+- criação de agendamento com transação, idempotência e proteção contra dupla reserva;
+- timezone explícito, conflitos de agenda, feriados, limites e validações de negócio;
+- reagendamento e cancelamento conforme políticas;
+- agenda futura e detalhes para paciente;
+- testes de concorrência e estados extremos.
+
+**Saída:** fluxo completo e responsivo, consistente mesmo sob requisições concorrentes.
+
+## Fase 8 — Jornadas de médico e gestor
+
+**Objetivo:** entregar operação clínica e gestão de pacientes.
+
+**Entregas:**
+
+- agenda, histórico, filtros e detalhes;
+- gestão de disponibilidade e modalidades;
+- lista autorizada de pacientes vinculados;
+- conclusão de consulta, relatório médico e regras de visibilidade;
+- controles de acesso por clínica/vínculo e trilha de auditoria;
+- adaptação de fluxos densos para desktop/tablet sem prejudicar mobile.
+
+**Saída:** médico e gestor só acessam dados permitidos e toda alteração crítica é auditada.
+
+## Fase 9 — PagBank Checkout em produção
+
+**Objetivo:** reimplementar cobrança sem confiar no navegador nem no comportamento frágil legado.
+
+**Entregas:**
+
+- validação da versão atual da API e documentação oficial do PagBank no início da fase;
+- cliente HTTP resiliente com configuração tipada e token de produção somente no backend;
+- criação de checkout a partir de valores calculados no servidor;
+- idempotência ponta a ponta para criação, retorno e webhook;
+- validação de autenticidade/assinatura do webhook segundo a especificação oficial vigente;
+- máquina de estados de pagamento, proteção contra replay, processamento transacional e reconciliação periódica;
+- páginas de retorno/sucesso/erro que consultam o estado real no servidor;
+- política de reembolso/cancelamento e trilha financeira auditável;
+- testes sandbox, testes de contrato e roteiro controlado para produção sem cobrança acidental.
+
+**Saída:** cenários duplicados, atrasados, forjados e fora de ordem cobertos; ativação de produção exige autorização explícita.
+
+## Fase 10 — Anexos, Cloudflare R2, domínio e CDN
+
+**Objetivo:** migrar documentos e mídia para armazenamento seguro e entrega eficiente.
+
+**Entregas:**
+
+- inventário e checksum dos objetos no storage legado;
+- buckets/ambientes separados no Cloudflare R2, menor privilégio e rotação de credenciais;
+- uploads validados por tamanho, extensão, MIME real e antivírus/quarentena;
+- chaves de objeto não previsíveis, metadados mínimos, criptografia e política de retenção;
+- URLs assinadas e curtas para conteúdo privado; nada médico deve se tornar público por CDN;
+- domínio próprio, DNS, TLS, regras de cache, invalidação e proteção de hotlink quando aplicável;
+- migração em lotes com retry, relatório de divergências, dual-read temporário e rollback;
+- testes de autorização, cache e indisponibilidade.
+
+**Saída:** 100% dos objetos reconciliados e acesso privado comprovado antes de desligar o storage antigo.
+
+## Fase 11 — Notificações, e-mail, SMS e jobs dentro da API
+
+**Objetivo:** substituir os workers separados por processamento durável e observável.
+
+**Entregas:**
+
+- transactional outbox no MySQL para e-mail, SMS, notificações in-app/push e eventos;
+- hosted services modulares com claim atômico, idempotência, backoff com jitter, dead-letter e reprocessamento administrativo;
+- coordenação segura para múltiplas instâncias da API, sem duplicidade por memória local;
+- templates versionados e seguros, preferências/consentimento e supressão;
+- provedores de e-mail/SMS/push encapsulados e substituíveis;
+- scheduler persistido para lembretes e manutenção;
+- métricas de fila, latência, falha e alertas; payloads sensíveis redigidos;
+- testes de crash entre envio e confirmação, concorrência e indisponibilidade do provedor.
+
+**Saída:** workers legados deixam de ser necessários somente após execução paralela controlada e reconciliação.
+
+## Fase 12 — Videochamada segura
+
+**Objetivo:** incorporar a sinalização do VideoHub e endurecer a jornada WebRTC.
+
+**Entregas:**
+
+- SignalR autenticado dentro da API e autorização por agendamento/sala;
+- identificadores imprevisíveis e credenciais de sala temporárias;
+- mensagens de sinalização com schema/limites, rate limiting e rejeição de payloads inválidos;
+- presença distribuída com expiração, sem `static Dictionary` como fonte de verdade;
+- STUN/TURN com credenciais efêmeras, HTTPS/WSS e allowlist de origem;
+- consentimento/permissões de câmera e microfone, estados de reconexão e teste de rede;
+- nenhuma gravação por padrão; qualquer gravação futura exige fase própria de privacidade;
+- testes com dois participantes, queda/reentrada, múltiplas instâncias e tentativa de acesso indevido.
+
+**Saída:** somente participantes autorizados sinalizam na sala e a solução escala além de uma instância.
+
+## Fase 13 — Pagamentos internos, premium e documentos
+
+**Objetivo:** reconstruir histórico financeiro e fluxo de usuário premium.
+
+**Entregas:**
+
+- histórico paginado, filtros e precisão monetária;
+- vínculo consistente entre checkout, pagamento e agendamento;
+- solicitação/análise de premium e documentos de plano de saúde;
+- autorização por ownership/papel e auditoria administrativa;
+- regras de retenção e acesso aos documentos;
+- reconciliação com registros legados.
+
+**Saída:** invariantes financeiras e de premium cobertas por testes e relatórios de reconciliação.
+
+## Fase 14 — Administração, analytics e operação
+
+**Objetivo:** reconstruir o backoffice com controles elevados.
+
+**Entregas:**
+
+- gestão de usuários, clínicas, agendamentos, premium e notificações;
+- MFA obrigatório, step-up authentication para ações críticas e sessões administrativas curtas;
+- segregação de funções e dupla confirmação para ações de alto impacto;
+- dashboards calculados no servidor com consultas limitadas e dados minimizados;
+- exportações assíncronas, auditadas, expiradas e protegidas;
+- console de filas/reprocessamento sem revelar segredos ou payloads médicos.
+
+**Saída:** trilha auditável e testes de elevação horizontal/vertical de privilégio.
+
+## Fase 15 — Robustez, desempenho e segurança ofensiva
+
+**Objetivo:** preparar o conjunto funcional para tráfego e ataques reais.
+
+**Entregas:**
+
+- testes de carga para login, agenda, checkout, SignalR e workers;
+- otimização de queries/índices medida por evidência;
+- testes de caos de provedores e retomada de jobs;
+- DAST, revisão OWASP ASVS, pentest independente e correção dos achados;
+- SBOM, dependências fixadas, assinatura/proveniência dos artefatos e pipeline de atualização;
+- revisão LGPD, acessibilidade e compatibilidade de navegadores;
+- SLOs, alertas acionáveis e runbooks.
+
+**Saída:** nenhum achado crítico/alto aberto e metas de desempenho/SLO atendidas.
+
+## Fase 16 — Infraestrutura, Cloudflare e CI/CD
+
+**Objetivo:** publicar sem Azure, com entrega repetível e origem protegida.
+
+**Entregas:**
+
+- ambientes separados, infraestrutura documentada e configuração por segredo;
+- domínio próprio no Cloudflare, DNSSEC, TLS estrito, CDN, WAF, bot management/rate rules conforme plano contratado;
+- origem acessível apenas pelos caminhos necessários e headers/IPs confiáveis validados corretamente;
+- deploy imutável com health checks, rollback e migrations coordenadas;
+- banco MySQL 8.0.41 com backup criptografado, restore testado e plano de recuperação;
+- CI com restore/build/test/format, migration script revisado, SAST/SCA/secret scan e artefatos versionados;
+- monitoramento de certificado, domínio, disponibilidade, filas e pagamentos.
+
+**Saída:** ensaio de deploy/rollback/restore aprovado. Compra e alterações externas exigem autorização do usuário.
+
+## Fase 17 — Migração final e lançamento gradual
+
+**Objetivo:** migrar dados e usuários com risco controlado.
+
+**Entregas:**
+
+- ensaio completo com cópia anonimizada/sintética e medição de duração;
+- validações por contagem, checksum e invariantes de negócio;
+- conversão final de senhas para hash ou fluxo de redefinição seguro;
+- migração/reconciliação de arquivos, agendamentos, pagamentos e filas;
+- janela de corte, modo manutenção quando necessário e plano de rollback;
+- canário/feature flags, monitoramento intensivo e suporte;
+- comunicação e procedimentos de incidentes.
+
+**Saída:** reconciliação assinada, métricas saudáveis e rollback ainda possível.
+
+## Fase 18 — Desativação controlada do legado
+
+**Objetivo:** encerrar componentes antigos somente depois da estabilidade comprovada.
+
+**Entregas:**
+
+- período de estabilidade e critérios objetivos cumpridos;
+- revogação/rotação de credenciais antigas e remoção de acessos externos;
+- retenção legal de dados/logs, backup final e documentação operacional;
+- desligamento do worker, API, VideoHub e storage antigos sem editar seu código-fonte;
+- pós-implementação, custos e backlog de melhorias.
+
+**Saída:** ausência de tráfego/dependências legadas confirmada e plano de recuperação arquivado.
+
+## Marcos sugeridos
+
+- **Marco A — Base confiável:** Fases 0 a 4.
+- **Marco B — MVP clínico web:** Fases 5 a 8.
+- **Marco C — Ecossistema integrado:** Fases 9 a 13.
+- **Marco D — Produção endurecida:** Fases 14 a 17.
+- **Encerramento:** Fase 18.
+
+## Decisões que deverão ser confirmadas com o proprietário
+
+- provedor de hospedagem da API/Blazor/MySQL fora do Azure;
+- domínio e plano Cloudflare;
+- estratégia de convivência ou corte do app MAUI;
+- provedor definitivo de e-mail, SMS, push e TURN;
+- necessidade de gravação de chamadas (recomendação inicial: não gravar);
+- política LGPD, prazos de retenção e responsáveis administrativos;
+- estratégia de recuperação para contas cujo segredo legado não possa ser migrado com segurança.
