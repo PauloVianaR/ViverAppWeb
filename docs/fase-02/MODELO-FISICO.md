@@ -12,6 +12,9 @@ O schema abaixo é a fonte de verdade da persistência. As classes EF em `Infras
 | `external_logins` | vínculo OIDC | apenas Google; no máximo um vínculo Google por conta |
 | `auth_sessions` | sessões revogáveis | token de renovação somente em hash; expiração posterior à criação |
 | `account_challenges` | login, confirmação e recuperação | canal e-mail/SMS; código e destino somente em hash; expiração e limite de tentativas |
+| `account_authenticators` | segredo TOTP por conta | chave protegida por Data Protection e ativação explícita |
+| `account_recovery_codes` | recuperação do MFA | código em HMAC e consumo atômico de uso único |
+| `account_passkeys` | credenciais WebAuthn | credencial pública vinculada a uma única conta; máximo aplicado pela aplicação |
 | `patient_profiles` | dados próprios de paciente | relação 1:1 com conta |
 | `doctor_profiles` | dados profissionais | relação 1:1 com conta; registro profissional único |
 

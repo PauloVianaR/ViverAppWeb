@@ -7,11 +7,11 @@ Reimplementação web do ViverApp em .NET 10, composta inicialmente por:
 - `ViverApp.Web`: Blazor Web App com interatividade Server;
 - `ViverApp.Api`: ASP.NET Core Web API;
 - `docs/ROADMAP.md`: plano completo e incremental da reimplementação;
-- `docs/fase-01/`, `docs/fase-02/` e `docs/fase-03/`: descoberta, persistência e baseline de segurança;
+- `docs/fase-01/` a `docs/fase-04/`: descoberta, persistência, segurança e identidade;
 - `docs/adr/`: decisões arquiteturais duráveis;
 - `AGENTS.md`: regras obrigatórias para agentes de IA.
 
-As Fases 0 a 3 criaram a fundação compilável, o banco DB-First e os controles transversais de segurança/observabilidade. Ainda não há autenticação real, endpoints de negócio, integrações ativas, workers ou regras de negócio implementados.
+As Fases 0 a 3 estão integradas à `main`. A Fase 4 está concluída e com integração autorizada, acrescentando identidade real, login por senha/e-mail/SMS/Google/passkey, MFA TOTP, sessões revogáveis e entrega dos códigos de autenticação por SMTP/SMSBarato. A configuração externa e a validação real do Google foram transferidas para a Fase 5 por decisão do proprietário. Endpoints de negócio e a interface visual de acesso ainda não fazem parte desta etapa.
 
 ## Pré-requisitos
 
@@ -30,7 +30,7 @@ dotnet run --project src/ViverApp.Web
 
 ## Segredos de desenvolvimento
 
-O projeto `ViverApp.Api` possui um `UserSecretsId`. Foram transferidas para o armazenamento local do .NET apenas estas chaves do legado:
+O projeto `ViverApp.Api` possui um `UserSecretsId`. As credenciais legadas necessárias e o novo segredo da identidade ficam somente no armazenamento local do .NET:
 
 - `ConnectionStrings:LocalConnection`;
 - `PagBank:SandboxUrl`;
@@ -39,17 +39,22 @@ O projeto `ViverApp.Api` possui um `UserSecretsId`. Foram transferidas para o ar
 - `PagBank:TokenProduction`;
 - `SmsBarato:ApiKey` e `SmsBarato:BaseUrl`;
 - `Smtp:Host`, `Smtp:Port`, `Smtp:User` e `Smtp:Password`.
+- `Authentication:ChallengePepper`.
+
+As credenciais `Authentication:Google:ClientId` e `Authentication:Google:ClientSecret` deverão ser adicionadas depois de criar um cliente OAuth Web no Google; elas não possuem fallback no repositório.
 
 As connection strings de Azure não foram copiadas. Nenhum valor secreto deve ser incluído no repositório, em exemplos, logs, testes ou documentação.
 
-O banco legado `viverappmobile` é somente leitura. A aplicação web usa o banco novo `viverappweb`, criado na Fase 2 e governado por migrations SQL antes do scaffold DB-First. As migrations `0001` a `0004` estão aplicadas e o modelo EF foi gerado exclusivamente desse schema.
+O banco legado `viverappmobile` é somente leitura. A aplicação web usa o banco novo `viverappweb`, criado na Fase 2 e governado por migrations SQL antes do scaffold DB-First. As migrations `0001` a `0005` estão aplicadas e o modelo EF foi gerado exclusivamente desse schema.
 
 Para conferir somente os nomes configurados, sem compartilhar valores:
 
 ```powershell
-dotnet user-secrets list --project src/ViverApp.Api/ViverApp.Api.csproj
+dotnet user-secrets list --project src/ViverApp.Api/ViverApp.Api.csproj |
+    ForEach-Object { ($_ -split ' = ', 2)[0] } |
+    Sort-Object
 ```
 
 ## Estado atual
 
-As Fases 1 a 3 estão concluídas e documentadas nos respectivos índices: [descoberta e arquitetura](docs/fase-01/README.md), [persistência DB-First](docs/fase-02/README.md) e [segurança e observabilidade](docs/fase-03/README.md).
+As Fases 1 a 3 estão concluídas e documentadas nos respectivos índices: [descoberta e arquitetura](docs/fase-01/README.md), [persistência DB-First](docs/fase-02/README.md) e [segurança e observabilidade](docs/fase-03/README.md). A implementação ainda não integrada da Fase 4 está em [identidade e autorização](docs/fase-04/README.md).

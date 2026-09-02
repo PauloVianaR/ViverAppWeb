@@ -32,7 +32,7 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(24, applicationEntities.Length);
+        Assert.Equal(27, applicationEntities.Length);
         Assert.DoesNotContain(
             applicationEntities,
             entity => string.Equals(entity.GetTableName(), "__schema_migrations", StringComparison.Ordinal));
@@ -63,7 +63,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005", migrations);
 
         var forbiddenColumns = await ExecuteScalarAsync(
             connection,
@@ -112,6 +112,41 @@ public sealed class DatabaseContractTests
                   'trg_audit_events_block_delete')
             """);
         Assert.Equal("2", auditProtectionTriggers);
+
+        var identityTables = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.tables
+            WHERE table_schema = 'viverappweb'
+              AND table_name IN (
+                  'account_authenticators',
+                  'account_recovery_codes',
+                  'account_passkeys')
+            """);
+        Assert.Equal("3", identityTables);
+
+        var reversiblePasswordColumns = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_schema = 'viverappweb'
+              AND column_name IN ('password', 'encrypted_password', 'password_ciphertext')
+            """);
+        Assert.Equal("0", reversiblePasswordColumns);
+
+        var roleColumns = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_schema = 'viverappweb'
+              AND table_name = 'accounts'
+              AND column_name = 'role_code'
+              AND is_nullable = 'NO'
+            """);
+        Assert.Equal("1", roleColumns);
     }
 
     private static ViverAppDbContext CreateContext()

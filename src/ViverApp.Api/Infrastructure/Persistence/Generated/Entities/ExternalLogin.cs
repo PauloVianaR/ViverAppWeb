@@ -13,6 +13,8 @@ public partial class ExternalLogin
 
     public string? ProviderEmail { get; set; }
 
+    public bool ProviderEmailVerified { get; set; }
+
     public DateTime LinkedAtUtc { get; set; }
 
     public DateTime? LastUsedAtUtc { get; set; }

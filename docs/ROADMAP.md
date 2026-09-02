@@ -90,7 +90,7 @@ Cada fase deve:
 
 ## Fase 3 — Fundação de segurança, privacidade e observabilidade
 
-**Estado:** implementada em `codex/fase-03-seguranca-observabilidade`; ainda não integrada à `main`.
+**Estado:** concluída e integrada à `main`.
 
 **Objetivo:** estabelecer controles transversais antes de expor funcionalidades.
 
@@ -113,6 +113,8 @@ Cada fase deve:
 
 ## Fase 4 — Identidade, login Google/e-mail/SMS e autorização
 
+**Estado:** concluída em `codex/fase-04-identidade-autorizacao`; integração à `main` autorizada pelo proprietário.
+
 **Objetivo:** substituir a autenticação legada por identidade moderna e políticas por perfil.
 
 **Entregas:**
@@ -120,12 +122,12 @@ Cada fase deve:
 - ASP.NET Core Identity adaptado ao MySQL, sessões revogáveis e confirmação de contato;
 - senhas com hash adaptativo, salgado e versionado (preferência inicial: Argon2id após validação da biblioteca; fallback documentado para o hasher robusto do Identity);
 - remoção completa de criptografia reversível para novas credenciais;
-- migrador temporário e auditado para converter as senhas AES/ECB legadas em hash, com backup, relatório de falhas, descarte posterior da chave e redefinição forçada quando necessário;
+- transição auditada sem transportar AES/ECB: contas legadas futuramente elegíveis entram sem a credencial reversível e executam redefinição forçada por contato confirmado; a chave AES não entra no runtime Web;
 - login local por e-mail ou telefone, com senha armazenada somente como hash, além do login Google;
 - confirmação e recuperação por código curto, de uso único e armazenado como hash, enviado por e-mail ou SMSBarato; nunca enviar senha temporária em texto claro;
 - Google OpenID Connect/OAuth 2.0 com `state`, `nonce`, PKCE quando aplicável, e-mail verificado e vínculo explícito de conta para impedir account takeover;
 - exatamente um papel por conta entre Paciente, Médico, Gestor e Administrador, com policies e checagem de ownership na API;
-- MFA obrigatório para administrador, priorizando passkeys/WebAuthn e oferecendo TOTP/recovery codes conforme suporte;
+- passkeys/WebAuthn como login primário moderno e MFA obrigatório para administrador por TOTP ou recovery code de uso único, pois passkeys nativas do ASP.NET Core 10 não operam como segundo fator;
 - gestão de dispositivos/sessões, rotação, revogação e eventos de segurança;
 - testes para brute force, enumeração, CSRF, fixation, redirect indevido, privilege escalation e vínculo Google.
 
@@ -137,6 +139,7 @@ Cada fase deve:
 
 **Entregas:**
 
+- concluir a configuração externa do cliente OAuth Web do Google e validar o handshake real sem versionar credenciais;
 - usuários e perfis profissionais;
 - clínica, especialidades, tipos de atendimento e feriados;
 - disponibilidade da clínica e de médicos;

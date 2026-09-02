@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
+using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Infrastructure.Persistence;
 using ViverApp.Security;
 
@@ -35,7 +36,7 @@ builder.Services.AddProblemDetails(options =>
     };
 });
 builder.Services
-    .AddControllers(options =>
+    .AddControllersWithViews(options =>
         options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()))
     .AddJsonOptions(options => options.JsonSerializerOptions.MaxDepth = 32);
 builder.Services.AddViverAppSecurityBaseline(
@@ -47,6 +48,7 @@ builder.Services.AddViverAppObservability(
     builder.Environment,
     "ViverApp.Api");
 builder.Services.AddViverAppDatabase(builder.Configuration);
+builder.Services.AddViverAppIdentity(builder.Configuration);
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), ["live"])
     .AddCheck<DatabaseReadinessHealthCheck>("database", tags: ["ready"]);

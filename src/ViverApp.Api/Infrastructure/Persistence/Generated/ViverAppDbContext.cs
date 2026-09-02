@@ -16,7 +16,13 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<AccountAddress> AccountAddresses { get; set; }
 
+    public virtual DbSet<AccountAuthenticator> AccountAuthenticators { get; set; }
+
     public virtual DbSet<AccountChallenge> AccountChallenges { get; set; }
+
+    public virtual DbSet<AccountPasskey> AccountPasskeys { get; set; }
+
+    public virtual DbSet<AccountRecoveryCode> AccountRecoveryCodes { get; set; }
 
     public virtual DbSet<ApplicationSetting> ApplicationSettings { get; set; }
 
@@ -168,6 +174,32 @@ public partial class ViverAppDbContext : DbContext
                 .HasConstraintName("fk_account_addresses_account");
         });
 
+        modelBuilder.Entity<AccountAuthenticator>(entity =>
+        {
+            entity.HasKey(e => e.AccountId).HasName("PRIMARY");
+
+            entity.ToTable("account_authenticators");
+
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.EnabledAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("enabled_at_utc");
+            entity.Property(e => e.IsEnabled).HasColumnName("is_enabled");
+            entity.Property(e => e.ProtectedKey)
+                .HasMaxLength(2048)
+                .HasColumnName("protected_key");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.Account).WithOne(p => p.AccountAuthenticator)
+                .HasForeignKey<AccountAuthenticator>(d => d.AccountId)
+                .HasConstraintName("fk_account_authenticators_account");
+        });
+
         modelBuilder.Entity<AccountChallenge>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
@@ -212,6 +244,77 @@ public partial class ViverAppDbContext : DbContext
             entity.HasOne(d => d.Account).WithMany(p => p.AccountChallenges)
                 .HasForeignKey(d => d.AccountId)
                 .HasConstraintName("fk_account_challenges_account");
+        });
+
+        modelBuilder.Entity<AccountPasskey>(entity =>
+        {
+            entity.HasKey(e => e.CredentialId).HasName("PRIMARY");
+
+            entity.ToTable("account_passkeys");
+
+            entity.HasIndex(e => new { e.AccountId, e.CreatedAtUtc }, "ix_account_passkeys_account");
+
+            entity.Property(e => e.CredentialId)
+                .HasMaxLength(1024)
+                .HasColumnName("credential_id");
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.AttestationObject)
+                .HasColumnType("blob")
+                .HasColumnName("attestation_object");
+            entity.Property(e => e.ClientDataJson)
+                .HasColumnType("blob")
+                .HasColumnName("client_data_json");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.DisplayName)
+                .HasMaxLength(100)
+                .HasColumnName("display_name");
+            entity.Property(e => e.IsBackedUp).HasColumnName("is_backed_up");
+            entity.Property(e => e.IsBackupEligible).HasColumnName("is_backup_eligible");
+            entity.Property(e => e.IsUserVerified).HasColumnName("is_user_verified");
+            entity.Property(e => e.PublicKey)
+                .HasMaxLength(2048)
+                .HasColumnName("public_key");
+            entity.Property(e => e.SignCount).HasColumnName("sign_count");
+            entity.Property(e => e.TransportsJson)
+                .HasColumnType("json")
+                .HasColumnName("transports_json");
+
+            entity.HasOne(d => d.Account).WithMany(p => p.AccountPasskeys)
+                .HasForeignKey(d => d.AccountId)
+                .HasConstraintName("fk_account_passkeys_account");
+        });
+
+        modelBuilder.Entity<AccountRecoveryCode>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("account_recovery_codes");
+
+            entity.HasIndex(e => new { e.AccountId, e.UsedAtUtc }, "ix_account_recovery_codes_available");
+
+            entity.HasIndex(e => new { e.AccountId, e.CodeHash }, "ux_account_recovery_codes_hash").IsUnique();
+
+            entity.Property(e => e.Id)
+                .HasMaxLength(16)
+                .IsFixedLength()
+                .HasColumnName("id");
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.CodeHash)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("code_hash");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.UsedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("used_at_utc");
+
+            entity.HasOne(d => d.Account).WithMany(p => p.AccountRecoveryCodes)
+                .HasForeignKey(d => d.AccountId)
+                .HasConstraintName("fk_account_recovery_codes_account");
         });
 
         modelBuilder.Entity<ApplicationSetting>(entity =>
@@ -472,6 +575,10 @@ public partial class ViverAppDbContext : DbContext
                 .IsFixedLength()
                 .HasColumnName("id");
             entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.AuthenticationMethod)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'password'")
+                .HasColumnName("authentication_method");
             entity.Property(e => e.CreatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("created_at_utc");
@@ -485,6 +592,7 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.LastSeenAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("last_seen_at_utc");
+            entity.Property(e => e.MfaSatisfied).HasColumnName("mfa_satisfied");
             entity.Property(e => e.RefreshTokenHash)
                 .HasMaxLength(32)
                 .IsFixedLength()
@@ -674,6 +782,7 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.ProviderEmail)
                 .HasMaxLength(254)
                 .HasColumnName("provider_email");
+            entity.Property(e => e.ProviderEmailVerified).HasColumnName("provider_email_verified");
 
             entity.HasOne(d => d.Account).WithMany(p => p.ExternalLogins)
                 .HasForeignKey(d => d.AccountId)

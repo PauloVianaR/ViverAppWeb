@@ -33,7 +33,7 @@ Este é um plano para fases futuras. A Fase 2 não copia registros de `viverappm
 
 ## Senhas e contatos
 
-Nenhuma senha reversível será gravada no novo schema. Na Fase 4, uma ferramenta transitória poderá validar a credencial legada uma única vez e substituí-la por hash adaptativo, ou exigir redefinição quando a conversão segura não for possível. A chave legada não será incorporada ao runtime permanente.
+Nenhuma senha reversível será gravada no novo schema. A Fase 4 escolheu a alternativa de redefinição forçada: contas futuramente migradas entrarão sem a senha AES/ECB e definirão uma credencial nova por contato reconciliado e confirmado. A chave legada não será incorporada ao runtime permanente nem usada para materializar senhas em texto claro.
 
 E-mail e telefone serão normalizados e verificados. Login e recuperação poderão usar e-mail ou SMSBarato; Google continuará como alternativa externa. Tokens e códigos legados não serão reaproveitados.
 

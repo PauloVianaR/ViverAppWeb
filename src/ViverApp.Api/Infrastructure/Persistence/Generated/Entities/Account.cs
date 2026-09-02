@@ -43,7 +43,13 @@ public partial class Account
 
     public virtual AccountAddress? AccountAddress { get; set; }
 
+    public virtual AccountAuthenticator? AccountAuthenticator { get; set; }
+
     public virtual ICollection<AccountChallenge> AccountChallenges { get; set; } = new List<AccountChallenge>();
+
+    public virtual ICollection<AccountPasskey> AccountPasskeys { get; set; } = new List<AccountPasskey>();
+
+    public virtual ICollection<AccountRecoveryCode> AccountRecoveryCodes { get; set; } = new List<AccountRecoveryCode>();
 
     public virtual ICollection<ApplicationSetting> ApplicationSettings { get; set; } = new List<ApplicationSetting>();
 

@@ -2,8 +2,6 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
@@ -88,14 +86,6 @@ public static class SecurityServiceCollectionExtensions
                 TimeSpan.FromMinutes(2));
         });
 
-        services.AddAuthentication(Phase3DenyAllAuthenticationHandler.SchemeName)
-            .AddScheme<AuthenticationSchemeOptions, Phase3DenyAllAuthenticationHandler>(
-                Phase3DenyAllAuthenticationHandler.SchemeName,
-                _ => { });
-        services.AddAuthorizationBuilder()
-            .SetFallbackPolicy(new AuthorizationPolicyBuilder()
-                .RequireAuthenticatedUser()
-                .Build());
     }
 
     private static void ConfigureAntiforgery(IServiceCollection services, SecuritySurface surface)

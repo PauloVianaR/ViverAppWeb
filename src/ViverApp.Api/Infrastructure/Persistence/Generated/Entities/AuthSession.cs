@@ -11,6 +11,10 @@ public partial class AuthSession
 
     public byte[] RefreshTokenHash { get; set; } = null!;
 
+    public string AuthenticationMethod { get; set; } = null!;
+
+    public bool MfaSatisfied { get; set; }
+
     public DateTime CreatedAtUtc { get; set; }
 
     public DateTime ExpiresAtUtc { get; set; }
