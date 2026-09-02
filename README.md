@@ -1,5 +1,7 @@
 # ViverApp Web
 
+Este diretório é um repositório Git independente do repositório legado/MAUI. O código MAUI não deve ser incorporado aqui; ele permanece apenas como referência externa somente leitura nas fases que autorizarem consulta.
+
 Reimplementação web do ViverApp em .NET 10, composta inicialmente por:
 
 - `ViverApp.Web`: Blazor Web App com interatividade Server;
