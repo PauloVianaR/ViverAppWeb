@@ -2,6 +2,10 @@
 **/obj/
 .vs/
 .vscode/
+.config/
+.codegraph/
+.local/
+AGENTS.md
 *.user
 *.suo
 artifacts/

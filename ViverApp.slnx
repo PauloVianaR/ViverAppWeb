@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/ViverApp.Api/ViverApp.Api.csproj" />
+    <Project Path="src/ViverApp.Security/ViverApp.Security.csproj" />
     <Project Path="src/ViverApp.Web/ViverApp.Web.csproj" />
   </Folder>
   <Folder Name="/tools/">
@@ -8,5 +9,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ViverApp.Persistence.IntegrationTests/ViverApp.Persistence.IntegrationTests.csproj" />
+    <Project Path="tests/ViverApp.Security.Tests/ViverApp.Security.Tests.csproj" />
   </Folder>
 </Solution>

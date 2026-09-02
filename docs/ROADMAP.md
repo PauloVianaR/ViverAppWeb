@@ -90,6 +90,8 @@ Cada fase deve:
 
 ## Fase 3 — Fundação de segurança, privacidade e observabilidade
 
+**Estado:** implementada em `codex/fase-03-seguranca-observabilidade`; ainda não integrada à `main`.
+
 **Objetivo:** estabelecer controles transversais antes de expor funcionalidades.
 
 **Entregas:**
@@ -106,6 +108,8 @@ Cada fase deve:
 - política de backup, retenção, restauração e resposta a incidentes.
 
 **Saída:** checklist de segurança automatizado e threat model atualizado.
+
+**Artefatos:** [índice da Fase 3](fase-03/README.md).
 
 ## Fase 4 — Identidade, login Google/e-mail/SMS e autorização
 

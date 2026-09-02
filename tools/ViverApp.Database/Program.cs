@@ -632,7 +632,7 @@ internal static partial class Program
                         $"Nome de migration inválido: {fileName}. Use NNNN__descricao.sql.");
                 }
 
-                var sql = File.ReadAllText(path, Encoding.UTF8);
+                var sql = File.ReadAllText(path, Encoding.UTF8).ReplaceLineEndings("\n");
                 if (string.IsNullOrWhiteSpace(sql))
                 {
                     throw new InvalidOperationException($"Migration vazia: {fileName}.");

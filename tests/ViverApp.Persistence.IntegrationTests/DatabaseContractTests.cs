@@ -63,7 +63,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003", migrations);
+        Assert.Equal("0001,0002,0003,0004", migrations);
 
         var forbiddenColumns = await ExecuteScalarAsync(
             connection,
@@ -100,6 +100,18 @@ public sealed class DatabaseContractTests
               AND enforced = 'YES'
             """);
         Assert.Equal("1", roleConstraint);
+
+        var auditProtectionTriggers = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.triggers
+            WHERE trigger_schema = 'viverappweb'
+              AND trigger_name IN (
+                  'trg_audit_events_block_update',
+                  'trg_audit_events_block_delete')
+            """);
+        Assert.Equal("2", auditProtectionTriggers);
     }
 
     private static ViverAppDbContext CreateContext()

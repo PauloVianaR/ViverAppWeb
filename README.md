@@ -7,11 +7,11 @@ Reimplementação web do ViverApp em .NET 10, composta inicialmente por:
 - `ViverApp.Web`: Blazor Web App com interatividade Server;
 - `ViverApp.Api`: ASP.NET Core Web API;
 - `docs/ROADMAP.md`: plano completo e incremental da reimplementação;
-- `docs/fase-01/`: descoberta funcional, riscos, arquitetura e backlog;
+- `docs/fase-01/`, `docs/fase-02/` e `docs/fase-03/`: descoberta, persistência e baseline de segurança;
 - `docs/adr/`: decisões arquiteturais duráveis;
 - `AGENTS.md`: regras obrigatórias para agentes de IA.
 
-As Fases 0 e 1 criaram a fundação compilável e documentaram o legado. Ainda não há domínio, persistência, autenticação, integrações, workers ou regras de negócio implementados.
+As Fases 0 a 3 criaram a fundação compilável, o banco DB-First e os controles transversais de segurança/observabilidade. Ainda não há autenticação real, endpoints de negócio, integrações ativas, workers ou regras de negócio implementados.
 
 ## Pré-requisitos
 
@@ -42,7 +42,7 @@ O projeto `ViverApp.Api` possui um `UserSecretsId`. Foram transferidas para o ar
 
 As connection strings de Azure não foram copiadas. Nenhum valor secreto deve ser incluído no repositório, em exemplos, logs, testes ou documentação.
 
-O banco legado `viverappmobile` é somente leitura. A aplicação web usa o banco novo `viverappweb`, criado na Fase 2 e governado por migrations SQL antes do scaffold DB-First. As migrations `0001`, `0002` e `0003` estão aplicadas e o modelo EF foi gerado exclusivamente desse schema.
+O banco legado `viverappmobile` é somente leitura. A aplicação web usa o banco novo `viverappweb`, criado na Fase 2 e governado por migrations SQL antes do scaffold DB-First. As migrations `0001` a `0004` estão aplicadas e o modelo EF foi gerado exclusivamente desse schema.
 
 Para conferir somente os nomes configurados, sem compartilhar valores:
 
@@ -52,4 +52,4 @@ dotnet user-secrets list --project src/ViverApp.Api/ViverApp.Api.csproj
 
 ## Estado atual
 
-As Fases 1 e 2 estão concluídas e documentadas nos respectivos índices: [descoberta e arquitetura](docs/fase-01/README.md) e [persistência DB-First](docs/fase-02/README.md).
+As Fases 1 a 3 estão concluídas e documentadas nos respectivos índices: [descoberta e arquitetura](docs/fase-01/README.md), [persistência DB-First](docs/fase-02/README.md) e [segurança e observabilidade](docs/fase-03/README.md).

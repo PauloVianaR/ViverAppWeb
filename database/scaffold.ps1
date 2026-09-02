@@ -10,6 +10,8 @@ $generatedRoot = [IO.Path]::GetFullPath(
     (Join-Path $repositoryRoot 'src\ViverApp.Api\Infrastructure\Persistence\Generated'))
 $stagingRoot = [IO.Path]::GetFullPath(
     (Join-Path $repositoryRoot 'src\ViverApp.Api\Infrastructure\Persistence\.ScaffoldStaging'))
+$toolRoot = [IO.Path]::GetFullPath((Join-Path $repositoryRoot '.local\tools'))
+$dotnetEf = Join-Path $toolRoot $(if ($IsWindows) { 'dotnet-ef.exe' } else { 'dotnet-ef' })
 $expectedPrefix = [IO.Path]::GetFullPath(
     (Join-Path $repositoryRoot 'src\ViverApp.Api\Infrastructure\Persistence')) + [IO.Path]::DirectorySeparatorChar
 
@@ -51,7 +53,6 @@ $tables = @(
 )
 
 $arguments = @(
-    'tool', 'run', 'dotnet-ef', '--',
     'dbcontext', 'scaffold',
     'Name=ConnectionStrings:LocalConnection',
     'MySql.EntityFrameworkCore',
@@ -77,7 +78,14 @@ foreach ($table in $tables) {
 
 Push-Location $repositoryRoot
 try {
-    & dotnet @arguments
+    if (-not (Test-Path -LiteralPath $dotnetEf -PathType Leaf)) {
+        & dotnet tool install dotnet-ef --tool-path $toolRoot --version 10.0.9
+        if ($LASTEXITCODE -ne 0) {
+            throw "A instalação local do dotnet-ef falhou com exit code $LASTEXITCODE."
+        }
+    }
+
+    & $dotnetEf @arguments
     if ($LASTEXITCODE -ne 0) {
         throw "O scaffold DB-First falhou com exit code $LASTEXITCODE."
     }

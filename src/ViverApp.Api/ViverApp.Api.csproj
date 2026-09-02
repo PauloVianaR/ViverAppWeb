@@ -15,4 +15,8 @@
     <PackageReference Include="MySql.EntityFrameworkCore" Version="10.0.9" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../ViverApp.Security/ViverApp.Security.csproj" />
+  </ItemGroup>
+
 </Project>
