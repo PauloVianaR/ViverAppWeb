@@ -68,6 +68,26 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.Contains("Tabela que se torna cartão no celular", html, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("/paciente/agendar")]
+    [InlineData("/paciente/agenda")]
+    public async Task PatientScheduling_HasAccessibleFourStepJourney(string path)
+    {
+        using var client = CreateClient();
+
+        using var response = await client.GetAsync(path);
+        var html = await ReadUtf8Async(response.Content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Etapas do agendamento", html, StringComparison.Ordinal);
+        Assert.Contains("Escolha o atendimento", html, StringComparison.Ordinal);
+        Assert.Contains("Profissional", html, StringComparison.Ordinal);
+        Assert.Contains("Data e horário", html, StringComparison.Ordinal);
+        Assert.Contains("Resumo", html, StringComparison.Ordinal);
+        Assert.Contains("Minha agenda", html, StringComparison.Ordinal);
+        Assert.Contains("24 horas de antecedência", html, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task UnknownRoute_UsesLocalizedRecoveryState()
     {

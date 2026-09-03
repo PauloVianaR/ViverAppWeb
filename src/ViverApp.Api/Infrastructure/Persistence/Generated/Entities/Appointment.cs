@@ -27,11 +27,15 @@ public partial class Appointment
 
     public string CurrencyCode { get; set; } = null!;
 
+    public string? PatientNotes { get; set; }
+
     public string? CancellationReason { get; set; }
 
     public ulong? CanceledByAccountId { get; set; }
 
     public DateTime? CanceledAtUtc { get; set; }
+
+    public ulong? RescheduledFromAppointmentId { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
 
@@ -41,6 +45,8 @@ public partial class Appointment
 
     public virtual ICollection<AppointmentDocument> AppointmentDocuments { get; set; } = new List<AppointmentDocument>();
 
+    public virtual ICollection<AppointmentStatusHistory> AppointmentStatusHistories { get; set; } = new List<AppointmentStatusHistory>();
+
     public virtual AppointmentType AppointmentType { get; set; } = null!;
 
     public virtual Account? CanceledByAccount { get; set; }
@@ -49,7 +55,11 @@ public partial class Appointment
 
     public virtual DoctorProfile DoctorAccount { get; set; } = null!;
 
+    public virtual Appointment? InverseRescheduledFromAppointment { get; set; }
+
     public virtual Account PatientAccount { get; set; } = null!;
 
     public virtual Payment? Payment { get; set; }
+
+    public virtual Appointment? RescheduledFromAppointment { get; set; }
 }

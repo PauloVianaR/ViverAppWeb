@@ -21,4 +21,8 @@
     <ProjectReference Include="../ViverApp.Security/ViverApp.Security.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="ViverApp.PatientScheduling.Tests" />
+  </ItemGroup>
+
 </Project>

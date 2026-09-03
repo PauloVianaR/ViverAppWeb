@@ -176,6 +176,8 @@ Cada fase deve:
 
 ## Fase 7 — Agenda e agendamento do paciente
 
+**Estado:** implementada em `codex/fase-07-agenda-agendamento-paciente`; ainda não integrada à `main`.
+
 **Objetivo:** entregar a jornada principal de descoberta e marcação.
 
 **Entregas:**
@@ -186,6 +188,10 @@ Cada fase deve:
 - reagendamento e cancelamento conforme políticas;
 - agenda futura e detalhes para paciente;
 - testes de concorrência e estados extremos.
+
+**Saída:** jornada responsiva ligada à API, com horários calculados no servidor e alterações protegidas contra repetição e disputa concorrente.
+
+**Artefatos:** [índice da Fase 7](fase-07/README.md), [API e regras](fase-07/API-E-REGRAS.md) e [concorrência e idempotência](fase-07/CONCORRENCIA-E-IDEMPOTENCIA.md).
 
 **Saída:** fluxo completo e responsivo, consistente mesmo sob requisições concorrentes.
 

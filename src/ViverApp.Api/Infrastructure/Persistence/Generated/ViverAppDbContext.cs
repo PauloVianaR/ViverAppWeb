@@ -30,6 +30,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<AppointmentDocument> AppointmentDocuments { get; set; }
 
+    public virtual DbSet<AppointmentStatusHistory> AppointmentStatusHistories { get; set; }
+
     public virtual DbSet<AppointmentType> AppointmentTypes { get; set; }
 
     public virtual DbSet<AuditEvent> AuditEvents { get; set; }
@@ -360,6 +362,10 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => e.AppointmentTypeId, "fk_appointments_type");
 
+            entity.HasIndex(e => new { e.DoctorAccountId, e.StatusCode, e.StartsAtUtc, e.EndsAtUtc }, "ix_appointments_doctor_period");
+
+            entity.HasIndex(e => new { e.PatientAccountId, e.StatusCode, e.StartsAtUtc, e.EndsAtUtc }, "ix_appointments_patient_period");
+
             entity.HasIndex(e => new { e.PatientAccountId, e.StatusCode, e.StartsAtUtc }, "ix_appointments_patient_status");
 
             entity.HasIndex(e => new { e.StatusCode, e.StartsAtUtc }, "ix_appointments_status_start");
@@ -367,6 +373,8 @@ public partial class ViverAppDbContext : DbContext
             entity.HasIndex(e => new { e.DoctorAccountId, e.StartsAtUtc }, "ux_appointments_doctor_start").IsUnique();
 
             entity.HasIndex(e => new { e.PatientAccountId, e.StartsAtUtc }, "ux_appointments_patient_start").IsUnique();
+
+            entity.HasIndex(e => e.RescheduledFromAppointmentId, "ux_appointments_rescheduled_from").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.AppointmentTypeId).HasColumnName("appointment_type_id");
@@ -394,9 +402,13 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(20)
                 .HasColumnName("modality_code");
             entity.Property(e => e.PatientAccountId).HasColumnName("patient_account_id");
+            entity.Property(e => e.PatientNotes)
+                .HasMaxLength(1000)
+                .HasColumnName("patient_notes");
             entity.Property(e => e.PriceAmount)
                 .HasPrecision(13)
                 .HasColumnName("price_amount");
+            entity.Property(e => e.RescheduledFromAppointmentId).HasColumnName("rescheduled_from_appointment_id");
             entity.Property(e => e.RowVersion)
                 .HasDefaultValueSql("'1'")
                 .HasColumnName("row_version");
@@ -435,6 +447,11 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey(d => d.PatientAccountId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_appointments_patient");
+
+            entity.HasOne(d => d.RescheduledFromAppointment).WithOne(p => p.InverseRescheduledFromAppointment)
+                .HasForeignKey<Appointment>(d => d.RescheduledFromAppointmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointments_rescheduled_from");
         });
 
         modelBuilder.Entity<AppointmentDocument>(entity =>
@@ -489,6 +506,49 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey(d => d.UploadedByAccountId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_appointment_documents_uploader");
+        });
+
+        modelBuilder.Entity<AppointmentStatusHistory>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("appointment_status_history");
+
+            entity.HasIndex(e => new { e.ActorAccountId, e.OccurredAtUtc }, "ix_appointment_status_history_actor_time");
+
+            entity.HasIndex(e => new { e.AppointmentId, e.OccurredAtUtc }, "ix_appointment_status_history_appointment_time");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ActorAccountId).HasColumnName("actor_account_id");
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.EndsAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("ends_at_utc");
+            entity.Property(e => e.FromStatusCode)
+                .HasMaxLength(20)
+                .HasColumnName("from_status_code");
+            entity.Property(e => e.OccurredAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("occurred_at_utc");
+            entity.Property(e => e.Reason)
+                .HasMaxLength(500)
+                .HasColumnName("reason");
+            entity.Property(e => e.StartsAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("starts_at_utc");
+            entity.Property(e => e.ToStatusCode)
+                .HasMaxLength(20)
+                .HasColumnName("to_status_code");
+
+            entity.HasOne(d => d.ActorAccount).WithMany(p => p.AppointmentStatusHistories)
+                .HasForeignKey(d => d.ActorAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointment_status_history_actor");
+
+            entity.HasOne(d => d.Appointment).WithMany(p => p.AppointmentStatusHistories)
+                .HasForeignKey(d => d.AppointmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointment_status_history_appointment");
         });
 
         modelBuilder.Entity<AppointmentType>(entity =>

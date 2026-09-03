@@ -46,6 +46,7 @@ $tables = @(
     'holidays',
     'professional_reviews',
     'appointments',
+    'appointment_status_history',
     'appointment_documents',
     'payments',
     'premium_plans',

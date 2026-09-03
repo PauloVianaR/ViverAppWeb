@@ -32,7 +32,7 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(28, applicationEntities.Length);
+        Assert.Equal(29, applicationEntities.Length);
         Assert.DoesNotContain(
             applicationEntities,
             entity => string.Equals(entity.GetTableName(), "__schema_migrations", StringComparison.Ordinal));
@@ -63,7 +63,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007", migrations);
 
         var forbiddenColumns = await ExecuteScalarAsync(
             connection,
@@ -168,6 +168,36 @@ public sealed class DatabaseContractTests
               AND column_name IN ('postal_code', 'street', 'number', 'district', 'city', 'state_code')
             """);
         Assert.Equal("6", clinicAddressColumns);
+
+        var schedulingHistoryTable = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.tables
+            WHERE table_schema = 'viverappweb'
+              AND table_name = 'appointment_status_history'
+            """);
+        Assert.Equal("1", schedulingHistoryTable);
+
+        var schedulingColumns = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_schema = 'viverappweb'
+              AND table_name = 'appointments'
+              AND column_name IN ('patient_notes', 'rescheduled_from_appointment_id')
+            """);
+        Assert.Equal("2", schedulingColumns);
+
+        var schedulingSettings = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM application_settings
+            WHERE setting_key LIKE 'appointments.%'
+            """);
+        Assert.Equal("5", schedulingSettings);
     }
 
     private static ViverAppDbContext CreateContext()

@@ -1,0 +1,613 @@
+@page "/paciente/agendar"
+@page "/paciente/agenda"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@using System.Globalization
+@inject IJSRuntime JavaScript
+@inject WebBackendOptions Backend
+
+<PageTitle>Agenda | ViverApp</PageTitle>
+
+<header class="workspace-heading">
+    <div>
+        <p class="eyebrow">Área do paciente</p>
+        <h1 class="page-title">Minha agenda de cuidado</h1>
+        <p class="page-description">Encontre o profissional certo, escolha um horário real e acompanhe seus atendimentos.</p>
+    </div>
+    <span class="badge badge--brand">Horários no fuso da clínica</span>
+</header>
+
+@if (!string.IsNullOrWhiteSpace(Notice))
+{
+    <div class="notice @(NoticeIsError ? "notice--error" : "notice--success")" role="@(NoticeIsError ? "alert" : "status")">
+        <span>@Notice</span>
+        @if (NoticeIsUnauthorized)
+        {
+            <a class="button button--small" href="@Backend.GoogleLoginUrl">Entrar com Google</a>
+        }
+    </div>
+}
+
+<nav class="booking-steps" aria-label="Etapas do agendamento">
+    <span class="booking-step booking-step--active"><b>1</b> Atendimento</span>
+    <span class="booking-step @(SelectedDoctor is null ? null : "booking-step--active")"><b>2</b> Profissional</span>
+    <span class="booking-step @(SelectedSlot is null ? null : "booking-step--active")"><b>3</b> Horário</span>
+    <span class="booking-step @(SelectedSlot is null ? null : "booking-step--active")"><b>4</b> Confirmar</span>
+</nav>
+
+<section class="booking-layout" aria-label="Novo agendamento">
+    <div class="booking-main">
+        <section class="surface booking-panel" aria-labelledby="service-title">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">Passo 1</p>
+                    <h2 id="service-title">Escolha o atendimento</h2>
+                </div>
+                @if (RescheduleTarget is not null)
+                {
+                    <span class="badge badge--warning">Reagendando #@RescheduleTarget.Id</span>
+                }
+            </div>
+
+            <div class="filter-grid">
+                <div class="field field--wide">
+                    <label for="appointment-type">Tipo de atendimento</label>
+                    <select id="appointment-type" @bind="AppointmentTypeId" disabled="@IsBusy">
+                        <option value="0">Selecione</option>
+                        @foreach (var type in AppointmentTypes)
+                        {
+                            <option value="@type.Id">@type.Name — @Money(type.PriceAmount)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="modality">Modalidade</label>
+                    <select id="modality" @bind="Modality" disabled="@IsBusy">
+                        <option value="in_person">Presencial</option>
+                        <option value="online">Online</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="specialty">Especialidade</label>
+                    <select id="specialty" @bind="SpecialtyId" disabled="@IsBusy">
+                        <option value="0">Todas</option>
+                        @foreach (var specialty in Specialties)
+                        {
+                            <option value="@specialty.Id">@specialty.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="field field--wide">
+                    <label for="professional-search">Nome do profissional</label>
+                    <input id="professional-search" @bind="Search" maxlength="100" placeholder="Ex.: Ana ou Cardiologia" disabled="@IsBusy" />
+                </div>
+            </div>
+            <div class="panel-actions">
+                <button class="button" type="button" @onclick="SearchProfessionalsAsync" disabled="@(IsBusy || AppointmentTypeId == 0)">
+                    Buscar profissionais
+                </button>
+                @if (RescheduleTarget is not null)
+                {
+                    <button class="button button--secondary" type="button" @onclick="CancelReschedule" disabled="@IsBusy">Sair do reagendamento</button>
+                }
+            </div>
+        </section>
+
+        <section class="surface booking-panel" aria-labelledby="professionals-title">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">Passo 2</p>
+                    <h2 id="professionals-title">Profissional</h2>
+                </div>
+                <span class="badge">@Professionals.Count resultado(s)</span>
+            </div>
+
+            @if (IsLoadingProfessionals)
+            {
+                <LoadingSkeleton Lines="3" />
+            }
+            else if (Professionals.Count == 0)
+            {
+                <InterfaceState Title="Comece pela busca"
+                                Description="Selecione o atendimento e use os filtros para encontrar profissionais com disponibilidade cadastrada."
+                                Icon="users" />
+            }
+            else
+            {
+                <div class="professional-list">
+                    @foreach (var professional in Professionals)
+                    {
+                        <button class="professional-card @(SelectedDoctor?.AccountId == professional.AccountId ? "professional-card--selected" : null)"
+                                type="button"
+                                @onclick="() => SelectDoctorAsync(professional)"
+                                aria-pressed="@(SelectedDoctor?.AccountId == professional.AccountId)"
+                                disabled="@IsBusy">
+                            <span class="professional-avatar" aria-hidden="true">@Initials(professional.FullName)</span>
+                            <span class="professional-copy">
+                                <strong>@professional.FullName</strong>
+                                <small>@string.Join(" • ", professional.Specialties.Select(item => item.Name))</small>
+                                <small>CRM @professional.LicenseStateCode @professional.LicenseNumber</small>
+                            </span>
+                            <span aria-hidden="true">→</span>
+                        </button>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="surface booking-panel" aria-labelledby="slots-title">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">Passo 3</p>
+                    <h2 id="slots-title">Data e horário</h2>
+                </div>
+                @if (Slots.Count > 0)
+                {
+                    <span class="badge badge--success">@Slots.Count horário(s)</span>
+                }
+            </div>
+
+            @if (IsLoadingSlots)
+            {
+                <LoadingSkeleton Lines="4" />
+            }
+            else if (SelectedDoctor is null)
+            {
+                <InterfaceState Title="Selecione um profissional"
+                                Description="Os próximos horários disponíveis aparecerão aqui."
+                                Icon="calendar" />
+            }
+            else if (Slots.Count == 0)
+            {
+                <InterfaceState Title="Sem horários nos próximos dias"
+                                Description="Tente outra modalidade, profissional ou período. Nenhum horário ocupado é exibido como disponível."
+                                Icon="calendar"
+                                Tone="warning" />
+            }
+            else
+            {
+                <div class="slot-days">
+                    @foreach (var group in Slots.GroupBy(item => item.Date))
+                    {
+                        <fieldset class="slot-day">
+                            <legend>@LongDate(group.Key)</legend>
+                            <div class="slot-grid">
+                                @foreach (var slot in group)
+                                {
+                                    <button class="slot-button @(SelectedSlot?.StartsAtUtc == slot.StartsAtUtc ? "slot-button--selected" : null)"
+                                            type="button"
+                                            @onclick="() => SelectedSlot = slot"
+                                            aria-pressed="@(SelectedSlot?.StartsAtUtc == slot.StartsAtUtc)"
+                                            disabled="@IsBusy">
+                                        @slot.StartsAt.ToString("HH:mm")
+                                    </button>
+                                }
+                            </div>
+                        </fieldset>
+                    }
+                </div>
+            }
+        </section>
+    </div>
+
+    <aside class="surface booking-summary" aria-labelledby="summary-title">
+        <p class="eyebrow">Passo 4</p>
+        <h2 id="summary-title">Resumo</h2>
+        <dl>
+            <div><dt>Atendimento</dt><dd>@(SelectedType?.Name ?? "Não selecionado")</dd></div>
+            <div><dt>Profissional</dt><dd>@(SelectedDoctor?.FullName ?? "Não selecionado")</dd></div>
+            <div><dt>Modalidade</dt><dd>@ModalityLabel(Modality)</dd></div>
+            <div><dt>Horário</dt><dd>@(SelectedSlot is null ? "Não selecionado" : $"{ShortDate(SelectedSlot.Date)} às {SelectedSlot.StartsAt:HH:mm}")</dd></div>
+            <div><dt>Valor</dt><dd>@(SelectedType is null ? "—" : Money(SelectedType.PriceAmount))</dd></div>
+        </dl>
+        <div class="field">
+            <label for="patient-notes">Observações para a clínica</label>
+            <textarea id="patient-notes" @bind="PatientNotes" maxlength="1000" disabled="@(IsBusy || RescheduleTarget is not null)"></textarea>
+            <p class="field-hint">Não informe senhas, documentos ou dados financeiros.</p>
+        </div>
+        @if (RescheduleTarget is not null)
+        {
+            <div class="field">
+                <label for="reschedule-reason">Motivo do reagendamento (opcional)</label>
+                <textarea id="reschedule-reason" @bind="RescheduleReason" maxlength="500" disabled="@IsBusy"></textarea>
+            </div>
+        }
+        <button class="button summary-action" type="button" @onclick="ConfirmAsync" disabled="@(IsBusy || SelectedSlot is null)">
+            @(RescheduleTarget is null ? "Confirmar agendamento" : "Confirmar novo horário")
+        </button>
+        <p class="summary-policy">Cancelamentos e reagendamentos pelo paciente exigem 24 horas de antecedência. A API sempre reaplica a política vigente.</p>
+    </aside>
+</section>
+
+<section class="agenda-section" id="agenda" aria-labelledby="agenda-title">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">Próximos atendimentos</p>
+            <h2 id="agenda-title">Minha agenda</h2>
+        </div>
+        <button class="button button--secondary button--small" type="button" @onclick="LoadAppointmentsAsync" disabled="@IsBusy">Atualizar</button>
+    </div>
+
+    @if (IsLoadingAppointments)
+    {
+        <LoadingSkeleton Lines="4" />
+    }
+    else if (Appointments.Count == 0)
+    {
+        <InterfaceState Title="Nenhum atendimento futuro"
+                        Description="Quando você agendar, os detalhes aparecerão aqui."
+                        Icon="calendar" />
+    }
+    else
+    {
+        <div class="appointment-list">
+            @foreach (var appointment in Appointments)
+            {
+                <article class="surface appointment-card">
+                    <div class="appointment-date" aria-label="@LongDate(appointment.LocalDate)">
+                        <strong>@appointment.LocalDate.Day.ToString("00")</strong>
+                        <span>@appointment.LocalDate.ToString("MMM", Culture).TrimEnd('.')</span>
+                    </div>
+                    <div class="appointment-copy">
+                        <div class="appointment-title-row">
+                            <h3>@appointment.AppointmentTypeName</h3>
+                            <span class="badge @StatusBadge(appointment.StatusCode)">@StatusLabel(appointment.StatusCode)</span>
+                        </div>
+                        <p>@appointment.DoctorName • @appointment.LocalStartsAt.ToString("HH:mm")–@appointment.LocalEndsAt.ToString("HH:mm")</p>
+                        <small>@ModalityLabel(appointment.ModalityCode) • @appointment.TimezoneName • #@appointment.Id</small>
+                    </div>
+                    <div class="appointment-actions">
+                        <button class="button button--secondary button--small" type="button" @onclick="() => BeginRescheduleAsync(appointment)" disabled="@IsBusy">Reagendar</button>
+                        <button class="button button--danger button--small" type="button" @onclick="() => BeginCancel(appointment)" disabled="@IsBusy">Cancelar</button>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</section>
+
+@if (CancelTarget is not null)
+{
+    <section class="surface cancel-panel" aria-labelledby="cancel-title">
+        <div>
+            <p class="eyebrow">Confirmação necessária</p>
+            <h2 id="cancel-title">Cancelar atendimento #@CancelTarget.Id</h2>
+            <p>@LongDate(CancelTarget.LocalDate), às @CancelTarget.LocalStartsAt.ToString("HH:mm"), com @CancelTarget.DoctorName.</p>
+        </div>
+        <div class="field">
+            <label for="cancel-reason">Motivo do cancelamento</label>
+            <textarea id="cancel-reason" @bind="CancelReason" minlength="5" maxlength="500" required disabled="@IsBusy"></textarea>
+        </div>
+        <div class="panel-actions">
+            <button class="button button--danger" type="button" @onclick="CancelAppointmentAsync" disabled="@(IsBusy || CancelReason.Trim().Length < 5)">Confirmar cancelamento</button>
+            <button class="button button--secondary" type="button" @onclick="CloseCancel" disabled="@IsBusy">Manter atendimento</button>
+        </div>
+    </section>
+}
+
+@code {
+    private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("pt-BR");
+    private IJSObjectReference? module;
+    private readonly List<WebAppointmentType> AppointmentTypes = [];
+    private readonly List<WebSpecialty> Specialties = [];
+    private readonly List<WebBookingProfessional> Professionals = [];
+    private readonly List<WebAvailableSlot> Slots = [];
+    private readonly List<WebAppointment> Appointments = [];
+    private uint AppointmentTypeId;
+    private uint SpecialtyId;
+    private string Modality = "in_person";
+    private string Search = string.Empty;
+    private string PatientNotes = string.Empty;
+    private string RescheduleReason = string.Empty;
+    private string CancelReason = string.Empty;
+    private string? Notice;
+    private bool NoticeIsError;
+    private bool NoticeIsUnauthorized;
+    private bool IsBusy;
+    private bool IsLoadingProfessionals;
+    private bool IsLoadingSlots;
+    private bool IsLoadingAppointments = true;
+    private WebBookingProfessional? SelectedDoctor;
+    private WebAvailableSlot? SelectedSlot;
+    private WebAppointment? RescheduleTarget;
+    private WebAppointment? CancelTarget;
+
+    private WebAppointmentType? SelectedType => AppointmentTypes.SingleOrDefault(item => item.Id == AppointmentTypeId);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/patient-scheduling.js");
+            await LoadInitialDataAsync();
+        }
+        catch (JSException exception)
+        {
+            ShowError(exception.Message);
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task LoadInitialDataAsync()
+    {
+        if (module is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var types = await GetAsync<WebPage<WebAppointmentType>>("api/v1/catalog/appointment-types?pageSize=50");
+            var specialties = await GetAsync<WebPage<WebSpecialty>>("api/v1/catalog/specialties?pageSize=50");
+            AppointmentTypes.AddRange(types.Items.Where(item => item.IsActive));
+            Specialties.AddRange(specialties.Items.Where(item => item.IsActive));
+            await LoadAppointmentsAsync();
+        }
+        catch (JSException exception)
+        {
+            ShowError(exception.Message);
+            IsLoadingAppointments = false;
+        }
+    }
+
+    private async Task SearchProfessionalsAsync()
+    {
+        ClearNotice();
+        SelectedDoctor = null;
+        SelectedSlot = null;
+        Slots.Clear();
+        Professionals.Clear();
+        IsLoadingProfessionals = true;
+        IsBusy = true;
+        try
+        {
+            var query = $"api/v1/patient/booking/professionals?pageSize=50&appointmentTypeId={AppointmentTypeId}&modality={Uri.EscapeDataString(Modality)}";
+            if (SpecialtyId != 0)
+            {
+                query += $"&specialtyId={SpecialtyId}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(Search))
+            {
+                query += $"&search={Uri.EscapeDataString(Search.Trim())}";
+            }
+
+            var page = await GetAsync<WebPage<WebBookingProfessional>>(query);
+            Professionals.AddRange(page.Items);
+        }
+        catch (JSException exception)
+        {
+            ShowError(exception.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+            IsLoadingProfessionals = false;
+        }
+    }
+
+    private async Task SelectDoctorAsync(WebBookingProfessional professional)
+    {
+        SelectedDoctor = professional;
+        SelectedSlot = null;
+        await LoadSlotsAsync();
+    }
+
+    private async Task LoadSlotsAsync()
+    {
+        if (SelectedDoctor is null || AppointmentTypeId == 0)
+        {
+            return;
+        }
+
+        Slots.Clear();
+        IsLoadingSlots = true;
+        IsBusy = true;
+        try
+        {
+            var from = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var path = $"api/v1/patient/booking/slots?doctorAccountId={SelectedDoctor.AccountId}&appointmentTypeId={AppointmentTypeId}&modality={Uri.EscapeDataString(Modality)}&from={from}&days=31";
+            Slots.AddRange(await GetAsync<IReadOnlyList<WebAvailableSlot>>(path));
+        }
+        catch (JSException exception)
+        {
+            ShowError(exception.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+            IsLoadingSlots = false;
+        }
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (module is null || SelectedDoctor is null || SelectedSlot is null || SelectedType is null)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        ClearNotice();
+        try
+        {
+            if (RescheduleTarget is null)
+            {
+                await SendAsync<WebAppointment>(
+                    "api/v1/patient/appointments",
+                    "POST",
+                    new WebAppointmentCreateRequest(
+                        SelectedDoctor.AccountId,
+                        SelectedType.Id,
+                        Modality,
+                        SelectedSlot.Date,
+                        SelectedSlot.StartsAt,
+                        string.IsNullOrWhiteSpace(PatientNotes) ? null : PatientNotes.Trim()),
+                    NewIdempotencyKey());
+                ShowSuccess("Agendamento criado. O horário já está reservado na sua agenda.");
+            }
+            else
+            {
+                await SendAsync<WebAppointment>(
+                    $"api/v1/patient/appointments/{RescheduleTarget.Id}/reschedule",
+                    "POST",
+                    new WebAppointmentRescheduleRequest(
+                        SelectedSlot.Date,
+                        SelectedSlot.StartsAt,
+                        string.IsNullOrWhiteSpace(RescheduleReason) ? null : RescheduleReason.Trim(),
+                        RescheduleTarget.RowVersion),
+                    NewIdempotencyKey());
+                ShowSuccess("Atendimento reagendado. A data anterior foi preservada no histórico.");
+            }
+
+            ResetBooking();
+            await LoadAppointmentsAsync();
+        }
+        catch (JSException exception)
+        {
+            ShowError(exception.Message);
+            await LoadSlotsAsync();
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task LoadAppointmentsAsync()
+    {
+        if (module is null)
+        {
+            return;
+        }
+
+        IsLoadingAppointments = true;
+        try
+        {
+            var page = await GetAsync<WebPage<WebAppointment>>("api/v1/patient/appointments?view=future&pageSize=50");
+            Appointments.Clear();
+            Appointments.AddRange(page.Items);
+        }
+        catch (JSException exception)
+        {
+            ShowError(exception.Message);
+        }
+        finally
+        {
+            IsLoadingAppointments = false;
+        }
+    }
+
+    private async Task BeginRescheduleAsync(WebAppointment appointment)
+    {
+        RescheduleTarget = appointment;
+        CancelTarget = null;
+        AppointmentTypeId = appointment.AppointmentTypeId;
+        Modality = appointment.ModalityCode;
+        PatientNotes = appointment.PatientNotes ?? string.Empty;
+        RescheduleReason = string.Empty;
+        SelectedDoctor = new WebBookingProfessional(
+            appointment.DoctorAccountId,
+            appointment.DoctorName,
+            null,
+            string.Empty,
+            string.Empty,
+            0,
+            []);
+        SelectedSlot = null;
+        await LoadSlotsAsync();
+    }
+
+    private void BeginCancel(WebAppointment appointment)
+    {
+        CancelTarget = appointment;
+        CancelReason = string.Empty;
+    }
+
+    private async Task CancelAppointmentAsync()
+    {
+        if (CancelTarget is null)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        ClearNotice();
+        try
+        {
+            await SendAsync<WebAppointment>(
+                $"api/v1/patient/appointments/{CancelTarget.Id}/cancel",
+                "POST",
+                new WebAppointmentCancelRequest(CancelReason.Trim(), CancelTarget.RowVersion));
+            CancelTarget = null;
+            CancelReason = string.Empty;
+            ShowSuccess("Atendimento cancelado e registrado no histórico.");
+            await LoadAppointmentsAsync();
+        }
+        catch (JSException exception)
+        {
+            ShowError(exception.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async ValueTask<T> GetAsync<T>(string path) where T : notnull =>
+        await module!.InvokeAsync<T>("get", Backend.BaseUrl.ToString(), path);
+
+    private async ValueTask<T> SendAsync<T>(string path, string method, object body, string? key = null) where T : notnull =>
+        await module!.InvokeAsync<T>("send", Backend.BaseUrl.ToString(), path, method, body, key);
+
+    private void ResetBooking()
+    {
+        Professionals.Clear();
+        Slots.Clear();
+        SelectedDoctor = null;
+        SelectedSlot = null;
+        RescheduleTarget = null;
+        AppointmentTypeId = 0;
+        SpecialtyId = 0;
+        Modality = "in_person";
+        Search = string.Empty;
+        PatientNotes = string.Empty;
+        RescheduleReason = string.Empty;
+    }
+
+    private void CancelReschedule() => ResetBooking();
+    private void CloseCancel() => CancelTarget = null;
+    private void ClearNotice() { Notice = null; NoticeIsError = false; NoticeIsUnauthorized = false; }
+    private void ShowSuccess(string message) { Notice = message; NoticeIsError = false; NoticeIsUnauthorized = false; }
+    private void ShowError(string message)
+    {
+        Notice = message;
+        NoticeIsError = true;
+        NoticeIsUnauthorized = message.Contains("401", StringComparison.Ordinal)
+            || message.Contains("sessão expirou", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("ainda não entrou", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NewIdempotencyKey() => $"web-{Guid.NewGuid():N}";
+    private static string Money(decimal value) => value.ToString("C", Culture);
+    private static string ShortDate(DateOnly date) => date.ToString("dd/MM/yyyy", Culture);
+    private static string LongDate(DateOnly date) => Culture.TextInfo.ToTitleCase(date.ToString("dddd, dd 'de' MMMM", Culture));
+    private static string ModalityLabel(string value) => value == "online" ? "Online" : "Presencial";
+    private static string StatusLabel(string value) => value switch { "pending" => "Pendente", "confirmed" => "Confirmado", _ => value };
+    private static string StatusBadge(string value) => value == "confirmed" ? "badge--success" : "badge--warning";
+    private static string Initials(string name) => string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(item => item[0])).ToUpper(Culture);
+
+    public async ValueTask DisposeAsync()
+    {
+        if (module is not null)
+        {
+            try { await module.DisposeAsync(); } catch (JSDisconnectedException) { }
+        }
+    }
+}

@@ -34,8 +34,8 @@
 | DEC-006 | Resolvida: médicos e gestores pertencem à clínica única | não haverá vínculo multiclínica | resolvida em 2026-09-02 |
 | DEC-007 | Quem pode criar/editar paciente e relatório médico? | risco de takeover e sigilo profissional | antes das Fases 4/8 |
 | DEC-008 | Premium é vitalício, assinatura ou revalidação periódica? | afeta schema, preço e PagBank | antes da Fase 2/13 |
-| DEC-009 | Quais regras exatas de cancelamento, reagendamento e no-show? | máquina de estados e financeiro | antes da Fase 7 |
-| DEC-010 | Qual timezone operacional da clínica e há atendimento em outros fusos? | slots, lembretes e auditoria | antes da Fase 2/7 |
+| DEC-009 | Base adotada: cancelamento e reagendamento pelo paciente com 24h de antecedência; valores configuráveis e sujeitos à validação do proprietário antes da produção. No-show permanece para a agenda operacional. | máquina de estados e financeiro | base implementada na Fase 7 |
+| DEC-010 | Base adotada: timezone singleton da clínica, inicialmente `America/Sao_Paulo`; datas persistidas em UTC e horários ambíguos/inexistentes recusados. Confirmar antes da produção se haverá atendimento em outro fuso. | slots, lembretes e auditoria | base implementada na Fase 7 |
 | DEC-011 | Haverá gravação de videochamada? | alto impacto LGPD/custo; recomendação inicial é não | antes da Fase 12 |
 | DEC-012 | Quais provedores finais de hospedagem, MySQL, e-mail e TURN? | custo, resiliência e contratos | antes das fases correspondentes |
 | DEC-013 | Qual domínio/plano Cloudflare será adquirido? | WAF, R2 custom domain e DNS | antes da Fase 10/16 |

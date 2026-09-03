@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using ViverApp.Api.Features.Identity;
+using ViverApp.Api.Features.PatientScheduling;
 using ViverApp.Api.Infrastructure.Persistence;
 using ViverApp.Security;
 
@@ -49,6 +50,9 @@ builder.Services.AddViverAppObservability(
     "ViverApp.Api");
 builder.Services.AddViverAppDatabase(builder.Configuration);
 builder.Services.AddViverAppIdentity(builder.Configuration);
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IPatientSchedulingAuditWriter, PatientSchedulingAuditWriter>();
+builder.Services.AddScoped<PatientSchedulingService>();
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), ["live"])
     .AddCheck<DatabaseReadinessHealthCheck>("database", tags: ["ready"]);

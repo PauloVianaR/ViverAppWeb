@@ -34,8 +34,8 @@ public static class ShellNavigationCatalog
         "Meu cuidado",
         [
             new("Início", "/paciente", "home"),
-            new("Agendar", "/paciente#agendar", "plus"),
-            new("Agenda", "/paciente#agenda", "calendar"),
+            new("Agendar", "/paciente/agendar", "plus"),
+            new("Agenda", "/paciente/agenda", "calendar"),
             new("Pagamentos", "/paciente#pagamentos", "card"),
             new("Perfil", "/paciente#perfil", "user"),
         ]);
