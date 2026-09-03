@@ -1,0 +1,130 @@
+@page "/paciente"
+@page "/medico"
+@page "/gestao"
+@page "/administracao"
+@inject NavigationManager Navigation
+
+<PageTitle>@Model.Title | ViverApp</PageTitle>
+
+<header class="workspace-heading">
+    <div>
+        <p class="eyebrow">@Model.Eyebrow</p>
+        <h1 class="page-title">@Model.Title</h1>
+        <p class="page-description">@Model.Description</p>
+    </div>
+    <span class="badge badge--brand">Base responsiva</span>
+</header>
+
+<section class="quick-actions" aria-label="Áreas principais">
+    @foreach (var action in Model.Actions)
+    {
+        <a class="quick-action surface" href="@action.Href" id="@action.Anchor">
+            <span class="quick-action__icon" aria-hidden="true"><AppIcon Name="@action.Icon" /></span>
+            <span>
+                <strong>@action.Title</strong>
+                <small>@action.Description</small>
+            </span>
+            <span class="quick-action__arrow" aria-hidden="true">→</span>
+        </a>
+    }
+</section>
+
+<div class="overview-grid">
+    <section class="surface overview-panel" aria-labelledby="readiness-title">
+        <div class="panel-heading">
+            <div>
+                <p class="eyebrow">Preparação</p>
+                <h2 id="readiness-title">Estrutura das próximas jornadas</h2>
+            </div>
+            <span class="badge badge--success">Shell pronto</span>
+        </div>
+
+        <div class="data-region">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Área</th>
+                        <th scope="col">Apresentação</th>
+                        <th scope="col">Dados</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var action in Model.Actions.Take(3))
+                    {
+                        <tr>
+                            <td data-label="Área"><strong>@action.Title</strong></td>
+                            <td data-label="Apresentação"><span class="badge badge--success">Responsiva</span></td>
+                            <td data-label="Dados"><span class="badge badge--warning">Próxima fase funcional</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <InterfaceState Title="Nenhum dado clínico carregado"
+                    Description="Esta página estabelece a navegação e os estados visuais. Informações reais só serão exibidas após autorização e consulta à API."
+                    Icon="shield"
+                    Tone="neutral" />
+</div>
+
+@code {
+    private WorkspaceModel Model => ResolveModel(ShellNavigationCatalog.Resolve(new Uri(Navigation.Uri).AbsolutePath).Profile);
+
+    private static WorkspaceModel ResolveModel(ShellProfile profile) => profile switch
+    {
+        ShellProfile.Patient => new(
+            "Meu cuidado",
+            "Área do paciente",
+            "Acompanhe sua jornada de cuidado em uma experiência simples, clara e confortável em qualquer tela.",
+            [
+                new("Agendar consulta", "Escolha profissional, modalidade e horário.", "/paciente#agendar", "agendar", "plus"),
+                new("Minha agenda", "Consulte próximos atendimentos e histórico.", "/paciente#agenda", "agenda", "calendar"),
+                new("Pagamentos", "Acompanhe cobranças e comprovantes.", "/paciente#pagamentos", "pagamentos", "card"),
+                new("Meu perfil", "Mantenha seus dados e preferências atualizados.", "/paciente#perfil", "perfil", "user"),
+            ]),
+        ShellProfile.Doctor => new(
+            "Rotina profissional",
+            "Área médica",
+            "Agenda, pacientes e histórico organizados com densidade adequada para a prática clínica.",
+            [
+                new("Agenda", "Visualize e conduza os atendimentos do dia.", "/medico#agenda", "agenda", "calendar"),
+                new("Pacientes", "Acesse somente pacientes vinculados ao seu cuidado.", "/medico#pacientes", "pacientes", "users"),
+                new("Histórico", "Consulte atendimentos concluídos autorizados.", "/medico#historico", "historico", "history"),
+                new("Perfil", "Gerencie disponibilidade e dados profissionais.", "/medico#perfil", "perfil", "user"),
+            ]),
+        ShellProfile.Administrator => new(
+            "Administração segura",
+            "Área administrativa",
+            "Governança da clínica, usuários e indicadores com MFA e auditoria obrigatórios.",
+            [
+                new("Clínica", "Configurações institucionais e operacionais.", "/administracao#clinica", "clinica", "clinic"),
+                new("Consultas", "Visão administrativa dos atendimentos.", "/administracao#consultas", "consultas", "calendar"),
+                new("Indicadores", "Leitura consolidada da operação.", "/administracao#indicadores", "indicadores", "chart"),
+                new("Usuários", "Gestão de acessos e papéis únicos.", "/administracao#usuarios", "usuarios", "users"),
+            ]),
+        _ => new(
+            "Gestão da clínica",
+            "Área do gestor",
+            "Organize equipe, agenda e cadastros com uma visão clara para telas amplas e dispositivos móveis.",
+            [
+                new("Agenda", "Acompanhe a operação diária da clínica.", "/gestao#agenda", "agenda", "calendar"),
+                new("Pacientes", "Consulte vínculos permitidos pela API.", "/gestao#pacientes", "pacientes", "users"),
+                new("Cadastros", "Mantenha clínica, equipe e serviços.", "/gestao/cadastros", "cadastros", "settings"),
+                new("Perfil", "Revise seus dados e segurança de acesso.", "/gestao#perfil", "perfil", "user"),
+            ]),
+    };
+
+    private sealed record WorkspaceModel(
+        string Title,
+        string Eyebrow,
+        string Description,
+        IReadOnlyList<WorkspaceAction> Actions);
+
+    private sealed record WorkspaceAction(
+        string Title,
+        string Description,
+        string Href,
+        string Anchor,
+        string Icon);
+}

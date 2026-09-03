@@ -1,94 +1,257 @@
-.app-shell {
-    min-height: 100vh;
+.app-shell { min-height: 100dvh; }
+
+.skip-link {
+    background: var(--color-brand-strong);
+    border-radius: 0 0 var(--radius-md) 0;
+    color: white;
+    font-weight: 800;
+    left: 0;
+    padding: var(--space-3) var(--space-4);
+    position: fixed;
+    top: 0;
+    transform: translateY(-120%);
+    transition: transform var(--motion-fast);
+    z-index: 100;
 }
+
+.skip-link:focus { transform: translateY(0); }
 
 .topbar {
     align-items: center;
-    background: rgba(255, 255, 255, 0.96);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-    padding: 0.85rem max(1rem, calc((100vw - 1180px) / 2));
+    background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+    border-bottom: 1px solid var(--color-border);
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: auto 1fr auto;
+    min-height: 5rem;
+    padding: var(--space-2) max(var(--space-4), calc((100vw - var(--content-wide)) / 2));
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: 30;
+}
+
+@supports (backdrop-filter: blur(12px)) {
+    .topbar { backdrop-filter: blur(12px); }
 }
 
 .brand {
     align-items: center;
-    display: flex;
+    color: var(--color-brand-strong);
+    display: inline-flex;
+    gap: var(--space-3);
+    min-height: 2.75rem;
     text-decoration: none;
 }
 
 .brand-logo {
     display: block;
-    height: 4rem;
+    height: 3.75rem;
     object-fit: contain;
-    width: 4rem;
+    width: 3.75rem;
 }
 
-nav {
+.brand-copy { display: grid; line-height: 1; }
+
+.brand-copy strong {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.45rem;
+    letter-spacing: 0.02em;
+}
+
+.brand-copy small {
+    color: var(--color-text-muted);
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.13em;
+    margin-top: 0.3rem;
+    text-transform: uppercase;
+}
+
+.public-navigation {
     display: flex;
-    gap: 0.35rem;
+    gap: var(--space-1);
+    justify-self: center;
 }
 
-nav ::deep a {
-    border-radius: 0.6rem;
-    color: var(--muted);
-    font-weight: 700;
-    padding: 0.55rem 0.8rem;
+.public-navigation a,
+.topbar-action {
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    font-weight: 750;
+    min-height: 2.75rem;
+    padding: 0.75rem var(--space-4);
     text-decoration: none;
 }
 
-nav ::deep a.active,
-nav ::deep a:hover {
-    background: var(--brand-soft);
-    color: var(--brand-dark);
+.public-navigation a:hover,
+.public-navigation a.active {
+    background: var(--color-brand-soft);
+    color: var(--color-brand-strong);
 }
+
+.topbar-action {
+    align-items: center;
+    background: var(--color-brand-strong);
+    color: white;
+    display: inline-flex;
+    gap: var(--space-2);
+    justify-self: end;
+}
+
+.topbar-action:hover { background: var(--color-brand); }
+
+.workspace-context { display: grid; justify-self: start; }
+.workspace-context span { color: var(--color-text-muted); font-size: var(--text-xs); }
+.workspace-context strong { font-size: var(--text-sm); }
+
+.shell-body { margin: 0 auto; max-width: var(--content-wide); }
+
+.app-shell--workspace .shell-body {
+    display: grid;
+    grid-template-columns: 16rem minmax(0, 1fr);
+}
+
+.sidebar {
+    align-self: start;
+    border-right: 1px solid var(--color-border);
+    min-height: calc(100dvh - 5rem);
+    padding: var(--space-6) var(--space-4);
+    position: sticky;
+    top: 5rem;
+}
+
+.sidebar-label {
+    color: var(--color-text-subtle);
+    font-size: var(--text-xs);
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    margin: 0 var(--space-3) var(--space-3);
+    text-transform: uppercase;
+}
+
+.sidebar nav { display: grid; gap: var(--space-1); }
+
+.sidebar nav a {
+    align-items: center;
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    display: flex;
+    font-size: var(--text-sm);
+    font-weight: 730;
+    gap: var(--space-3);
+    min-height: 2.75rem;
+    padding: 0.7rem var(--space-3);
+    text-decoration: none;
+}
+
+.sidebar nav a:hover,
+.sidebar nav a.active {
+    background: var(--color-brand-soft);
+    color: var(--color-brand-strong);
+}
+
+.sidebar nav a.active { box-shadow: inset 3px 0 var(--color-brand); }
+
+.sidebar-security {
+    align-items: flex-start;
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    color: var(--color-brand);
+    display: flex;
+    gap: var(--space-3);
+    margin-top: var(--space-8);
+    padding: var(--space-4);
+}
+
+.sidebar-security div { display: grid; gap: var(--space-1); }
+.sidebar-security strong { color: var(--color-text); font-size: var(--text-xs); }
+.sidebar-security span { color: var(--color-text-muted); font-size: 0.72rem; line-height: 1.45; }
 
 .page-container {
-    margin: 0 auto;
-    max-width: 1180px;
-    padding: clamp(1.25rem, 3vw, 3rem) 1rem 4rem;
+    min-width: 0;
+    padding: clamp(var(--space-5), 4vw, var(--space-10));
 }
 
-@media (max-width: 520px) {
-    .topbar {
+.app-shell--public .page-container { margin: 0 auto; max-width: var(--content-wide); }
+.mobile-navigation { display: none; }
+
+@media (max-width: 64rem) {
+    .app-shell--workspace .shell-body { grid-template-columns: 5.25rem minmax(0, 1fr); }
+    .sidebar-label, .sidebar nav a span, .sidebar-security div { display: none; }
+    .sidebar nav a { justify-content: center; padding-inline: 0; }
+    .sidebar-security { justify-content: center; padding-inline: 0; }
+}
+
+@media (max-width: 46rem) {
+    .topbar { gap: var(--space-3); grid-template-columns: 1fr auto; min-height: 4.5rem; }
+    .brand-logo { height: 3.25rem; width: 3.25rem; }
+    .brand-copy, .workspace-context, .public-navigation { display: none; }
+    .app-shell--workspace .shell-body { display: block; }
+    .sidebar { display: none; }
+    .page-container { padding: var(--space-5) var(--space-4) calc(6.5rem + env(safe-area-inset-bottom)); }
+    .app-shell--public .page-container { padding-bottom: var(--space-8); }
+
+    .mobile-navigation {
+        align-items: stretch;
+        background: color-mix(in srgb, var(--color-surface) 96%, transparent);
+        border-top: 1px solid var(--color-border);
+        bottom: 0;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        left: 0;
+        padding: var(--space-2) max(var(--space-2), env(safe-area-inset-right)) max(var(--space-2), env(safe-area-inset-bottom)) max(var(--space-2), env(safe-area-inset-left));
+        position: fixed;
+        right: 0;
+        z-index: 30;
+    }
+
+    .mobile-navigation a {
         align-items: center;
-        gap: 0.75rem;
-    }
-
-    .brand-logo {
-        height: 3.25rem;
-        width: 3.25rem;
-    }
-
-    nav {
+        border-radius: var(--radius-md);
+        color: var(--color-text-subtle);
+        display: flex;
+        flex-direction: column;
+        font-size: clamp(0.58rem, 2.7vw, 0.72rem);
+        font-weight: 720;
+        gap: 0.2rem;
+        justify-content: center;
+        min-height: 3.25rem;
         min-width: 0;
+        padding: var(--space-1);
+        text-decoration: none;
     }
 
-    nav ::deep a {
-        padding-inline: 0.65rem;
+    .mobile-navigation a.active { background: var(--color-brand-soft); color: var(--color-brand-strong); }
+}
+
+@media (max-width: 22rem) {
+    .mobile-navigation a span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        width: 100%;
     }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skip-link { transition: none; }
 }
 
 #blazor-error-ui {
-    color-scheme: light only;
-    background: lightyellow;
+    background: var(--color-danger-strong);
     bottom: 0;
-    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-lg);
     box-sizing: border-box;
+    color: white;
     display: none;
     left: 0;
-    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    padding: var(--space-4) var(--space-10) var(--space-4) var(--space-5);
     position: fixed;
     width: 100%;
     z-index: 1000;
 }
 
-    #blazor-error-ui .dismiss {
-        cursor: pointer;
-        position: absolute;
-        right: 0.75rem;
-        top: 0.5rem;
-    }
+#blazor-error-ui a { color: white; font-weight: 800; }
+#blazor-error-ui .dismiss { cursor: pointer; position: absolute; right: var(--space-4); top: var(--space-4); }

@@ -1,0 +1,82 @@
+.workspace-heading {
+    align-items: flex-start;
+    display: flex;
+    gap: var(--space-6);
+    justify-content: space-between;
+}
+
+.quick-actions {
+    display: grid;
+    gap: var(--space-4);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: var(--space-8);
+}
+
+.quick-action {
+    align-items: center;
+    color: var(--color-text);
+    display: grid;
+    gap: var(--space-4);
+    grid-template-columns: auto 1fr auto;
+    padding: var(--space-5);
+    text-decoration: none;
+    transition: border-color var(--motion-fast), box-shadow var(--motion-fast), transform var(--motion-fast);
+}
+
+.quick-action:hover {
+    border-color: var(--color-brand);
+    box-shadow: var(--shadow-md);
+    color: var(--color-text);
+    transform: translateY(-2px);
+}
+
+.quick-action__icon {
+    align-items: center;
+    background: var(--color-brand-soft);
+    border-radius: var(--radius-md);
+    color: var(--color-brand);
+    display: inline-flex;
+    height: 2.75rem;
+    justify-content: center;
+    width: 2.75rem;
+}
+
+.quick-action strong, .quick-action small { display: block; }
+.quick-action small { color: var(--color-text-muted); line-height: 1.5; margin-top: var(--space-1); }
+.quick-action__arrow { color: var(--color-brand); font-size: var(--text-xl); }
+
+.overview-grid {
+    align-items: start;
+    display: grid;
+    gap: var(--space-5);
+    grid-template-columns: minmax(0, 1.5fr) minmax(17rem, 0.7fr);
+    margin-top: var(--space-5);
+}
+
+.overview-panel { min-width: 0; padding: var(--space-5); }
+
+.panel-heading {
+    align-items: flex-start;
+    display: flex;
+    gap: var(--space-4);
+    justify-content: space-between;
+    margin-bottom: var(--space-5);
+}
+
+.panel-heading h2 { font-size: var(--text-xl); margin: 0; }
+
+@media (max-width: 66rem) {
+    .overview-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 42rem) {
+    .workspace-heading { display: block; }
+    .workspace-heading .badge { margin-top: var(--space-4); }
+    .quick-actions { grid-template-columns: 1fr; margin-top: var(--space-6); }
+    .panel-heading { display: block; }
+    .panel-heading .badge { margin-top: var(--space-3); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .quick-action:hover { transform: none; }
+}

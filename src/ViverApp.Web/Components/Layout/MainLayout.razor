@@ -1,19 +1,86 @@
 ﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager Navigation
+@inject WebBackendOptions Backend
 
-<div class="app-shell">
+<a class="skip-link" href="#main-content">Ir para o conteúdo principal</a>
+
+<div class="app-shell @(IsWorkspace ? "app-shell--workspace" : "app-shell--public")">
     <header class="topbar">
-        <a class="brand" href="/" aria-label="ViverApp — início">
-            <img class="brand-logo" src="/images/logo.png" alt="Centro Médico Viver" />
+        <a class="brand" href="/" aria-label="Centro Médico Viver — início">
+            <img class="brand-logo" src="/images/logo.png" alt="" />
+            <span class="brand-copy">
+                <strong>Viver</strong>
+                <small>Centro Médico</small>
+            </span>
         </a>
-        <nav aria-label="Navegação principal">
-            <NavLink href="/" Match="NavLinkMatch.All">Início</NavLink>
-            <NavLink href="gestao/cadastros">Cadastros</NavLink>
-        </nav>
+
+        @if (IsWorkspace)
+        {
+            <div class="workspace-context" aria-label="Contexto atual">
+                <span>@Shell.Context</span>
+                <strong>@Shell.Label</strong>
+            </div>
+        }
+        else
+        {
+            <nav class="public-navigation" aria-label="Navegação principal">
+                @foreach (var item in Shell.Items)
+                {
+                    <a class="@ActiveClass(item)" href="@item.Href" aria-current="@AriaCurrent(item)">
+                        @item.Label
+                    </a>
+                }
+            </nav>
+        }
+
+        <a class="topbar-action" href="@Backend.GoogleLoginUrl">
+            <AppIcon Name="shield" />
+            <span>Entrar</span>
+        </a>
     </header>
 
-    <main class="page-container">
-        @Body
-    </main>
+    <div class="shell-body">
+        @if (IsWorkspace)
+        {
+            <aside class="sidebar" aria-label="Navegação da área @Shell.Label">
+                <p class="sidebar-label">@Shell.Context</p>
+                <nav>
+                    @foreach (var item in Shell.Items)
+                    {
+                        <a class="@ActiveClass(item)" href="@item.Href" aria-current="@AriaCurrent(item)">
+                            <AppIcon Name="@item.Icon" />
+                            <span>@item.Label</span>
+                        </a>
+                    }
+                </nav>
+                <div class="sidebar-security">
+                    <AppIcon Name="shield" />
+                    <div>
+                        <strong>Proteção em camadas</strong>
+                        <span>A API valida cada permissão.</span>
+                    </div>
+                </div>
+            </aside>
+        }
+
+        <main id="main-content" class="page-container" tabindex="-1">
+            @Body
+        </main>
+    </div>
+
+    @if (IsWorkspace)
+    {
+        <nav class="mobile-navigation" aria-label="Navegação móvel da área @Shell.Label">
+            @foreach (var item in Shell.Items.Take(5))
+            {
+                <a class="@ActiveClass(item)" href="@item.Href" aria-current="@AriaCurrent(item)">
+                    <AppIcon Name="@item.Icon" />
+                    <span>@item.Label</span>
+                </a>
+            }
+        </nav>
+    }
 </div>
 
 <div id="blazor-error-ui" data-nosnippet>
@@ -21,3 +88,42 @@
     <a href="." class="reload">Recarregar</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private ShellDefinition Shell { get; set; } = ShellNavigationCatalog.Resolve("/");
+
+    private bool IsWorkspace => Shell.Profile != ShellProfile.Public;
+
+    protected override void OnInitialized()
+    {
+        UpdateShell();
+        Navigation.LocationChanged += HandleLocationChanged;
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        UpdateShell();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void UpdateShell() =>
+        Shell = ShellNavigationCatalog.Resolve(new Uri(Navigation.Uri).AbsolutePath);
+
+    private string? ActiveClass(ShellNavigationItem item) => IsActive(item) ? "active" : null;
+
+    private string? AriaCurrent(ShellNavigationItem item) => IsActive(item) ? "page" : null;
+
+    private bool IsActive(ShellNavigationItem item)
+    {
+        var current = new Uri(Navigation.Uri);
+        var target = new Uri(new Uri(Navigation.BaseUri), item.Href);
+        if (!string.Equals(current.AbsolutePath.TrimEnd('/'), target.AbsolutePath.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return string.Equals(current.Fragment, target.Fragment, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= HandleLocationChanged;
+}

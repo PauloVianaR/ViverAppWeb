@@ -4,30 +4,63 @@
 
 <PageTitle>ViverApp</PageTitle>
 
-<section class="hero">
-    <p class="eyebrow">Clínica única, cuidado integrado</p>
-    <h1>Gestão clínica clara e segura.</h1>
-    <p class="lead">A nova base web do ViverApp reúne identidade, configuração e cadastros essenciais em uma experiência preparada para qualquer tela.</p>
-    <div class="hero-actions">
-        <a class="primary-action" href="@Backend.GoogleLoginUrl">Entrar ou criar conta com Google</a>
-        <a class="secondary-action" href="gestao/cadastros">Abrir cadastros</a>
+<section class="hero" aria-labelledby="hero-title">
+    <div class="hero-copy">
+        <p class="eyebrow">Clínica única, cuidado integrado</p>
+        <h1 id="hero-title">Cuidado próximo. Gestão precisa.</h1>
+        <p class="lead">O Centro Médico Viver conecta pacientes e equipe clínica em uma experiência segura, simples e preparada para qualquer tela.</p>
+        <div class="hero-actions">
+            <a class="button" href="@Backend.GoogleLoginUrl">
+                <AppIcon Name="shield" />
+                Entrar ou criar conta com Google
+            </a>
+            <a class="button button--secondary" href="#recursos">Conhecer recursos</a>
+        </div>
+        <ul class="trust-list" aria-label="Compromissos de segurança">
+            <li>Dados protegidos</li>
+            <li>Acesso por perfil</li>
+            <li>Experiência acessível</li>
+        </ul>
     </div>
+    <div class="hero-brand" aria-hidden="true">
+        <div class="brand-halo"></div>
+        <img src="/images/logo.png" alt="" />
+    </div>
+</section>
+
+<section id="recursos" class="section-heading">
+    <p class="eyebrow">Uma base para toda a clínica</p>
+    <h2>Clareza para cada rotina.</h2>
+    <p>Informação organizada para quem cuida, para quem administra e para quem busca atendimento.</p>
 </section>
 
 <section class="feature-grid" aria-label="Recursos disponíveis">
     <article>
-        <span>01</span>
-        <h2>Identidade protegida</h2>
+        <span class="feature-icon"><AppIcon Name="shield" /></span>
+        <h3>Identidade protegida</h3>
         <p>Sessões revogáveis, autorização por papel e MFA administrativo.</p>
     </article>
     <article>
-        <span>02</span>
-        <h2>Dados mestres</h2>
+        <span class="feature-icon"><AppIcon Name="clinic" /></span>
+        <h3>Clínica organizada</h3>
         <p>Clínica, profissionais, especialidades, atendimentos e horários.</p>
     </article>
     <article>
-        <span>03</span>
-        <h2>Operação auditável</h2>
+        <span class="feature-icon"><AppIcon Name="history" /></span>
+        <h3>Operação auditável</h3>
         <p>Alterações críticas registradas e protegidas contra edições concorrentes.</p>
     </article>
+</section>
+
+<section class="role-section" aria-labelledby="roles-title">
+    <div>
+        <p class="eyebrow">Feito para a Web</p>
+        <h2 id="roles-title">A interface muda com a rotina, a proteção não.</h2>
+    </div>
+    <div class="role-list">
+        <span>Paciente</span>
+        <span>Médico</span>
+        <span>Gestor</span>
+        <span>Administrador</span>
+    </div>
 </section>

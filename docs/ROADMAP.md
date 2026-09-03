@@ -135,7 +135,7 @@ Cada fase deve:
 
 ## Fase 5 — Cadastros e configuração clínica
 
-**Estado:** implementada em `codex/fase-05-cadastros-configuracao-clinica`; ainda não integrada à `main`.
+**Estado:** concluída e integrada à `main`.
 
 **Objetivo:** reconstruir os dados mestres usados pelas jornadas.
 
@@ -155,6 +155,8 @@ Cada fase deve:
 
 ## Fase 6 — Design system e shell web responsivo
 
+**Estado:** concluída e integrada à `main`.
+
 **Objetivo:** redesenhar a experiência MAUI para web, preservando a identidade útil sem copiar limitações mobile.
 
 **Entregas:**
@@ -169,6 +171,8 @@ Cada fase deve:
 - testes visuais e de acessibilidade nos breakpoints acordados.
 
 **Saída:** biblioteca visual aprovada e páginas-base prontas para receber os fluxos.
+
+**Artefatos:** [índice da Fase 6](fase-06/README.md), [design system](fase-06/DESIGN-SYSTEM.md) e [acessibilidade e responsividade](fase-06/ACESSIBILIDADE-E-RESPONSIVIDADE.md).
 
 ## Fase 7 — Agenda e agendamento do paciente
 

@@ -12,5 +12,6 @@
     <Project Path="tests/ViverApp.Identity.Tests/ViverApp.Identity.Tests.csproj" />
     <Project Path="tests/ViverApp.Persistence.IntegrationTests/ViverApp.Persistence.IntegrationTests.csproj" />
     <Project Path="tests/ViverApp.Security.Tests/ViverApp.Security.Tests.csproj" />
+    <Project Path="tests/ViverApp.Web.Tests/ViverApp.Web.Tests.csproj" />
   </Folder>
 </Solution>

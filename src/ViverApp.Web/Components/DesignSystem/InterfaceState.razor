@@ -1,0 +1,37 @@
+<section class="interface-state interface-state--@Tone" role="@Role" aria-live="@Live">
+    <span class="interface-state__icon" aria-hidden="true">
+        <AppIcon Name="@Icon" />
+    </span>
+    <div>
+        <h2>@Title</h2>
+        <p>@Description</p>
+        @if (!string.IsNullOrWhiteSpace(ActionLabel) && !string.IsNullOrWhiteSpace(ActionHref))
+        {
+            <a class="button button--secondary button--small" href="@ActionHref">@ActionLabel</a>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Description { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Tone { get; set; } = "neutral";
+
+    [Parameter]
+    public string Icon { get; set; } = "sparkles";
+
+    [Parameter]
+    public string? ActionLabel { get; set; }
+
+    [Parameter]
+    public string? ActionHref { get; set; }
+
+    private string Role => Tone is "danger" or "warning" ? "alert" : "status";
+
+    private string Live => Tone is "danger" or "warning" ? "assertive" : "polite";
+}

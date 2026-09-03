@@ -1,0 +1,81 @@
+@page "/design-system"
+
+<PageTitle>Sistema visual | ViverApp</PageTitle>
+
+<header class="showcase-heading">
+    <p class="eyebrow">Viver Design System</p>
+    <h1 class="page-title">Uma linguagem visual para cuidar e operar.</h1>
+    <p class="page-description">Tokens e componentes-base preparados para consistência, acessibilidade e adaptação do celular ao desktop largo.</p>
+</header>
+
+<section class="showcase-section" aria-labelledby="colors-title">
+    <h2 id="colors-title">Cores semânticas</h2>
+    <div class="swatches">
+        <div><span class="swatch swatch--brand"></span><strong>Marca</strong><small>Ações e navegação</small></div>
+        <div><span class="swatch swatch--accent"></span><strong>Acento clínico</strong><small>Destaques informativos</small></div>
+        <div><span class="swatch swatch--success"></span><strong>Sucesso</strong><small>Confirmações</small></div>
+        <div><span class="swatch swatch--warning"></span><strong>Atenção</strong><small>Pendências</small></div>
+        <div><span class="swatch swatch--danger"></span><strong>Crítico</strong><small>Erros e bloqueios</small></div>
+    </div>
+</section>
+
+<section class="showcase-section" aria-labelledby="actions-title">
+    <h2 id="actions-title">Ações e status</h2>
+    <div class="component-row">
+        <button class="button" type="button">Ação principal</button>
+        <button class="button button--secondary" type="button">Ação secundária</button>
+        <button class="button button--danger" type="button">Ação destrutiva</button>
+        <button class="button" type="button" disabled>Indisponível</button>
+    </div>
+    <div class="component-row">
+        <span class="badge badge--brand">Em análise</span>
+        <span class="badge badge--success">Confirmado</span>
+        <span class="badge badge--warning">Pendente</span>
+        <span class="badge badge--danger">Bloqueado</span>
+    </div>
+</section>
+
+<section class="showcase-section" aria-labelledby="forms-title">
+    <h2 id="forms-title">Campos</h2>
+    <div class="form-grid">
+        <div class="field">
+            <label for="showcase-name">Nome completo</label>
+            <input id="showcase-name" type="text" placeholder="Digite o nome" />
+            <p class="field-hint">Use a mesma identificação dos documentos.</p>
+        </div>
+        <div class="field">
+            <label for="showcase-status">Situação</label>
+            <select id="showcase-status">
+                <option>Ativo</option>
+                <option>Pendente</option>
+            </select>
+            <p class="field-hint">Exemplo visual; nenhum dado será salvo.</p>
+        </div>
+    </div>
+</section>
+
+<section class="showcase-section" aria-labelledby="states-title">
+    <h2 id="states-title">Estados de interface</h2>
+    <div class="state-grid">
+        <InterfaceState Title="Nenhum resultado" Description="Ajuste os filtros ou crie o primeiro registro permitido." />
+        <InterfaceState Title="Conexão indisponível" Description="Preservamos sua posição enquanto tentamos restabelecer a conexão." Tone="warning" Icon="wifi-off" />
+        <InterfaceState Title="Sessão expirada" Description="Entre novamente para proteger seus dados e continuar." Tone="danger" Icon="shield" ActionLabel="Voltar ao início" ActionHref="/" />
+        <div class="surface loading-preview">
+            <p class="eyebrow">Carregamento</p>
+            <LoadingSkeleton Lines="4" />
+        </div>
+    </div>
+</section>
+
+<section class="showcase-section" aria-labelledby="density-title">
+    <h2 id="density-title">Tabela que se torna cartão no celular</h2>
+    <div class="data-region">
+        <table class="data-table">
+            <thead><tr><th scope="col">Componente</th><th scope="col">Desktop</th><th scope="col">Mobile</th></tr></thead>
+            <tbody>
+                <tr><td data-label="Componente">Lista de registros</td><td data-label="Desktop">Tabela comparável</td><td data-label="Mobile">Cartões empilhados</td></tr>
+                <tr><td data-label="Componente">Navegação</td><td data-label="Desktop">Barra lateral</td><td data-label="Mobile">Barra inferior</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>

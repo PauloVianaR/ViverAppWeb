@@ -1,0 +1,15 @@
+<div class="skeleton-stack" role="status" aria-label="@Label">
+    @for (var index = 0; index < Lines; index++)
+    {
+        <span class="skeleton-line skeleton-line--@((index % 3) + 1)" aria-hidden="true"></span>
+    }
+    <span class="visually-hidden">@Label</span>
+</div>
+
+@code {
+    [Parameter]
+    public int Lines { get; set; } = 3;
+
+    [Parameter]
+    public string Label { get; set; } = "Carregando conteúdo";
+}

@@ -1,0 +1,3 @@
+.error-page { margin: clamp(var(--space-8), 10vh, 7rem) auto; max-width: 42rem; }
+.request-reference { color: var(--color-text-subtle); font-size: var(--text-xs); margin: var(--space-4) 0 0; text-align: center; }
+.request-reference code { overflow-wrap: anywhere; }

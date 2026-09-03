@@ -7,11 +7,11 @@ Reimplementação web do ViverApp em .NET 10, composta inicialmente por:
 - `ViverApp.Web`: Blazor Web App com interatividade Server;
 - `ViverApp.Api`: ASP.NET Core Web API;
 - `docs/ROADMAP.md`: plano completo e incremental da reimplementação;
-- `docs/fase-01/` a `docs/fase-04/`: descoberta, persistência, segurança e identidade;
+- `docs/fase-01/` a `docs/fase-06/`: documentação incremental das fases;
 - `docs/adr/`: decisões arquiteturais duráveis;
 - `AGENTS.md`: regras obrigatórias para agentes de IA.
 
-As Fases 0 a 4 estão integradas à `main`. A Fase 5 está implementada em branch própria e acrescenta os cadastros da clínica única, usuários, profissionais, especialidades, tipos de atendimento, feriados e disponibilidades, além de uma primeira superfície web responsiva. A configuração externa e a validação real do Google continuam dependendo das credenciais OAuth Web do proprietário.
+As Fases 0 a 6 estão integradas à `main`, incluindo o design system, a identidade visual oficial e os shells responsivos por perfil.
 
 ## Pré-requisitos
 
@@ -38,10 +38,10 @@ O projeto `ViverApp.Api` possui um `UserSecretsId`. As credenciais legadas neces
 - `PagBank:ProductionUrl`;
 - `PagBank:TokenProduction`;
 - `SmsBarato:ApiKey` e `SmsBarato:BaseUrl`;
-- `Smtp:Host`, `Smtp:Port`, `Smtp:User` e `Smtp:Password`.
+- `Smtp:Host`, `Smtp:Port`, `Smtp:User` e `Smtp:Password`;
 - `Authentication:ChallengePepper`.
 
-As credenciais `Authentication:Google:ClientId` e `Authentication:Google:ClientSecret` deverão ser adicionadas depois de criar um cliente OAuth Web no Google; elas não possuem fallback no repositório.
+O OAuth Web do Google utiliza `GoogleOAuth:ClientID`, `GoogleOAuth:ProjectID`, `GoogleOAuth:ClientSecret` e `GoogleOAuth:RedirectURI`, todos exclusivamente em user-secrets e sem fallback no repositório.
 
 As connection strings de Azure não foram copiadas. Nenhum valor secreto deve ser incluído no repositório, em exemplos, logs, testes ou documentação.
 
@@ -57,4 +57,4 @@ dotnet user-secrets list --project src/ViverApp.Api/ViverApp.Api.csproj |
 
 ## Estado atual
 
-As Fases 1 a 4 estão concluídas e integradas à `main`: [descoberta e arquitetura](docs/fase-01/README.md), [persistência DB-First](docs/fase-02/README.md), [segurança e observabilidade](docs/fase-03/README.md) e [identidade e autorização](docs/fase-04/README.md). A implementação ainda não integrada da Fase 5 está em [cadastros e configuração clínica](docs/fase-05/README.md).
+As Fases 1 a 6 estão concluídas e integradas à `main`: [descoberta e arquitetura](docs/fase-01/README.md), [persistência DB-First](docs/fase-02/README.md), [segurança e observabilidade](docs/fase-03/README.md), [identidade e autorização](docs/fase-04/README.md), [cadastros e configuração clínica](docs/fase-05/README.md) e [design system e shell responsivo](docs/fase-06/README.md).

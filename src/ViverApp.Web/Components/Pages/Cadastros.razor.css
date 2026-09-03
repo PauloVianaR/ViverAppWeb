@@ -14,12 +14,6 @@
     text-transform: uppercase;
 }
 
-h1 {
-    font-size: clamp(2rem, 5vw, 3.4rem);
-    letter-spacing: -0.045em;
-    margin: 0;
-}
-
 .page-heading p:last-child {
     color: var(--muted);
     line-height: 1.6;
@@ -125,41 +119,19 @@ h1 {
     margin: 0.15rem 0 0;
 }
 
-.empty-state {
-    margin: 2.5rem auto;
-    max-width: 32rem;
-    text-align: center;
-}
-
-.empty-icon {
-    align-items: center;
-    background: var(--brand-soft);
-    border-radius: 50%;
-    color: var(--brand-dark);
-    display: inline-flex;
-    font-weight: 900;
-    height: 3rem;
-    justify-content: center;
-    width: 3rem;
-}
-
-.empty-state h4 {
-    font-size: 1.1rem;
-    margin: 1rem 0 0.4rem;
-}
-
-.empty-state p {
-    color: var(--muted);
-    line-height: 1.55;
-    margin: 0;
-}
-
 .card-footer {
     border-top: 1px solid var(--border);
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
     padding-top: 1rem;
+}
+
+.maintenance-card ::deep .interface-state {
+    border: 0;
+    box-shadow: none;
+    margin: 1.5rem 0;
+    padding-inline: 0;
 }
 
 .card-footer span {

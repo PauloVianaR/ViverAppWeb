@@ -1,0 +1,33 @@
+.skeleton-stack {
+    display: grid;
+    gap: var(--space-3);
+}
+
+.skeleton-line {
+    animation: skeleton-pulse 1.4s ease-in-out infinite;
+    background: linear-gradient(90deg, var(--color-surface-muted), var(--color-border), var(--color-surface-muted));
+    background-size: 220% 100%;
+    border-radius: var(--radius-pill);
+    display: block;
+    height: 0.9rem;
+    width: 100%;
+}
+
+.skeleton-line--2 {
+    width: 82%;
+}
+
+.skeleton-line--3 {
+    width: 61%;
+}
+
+@keyframes skeleton-pulse {
+    0% { background-position: 100% 0; }
+    100% { background-position: -120% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton-line {
+        animation: none;
+    }
+}

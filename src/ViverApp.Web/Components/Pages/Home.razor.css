@@ -1,105 +1,125 @@
 .hero {
-    background: linear-gradient(135deg, #ffffff 0%, #edf8f4 100%);
-    border: 1px solid var(--border);
-    border-radius: 1.5rem;
-    box-shadow: var(--shadow);
-    padding: clamp(1.5rem, 5vw, 4.5rem);
+    align-items: center;
+    background:
+        radial-gradient(circle at 82% 24%, rgba(77, 132, 185, 0.18), transparent 32%),
+        linear-gradient(145deg, #ffffff 0%, #edf3f9 100%);
+    border: 1px solid var(--color-border);
+    border-radius: clamp(var(--radius-lg), 3vw, 2rem);
+    box-shadow: var(--shadow-md);
+    display: grid;
+    gap: clamp(var(--space-8), 6vw, var(--space-16));
+    grid-template-columns: minmax(0, 1.25fr) minmax(14rem, 0.75fr);
+    min-height: min(42rem, calc(100dvh - 9rem));
+    overflow: hidden;
+    padding: clamp(var(--space-6), 6vw, 5rem);
 }
 
-.eyebrow {
-    color: var(--brand-dark);
-    font-size: 0.78rem;
-    font-weight: 800;
-    letter-spacing: 0.12em;
-    margin: 0 0 0.75rem;
-    text-transform: uppercase;
-}
+.hero-copy { position: relative; z-index: 1; }
 
 h1 {
-    font-size: clamp(2.1rem, 6vw, 4.4rem);
+    color: var(--color-brand-strong);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: var(--text-display);
+    font-weight: 700;
     letter-spacing: -0.055em;
-    line-height: 0.98;
+    line-height: 0.96;
     margin: 0;
-    max-width: 12ch;
+    max-width: 11ch;
 }
 
 .lead {
-    color: var(--muted);
-    font-size: clamp(1rem, 2vw, 1.2rem);
+    color: var(--color-text-muted);
+    font-size: clamp(var(--text-base), 2vw, var(--text-xl));
     line-height: 1.7;
-    margin: 1.5rem 0 2rem;
-    max-width: 62ch;
+    margin: var(--space-6) 0 var(--space-8);
+    max-width: 58ch;
 }
 
-.primary-action {
-    background: var(--brand);
-    border-radius: 0.75rem;
-    color: white;
-    display: inline-block;
-    font-weight: 800;
-    padding: 0.85rem 1.15rem;
-    text-decoration: none;
-}
+.hero-actions { align-items: center; display: flex; flex-wrap: wrap; gap: var(--space-3); }
 
-.primary-action:hover {
-    background: var(--brand-dark);
-}
-
-.hero-actions {
-    align-items: center;
+.trust-list {
+    color: var(--color-text-muted);
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem;
+    font-size: var(--text-sm);
+    gap: var(--space-3) var(--space-6);
+    list-style: none;
+    margin: var(--space-8) 0 0;
+    padding: 0;
 }
 
-.secondary-action {
-    border: 1px solid var(--border);
-    border-radius: 0.75rem;
-    color: var(--ink);
-    display: inline-block;
-    font-weight: 800;
-    padding: 0.8rem 1.15rem;
-    text-decoration: none;
+.trust-list li::before { color: var(--color-accent); content: "✓"; font-weight: 900; margin-right: var(--space-2); }
+
+.hero-brand { display: grid; place-items: center; position: relative; }
+.hero-brand img { border-radius: 22%; filter: drop-shadow(0 20px 32px rgba(11, 35, 64, 0.18)); position: relative; width: min(100%, 18rem); }
+
+.brand-halo {
+    background: linear-gradient(145deg, rgba(23, 63, 107, 0.12), rgba(22, 117, 109, 0.1));
+    border: 1px solid rgba(23, 63, 107, 0.12);
+    border-radius: 50%;
+    height: min(30vw, 23rem);
+    position: absolute;
+    width: min(30vw, 23rem);
 }
 
-.secondary-action:hover {
-    background: var(--surface);
-    border-color: var(--brand);
-}
+.section-heading { margin: clamp(var(--space-12), 8vw, 6rem) auto var(--space-8); max-width: 46rem; text-align: center; }
+.section-heading h2, .role-section h2 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.8rem, 4vw, 3.25rem); letter-spacing: -0.04em; margin: 0; }
+.section-heading > p:last-child { color: var(--color-text-muted); line-height: 1.7; }
 
-.feature-grid {
-    display: grid;
-    gap: 1rem;
-    grid-template-columns: repeat(3, 1fr);
-    margin-top: 1rem;
-}
+.feature-grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(3, 1fr); }
 
 .feature-grid article {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 1rem;
-    padding: 1.35rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding: clamp(var(--space-5), 3vw, var(--space-8));
 }
 
-.feature-grid span {
-    color: var(--brand);
-    font-size: 0.8rem;
-    font-weight: 900;
+.feature-icon {
+    align-items: center;
+    background: var(--color-brand-soft);
+    border-radius: var(--radius-lg);
+    color: var(--color-brand);
+    display: inline-flex;
+    height: 3rem;
+    justify-content: center;
+    width: 3rem;
 }
 
-.feature-grid h2 {
-    font-size: 1.05rem;
-    margin: 0.55rem 0;
+.feature-grid h3 { font-size: var(--text-lg); margin: var(--space-5) 0 var(--space-2); }
+.feature-grid p { color: var(--color-text-muted); line-height: 1.65; margin: 0; }
+
+.role-section {
+    align-items: center;
+    background: var(--color-brand-strong);
+    border-radius: var(--radius-xl);
+    color: white;
+    display: grid;
+    gap: var(--space-8);
+    grid-template-columns: minmax(0, 1fr) auto;
+    margin-top: var(--space-8);
+    padding: clamp(var(--space-6), 5vw, var(--space-12));
 }
 
-.feature-grid p {
-    color: var(--muted);
-    line-height: 1.55;
-    margin: 0;
+.role-section .eyebrow { color: #9bc8c3; }
+.role-list { display: grid; gap: var(--space-2); grid-template-columns: repeat(2, auto); }
+.role-list span { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: var(--radius-pill); font-size: var(--text-sm); font-weight: 750; padding: var(--space-3) var(--space-5); text-align: center; }
+
+@media (min-width: 100rem) {
+    .hero { min-height: 44rem; }
 }
 
-@media (max-width: 760px) {
-    .feature-grid {
-        grid-template-columns: 1fr;
-    }
+@media (max-width: 52rem) {
+    .hero { grid-template-columns: 1fr; min-height: auto; }
+    .hero-brand { display: none; }
+    .feature-grid { grid-template-columns: 1fr; }
+    .role-section { grid-template-columns: 1fr; }
+    .role-list { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (max-width: 36rem) {
+    .hero { padding: var(--space-6); }
+    .hero-actions .button { width: 100%; }
+    .trust-list { display: grid; gap: var(--space-2); }
+    .role-list { grid-template-columns: repeat(2, 1fr); }
 }

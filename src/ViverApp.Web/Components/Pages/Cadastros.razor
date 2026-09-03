@@ -6,10 +6,10 @@
 <header class="page-heading">
     <div>
         <p class="eyebrow">Configuração</p>
-        <h1>Cadastros da clínica</h1>
+        <h1 class="page-title">Cadastros da clínica</h1>
         <p>Uma visão inicial das áreas de manutenção. O acesso aos dados respeita o papel e a sessão autenticada na API.</p>
     </div>
-    <span class="phase-badge">Fase 5</span>
+    <span class="phase-badge">API disponível</span>
 </header>
 
 <nav class="section-tabs" aria-label="Áreas de cadastro">
@@ -47,11 +47,10 @@
             <span class="secure-pill">Acesso controlado</span>
         </div>
 
-        <div class="empty-state">
-            <div class="empty-icon" aria-hidden="true">✓</div>
-            <h4>API de cadastro disponível</h4>
-            <p>Entre com uma conta autorizada para consultar e alterar registros. Nenhum dado fictício é exibido nesta tela.</p>
-        </div>
+        <InterfaceState Title="Pronto para uma sessão autorizada"
+                        Description="Entre com uma conta permitida para consultar e alterar registros. Nenhum dado fictício é exibido nesta tela."
+                        Icon="shield"
+                        Tone="success" />
 
         <div class="card-footer">
             <span>Paginação e filtros</span>
