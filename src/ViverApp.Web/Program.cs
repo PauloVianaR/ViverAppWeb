@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using ViverApp.Security;
+using ViverApp.Web;
 using ViverApp.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -31,6 +32,7 @@ builder.Services.AddViverAppObservability(
     builder.Configuration,
     builder.Environment,
     "ViverApp.Web");
+builder.Services.AddSingleton(WebBackendOptions.Load(builder.Configuration, builder.Environment));
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), ["live", "ready"]);
 builder.Services.AddRazorComponents()

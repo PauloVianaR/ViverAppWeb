@@ -32,7 +32,7 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(27, applicationEntities.Length);
+        Assert.Equal(28, applicationEntities.Length);
         Assert.DoesNotContain(
             applicationEntities,
             entity => string.Equals(entity.GetTableName(), "__schema_migrations", StringComparison.Ordinal));
@@ -63,7 +63,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006", migrations);
 
         var forbiddenColumns = await ExecuteScalarAsync(
             connection,
@@ -147,6 +147,27 @@ public sealed class DatabaseContractTests
               AND is_nullable = 'NO'
             """);
         Assert.Equal("1", roleColumns);
+
+        var phaseFiveTables = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.tables
+            WHERE table_schema = 'viverappweb'
+              AND table_name = 'professional_reviews'
+            """);
+        Assert.Equal("1", phaseFiveTables);
+
+        var clinicAddressColumns = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_schema = 'viverappweb'
+              AND table_name = 'clinic'
+              AND column_name IN ('postal_code', 'street', 'number', 'district', 'city', 'state_code')
+            """);
+        Assert.Equal("6", clinicAddressColumns);
     }
 
     private static ViverAppDbContext CreateContext()

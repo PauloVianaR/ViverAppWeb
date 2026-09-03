@@ -113,7 +113,7 @@ Cada fase deve:
 
 ## Fase 4 — Identidade, login Google/e-mail/SMS e autorização
 
-**Estado:** concluída em `codex/fase-04-identidade-autorizacao`; integração à `main` autorizada pelo proprietário.
+**Estado:** concluída e integrada à `main`.
 
 **Objetivo:** substituir a autenticação legada por identidade moderna e políticas por perfil.
 
@@ -135,6 +135,8 @@ Cada fase deve:
 
 ## Fase 5 — Cadastros e configuração clínica
 
+**Estado:** implementada em `codex/fase-05-cadastros-configuracao-clinica`; ainda não integrada à `main`.
+
 **Objetivo:** reconstruir os dados mestres usados pelas jornadas.
 
 **Entregas:**
@@ -148,6 +150,8 @@ Cada fase deve:
 - primeiras telas responsivas de manutenção conforme o design system da Fase 6.
 
 **Saída:** CRUDs autorizados por política, sem exposição direta de entidades EF.
+
+**Artefatos:** [índice da Fase 5](fase-05/README.md) e [matriz de acesso da API](fase-05/API-E-AUTORIZACAO.md).
 
 ## Fase 6 — Design system e shell web responsivo
 

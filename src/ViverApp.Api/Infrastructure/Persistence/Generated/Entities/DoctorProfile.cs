@@ -19,6 +19,8 @@ public partial class DoctorProfile
 
     public DateTime UpdatedAtUtc { get; set; }
 
+    public ulong RowVersion { get; set; }
+
     public virtual Account Account { get; set; } = null!;
 
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();

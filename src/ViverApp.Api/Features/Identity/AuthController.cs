@@ -549,6 +549,7 @@ public sealed class AuthController(
                 return Redirect(securityOptions.BuildWebReturnUrl("explicit_link_required"));
             }
 
+            await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
             user = new ViverAppUser
             {
                 UserName = email,
@@ -561,12 +562,17 @@ public sealed class AuthController(
                 EmailConfirmed = true,
             };
             var created = await userManager.CreateAsync(user);
-            if (!created.Succeeded || !(await userManager.AddLoginAsync(user, info)).Succeeded)
+            var loginAdded = created.Succeeded
+                ? await userManager.AddLoginAsync(user, info)
+                : IdentityResult.Failed();
+            if (!created.Succeeded || !loginAdded.Succeeded)
             {
+                await transaction.RollbackAsync(cancellationToken);
                 await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
                 return Redirect(securityOptions.BuildWebReturnUrl("google_failed"));
             }
 
+            await transaction.CommitAsync(cancellationToken);
         }
 
         await MarkGoogleEmailVerifiedAsync(user.Id, info.ProviderKey, email!, cancellationToken);

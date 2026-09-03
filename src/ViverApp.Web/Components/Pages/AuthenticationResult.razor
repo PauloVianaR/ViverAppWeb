@@ -1,0 +1,40 @@
+@page "/auth/result"
+@using Microsoft.AspNetCore.Components
+
+<PageTitle>Resultado do acesso | ViverApp</PageTitle>
+
+<section class="auth-result" aria-live="polite">
+    <span class="status-mark" aria-hidden="true">@Presentation.Mark</span>
+    <p class="eyebrow">Conta Google</p>
+    <h1>@Presentation.Title</h1>
+    <p>@Presentation.Message</p>
+    <div class="actions">
+        @if (Presentation.Success)
+        {
+            <a class="primary-action" href="gestao/cadastros">Continuar</a>
+        }
+        else
+        {
+            <a class="primary-action" href="/">Tentar novamente</a>
+        }
+    </div>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "result")]
+    public string? Result { get; set; }
+
+    private ResultPresentation Presentation => Result switch
+    {
+        "success" => new(true, "✓", "Acesso concluído", "Sua conta Google foi autenticada com segurança."),
+        "mfa_required" => new(true, "→", "Confirme seu segundo fator", "A conta foi reconhecida e requer a confirmação do MFA."),
+        "mfa_enrollment_required" => new(true, "→", "Configure o MFA", "Administradores precisam configurar o segundo fator antes de continuar."),
+        "explicit_link_required" => new(false, "!", "Vínculo necessário", "Já existe uma conta com este e-mail. Entre pelo método atual e vincule o Google nas configurações de segurança."),
+        "account_unavailable" => new(false, "!", "Conta indisponível", "Esta conta não está liberada para acesso. Procure a administração da clínica."),
+        "google_linked" => new(true, "✓", "Google vinculado", "A conta Google foi vinculada ao seu acesso."),
+        "google_link_failed" => new(false, "!", "Não foi possível vincular", "O vínculo com a conta Google não foi concluído."),
+        _ => new(false, "!", "Acesso não concluído", "Não foi possível validar a conta Google. Tente novamente."),
+    };
+
+    private sealed record ResultPresentation(bool Success, string Mark, string Title, string Message);
+}

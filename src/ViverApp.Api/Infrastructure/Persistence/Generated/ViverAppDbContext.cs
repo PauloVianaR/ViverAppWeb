@@ -62,6 +62,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<PremiumPlan> PremiumPlans { get; set; }
 
+    public virtual DbSet<ProfessionalReview> ProfessionalReviews { get; set; }
+
     public virtual DbSet<Role> Roles { get; set; }
 
     public virtual DbSet<Specialty> Specialties { get; set; }
@@ -514,6 +516,9 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.PriceAmount)
                 .HasPrecision(13)
                 .HasColumnName("price_amount");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
             entity.Property(e => e.UpdatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");
@@ -624,24 +629,47 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.SingletonId)
                 .HasDefaultValueSql("'1'")
                 .HasColumnName("singleton_id");
+            entity.Property(e => e.City)
+                .HasMaxLength(100)
+                .HasColumnName("city");
+            entity.Property(e => e.Complement)
+                .HasMaxLength(100)
+                .HasColumnName("complement");
             entity.Property(e => e.CreatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("created_at_utc");
             entity.Property(e => e.DisplayName)
                 .HasMaxLength(120)
                 .HasColumnName("display_name");
+            entity.Property(e => e.District)
+                .HasMaxLength(100)
+                .HasColumnName("district");
             entity.Property(e => e.Email)
                 .HasMaxLength(254)
                 .HasColumnName("email");
             entity.Property(e => e.LegalName)
                 .HasMaxLength(200)
                 .HasColumnName("legal_name");
+            entity.Property(e => e.Number)
+                .HasMaxLength(20)
+                .HasColumnName("number");
             entity.Property(e => e.PhoneE164)
                 .HasMaxLength(16)
                 .HasColumnName("phone_e164");
+            entity.Property(e => e.PostalCode)
+                .HasMaxLength(8)
+                .IsFixedLength()
+                .HasColumnName("postal_code");
             entity.Property(e => e.RowVersion)
                 .HasDefaultValueSql("'1'")
                 .HasColumnName("row_version");
+            entity.Property(e => e.StateCode)
+                .HasMaxLength(2)
+                .IsFixedLength()
+                .HasColumnName("state_code");
+            entity.Property(e => e.Street)
+                .HasMaxLength(200)
+                .HasColumnName("street");
             entity.Property(e => e.TaxId)
                 .HasMaxLength(14)
                 .IsFixedLength()
@@ -664,14 +692,23 @@ public partial class ViverAppDbContext : DbContext
             entity.HasIndex(e => new { e.DayOfWeek, e.StartTime, e.EndTime }, "ux_clinic_weekly_hours").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
             entity.Property(e => e.DayOfWeek).HasColumnName("day_of_week");
             entity.Property(e => e.EndTime)
                 .HasColumnType("time")
                 .HasColumnName("end_time");
             entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
             entity.Property(e => e.StartTime)
                 .HasColumnType("time")
                 .HasColumnName("start_time");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
         });
 
         modelBuilder.Entity<DoctorProfile>(entity =>
@@ -699,6 +736,9 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(2)
                 .IsFixedLength()
                 .HasColumnName("license_state_code");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
             entity.Property(e => e.UpdatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");
@@ -739,15 +779,24 @@ public partial class ViverAppDbContext : DbContext
             entity.HasIndex(e => new { e.DoctorAccountId, e.DayOfWeek, e.StartTime, e.EndTime, e.ValidFrom }, "ux_doctor_weekly_hours").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
             entity.Property(e => e.DayOfWeek).HasColumnName("day_of_week");
             entity.Property(e => e.DoctorAccountId).HasColumnName("doctor_account_id");
             entity.Property(e => e.EndTime)
                 .HasColumnType("time")
                 .HasColumnName("end_time");
             entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
             entity.Property(e => e.StartTime)
                 .HasColumnType("time")
                 .HasColumnName("start_time");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
             entity.Property(e => e.ValidFrom)
                 .HasColumnType("date")
                 .HasColumnName("valid_from");
@@ -798,6 +847,9 @@ public partial class ViverAppDbContext : DbContext
             entity.HasIndex(e => new { e.HolidayDate, e.Name }, "ux_holidays_date_name").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
             entity.Property(e => e.EndTime)
                 .HasColumnType("time")
                 .HasColumnName("end_time");
@@ -807,9 +859,15 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.Name)
                 .HasMaxLength(120)
                 .HasColumnName("name");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
             entity.Property(e => e.StartTime)
                 .HasColumnType("time")
                 .HasColumnName("start_time");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
         });
 
         modelBuilder.Entity<IdempotencyRecord>(entity =>
@@ -1057,6 +1115,40 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.ValidityDays).HasColumnName("validity_days");
         });
 
+        modelBuilder.Entity<ProfessionalReview>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("professional_reviews");
+
+            entity.HasIndex(e => new { e.ProfessionalAccountId, e.OccurredAtUtc }, "ix_professional_reviews_professional_time");
+
+            entity.HasIndex(e => new { e.ReviewerAccountId, e.OccurredAtUtc }, "ix_professional_reviews_reviewer_time");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.DecisionCode)
+                .HasMaxLength(20)
+                .HasColumnName("decision_code");
+            entity.Property(e => e.OccurredAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("occurred_at_utc");
+            entity.Property(e => e.ProfessionalAccountId).HasColumnName("professional_account_id");
+            entity.Property(e => e.Reason)
+                .HasMaxLength(500)
+                .HasColumnName("reason");
+            entity.Property(e => e.ReviewerAccountId).HasColumnName("reviewer_account_id");
+
+            entity.HasOne(d => d.ProfessionalAccount).WithMany(p => p.ProfessionalReviewProfessionalAccounts)
+                .HasForeignKey(d => d.ProfessionalAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_professional_reviews_professional");
+
+            entity.HasOne(d => d.ReviewerAccount).WithMany(p => p.ProfessionalReviewReviewerAccounts)
+                .HasForeignKey(d => d.ReviewerAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_professional_reviews_reviewer");
+        });
+
         modelBuilder.Entity<Role>(entity =>
         {
             entity.HasKey(e => e.Code).HasName("PRIMARY");
@@ -1081,6 +1173,9 @@ public partial class ViverAppDbContext : DbContext
             entity.HasIndex(e => e.NormalizedName, "ux_specialties_normalized_name").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
             entity.Property(e => e.IsActive).HasColumnName("is_active");
             entity.Property(e => e.Name)
                 .HasMaxLength(120)
@@ -1088,6 +1183,12 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.NormalizedName)
                 .HasMaxLength(120)
                 .HasColumnName("normalized_name");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
         });
 
         OnModelCreatingPartial(modelBuilder);

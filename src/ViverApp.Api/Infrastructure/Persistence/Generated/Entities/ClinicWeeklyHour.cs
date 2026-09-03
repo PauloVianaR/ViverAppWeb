@@ -14,4 +14,10 @@ public partial class ClinicWeeklyHour
     public TimeSpan EndTime { get; set; }
 
     public bool IsActive { get; set; }
+
+    public DateTime CreatedAtUtc { get; set; }
+
+    public DateTime UpdatedAtUtc { get; set; }
+
+    public ulong RowVersion { get; set; }
 }

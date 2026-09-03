@@ -44,6 +44,7 @@ $tables = @(
     'clinic_weekly_hours',
     'doctor_weekly_hours',
     'holidays',
+    'professional_reviews',
     'appointments',
     'appointment_documents',
     'payments',

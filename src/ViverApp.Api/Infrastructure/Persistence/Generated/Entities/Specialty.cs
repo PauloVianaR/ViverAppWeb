@@ -13,5 +13,11 @@ public partial class Specialty
 
     public bool IsActive { get; set; }
 
+    public DateTime CreatedAtUtc { get; set; }
+
+    public DateTime UpdatedAtUtc { get; set; }
+
+    public ulong RowVersion { get; set; }
+
     public virtual ICollection<DoctorSpecialty> DoctorSpecialties { get; set; } = new List<DoctorSpecialty>();
 }

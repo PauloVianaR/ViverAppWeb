@@ -12,6 +12,10 @@ public sealed class IdentitySecurityOptions
 
     public string? GoogleClientSecret { get; private init; }
 
+    public string? GoogleProjectId { get; private init; }
+
+    public Uri? GoogleRedirectUri { get; private init; }
+
     public Uri? WebReturnUrl { get; private init; }
 
     public static IdentitySecurityOptions Load(IConfiguration configuration)
@@ -37,12 +41,29 @@ public sealed class IdentitySecurityOptions
                 "Authentication:ChallengePepper deve conter pelo menos 32 bytes aleatórios.");
         }
 
-        var clientId = configuration["Authentication:Google:ClientId"];
-        var clientSecret = configuration["Authentication:Google:ClientSecret"];
-        if (string.IsNullOrWhiteSpace(clientId) != string.IsNullOrWhiteSpace(clientSecret))
+        var clientId = configuration["GoogleOAuth:ClientID"];
+        var projectId = configuration["GoogleOAuth:ProjectID"];
+        var clientSecret = configuration["GoogleOAuth:ClientSecret"];
+        var redirectUriValue = configuration["GoogleOAuth:RedirectURI"];
+        var googleValues = new[] { clientId, projectId, clientSecret, redirectUriValue };
+        var configuredGoogleValues = googleValues.Count(value => !string.IsNullOrWhiteSpace(value));
+        if (configuredGoogleValues != 0 && configuredGoogleValues != googleValues.Length)
         {
             throw new InvalidOperationException(
-                "As credenciais Google devem possuir ClientId e ClientSecret em conjunto.");
+                "GoogleOAuth deve possuir ClientID, ProjectID, ClientSecret e RedirectURI em conjunto.");
+        }
+
+        Uri? googleRedirectUri = null;
+        if (configuredGoogleValues == googleValues.Length
+            && (!Uri.TryCreate(redirectUriValue, UriKind.Absolute, out googleRedirectUri)
+                || googleRedirectUri.Scheme != Uri.UriSchemeHttps
+                || !string.IsNullOrEmpty(googleRedirectUri.UserInfo)
+                || !string.IsNullOrEmpty(googleRedirectUri.Query)
+                || !string.IsNullOrEmpty(googleRedirectUri.Fragment)
+                || !string.Equals(googleRedirectUri.AbsolutePath, "/signin-google", StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException(
+                "GoogleOAuth:RedirectURI deve ser uma URL HTTPS absoluta com o caminho exato /signin-google.");
         }
 
         var returnUrlValue = configuration["Authentication:WebReturnUrl"];
@@ -62,8 +83,10 @@ public sealed class IdentitySecurityOptions
         {
             ChallengePepper = pepper,
             GoogleEnabled = !string.IsNullOrWhiteSpace(clientId),
-            GoogleClientId = clientId,
-            GoogleClientSecret = clientSecret,
+            GoogleClientId = clientId?.Trim(),
+            GoogleClientSecret = clientSecret?.Trim(),
+            GoogleProjectId = projectId?.Trim(),
+            GoogleRedirectUri = googleRedirectUri,
             WebReturnUrl = returnUrl,
         };
     }

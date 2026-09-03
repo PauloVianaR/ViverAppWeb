@@ -6,8 +6,10 @@ Todos os valores abaixo ficam em User Secrets no desenvolvimento e em secret sto
 |---|---|
 | `ConnectionStrings:LocalConnection` | conexão exclusivamente com `viverappweb` |
 | `Authentication:ChallengePepper` | Base64 de pelo menos 32 bytes para HMAC de códigos, destinos e metadados |
-| `Authentication:Google:ClientId` | OAuth Client ID do tipo Web |
-| `Authentication:Google:ClientSecret` | segredo OAuth Web |
+| `GoogleOAuth:ClientID` | OAuth Client ID do tipo Aplicativo Web |
+| `GoogleOAuth:ProjectID` | identificador do projeto no Google Cloud |
+| `GoogleOAuth:ClientSecret` | segredo OAuth Web |
+| `GoogleOAuth:RedirectURI` | callback HTTPS exato terminado em `/signin-google` |
 | `Authentication:WebReturnUrl` | URL HTTPS fixa da página Web que recebe o resultado do Google |
 | `Authentication:Passkeys:ServerDomain` | RP ID/domínio efetivo das passkeys |
 | `Authentication:Delivery:Enabled` | habilita o consumidor da outbox; `true` por padrão |
@@ -15,7 +17,7 @@ Todos os valores abaixo ficam em User Secrets no desenvolvimento e em secret sto
 | `Smtp:User`, `Smtp:Password` | remetente/autenticação SMTP |
 | `SmsBarato:BaseUrl`, `SmsBarato:ApiKey` | host HTTPS oficial e chave do SMSBarato |
 
-O callback a cadastrar no Google é `https://<host-da-api>/signin-google`. As duas credenciais Google devem ser configuradas juntas. A API recusa URL de retorno sem HTTPS, URL com credenciais e host de SMSBarato diferente do oficial.
+O callback a cadastrar no Google é `https://<host-da-api>/signin-google`. As quatro chaves `GoogleOAuth` devem ser configuradas juntas. A API recusa callback sem HTTPS, caminho diferente de `/signin-google`, query, fragmento, credenciais na URL e host de SMSBarato diferente do oficial.
 
 O switch de entrega existe para testes isolados e manutenção controlada. Ele não descarta mensagens: com o valor `false`, novos códigos continuam pendentes na outbox e expiram normalmente. Produção deve mantê-lo habilitado e monitorar retries/dead-letter.
 

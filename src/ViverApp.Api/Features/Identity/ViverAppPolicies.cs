@@ -7,6 +7,7 @@ public static class ViverAppPolicies
     public const string Manager = "role:manager";
     public const string Administrator = "role:administrator";
     public const string ClinicalStaff = "role:clinical-staff";
+    public const string Management = "role:management";
     public const string MfaEnrollment = "identity:mfa-enrollment";
     public const string MfaSatisfied = "identity:mfa-satisfied";
 }

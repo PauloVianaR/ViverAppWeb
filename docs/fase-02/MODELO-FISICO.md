@@ -17,6 +17,7 @@ O schema abaixo é a fonte de verdade da persistência. As classes EF em `Infras
 | `account_passkeys` | credenciais WebAuthn | credencial pública vinculada a uma única conta; máximo aplicado pela aplicação |
 | `patient_profiles` | dados próprios de paciente | relação 1:1 com conta |
 | `doctor_profiles` | dados profissionais | relação 1:1 com conta; registro profissional único |
+| `professional_reviews` | histórico de decisões profissionais | profissional e revisor válidos; decisão fechada e justificativa obrigatória para rejeição/bloqueio |
 
 O banco assegura que uma conta aponta para um único papel. A aplicação deverá assegurar, nas fases funcionais, que apenas contas com papel correspondente recebam perfil de paciente ou médico e que mudanças de papel sejam administrativas e auditadas.
 
@@ -60,5 +61,5 @@ Não existe `clinic_id` nas contas ou nas tabelas operacionais porque todos os r
 - valores financeiros em `decimal`, nunca ponto flutuante;
 - chaves externas com `RESTRICT` quando exclusão quebraria histórico e `CASCADE` apenas em dependentes inseparáveis;
 - checks do MySQL para enums fechados e invariantes locais;
-- `row_version` em conta, clínica, consulta e pagamento, marcado como concurrency token em arquivo parcial fora do código gerado;
+- `row_version` em contas e cadastros mutáveis, marcado como concurrency token em arquivo parcial fora do código gerado;
 - segredos, tokens reutilizáveis e códigos de desafio nunca persistidos em texto claro.

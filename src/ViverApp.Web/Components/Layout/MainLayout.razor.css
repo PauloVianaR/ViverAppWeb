@@ -1,3 +1,77 @@
+.app-shell {
+    min-height: 100vh;
+}
+
+.topbar {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.96);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    padding: 0.85rem max(1rem, calc((100vw - 1180px) / 2));
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.brand {
+    align-items: center;
+    display: flex;
+    text-decoration: none;
+}
+
+.brand-logo {
+    display: block;
+    height: 4rem;
+    object-fit: contain;
+    width: 4rem;
+}
+
+nav {
+    display: flex;
+    gap: 0.35rem;
+}
+
+nav ::deep a {
+    border-radius: 0.6rem;
+    color: var(--muted);
+    font-weight: 700;
+    padding: 0.55rem 0.8rem;
+    text-decoration: none;
+}
+
+nav ::deep a.active,
+nav ::deep a:hover {
+    background: var(--brand-soft);
+    color: var(--brand-dark);
+}
+
+.page-container {
+    margin: 0 auto;
+    max-width: 1180px;
+    padding: clamp(1.25rem, 3vw, 3rem) 1rem 4rem;
+}
+
+@media (max-width: 520px) {
+    .topbar {
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .brand-logo {
+        height: 3.25rem;
+        width: 3.25rem;
+    }
+
+    nav {
+        min-width: 0;
+    }
+
+    nav ::deep a {
+        padding-inline: 0.65rem;
+    }
+}
+
 #blazor-error-ui {
     color-scheme: light only;
     background: lightyellow;

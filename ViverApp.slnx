@@ -8,6 +8,7 @@
     <Project Path="tools/ViverApp.Database/ViverApp.Database.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/ViverApp.ClinicAdministration.Tests/ViverApp.ClinicAdministration.Tests.csproj" />
     <Project Path="tests/ViverApp.Identity.Tests/ViverApp.Identity.Tests.csproj" />
     <Project Path="tests/ViverApp.Persistence.IntegrationTests/ViverApp.Persistence.IntegrationTests.csproj" />
     <Project Path="tests/ViverApp.Security.Tests/ViverApp.Security.Tests.csproj" />

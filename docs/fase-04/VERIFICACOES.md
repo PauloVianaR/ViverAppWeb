@@ -25,4 +25,4 @@
 
 ## Verificações externas pendentes
 
-O handshake Google real requer credenciais OAuth Web e redirect URI do proprietário. Entregabilidade SMTP/SMS exige saldo, autorização de IP e configuração vigentes nos provedores. Esses testes externos não devem usar destinatários reais sem autorização explícita.
+O handshake Google usa credenciais OAuth Web e redirect URI mantidos somente em user-secrets; a configuração e a integração real são verificadas na Fase 5. Entregabilidade SMTP/SMS exige saldo, autorização de IP e configuração vigentes nos provedores. Esses testes externos não devem usar destinatários reais sem autorização explícita.

@@ -1,0 +1,85 @@
+@page "/gestao/cadastros"
+@rendermode InteractiveServer
+
+<PageTitle>Cadastros | ViverApp</PageTitle>
+
+<header class="page-heading">
+    <div>
+        <p class="eyebrow">Configuração</p>
+        <h1>Cadastros da clínica</h1>
+        <p>Uma visão inicial das áreas de manutenção. O acesso aos dados respeita o papel e a sessão autenticada na API.</p>
+    </div>
+    <span class="phase-badge">Fase 5</span>
+</header>
+
+<nav class="section-tabs" aria-label="Áreas de cadastro">
+    @foreach (var section in Sections)
+    {
+        <button class="@(activeSection == section.Id ? "active" : null)"
+                type="button"
+                aria-pressed="@(activeSection == section.Id)"
+                @onclick="() => activeSection = section.Id">
+            @section.Label
+        </button>
+    }
+</nav>
+
+<section class="workspace" aria-live="polite">
+    <div class="workspace-copy">
+        <span class="section-number">@ActiveSection.Number</span>
+        <p class="eyebrow">@ActiveSection.Kicker</p>
+        <h2>@ActiveSection.Title</h2>
+        <p>@ActiveSection.Description</p>
+        <ul>
+            @foreach (var item in ActiveSection.Capabilities)
+            {
+                <li>@item</li>
+            }
+        </ul>
+    </div>
+
+    <div class="maintenance-card">
+        <div class="card-header">
+            <div>
+                <span>Manutenção</span>
+                <h3>@ActiveSection.Label</h3>
+            </div>
+            <span class="secure-pill">Acesso controlado</span>
+        </div>
+
+        <div class="empty-state">
+            <div class="empty-icon" aria-hidden="true">✓</div>
+            <h4>API de cadastro disponível</h4>
+            <p>Entre com uma conta autorizada para consultar e alterar registros. Nenhum dado fictício é exibido nesta tela.</p>
+        </div>
+
+        <div class="card-footer">
+            <span>Paginação e filtros</span>
+            <span>Auditoria</span>
+            <span>Concorrência otimista</span>
+        </div>
+    </div>
+</section>
+
+@code {
+    private string activeSection = "clinic";
+
+    private Section ActiveSection => Sections.Single(section => section.Id == activeSection);
+
+    private static readonly Section[] Sections =
+    [
+        new("clinic", "01", "Clínica", "Dados institucionais", "Identidade da clínica", "Centralize os dados oficiais, contato, endereço e fuso operacional.", ["Cadastro único, sem multiclínica", "Horários semanais", "Feriados totais ou parciais"]),
+        new("professionals", "02", "Profissionais", "Equipe clínica", "Médicos e gestores", "Acompanhe cadastros profissionais e decisões administrativas.", ["CRM e perfil médico", "Especialidade principal", "Aprovação, bloqueio e reativação"]),
+        new("catalog", "03", "Serviços", "Catálogo assistencial", "Especialidades e atendimentos", "Organize o que a clínica oferece antes de abrir a agenda.", ["Modalidade presencial ou online", "Duração e preço", "Ativação sem exclusão histórica"]),
+        new("availability", "04", "Disponibilidade", "Agenda base", "Horários dos médicos", "Configure períodos recorrentes e vigências sem sobreposição.", ["Controle por dia da semana", "Vigência opcional", "Edição pelo próprio médico ou gestão"]),
+    ];
+
+    private sealed record Section(
+        string Id,
+        string Number,
+        string Label,
+        string Kicker,
+        string Title,
+        string Description,
+        string[] Capabilities);
+}

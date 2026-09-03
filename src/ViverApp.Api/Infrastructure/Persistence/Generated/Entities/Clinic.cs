@@ -17,6 +17,20 @@ public partial class Clinic
 
     public string? PhoneE164 { get; set; }
 
+    public string? PostalCode { get; set; }
+
+    public string? Street { get; set; }
+
+    public string? Number { get; set; }
+
+    public string? Complement { get; set; }
+
+    public string? District { get; set; }
+
+    public string? City { get; set; }
+
+    public string? StateCode { get; set; }
+
     public string TimezoneName { get; set; } = null!;
 
     public DateTime CreatedAtUtc { get; set; }

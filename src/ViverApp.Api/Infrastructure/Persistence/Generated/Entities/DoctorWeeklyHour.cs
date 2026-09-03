@@ -21,5 +21,11 @@ public partial class DoctorWeeklyHour
 
     public bool IsActive { get; set; }
 
+    public DateTime CreatedAtUtc { get; set; }
+
+    public DateTime UpdatedAtUtc { get; set; }
+
+    public ulong RowVersion { get; set; }
+
     public virtual DoctorProfile DoctorAccount { get; set; } = null!;
 }

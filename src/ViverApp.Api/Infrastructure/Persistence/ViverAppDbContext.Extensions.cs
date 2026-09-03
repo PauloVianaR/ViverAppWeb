@@ -16,7 +16,25 @@ public partial class ViverAppDbContext
         modelBuilder.Entity<Clinic>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
+        modelBuilder.Entity<ClinicWeeklyHour>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
+        modelBuilder.Entity<DoctorProfile>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
+        modelBuilder.Entity<DoctorWeeklyHour>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
+        modelBuilder.Entity<Holiday>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
+        modelBuilder.Entity<AppointmentType>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
         modelBuilder.Entity<Payment>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
+        modelBuilder.Entity<Specialty>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
     }

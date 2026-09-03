@@ -103,6 +103,7 @@ public static class IdentityServiceCollectionExtensions
             {
                 options.ClientId = securityOptions.GoogleClientId!;
                 options.ClientSecret = securityOptions.GoogleClientSecret!;
+                options.CallbackPath = securityOptions.GoogleRedirectUri!.AbsolutePath;
                 options.SignInScheme = IdentityConstants.ExternalScheme;
                 options.SaveTokens = false;
                 options.UsePkce = true;
@@ -111,6 +112,12 @@ public static class IdentityServiceCollectionExtensions
                 options.CorrelationCookie.Path = "/";
                 options.CorrelationCookie.SameSite = SameSiteMode.Lax;
                 options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.Always;
+                options.Events.OnRemoteFailure = context =>
+                {
+                    context.HandleResponse();
+                    context.Response.Redirect(securityOptions.BuildWebReturnUrl("google_failed"));
+                    return Task.CompletedTask;
+                };
             });
         }
 
@@ -137,6 +144,11 @@ public static class IdentityServiceCollectionExtensions
             ViverAppPolicies.ClinicalStaff,
             policy => policy.RequireRole(
                 ViverAppRoles.Doctor,
+                ViverAppRoles.Manager,
+                ViverAppRoles.Administrator));
+        authorization.AddPolicy(
+            ViverAppPolicies.Management,
+            policy => policy.RequireRole(
                 ViverAppRoles.Manager,
                 ViverAppRoles.Administrator));
         authorization.AddPolicy(

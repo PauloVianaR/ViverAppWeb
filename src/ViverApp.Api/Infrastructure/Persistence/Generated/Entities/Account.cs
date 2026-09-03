@@ -73,5 +73,9 @@ public partial class Account
 
     public virtual ICollection<PremiumMembership> PremiumMemberships { get; set; } = new List<PremiumMembership>();
 
+    public virtual ICollection<ProfessionalReview> ProfessionalReviewProfessionalAccounts { get; set; } = new List<ProfessionalReview>();
+
+    public virtual ICollection<ProfessionalReview> ProfessionalReviewReviewerAccounts { get; set; } = new List<ProfessionalReview>();
+
     public virtual Role RoleCodeNavigation { get; set; } = null!;
 }

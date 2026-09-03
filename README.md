@@ -11,7 +11,7 @@ Reimplementação web do ViverApp em .NET 10, composta inicialmente por:
 - `docs/adr/`: decisões arquiteturais duráveis;
 - `AGENTS.md`: regras obrigatórias para agentes de IA.
 
-As Fases 0 a 3 estão integradas à `main`. A Fase 4 está concluída e com integração autorizada, acrescentando identidade real, login por senha/e-mail/SMS/Google/passkey, MFA TOTP, sessões revogáveis e entrega dos códigos de autenticação por SMTP/SMSBarato. A configuração externa e a validação real do Google foram transferidas para a Fase 5 por decisão do proprietário. Endpoints de negócio e a interface visual de acesso ainda não fazem parte desta etapa.
+As Fases 0 a 4 estão integradas à `main`. A Fase 5 está implementada em branch própria e acrescenta os cadastros da clínica única, usuários, profissionais, especialidades, tipos de atendimento, feriados e disponibilidades, além de uma primeira superfície web responsiva. A configuração externa e a validação real do Google continuam dependendo das credenciais OAuth Web do proprietário.
 
 ## Pré-requisitos
 
@@ -45,7 +45,7 @@ As credenciais `Authentication:Google:ClientId` e `Authentication:Google:ClientS
 
 As connection strings de Azure não foram copiadas. Nenhum valor secreto deve ser incluído no repositório, em exemplos, logs, testes ou documentação.
 
-O banco legado `viverappmobile` é somente leitura. A aplicação web usa o banco novo `viverappweb`, criado na Fase 2 e governado por migrations SQL antes do scaffold DB-First. As migrations `0001` a `0005` estão aplicadas e o modelo EF foi gerado exclusivamente desse schema.
+O banco legado `viverappmobile` é somente leitura. A aplicação web usa o banco novo `viverappweb`, criado na Fase 2 e governado por migrations SQL antes do scaffold DB-First. As migrations `0001` a `0006` estão aplicadas e o modelo EF foi gerado exclusivamente desse schema.
 
 Para conferir somente os nomes configurados, sem compartilhar valores:
 
@@ -57,4 +57,4 @@ dotnet user-secrets list --project src/ViverApp.Api/ViverApp.Api.csproj |
 
 ## Estado atual
 
-As Fases 1 a 3 estão concluídas e documentadas nos respectivos índices: [descoberta e arquitetura](docs/fase-01/README.md), [persistência DB-First](docs/fase-02/README.md) e [segurança e observabilidade](docs/fase-03/README.md). A implementação ainda não integrada da Fase 4 está em [identidade e autorização](docs/fase-04/README.md).
+As Fases 1 a 4 estão concluídas e integradas à `main`: [descoberta e arquitetura](docs/fase-01/README.md), [persistência DB-First](docs/fase-02/README.md), [segurança e observabilidade](docs/fase-03/README.md) e [identidade e autorização](docs/fase-04/README.md). A implementação ainda não integrada da Fase 5 está em [cadastros e configuração clínica](docs/fase-05/README.md).

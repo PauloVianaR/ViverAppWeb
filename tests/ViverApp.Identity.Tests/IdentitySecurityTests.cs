@@ -78,13 +78,28 @@ public sealed class IdentitySecurityTests
     {
         var configuration = CreateConfiguration(new Dictionary<string, string?>
         {
-            ["Authentication:Google:ClientId"] = "client-id",
+            ["GoogleOAuth:ClientID"] = "client-id",
         });
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
             IdentitySecurityOptions.Load(configuration));
 
-        Assert.Contains("ClientId e ClientSecret", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("ClientID, ProjectID, ClientSecret e RedirectURI", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("http://localhost:7176/signin-google")]
+    [InlineData("https://localhost:7176/signin-google/")]
+    [InlineData("https://localhost:7176/outro-callback")]
+    [InlineData("https://localhost:7176/signin-google?returnUrl=https://evil.example")]
+    public void IdentityConfiguration_RejectsUnsafeGoogleRedirectUri(string redirectUri)
+    {
+        var configuration = CreateConfiguration(GoogleConfiguration(redirectUri));
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            IdentitySecurityOptions.Load(configuration));
+
+        Assert.Contains("caminho exato /signin-google", exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -143,14 +158,21 @@ public sealed class IdentitySecurityTests
     {
         var configuration = CreateConfiguration(new Dictionary<string, string?>
         {
-            ["Authentication:Google:ClientId"] = "client-id",
-            ["Authentication:Google:ClientSecret"] = "client-secret",
+            ["GoogleOAuth:ClientID"] = "client-id",
+            ["GoogleOAuth:ProjectID"] = "project-id",
+            ["GoogleOAuth:ClientSecret"] = "client-secret",
+            ["GoogleOAuth:RedirectURI"] = "https://localhost:7176/signin-google",
         });
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddDataProtection();
         services.AddViverAppIdentity(configuration);
         await using var provider = services.BuildServiceProvider();
+
+        var security = provider.GetRequiredService<IdentitySecurityOptions>();
+        Assert.True(security.GoogleEnabled);
+        Assert.Equal("project-id", security.GoogleProjectId);
+        Assert.Equal("https://localhost:7176/signin-google", security.GoogleRedirectUri?.ToString());
 
         var cookies = provider.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>();
         var applicationCookie = cookies.Get(IdentityConstants.ApplicationScheme);
@@ -166,6 +188,7 @@ public sealed class IdentitySecurityTests
             .Get(GoogleDefaults.AuthenticationScheme);
         Assert.True(google.UsePkce);
         Assert.False(google.SaveTokens);
+        Assert.Equal("/signin-google", google.CallbackPath);
         Assert.StartsWith(
             "__Host-ViverApp.Google.Correlation.",
             google.CorrelationCookie.Name,
@@ -240,6 +263,14 @@ public sealed class IdentitySecurityTests
 
         return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
     }
+
+    private static Dictionary<string, string?> GoogleConfiguration(string redirectUri) => new()
+    {
+        ["GoogleOAuth:ClientID"] = "client-id",
+        ["GoogleOAuth:ProjectID"] = "project-id",
+        ["GoogleOAuth:ClientSecret"] = "client-secret",
+        ["GoogleOAuth:RedirectURI"] = redirectUri,
+    };
 
     private sealed class RecordingHandler : HttpMessageHandler
     {

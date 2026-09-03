@@ -1,9 +1,23 @@
 ﻿@inherits LayoutComponentBase
 
-@Body
+<div class="app-shell">
+    <header class="topbar">
+        <a class="brand" href="/" aria-label="ViverApp — início">
+            <img class="brand-logo" src="/images/logo.png" alt="Centro Médico Viver" />
+        </a>
+        <nav aria-label="Navegação principal">
+            <NavLink href="/" Match="NavLinkMatch.All">Início</NavLink>
+            <NavLink href="gestao/cadastros">Cadastros</NavLink>
+        </nav>
+    </header>
+
+    <main class="page-container">
+        @Body
+    </main>
+</div>
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
+    Ocorreu um erro inesperado.
+    <a href="." class="reload">Recarregar</a>
     <span class="dismiss">🗙</span>
 </div>

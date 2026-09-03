@@ -1,7 +1,33 @@
 ﻿@page "/"
 
+@inject ViverApp.Web.WebBackendOptions Backend
+
 <PageTitle>ViverApp</PageTitle>
 
-<h1>ViverApp Web</h1>
+<section class="hero">
+    <p class="eyebrow">Clínica única, cuidado integrado</p>
+    <h1>Gestão clínica clara e segura.</h1>
+    <p class="lead">A nova base web do ViverApp reúne identidade, configuração e cadastros essenciais em uma experiência preparada para qualquer tela.</p>
+    <div class="hero-actions">
+        <a class="primary-action" href="@Backend.GoogleLoginUrl">Entrar ou criar conta com Google</a>
+        <a class="secondary-action" href="gestao/cadastros">Abrir cadastros</a>
+    </div>
+</section>
 
-<p>A fundação técnica está pronta. As funcionalidades serão implementadas por fases.</p>
+<section class="feature-grid" aria-label="Recursos disponíveis">
+    <article>
+        <span>01</span>
+        <h2>Identidade protegida</h2>
+        <p>Sessões revogáveis, autorização por papel e MFA administrativo.</p>
+    </article>
+    <article>
+        <span>02</span>
+        <h2>Dados mestres</h2>
+        <p>Clínica, profissionais, especialidades, atendimentos e horários.</p>
+    </article>
+    <article>
+        <span>03</span>
+        <h2>Operação auditável</h2>
+        <p>Alterações críticas registradas e protegidas contra edições concorrentes.</p>
+    </article>
+</section>

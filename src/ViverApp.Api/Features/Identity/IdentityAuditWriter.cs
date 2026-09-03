@@ -18,6 +18,23 @@ public sealed class IdentityAuditWriter(
         IReadOnlyDictionary<string, string>? safeData,
         CancellationToken cancellationToken)
     {
+        await WriteAsync(
+            eventCode,
+            actorAccountId,
+            actorAccountId is null ? null : "account",
+            actorAccountId?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            safeData,
+            cancellationToken);
+    }
+
+    public async Task WriteAsync(
+        string eventCode,
+        ulong? actorAccountId,
+        string? entityType,
+        string? entityId,
+        IReadOnlyDictionary<string, string>? safeData,
+        CancellationToken cancellationToken)
+    {
         var context = httpContextAccessor.HttpContext;
         var correlation = context is null
             ? Guid.NewGuid()
@@ -27,8 +44,8 @@ public sealed class IdentityAuditWriter(
         {
             ActorAccountId = actorAccountId,
             EventCode = eventCode,
-            EntityType = actorAccountId is null ? null : "account",
-            EntityId = actorAccountId?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            EntityType = entityType,
+            EntityId = entityId,
             CorrelationId = correlation,
             IpAddressHash = addressBytes is null
                 ? null

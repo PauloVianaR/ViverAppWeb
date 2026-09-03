@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -18,6 +19,10 @@ public sealed class IdentityApiSecurityTests : IAsyncLifetime
                 configuration.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["Authentication:Delivery:Enabled"] = "false",
+                    ["GoogleOAuth:ClientID"] = "test-client-id",
+                    ["GoogleOAuth:ProjectID"] = "test-project-id",
+                    ["GoogleOAuth:ClientSecret"] = "test-client-secret",
+                    ["GoogleOAuth:RedirectURI"] = "https://localhost:7176/signin-google",
                 }));
         });
 
@@ -83,12 +88,30 @@ public sealed class IdentityApiSecurityTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    [Fact]
+    public async Task GoogleStart_UsesAuthorizationCodePkceAndExactCallback()
+    {
+        using var client = CreateClient();
+
+        using var response = await client.GetAsync("/api/v1/auth/google/start");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = Assert.IsType<Uri>(response.Headers.Location);
+        Assert.Equal("accounts.google.com", location.Host);
+        var query = QueryHelpers.ParseQuery(location.Query);
+        Assert.Equal("code", query["response_type"].ToString());
+        Assert.Equal("S256", query["code_challenge_method"].ToString());
+        Assert.False(string.IsNullOrWhiteSpace(query["code_challenge"].ToString()));
+        Assert.False(string.IsNullOrWhiteSpace(query["state"].ToString()));
+        Assert.Equal("https://localhost:7176/signin-google", query["redirect_uri"].ToString());
+    }
+
     private HttpClient CreateClient()
     {
         return factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
-            BaseAddress = new Uri("https://localhost"),
+            BaseAddress = new Uri("https://localhost:7176"),
             HandleCookies = true,
         });
     }

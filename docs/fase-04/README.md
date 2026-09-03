@@ -30,6 +30,6 @@ Contas novas recebem somente `password_hash`. Contas criadas pelo Google podem p
 - não existe cadastro público de médico, gestor ou administrador;
 - criação e alteração administrativa de profissionais entram nas fases de cadastros/administração;
 - as páginas Blazor de login e o acabamento responsivo entram na fase visual; esta fase entrega os contratos e fluxos seguros da API;
-- por decisão do proprietário, o Client ID/secret Web, o redirect URI e a validação do handshake real do Google serão concluídos na Fase 5; nenhuma credencial será versionada.
+- por decisão do proprietário, o Client ID/secret Web, o redirect URI e a validação do handshake real do Google foram concluídos na Fase 5; nenhuma credencial foi versionada.
 
 Consulte [matriz de autorização](MATRIZ-AUTORIZACAO.md), [configuração e operação](CONFIGURACAO-E-OPERACAO.md) e [verificações](VERIFICACOES.md).
