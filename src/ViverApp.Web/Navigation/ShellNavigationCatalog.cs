@@ -46,10 +46,10 @@ public static class ShellNavigationCatalog
         "Área profissional",
         [
             new("Início", "/medico", "home"),
-            new("Agenda", "/medico#agenda", "calendar"),
-            new("Pacientes", "/medico#pacientes", "users"),
-            new("Histórico", "/medico#historico", "history"),
-            new("Perfil", "/medico#perfil", "user"),
+            new("Agenda", "/medico/agenda", "calendar"),
+            new("Pacientes", "/medico/pacientes", "users"),
+            new("Histórico", "/medico/historico", "history"),
+            new("Disponibilidade", "/medico/disponibilidade", "settings"),
         ]);
 
     private static readonly ShellDefinition Manager = new(
@@ -58,10 +58,10 @@ public static class ShellNavigationCatalog
         "Gestão clínica",
         [
             new("Visão geral", "/gestao", "home"),
-            new("Agenda", "/gestao#agenda", "calendar"),
-            new("Pacientes", "/gestao#pacientes", "users"),
+            new("Agenda", "/gestao/agenda", "calendar"),
+            new("Pacientes", "/gestao/pacientes", "users"),
+            new("Disponibilidade", "/gestao/disponibilidade", "settings"),
             new("Cadastros", "/gestao/cadastros", "settings"),
-            new("Perfil", "/gestao#perfil", "user"),
         ]);
 
     private static readonly ShellDefinition Administrator = new(

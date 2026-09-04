@@ -54,6 +54,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<IdempotencyRecord> IdempotencyRecords { get; set; }
 
+    public virtual DbSet<MedicalReport> MedicalReports { get; set; }
+
     public virtual DbSet<OutboxMessage> OutboxMessages { get; set; }
 
     public virtual DbSet<PatientProfile> PatientProfiles { get; set; }
@@ -358,11 +360,19 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => e.CanceledByAccountId, "fk_appointments_canceler");
 
+            entity.HasIndex(e => e.CompletedByAccountId, "fk_appointments_completer");
+
             entity.HasIndex(e => e.CreatedByAccountId, "fk_appointments_creator");
+
+            entity.HasIndex(e => e.NoShowRecordedByAccountId, "fk_appointments_no_show_actor");
 
             entity.HasIndex(e => e.AppointmentTypeId, "fk_appointments_type");
 
             entity.HasIndex(e => new { e.DoctorAccountId, e.StatusCode, e.StartsAtUtc, e.EndsAtUtc }, "ix_appointments_doctor_period");
+
+            entity.HasIndex(e => new { e.DoctorAccountId, e.StatusCode, e.EndsAtUtc }, "ix_appointments_doctor_status_end");
+
+            entity.HasIndex(e => new { e.PatientAccountId, e.DoctorAccountId, e.StatusCode }, "ix_appointments_patient_doctor_status");
 
             entity.HasIndex(e => new { e.PatientAccountId, e.StatusCode, e.StartsAtUtc, e.EndsAtUtc }, "ix_appointments_patient_period");
 
@@ -385,6 +395,10 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.CancellationReason)
                 .HasMaxLength(500)
                 .HasColumnName("cancellation_reason");
+            entity.Property(e => e.CompletedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("completed_at_utc");
+            entity.Property(e => e.CompletedByAccountId).HasColumnName("completed_by_account_id");
             entity.Property(e => e.CreatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("created_at_utc");
@@ -401,6 +415,10 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.ModalityCode)
                 .HasMaxLength(20)
                 .HasColumnName("modality_code");
+            entity.Property(e => e.NoShowRecordedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("no_show_recorded_at_utc");
+            entity.Property(e => e.NoShowRecordedByAccountId).HasColumnName("no_show_recorded_by_account_id");
             entity.Property(e => e.PatientAccountId).HasColumnName("patient_account_id");
             entity.Property(e => e.PatientNotes)
                 .HasMaxLength(1000)
@@ -433,6 +451,11 @@ public partial class ViverAppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_appointments_canceler");
 
+            entity.HasOne(d => d.CompletedByAccount).WithMany(p => p.AppointmentCompletedByAccounts)
+                .HasForeignKey(d => d.CompletedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointments_completer");
+
             entity.HasOne(d => d.CreatedByAccount).WithMany(p => p.AppointmentCreatedByAccounts)
                 .HasForeignKey(d => d.CreatedByAccountId)
                 .OnDelete(DeleteBehavior.Restrict)
@@ -442,6 +465,11 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey(d => d.DoctorAccountId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_appointments_doctor");
+
+            entity.HasOne(d => d.NoShowRecordedByAccount).WithMany(p => p.AppointmentNoShowRecordedByAccounts)
+                .HasForeignKey(d => d.NoShowRecordedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointments_no_show_actor");
 
             entity.HasOne(d => d.PatientAccount).WithMany(p => p.AppointmentPatientAccounts)
                 .HasForeignKey(d => d.PatientAccountId)
@@ -958,6 +986,55 @@ public partial class ViverAppDbContext : DbContext
                 .HasColumnType("json")
                 .HasColumnName("response_body_json");
             entity.Property(e => e.ResponseStatusCode).HasColumnName("response_status_code");
+        });
+
+        modelBuilder.Entity<MedicalReport>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("medical_reports");
+
+            entity.HasIndex(e => new { e.AuthorDoctorAccountId, e.UpdatedAtUtc }, "ix_medical_reports_author_updated");
+
+            entity.HasIndex(e => new { e.StatusCode, e.PublishedAtUtc }, "ix_medical_reports_status_published");
+
+            entity.HasIndex(e => e.AppointmentId, "ux_medical_reports_appointment").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.AuthorDoctorAccountId).HasColumnName("author_doctor_account_id");
+            entity.Property(e => e.ClinicalSummary)
+                .HasColumnType("text")
+                .HasColumnName("clinical_summary");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.PublishedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("published_at_utc");
+            entity.Property(e => e.Recommendations)
+                .HasColumnType("text")
+                .HasColumnName("recommendations");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.StatusCode)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'draft'")
+                .HasColumnName("status_code");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.Appointment).WithOne(p => p.MedicalReport)
+                .HasForeignKey<MedicalReport>(d => d.AppointmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_reports_appointment");
+
+            entity.HasOne(d => d.AuthorDoctorAccount).WithMany(p => p.MedicalReports)
+                .HasForeignKey(d => d.AuthorDoctorAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_reports_author");
         });
 
         modelBuilder.Entity<OutboxMessage>(entity =>

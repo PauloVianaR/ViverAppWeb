@@ -28,6 +28,9 @@ public partial class ViverAppDbContext
         modelBuilder.Entity<Holiday>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
+        modelBuilder.Entity<MedicalReport>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
         modelBuilder.Entity<AppointmentType>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();

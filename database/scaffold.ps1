@@ -47,6 +47,7 @@ $tables = @(
     'professional_reviews',
     'appointments',
     'appointment_status_history',
+    'medical_reports',
     'appointment_documents',
     'payments',
     'premium_plans',

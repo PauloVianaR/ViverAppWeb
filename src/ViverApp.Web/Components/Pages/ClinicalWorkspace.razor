@@ -1,0 +1,379 @@
+@page "/medico/agenda"
+@page "/medico/pacientes"
+@page "/medico/historico"
+@page "/medico/disponibilidade"
+@page "/gestao/agenda"
+@page "/gestao/pacientes"
+@page "/gestao/disponibilidade"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@using System.Globalization
+@inject IJSRuntime JavaScript
+@inject NavigationManager Navigation
+@inject WebBackendOptions Backend
+
+<PageTitle>@PageHeading | ViverApp</PageTitle>
+
+<header class="workspace-heading clinical-heading">
+    <div>
+        <p class="eyebrow">@AreaLabel</p>
+        <h1 class="page-title">@PageHeading</h1>
+        <p class="page-description">@PageDescription</p>
+    </div>
+    @if (Context is not null)
+    {
+        <span class="badge badge--brand">@Context.FullName</span>
+    }
+</header>
+
+@if (!string.IsNullOrWhiteSpace(Notice))
+{
+    <div class="notice @(NoticeIsError ? "notice--error" : "notice--success")" role="@(NoticeIsError ? "alert" : "status")">
+        <span>@Notice</span>
+        @if (NoticeIsUnauthorized)
+        {
+            <a class="button button--small" href="@Backend.GoogleLoginUrl">Entrar novamente</a>
+        }
+    </div>
+}
+
+<nav class="clinical-tabs" aria-label="Operação clínica">
+    <a class="@(View == ClinicalView.Agenda ? "active" : null)" href="@AreaRoot/agenda">Agenda</a>
+    <a class="@(View == ClinicalView.History ? "active" : null)" href="@AreaRoot/historico">Histórico</a>
+    <a class="@(View == ClinicalView.Patients ? "active" : null)" href="@AreaRoot/pacientes">Pacientes</a>
+    <a class="@(View == ClinicalView.Availability ? "active" : null)" href="@AreaRoot/disponibilidade">Disponibilidade</a>
+</nav>
+
+@if (IsLoading)
+{
+    <InterfaceState Title="Carregando operação clínica"
+                    Description="Consultando somente os dados permitidos para seu papel."
+                    Icon="calendar" />
+}
+else if (View is ClinicalView.Agenda or ClinicalView.History)
+{
+    <section class="surface clinical-filter" aria-labelledby="agenda-filter-title">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">Filtros</p>
+                <h2 id="agenda-filter-title">@(View == ClinicalView.History ? "Histórico clínico" : "Período da agenda")</h2>
+            </div>
+            <span class="badge">@Appointments.Count de @AppointmentTotal</span>
+        </div>
+        <div class="filter-grid clinical-filter-grid">
+            <div class="field"><label for="clinical-from">De</label><input id="clinical-from" type="date" @bind="FromDate" /></div>
+            <div class="field"><label for="clinical-to">Até</label><input id="clinical-to" type="date" @bind="ToDate" /></div>
+            <div class="field">
+                <label for="clinical-status">Status</label>
+                <select id="clinical-status" @bind="StatusFilter">
+                    <option value="">Todos</option><option value="pending">Pendente</option><option value="confirmed">Confirmada</option>
+                    <option value="completed">Concluída</option><option value="no_show">Falta</option><option value="canceled">Cancelada</option>
+                    <option value="rescheduled">Remarcada</option>
+                </select>
+            </div>
+            @if (Context?.RoleCode != "doctor")
+            {
+                <div class="field">
+                    <label for="clinical-doctor">Profissional</label>
+                    <select id="clinical-doctor" @bind="SelectedDoctorId">
+                        <option value="0">Todos</option>
+                        @foreach (var doctor in Context?.Doctors ?? []) { <option value="@doctor.AccountId">@doctor.FullName</option> }
+                    </select>
+                </div>
+            }
+            <div class="field field--wide"><label for="clinical-search">Paciente, médico ou atendimento</label><input id="clinical-search" @bind="Search" maxlength="120" /></div>
+        </div>
+        <div class="panel-actions"><button class="button" type="button" @onclick="LoadAppointmentsAsync" disabled="@IsBusy">Atualizar agenda</button></div>
+    </section>
+
+    <div class="clinical-layout">
+        <section class="surface clinical-list" aria-label="Consultas">
+            @if (Appointments.Count == 0)
+            {
+                <InterfaceState Title="Nenhuma consulta neste recorte" Description="Ajuste o período ou os filtros para ampliar a busca." Icon="calendar" />
+            }
+            else
+            {
+                @foreach (var appointment in Appointments)
+                {
+                    <button type="button" class="appointment-row @(SelectedAppointment?.Id == appointment.Id ? "selected" : null)" @onclick="() => SelectAppointmentAsync(appointment.Id)">
+                        <time datetime="@appointment.StartsAtUtc.ToString("O", CultureInfo.InvariantCulture)">
+                            <strong>@LocalDate(appointment.StartsAtUtc)</strong><span>@LocalTime(appointment.StartsAtUtc)</span>
+                        </time>
+                        <span class="appointment-row__main"><strong>@appointment.PatientName</strong><small>@appointment.AppointmentTypeName · @ModalityLabel(appointment.ModalityCode)</small></span>
+                        <span class="appointment-row__doctor">@appointment.DoctorName</span>
+                        <span class="badge @StatusClass(appointment.StatusCode)">@StatusLabel(appointment.StatusCode)</span>
+                    </button>
+                }
+            }
+        </section>
+
+        <aside class="surface clinical-detail" aria-live="polite">
+            @if (SelectedAppointment is null)
+            {
+                <InterfaceState Title="Selecione uma consulta" Description="Os detalhes e ações permitidas aparecerão aqui." Icon="history" />
+            }
+            else
+            {
+                <div class="section-heading"><div><p class="eyebrow">Consulta #@SelectedAppointment.Id</p><h2>@SelectedAppointment.PatientName</h2></div><span class="badge @StatusClass(SelectedAppointment.StatusCode)">@StatusLabel(SelectedAppointment.StatusCode)</span></div>
+                <dl class="detail-grid">
+                    <div><dt>Quando</dt><dd>@LocalDateTime(SelectedAppointment.StartsAtUtc)</dd></div>
+                    <div><dt>Modalidade</dt><dd>@ModalityLabel(SelectedAppointment.ModalityCode)</dd></div>
+                    <div><dt>Atendimento</dt><dd>@SelectedAppointment.AppointmentTypeName</dd></div>
+                    <div><dt>Profissional</dt><dd>@SelectedAppointment.DoctorName</dd></div>
+                    <div><dt>Contato</dt><dd>@ContactLabel(SelectedAppointment)</dd></div>
+                </dl>
+                @if (!string.IsNullOrWhiteSpace(SelectedAppointment.PatientNotes))
+                {
+                    <div class="patient-note"><strong>Observação enviada pelo paciente</strong><p>@SelectedAppointment.PatientNotes</p></div>
+                }
+
+                @if (Context?.RoleCode == "doctor")
+                {
+                    <div class="report-editor">
+                        <div><p class="eyebrow">Registro clínico sigiloso</p><h3>Relatório médico</h3></div>
+                        @if (SelectedAppointment.MedicalReport?.StatusCode == "published")
+                        {
+                            <div class="published-report"><p>@SelectedAppointment.MedicalReport.ClinicalSummary</p>@if (!string.IsNullOrWhiteSpace(SelectedAppointment.MedicalReport.Recommendations)) { <strong>Recomendações</strong><p>@SelectedAppointment.MedicalReport.Recommendations</p> }</div>
+                        }
+                        else
+                        {
+                            <div class="field"><label for="clinical-summary">Resumo clínico</label><textarea id="clinical-summary" @bind="ClinicalSummary" maxlength="12000" rows="7"></textarea><small>Mínimo de 20 caracteres. Não inclua dados desnecessários.</small></div>
+                            <div class="field"><label for="recommendations">Recomendações</label><textarea id="recommendations" @bind="Recommendations" maxlength="8000" rows="4"></textarea></div>
+                            <div class="panel-actions">
+                                <button class="button button--secondary" type="button" @onclick="SaveDraftAsync" disabled="@(IsBusy || ClinicalSummary.Trim().Length < 20)">Salvar rascunho</button>
+                                @if (SelectedAppointment.CanComplete)
+                                {
+                                    <button class="button" type="button" @onclick="CompleteAsync" disabled="@(IsBusy || ClinicalSummary.Trim().Length < 20)">Concluir e publicar</button>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                else if (SelectedAppointment.MedicalReport is not null)
+                {
+                    <div class="privacy-card"><strong>Relatório clínico protegido</strong><p>O gestor visualiza apenas a existência e o estado do documento; o conteúdo permanece restrito ao médico responsável e ao paciente após a publicação.</p></div>
+                }
+
+                @if (SelectedAppointment.CanMarkNoShow)
+                {
+                    <div class="danger-zone"><p>Use somente após confirmar que o paciente não compareceu.</p><button class="button button--danger" type="button" @onclick="RecordNoShowAsync" disabled="@IsBusy">Registrar falta</button></div>
+                }
+            }
+        </aside>
+    </div>
+}
+else if (View == ClinicalView.Patients)
+{
+    <section class="surface clinical-filter">
+        <div class="section-heading"><div><p class="eyebrow">Vínculos autorizados</p><h2>Pacientes da sua operação</h2></div><span class="badge">@Patients.Count de @PatientTotal</span></div>
+        <div class="filter-grid"><div class="field field--wide"><label for="patient-search">Nome, e-mail ou telefone</label><input id="patient-search" @bind="Search" maxlength="120" /></div></div>
+        <div class="panel-actions"><button class="button" type="button" @onclick="LoadPatientsAsync" disabled="@IsBusy">Buscar pacientes</button></div>
+    </section>
+    <section class="patient-grid" aria-label="Pacientes vinculados">
+        @if (Patients.Count == 0)
+        {
+            <InterfaceState Title="Nenhum paciente vinculado" Description="Somente pacientes com consultas permitidas para seu papel aparecem aqui." Icon="users" />
+        }
+        @foreach (var patient in Patients)
+        {
+            <article class="surface patient-card"><div class="patient-avatar" aria-hidden="true">@Initials(patient.FullName)</div><div><p class="eyebrow">@patient.AppointmentCount atendimento(s)</p><h2>@(patient.PreferredName ?? patient.FullName)</h2><p>@patient.Email<br />@patient.Phone</p></div><dl><div><dt>Último</dt><dd>@OptionalDate(patient.LastAppointmentAtUtc)</dd></div><div><dt>Próximo</dt><dd>@OptionalDate(patient.NextAppointmentAtUtc)</dd></div></dl></article>
+        }
+    </section>
+}
+else
+{
+    <section class="surface clinical-filter">
+        <div class="section-heading"><div><p class="eyebrow">Agenda semanal</p><h2>Disponibilidade do profissional</h2></div><span class="badge badge--brand">Fuso da clínica</span></div>
+        @if (Context?.Doctors.Count > 1)
+        {
+            <div class="field"><label for="availability-doctor">Profissional</label><select id="availability-doctor" @bind="SelectedDoctorId" @bind:after="LoadAvailabilityAsync">@foreach (var doctor in Context.Doctors) { <option value="@doctor.AccountId">@doctor.FullName — @doctor.LicenseLabel</option> }</select></div>
+        }
+    </section>
+    <div class="availability-layout">
+        <section class="surface availability-form">
+            <div><p class="eyebrow">@(EditingHourId == 0 ? "Novo período" : "Editando período")</p><h2>Horário de atendimento</h2></div>
+            <div class="filter-grid">
+                <div class="field"><label for="weekday">Dia</label><select id="weekday" @bind="Weekday">@for (byte day = 0; day < 7; day++) { <option value="@day">@DayLabel(day)</option> }</select></div>
+                <div class="field"><label for="start-time">Início</label><input id="start-time" type="time" @bind="StartTime" /></div>
+                <div class="field"><label for="end-time">Fim</label><input id="end-time" type="time" @bind="EndTime" /></div>
+                <div class="field"><label for="valid-from">Válido de</label><input id="valid-from" type="date" @bind="ValidFromDate" /></div>
+                <div class="field"><label for="valid-until">Válido até</label><input id="valid-until" type="date" @bind="ValidUntilDate" /></div>
+                <label class="check-field"><input type="checkbox" @bind="HourActive" /> Período ativo</label>
+            </div>
+            <div class="panel-actions"><button class="button" type="button" @onclick="SaveAvailabilityAsync" disabled="@IsBusy">@(EditingHourId == 0 ? "Adicionar" : "Salvar")</button>@if (EditingHourId != 0) { <button class="button button--secondary" type="button" @onclick="ResetAvailabilityForm">Cancelar edição</button> }</div>
+        </section>
+        <section class="surface availability-list" aria-label="Períodos cadastrados">
+            @if (WeeklyHours.Count == 0) { <InterfaceState Title="Nenhum período cadastrado" Description="Adicione ao menos um horário para liberar agendamentos." Icon="calendar" /> }
+            @foreach (var hour in WeeklyHours)
+            {
+                <article><div><strong>@DayLabel(hour.DayOfWeek)</strong><span>@hour.StartTime.ToString("hh\\:mm")–@hour.EndTime.ToString("hh\\:mm")</span><small>@ValidityLabel(hour)</small></div><span class="badge @(hour.IsActive ? "badge--success" : "badge--warning")">@(hour.IsActive ? "Ativo" : "Inativo")</span><div class="row-actions"><button type="button" class="button button--small button--secondary" @onclick="() => EditAvailability(hour)">Editar</button><button type="button" class="button button--small button--danger" @onclick="() => DeleteAvailabilityAsync(hour)">Excluir</button></div></article>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private enum ClinicalView { Agenda, History, Patients, Availability }
+    private IJSObjectReference? module;
+    private WebClinicalContext? Context;
+    private readonly List<WebClinicalAppointment> Appointments = [];
+    private readonly List<WebClinicalPatient> Patients = [];
+    private readonly List<WebDoctorWeeklyHour> WeeklyHours = [];
+    private WebClinicalAppointment? SelectedAppointment;
+    private bool IsLoading = true;
+    private bool IsBusy;
+    private string? Notice;
+    private bool NoticeIsError;
+    private bool NoticeIsUnauthorized;
+    private int AppointmentTotal;
+    private int PatientTotal;
+    private string Search = string.Empty;
+    private string StatusFilter = string.Empty;
+    private ulong SelectedDoctorId;
+    private string ClinicalSummary = string.Empty;
+    private string Recommendations = string.Empty;
+    private DateTime FromDate = DateTime.Today.AddDays(-1);
+    private DateTime ToDate = DateTime.Today.AddDays(30);
+    private ulong EditingHourId;
+    private ulong EditingHourVersion;
+    private byte Weekday = 1;
+    private TimeOnly StartTime = new(8, 0);
+    private TimeOnly EndTime = new(12, 0);
+    private DateTime? ValidFromDate;
+    private DateTime? ValidUntilDate;
+    private bool HourActive = true;
+
+    private string AreaRoot => Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("medico", StringComparison.OrdinalIgnoreCase) ? "/medico" : "/gestao";
+    private string AreaLabel => AreaRoot == "/medico" ? "Área médica" : "Gestão clínica";
+    private ClinicalView View { get { var path = Navigation.ToBaseRelativePath(Navigation.Uri); return path.EndsWith("/pacientes", StringComparison.OrdinalIgnoreCase) ? ClinicalView.Patients : path.EndsWith("/historico", StringComparison.OrdinalIgnoreCase) ? ClinicalView.History : path.EndsWith("/disponibilidade", StringComparison.OrdinalIgnoreCase) ? ClinicalView.Availability : ClinicalView.Agenda; } }
+    private string PageHeading => View switch { ClinicalView.Patients => "Pacientes vinculados", ClinicalView.History => "Histórico de atendimentos", ClinicalView.Availability => "Minha disponibilidade", _ => "Agenda clínica" };
+    private string PageDescription => View switch { ClinicalView.Patients => "Acesse apenas pessoas vinculadas por consultas permitidas ao seu papel.", ClinicalView.History => "Consulte atendimentos anteriores e seus registros autorizados.", ClinicalView.Availability => "Defina períodos de atendimento sem sobreposição.", _ => "Conduza o dia da clínica com filtros, detalhes e ações auditadas." };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/clinical-operations.js");
+            Context = await GetAsync<WebClinicalContext>("api/v1/clinical/context");
+            SelectedDoctorId = Context.RoleCode == "doctor" ? Context.AccountId : Context.Doctors.FirstOrDefault()?.AccountId ?? 0;
+            if (View == ClinicalView.History) { FromDate = DateTime.Today.AddMonths(-6); ToDate = DateTime.Today; }
+            await LoadCurrentViewAsync();
+        }
+        catch (JSException exception) { ShowError(exception.Message); }
+        finally { IsLoading = false; StateHasChanged(); }
+    }
+
+    private Task LoadCurrentViewAsync() => View switch { ClinicalView.Patients => LoadPatientsAsync(), ClinicalView.Availability => LoadAvailabilityAsync(), _ => LoadAppointmentsAsync() };
+
+    private async Task LoadAppointmentsAsync()
+    {
+        if (module is null) return;
+        IsBusy = true; ClearNotice();
+        try
+        {
+            var path = $"api/v1/clinical/appointments?from={FromDate:yyyy-MM-dd}&to={ToDate:yyyy-MM-dd}&pageSize=100";
+            if (!string.IsNullOrWhiteSpace(StatusFilter)) path += $"&status={Uri.EscapeDataString(StatusFilter)}";
+            if (Context?.RoleCode != "doctor" && SelectedDoctorId != 0) path += $"&doctorAccountId={SelectedDoctorId}";
+            if (!string.IsNullOrWhiteSpace(Search)) path += $"&search={Uri.EscapeDataString(Search.Trim())}";
+            var page = await GetAsync<WebClinicalPage<WebClinicalAppointment>>(path);
+            Appointments.Clear(); Appointments.AddRange(page.Items); AppointmentTotal = page.Total; SelectedAppointment = null;
+        }
+        catch (JSException exception) { ShowError(exception.Message); }
+        finally { IsBusy = false; }
+    }
+
+    private async Task SelectAppointmentAsync(ulong id)
+    {
+        IsBusy = true; ClearNotice();
+        try { SelectedAppointment = await GetAsync<WebClinicalAppointment>($"api/v1/clinical/appointments/{id}"); ClinicalSummary = SelectedAppointment.MedicalReport?.ClinicalSummary ?? string.Empty; Recommendations = SelectedAppointment.MedicalReport?.Recommendations ?? string.Empty; }
+        catch (JSException exception) { ShowError(exception.Message); }
+        finally { IsBusy = false; }
+    }
+
+    private async Task LoadPatientsAsync()
+    {
+        if (module is null) return;
+        IsBusy = true; ClearNotice();
+        try { var path = "api/v1/clinical/patients?pageSize=100" + (string.IsNullOrWhiteSpace(Search) ? string.Empty : $"&search={Uri.EscapeDataString(Search.Trim())}"); var page = await GetAsync<WebClinicalPage<WebClinicalPatient>>(path); Patients.Clear(); Patients.AddRange(page.Items); PatientTotal = page.Total; }
+        catch (JSException exception) { ShowError(exception.Message); }
+        finally { IsBusy = false; }
+    }
+
+    private async Task SaveDraftAsync()
+    {
+        if (SelectedAppointment is null) return;
+        IsBusy = true; ClearNotice();
+        try { var report = await SendAsync<WebClinicalReport>($"api/v1/clinical/appointments/{SelectedAppointment.Id}/medical-report", "PUT", new WebMedicalReportWriteRequest(SelectedAppointment.MedicalReport?.RowVersion ?? 0, ClinicalSummary.Trim(), Optional(Recommendations))); SelectedAppointment = SelectedAppointment with { MedicalReport = report }; ShowSuccess("Rascunho salvo com segurança."); await LoadAppointmentsPreservingSelectionAsync(); }
+        catch (JSException exception) { ShowError(exception.Message); }
+        finally { IsBusy = false; }
+    }
+
+    private async Task CompleteAsync()
+    {
+        if (SelectedAppointment is null) return;
+        IsBusy = true; ClearNotice();
+        try { SelectedAppointment = await SendAsync<WebClinicalAppointment>($"api/v1/clinical/appointments/{SelectedAppointment.Id}/complete", "POST", new WebCompleteAppointmentRequest(SelectedAppointment.RowVersion, SelectedAppointment.MedicalReport?.RowVersion ?? 0, ClinicalSummary.Trim(), Optional(Recommendations))); ShowSuccess("Consulta concluída e relatório publicado. O conteúdo agora é imutável."); await LoadAppointmentsPreservingSelectionAsync(); }
+        catch (JSException exception) { ShowError(exception.Message); }
+        finally { IsBusy = false; }
+    }
+
+    private async Task RecordNoShowAsync()
+    {
+        if (SelectedAppointment is null) return;
+        IsBusy = true; ClearNotice();
+        try { SelectedAppointment = await SendAsync<WebClinicalAppointment>($"api/v1/clinical/appointments/{SelectedAppointment.Id}/no-show", "POST", new WebRecordNoShowRequest(SelectedAppointment.RowVersion)); ShowSuccess("Falta registrada e auditada."); await LoadAppointmentsPreservingSelectionAsync(); }
+        catch (JSException exception) { ShowError(exception.Message); }
+        finally { IsBusy = false; }
+    }
+
+    private async Task LoadAppointmentsPreservingSelectionAsync() { var id = SelectedAppointment?.Id; await LoadAppointmentsAsync(); if (id.HasValue) await SelectAppointmentAsync(id.Value); }
+
+    private async Task LoadAvailabilityAsync()
+    {
+        if (module is null || SelectedDoctorId == 0) return;
+        IsBusy = true; ClearNotice();
+        try { var items = await GetAsync<IReadOnlyList<WebDoctorWeeklyHour>>($"api/v1/professionals/{SelectedDoctorId}/weekly-hours"); WeeklyHours.Clear(); WeeklyHours.AddRange(items); ResetAvailabilityForm(); }
+        catch (JSException exception) { ShowError(exception.Message); }
+        finally { IsBusy = false; }
+    }
+
+    private async Task SaveAvailabilityAsync()
+    {
+        IsBusy = true; ClearNotice();
+        try { var request = new WebDoctorWeeklyHourWriteRequest(Weekday, StartTime.ToTimeSpan(), EndTime.ToTimeSpan(), ValidFromDate.HasValue ? DateOnly.FromDateTime(ValidFromDate.Value) : null, ValidUntilDate.HasValue ? DateOnly.FromDateTime(ValidUntilDate.Value) : null, HourActive, EditingHourVersion); if (EditingHourId == 0) await SendAsync<WebDoctorWeeklyHour>($"api/v1/professionals/{SelectedDoctorId}/weekly-hours", "POST", request); else await SendAsync<WebDoctorWeeklyHour>($"api/v1/professionals/{SelectedDoctorId}/weekly-hours/{EditingHourId}", "PUT", request); ShowSuccess("Disponibilidade atualizada."); await LoadAvailabilityAsync(); }
+        catch (JSException exception) { ShowError(exception.Message); }
+        finally { IsBusy = false; }
+    }
+
+    private async Task DeleteAvailabilityAsync(WebDoctorWeeklyHour hour)
+    {
+        IsBusy = true; ClearNotice();
+        try { await SendAsync<object?>($"api/v1/professionals/{SelectedDoctorId}/weekly-hours/{hour.Id}?rowVersion={hour.RowVersion}", "DELETE", null); ShowSuccess("Período removido."); await LoadAvailabilityAsync(); }
+        catch (JSException exception) { ShowError(exception.Message); }
+        finally { IsBusy = false; }
+    }
+
+    private void EditAvailability(WebDoctorWeeklyHour hour) { EditingHourId = hour.Id; EditingHourVersion = hour.RowVersion; Weekday = hour.DayOfWeek; StartTime = TimeOnly.FromTimeSpan(hour.StartTime); EndTime = TimeOnly.FromTimeSpan(hour.EndTime); ValidFromDate = hour.ValidFrom?.ToDateTime(TimeOnly.MinValue); ValidUntilDate = hour.ValidUntil?.ToDateTime(TimeOnly.MinValue); HourActive = hour.IsActive; }
+    private void ResetAvailabilityForm() { EditingHourId = 0; EditingHourVersion = 0; Weekday = 1; StartTime = new TimeOnly(8, 0); EndTime = new TimeOnly(12, 0); ValidFromDate = null; ValidUntilDate = null; HourActive = true; }
+
+    private async ValueTask<T> GetAsync<T>(string path) => module is null ? throw new InvalidOperationException("clinical_module_missing") : await module.InvokeAsync<T>("get", Backend.BaseUrl, path);
+    private async ValueTask<T> SendAsync<T>(string path, string method, object? body) => module is null ? throw new InvalidOperationException("clinical_module_missing") : await module.InvokeAsync<T>("send", Backend.BaseUrl, path, method, body);
+    private void ShowError(string message) { Notice = message; NoticeIsError = true; NoticeIsUnauthorized = message.Contains("sessão", StringComparison.OrdinalIgnoreCase) || message.Contains("entrou", StringComparison.OrdinalIgnoreCase); }
+    private void ShowSuccess(string message) { Notice = message; NoticeIsError = false; NoticeIsUnauthorized = false; }
+    private void ClearNotice() { Notice = null; NoticeIsError = false; NoticeIsUnauthorized = false; }
+    private static string? Optional(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string LocalDate(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime().ToString("dd/MM", CultureInfo.GetCultureInfo("pt-BR"));
+    private static string LocalTime(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);
+    private static string LocalDateTime(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime().ToString("dddd, dd 'de' MMMM 'às' HH:mm", CultureInfo.GetCultureInfo("pt-BR"));
+    private static string OptionalDate(DateTime? utc) => utc.HasValue ? LocalDateTime(utc.Value) : "—";
+    private static string Initials(string name) => string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(item => char.ToUpperInvariant(item[0])));
+    private static string ContactLabel(WebClinicalAppointment appointment) => string.Join(" · ", new[] { appointment.PatientEmail, appointment.PatientPhone }.Where(item => !string.IsNullOrWhiteSpace(item)));
+    private static string ModalityLabel(string value) => value == "online" ? "Online" : "Presencial";
+    private static string StatusLabel(string value) => value switch { "pending" => "Pendente", "confirmed" => "Confirmada", "completed" => "Concluída", "canceled" => "Cancelada", "rescheduled" => "Remarcada", "no_show" => "Falta", _ => value };
+    private static string StatusClass(string value) => value switch { "confirmed" or "completed" => "badge--success", "pending" => "badge--warning", "canceled" or "no_show" => "badge--danger", _ => string.Empty };
+    private static string DayLabel(byte day) => day switch { 0 => "Domingo", 1 => "Segunda-feira", 2 => "Terça-feira", 3 => "Quarta-feira", 4 => "Quinta-feira", 5 => "Sexta-feira", 6 => "Sábado", _ => "Dia inválido" };
+    private static string ValidityLabel(WebDoctorWeeklyHour hour) => hour.ValidFrom is null && hour.ValidUntil is null ? "Sem período de validade" : $"{hour.ValidFrom?.ToString("dd/MM/yyyy") ?? "início"} a {hour.ValidUntil?.ToString("dd/MM/yyyy") ?? "sem fim"}";
+    public async ValueTask DisposeAsync() { if (module is not null) { try { await module.DisposeAsync(); } catch (JSDisconnectedException) { } } }
+}

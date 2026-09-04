@@ -88,6 +88,28 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.Contains("24 horas de antecedência", html, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("/medico/agenda", "Agenda clínica")]
+    [InlineData("/medico/historico", "Histórico de atendimentos")]
+    [InlineData("/medico/pacientes", "Pacientes vinculados")]
+    [InlineData("/medico/disponibilidade", "Minha disponibilidade")]
+    [InlineData("/gestao/agenda", "Agenda clínica")]
+    [InlineData("/gestao/pacientes", "Pacientes vinculados")]
+    [InlineData("/gestao/disponibilidade", "Minha disponibilidade")]
+    public async Task ClinicalWorkspace_ExposesRoleAwareResponsiveJourneys(string path, string heading)
+    {
+        using var client = CreateClient();
+
+        using var response = await client.GetAsync(path);
+        var html = await ReadUtf8Async(response.Content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains(heading, html, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"Operação clínica\"", html, StringComparison.Ordinal);
+        Assert.Contains("Carregando operação clínica", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("Lorem ipsum", html, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task UnknownRoute_UsesLocalizedRecoveryState()
     {

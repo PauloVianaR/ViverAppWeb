@@ -32,7 +32,7 @@
 | DEC-004 | Resolvida: cada conta possui exatamente um papel | confirmado pelo proprietário | resolvida em 2026-09-02 |
 | DEC-005 | Resolvida: o sistema atende exatamente uma clínica | confirmado pelo proprietário | resolvida em 2026-09-02 |
 | DEC-006 | Resolvida: médicos e gestores pertencem à clínica única | não haverá vínculo multiclínica | resolvida em 2026-09-02 |
-| DEC-007 | Quem pode criar/editar paciente e relatório médico? | risco de takeover e sigilo profissional | antes das Fases 4/8 |
+| DEC-007 | Resolvida: o paciente cria e mantém a própria identidade; o relatório é criado pelo médico atribuído, fica imutável ao publicar, gestor/admin veem somente metadados e o paciente vê apenas o próprio relatório publicado. | risco de takeover e sigilo profissional | base implementada na Fase 8 |
 | DEC-008 | Premium é vitalício, assinatura ou revalidação periódica? | afeta schema, preço e PagBank | antes da Fase 2/13 |
 | DEC-009 | Base adotada: cancelamento e reagendamento pelo paciente com 24h de antecedência; valores configuráveis e sujeitos à validação do proprietário antes da produção. No-show permanece para a agenda operacional. | máquina de estados e financeiro | base implementada na Fase 7 |
 | DEC-010 | Base adotada: timezone singleton da clínica, inicialmente `America/Sao_Paulo`; datas persistidas em UTC e horários ambíguos/inexistentes recusados. Confirmar antes da produção se haverá atendimento em outro fuso. | slots, lembretes e auditoria | base implementada na Fase 7 |

@@ -63,6 +63,7 @@ public static class SecurityServiceCollectionExtensions
                     .WithHeaders(
                         "Accept",
                         "Content-Type",
+                        "Idempotency-Key",
                         "X-CSRF-TOKEN",
                         CorrelationIdMiddleware.HeaderName,
                         "traceparent",

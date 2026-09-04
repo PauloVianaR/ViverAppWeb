@@ -28,4 +28,6 @@ public partial class DoctorProfile
     public virtual ICollection<DoctorSpecialty> DoctorSpecialties { get; set; } = new List<DoctorSpecialty>();
 
     public virtual ICollection<DoctorWeeklyHour> DoctorWeeklyHours { get; set; } = new List<DoctorWeeklyHour>();
+
+    public virtual ICollection<MedicalReport> MedicalReports { get; set; } = new List<MedicalReport>();
 }

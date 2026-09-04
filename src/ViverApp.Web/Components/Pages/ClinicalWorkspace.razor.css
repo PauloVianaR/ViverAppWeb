@@ -1,0 +1,34 @@
+.clinical-heading { align-items: flex-start; }
+.clinical-tabs { display: flex; gap: .35rem; margin: 1rem 0; overflow-x: auto; padding: .25rem; scrollbar-width: thin; }
+.clinical-tabs a { border-radius: 999px; color: var(--color-text-muted); font-weight: 700; padding: .65rem 1rem; text-decoration: none; white-space: nowrap; }
+.clinical-tabs a:hover, .clinical-tabs a.active { background: var(--color-brand-soft); color: var(--color-brand-strong); }
+.clinical-filter { margin-bottom: 1rem; padding: clamp(1rem, 2vw, 1.5rem); }
+.clinical-filter-grid { grid-template-columns: repeat(5, minmax(8rem, 1fr)); }
+.clinical-layout { display: grid; gap: 1rem; grid-template-columns: minmax(31rem, 1.25fr) minmax(20rem, .75fr); align-items: start; }
+.clinical-list { overflow: hidden; }
+.appointment-row { align-items: center; background: transparent; border: 0; border-bottom: 1px solid var(--color-border); color: inherit; cursor: pointer; display: grid; gap: 1rem; grid-template-columns: 4.5rem minmax(12rem, 1fr) minmax(9rem, .7fr) auto; padding: 1rem; text-align: left; width: 100%; }
+.appointment-row:hover, .appointment-row.selected { background: var(--color-brand-soft); }
+.appointment-row time, .appointment-row__main { display: flex; flex-direction: column; }
+.appointment-row time span, .appointment-row small, .appointment-row__doctor { color: var(--color-text-muted); font-size: .82rem; }
+.clinical-detail { padding: clamp(1rem, 2vw, 1.5rem); position: sticky; top: 1rem; }
+.detail-grid, .patient-card dl { display: grid; gap: .75rem; grid-template-columns: 1fr 1fr; margin: 1rem 0; }
+.detail-grid div, .patient-card dl div { border-left: 3px solid var(--color-brand-soft); padding-left: .7rem; }
+dt { color: var(--color-text-muted); font-size: .75rem; font-weight: 800; text-transform: uppercase; } dd { margin: .2rem 0 0; }
+.patient-note, .privacy-card, .published-report { background: var(--color-surface-muted); border-radius: var(--radius-md); margin-top: 1rem; padding: 1rem; }
+.report-editor { border-top: 1px solid var(--color-border); margin-top: 1.25rem; padding-top: 1.25rem; }
+.report-editor textarea { resize: vertical; }
+.danger-zone { align-items: center; border-top: 1px solid var(--color-border); display: flex; gap: 1rem; justify-content: space-between; margin-top: 1.25rem; padding-top: 1rem; }
+.danger-zone p { color: var(--color-text-muted); font-size: .82rem; margin: 0; }
+.patient-grid { display: grid; gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.patient-card { display: grid; gap: 1rem; grid-template-columns: auto 1fr; padding: 1.25rem; }
+.patient-card h2 { font-size: 1.1rem; margin: .2rem 0; }.patient-card p { color: var(--color-text-muted); font-size: .86rem; margin: 0; }
+.patient-card dl { grid-column: 1 / -1; }.patient-avatar { align-items: center; background: var(--color-brand-soft); border-radius: 50%; color: var(--color-brand-strong); display: flex; font-weight: 900; height: 3rem; justify-content: center; width: 3rem; }
+.availability-layout { display: grid; gap: 1rem; grid-template-columns: minmax(20rem, .8fr) minmax(28rem, 1.2fr); align-items: start; }
+.availability-form, .availability-list { padding: clamp(1rem, 2vw, 1.5rem); }.availability-form { position: sticky; top: 1rem; }
+.availability-list article { align-items: center; border-bottom: 1px solid var(--color-border); display: grid; gap: 1rem; grid-template-columns: 1fr auto auto; padding: 1rem 0; }
+.availability-list article > div:first-child { display: flex; flex-direction: column; }.availability-list small { color: var(--color-text-muted); }.row-actions { display: flex; gap: .4rem; }
+.check-field { align-items: center; display: flex; gap: .5rem; font-weight: 700; padding-top: 1.7rem; }.check-field input { width: auto; }
+
+@media (max-width: 1100px) { .clinical-filter-grid { grid-template-columns: repeat(3, 1fr); }.clinical-layout { grid-template-columns: 1fr; }.clinical-detail, .availability-form { position: static; }.patient-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .clinical-filter-grid, .availability-layout, .patient-grid { grid-template-columns: 1fr; }.appointment-row { align-items: start; grid-template-columns: 3.75rem 1fr auto; }.appointment-row__doctor { grid-column: 2 / -1; }.detail-grid { grid-template-columns: 1fr; }.danger-zone, .availability-list article { align-items: stretch; grid-template-columns: 1fr; }.danger-zone { flex-direction: column; }.row-actions { flex-wrap: wrap; } }
+@media (max-width: 430px) { .appointment-row { gap: .65rem; padding: .85rem; }.appointment-row .badge { grid-column: 2 / -1; justify-self: start; }.clinical-tabs a { padding-inline: .8rem; } }

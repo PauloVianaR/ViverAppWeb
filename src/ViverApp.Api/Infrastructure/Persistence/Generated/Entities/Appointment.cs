@@ -37,6 +37,14 @@ public partial class Appointment
 
     public ulong? RescheduledFromAppointmentId { get; set; }
 
+    public ulong? CompletedByAccountId { get; set; }
+
+    public DateTime? CompletedAtUtc { get; set; }
+
+    public ulong? NoShowRecordedByAccountId { get; set; }
+
+    public DateTime? NoShowRecordedAtUtc { get; set; }
+
     public DateTime CreatedAtUtc { get; set; }
 
     public DateTime UpdatedAtUtc { get; set; }
@@ -51,11 +59,17 @@ public partial class Appointment
 
     public virtual Account? CanceledByAccount { get; set; }
 
+    public virtual Account? CompletedByAccount { get; set; }
+
     public virtual Account CreatedByAccount { get; set; } = null!;
 
     public virtual DoctorProfile DoctorAccount { get; set; } = null!;
 
     public virtual Appointment? InverseRescheduledFromAppointment { get; set; }
+
+    public virtual MedicalReport? MedicalReport { get; set; }
+
+    public virtual Account? NoShowRecordedByAccount { get; set; }
 
     public virtual Account PatientAccount { get; set; } = null!;
 

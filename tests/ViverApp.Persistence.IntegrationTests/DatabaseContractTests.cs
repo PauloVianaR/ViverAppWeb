@@ -32,7 +32,7 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(29, applicationEntities.Length);
+        Assert.Equal(30, applicationEntities.Length);
         Assert.DoesNotContain(
             applicationEntities,
             entity => string.Equals(entity.GetTableName(), "__schema_migrations", StringComparison.Ordinal));
@@ -41,6 +41,9 @@ public sealed class DatabaseContractTests
         Assert.NotNull(account);
         Assert.False(account.FindProperty(nameof(Account.RoleCode))!.IsNullable);
         Assert.True(account.FindProperty(nameof(Account.RowVersion))!.IsConcurrencyToken);
+        var medicalReport = context.Model.FindEntityType(typeof(MedicalReport));
+        Assert.NotNull(medicalReport);
+        Assert.True(medicalReport.FindProperty(nameof(MedicalReport.RowVersion))!.IsConcurrencyToken);
 
         var expectedRoles = new[] { "administrator", "doctor", "manager", "patient" };
         var roles = await context.Roles
@@ -63,7 +66,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006,0007", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008", migrations);
 
         var forbiddenColumns = await ExecuteScalarAsync(
             connection,
@@ -198,6 +201,31 @@ public sealed class DatabaseContractTests
             WHERE setting_key LIKE 'appointments.%'
             """);
         Assert.Equal("5", schedulingSettings);
+
+        var clinicalReportTable = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.tables
+            WHERE table_schema = 'viverappweb'
+              AND table_name = 'medical_reports'
+            """);
+        Assert.Equal("1", clinicalReportTable);
+
+        var clinicalLifecycleColumns = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_schema = 'viverappweb'
+              AND table_name = 'appointments'
+              AND column_name IN (
+                  'completed_by_account_id',
+                  'completed_at_utc',
+                  'no_show_recorded_by_account_id',
+                  'no_show_recorded_at_utc')
+            """);
+        Assert.Equal("4", clinicalLifecycleColumns);
     }
 
     private static ViverAppDbContext CreateContext()

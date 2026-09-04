@@ -176,7 +176,7 @@ Cada fase deve:
 
 ## Fase 7 — Agenda e agendamento do paciente
 
-**Estado:** implementada em `codex/fase-07-agenda-agendamento-paciente`; ainda não integrada à `main`.
+**Estado:** concluída e integrada à `main` em `54f43b1`.
 
 **Objetivo:** entregar a jornada principal de descoberta e marcação.
 
@@ -193,9 +193,9 @@ Cada fase deve:
 
 **Artefatos:** [índice da Fase 7](fase-07/README.md), [API e regras](fase-07/API-E-REGRAS.md) e [concorrência e idempotência](fase-07/CONCORRENCIA-E-IDEMPOTENCIA.md).
 
-**Saída:** fluxo completo e responsivo, consistente mesmo sob requisições concorrentes.
-
 ## Fase 8 — Jornadas de médico e gestor
+
+**Estado:** implementada em `codex/fase-08-jornadas-medico-gestor`; ainda não integrada à `main`.
 
 **Objetivo:** entregar operação clínica e gestão de pacientes.
 
@@ -209,6 +209,8 @@ Cada fase deve:
 - adaptação de fluxos densos para desktop/tablet sem prejudicar mobile.
 
 **Saída:** médico e gestor só acessam dados permitidos e toda alteração crítica é auditada.
+
+**Artefatos:** [índice da Fase 8](fase-08/README.md), [API e autorização](fase-08/API-E-AUTORIZACAO.md) e [sigilo e ciclo clínico](fase-08/SIGILO-E-CICLO-CLINICO.md).
 
 ## Fase 9 — PagBank Checkout em produção
 
