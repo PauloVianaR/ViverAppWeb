@@ -21,9 +21,21 @@ public partial class Payment
 
     public string? ProviderCheckoutId { get; set; }
 
+    public string? CheckoutUrl { get; set; }
+
+    public DateTime? CheckoutExpiresAtUtc { get; set; }
+
     public string? ProviderTransactionId { get; set; }
 
     public string? ProviderStatusCode { get; set; }
+
+    public DateTime? ProviderEventAtUtc { get; set; }
+
+    public DateTime? LastReconciledAtUtc { get; set; }
+
+    public DateTime? NextReconciliationAtUtc { get; set; }
+
+    public ushort ReconciliationAttemptCount { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
 
@@ -33,7 +45,13 @@ public partial class Payment
 
     public DateTime? CanceledAtUtc { get; set; }
 
+    public decimal? RefundAmount { get; set; }
+
+    public DateTime? RefundedAtUtc { get; set; }
+
     public ulong RowVersion { get; set; }
 
     public virtual Appointment Appointment { get; set; } = null!;
+
+    public virtual ICollection<PaymentEvent> PaymentEvents { get; set; } = new List<PaymentEvent>();
 }

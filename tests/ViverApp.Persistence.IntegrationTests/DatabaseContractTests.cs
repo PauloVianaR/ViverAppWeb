@@ -32,7 +32,7 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(30, applicationEntities.Length);
+        Assert.Equal(32, applicationEntities.Length);
         Assert.DoesNotContain(
             applicationEntities,
             entity => string.Equals(entity.GetTableName(), "__schema_migrations", StringComparison.Ordinal));
@@ -44,6 +44,12 @@ public sealed class DatabaseContractTests
         var medicalReport = context.Model.FindEntityType(typeof(MedicalReport));
         Assert.NotNull(medicalReport);
         Assert.True(medicalReport.FindProperty(nameof(MedicalReport.RowVersion))!.IsConcurrencyToken);
+        var payment = context.Model.FindEntityType(typeof(Payment));
+        Assert.NotNull(payment);
+        Assert.True(payment.FindProperty(nameof(Payment.RowVersion))!.IsConcurrencyToken);
+        var statusHistory = context.Model.FindEntityType(typeof(AppointmentStatusHistory));
+        Assert.NotNull(statusHistory);
+        Assert.True(statusHistory.FindProperty(nameof(AppointmentStatusHistory.ActorAccountId))!.IsNullable);
 
         var expectedRoles = new[] { "administrator", "doctor", "manager", "patient" };
         var roles = await context.Roles
@@ -66,7 +72,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010", migrations);
 
         var forbiddenColumns = await ExecuteScalarAsync(
             connection,
@@ -226,6 +232,35 @@ public sealed class DatabaseContractTests
                   'no_show_recorded_at_utc')
             """);
         Assert.Equal("4", clinicalLifecycleColumns);
+
+        var paymentTables = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.tables
+            WHERE table_schema = 'viverappweb'
+              AND table_name IN ('payment_events', 'payment_webhook_receipts')
+            """);
+        Assert.Equal("2", paymentTables);
+
+        var paymentOperationalColumns = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_schema = 'viverappweb'
+              AND table_name = 'payments'
+              AND column_name IN (
+                  'checkout_url',
+                  'checkout_expires_at_utc',
+                  'provider_event_at_utc',
+                  'last_reconciled_at_utc',
+                  'next_reconciliation_at_utc',
+                  'reconciliation_attempt_count',
+                  'refund_amount',
+                  'refunded_at_utc')
+            """);
+        Assert.Equal("8", paymentOperationalColumns);
     }
 
     private static ViverAppDbContext CreateContext()

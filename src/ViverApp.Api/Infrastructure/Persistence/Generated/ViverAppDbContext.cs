@@ -62,6 +62,10 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<Payment> Payments { get; set; }
 
+    public virtual DbSet<PaymentEvent> PaymentEvents { get; set; }
+
+    public virtual DbSet<PaymentWebhookReceipt> PaymentWebhookReceipts { get; set; }
+
     public virtual DbSet<PremiumMembership> PremiumMemberships { get; set; }
 
     public virtual DbSet<PremiumPlan> PremiumPlans { get; set; }
@@ -1126,6 +1130,8 @@ public partial class ViverAppDbContext : DbContext
 
             entity.ToTable("payments");
 
+            entity.HasIndex(e => new { e.StatusCode, e.NextReconciliationAtUtc }, "ix_payments_reconciliation");
+
             entity.HasIndex(e => new { e.StatusCode, e.CreatedAtUtc }, "ix_payments_status_created");
 
             entity.HasIndex(e => e.AppointmentId, "ux_payments_appointment").IsUnique();
@@ -1144,6 +1150,12 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.CanceledAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("canceled_at_utc");
+            entity.Property(e => e.CheckoutExpiresAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("checkout_expires_at_utc");
+            entity.Property(e => e.CheckoutUrl)
+                .HasMaxLength(500)
+                .HasColumnName("checkout_url");
             entity.Property(e => e.CreatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("created_at_utc");
@@ -1153,6 +1165,12 @@ public partial class ViverAppDbContext : DbContext
                 .IsFixedLength()
                 .HasColumnName("currency_code");
             entity.Property(e => e.IdempotencyKey).HasColumnName("idempotency_key");
+            entity.Property(e => e.LastReconciledAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("last_reconciled_at_utc");
+            entity.Property(e => e.NextReconciliationAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("next_reconciliation_at_utc");
             entity.Property(e => e.PaidAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("paid_at_utc");
@@ -1162,12 +1180,22 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.ProviderCode)
                 .HasMaxLength(20)
                 .HasColumnName("provider_code");
+            entity.Property(e => e.ProviderEventAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("provider_event_at_utc");
             entity.Property(e => e.ProviderStatusCode)
                 .HasMaxLength(50)
                 .HasColumnName("provider_status_code");
             entity.Property(e => e.ProviderTransactionId)
                 .HasMaxLength(100)
                 .HasColumnName("provider_transaction_id");
+            entity.Property(e => e.ReconciliationAttemptCount).HasColumnName("reconciliation_attempt_count");
+            entity.Property(e => e.RefundAmount)
+                .HasPrecision(13)
+                .HasColumnName("refund_amount");
+            entity.Property(e => e.RefundedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("refunded_at_utc");
             entity.Property(e => e.RowVersion)
                 .HasDefaultValueSql("'1'")
                 .HasColumnName("row_version");
@@ -1183,6 +1211,99 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey<Payment>(d => d.AppointmentId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_payments_appointment");
+        });
+
+        modelBuilder.Entity<PaymentEvent>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("payment_events");
+
+            entity.HasIndex(e => new { e.PaymentId, e.OccurredAtUtc }, "ix_payment_events_payment_time");
+
+            entity.HasIndex(e => new { e.PaymentId, e.EventFingerprint }, "ux_payment_events_fingerprint").IsUnique();
+
+            entity.HasIndex(e => e.WebhookReceiptId, "ux_payment_events_webhook_receipt").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.EventFingerprint)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("event_fingerprint");
+            entity.Property(e => e.IgnoredReasonCode)
+                .HasMaxLength(100)
+                .HasColumnName("ignored_reason_code");
+            entity.Property(e => e.NormalizedStatusCode)
+                .HasMaxLength(20)
+                .HasColumnName("normalized_status_code");
+            entity.Property(e => e.OccurredAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("occurred_at_utc");
+            entity.Property(e => e.PaymentId).HasColumnName("payment_id");
+            entity.Property(e => e.ProviderOccurredAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("provider_occurred_at_utc");
+            entity.Property(e => e.ProviderResourceId)
+                .HasMaxLength(100)
+                .HasColumnName("provider_resource_id");
+            entity.Property(e => e.ProviderStatusCode)
+                .HasMaxLength(50)
+                .HasColumnName("provider_status_code");
+            entity.Property(e => e.SourceCode)
+                .HasMaxLength(20)
+                .HasColumnName("source_code");
+            entity.Property(e => e.WasApplied).HasColumnName("was_applied");
+            entity.Property(e => e.WebhookReceiptId).HasColumnName("webhook_receipt_id");
+
+            entity.HasOne(d => d.Payment).WithMany(p => p.PaymentEvents)
+                .HasForeignKey(d => d.PaymentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_payment_events_payment");
+
+            entity.HasOne(d => d.WebhookReceipt).WithOne(p => p.PaymentEvent)
+                .HasForeignKey<PaymentEvent>(d => d.WebhookReceiptId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_payment_events_webhook_receipt");
+        });
+
+        modelBuilder.Entity<PaymentWebhookReceipt>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("payment_webhook_receipts");
+
+            entity.HasIndex(e => new { e.ProcessingStatusCode, e.ReceivedAtUtc }, "ix_payment_webhook_receipts_status_time");
+
+            entity.HasIndex(e => new { e.ProviderCode, e.PayloadSha256 }, "ux_payment_webhook_receipts_payload").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AuthenticitySha256)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("authenticity_sha256");
+            entity.Property(e => e.PayloadSha256)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("payload_sha256");
+            entity.Property(e => e.ProcessedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("processed_at_utc");
+            entity.Property(e => e.ProcessingStatusCode)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'received'")
+                .HasColumnName("processing_status_code");
+            entity.Property(e => e.ProviderCode)
+                .HasMaxLength(20)
+                .HasColumnName("provider_code");
+            entity.Property(e => e.ProviderResourceId)
+                .HasMaxLength(100)
+                .HasColumnName("provider_resource_id");
+            entity.Property(e => e.ReceivedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("received_at_utc");
+            entity.Property(e => e.ResultCode)
+                .HasMaxLength(100)
+                .HasColumnName("result_code");
         });
 
         modelBuilder.Entity<PremiumMembership>(entity =>

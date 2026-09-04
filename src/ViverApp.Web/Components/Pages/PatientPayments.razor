@@ -1,0 +1,222 @@
+@page "/paciente/pagamentos"
+@page "/paciente/pagamentos/retorno"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@using System.Globalization
+@inject IJSRuntime JavaScript
+@inject WebBackendOptions Backend
+
+<PageTitle>Pagamentos | ViverApp</PageTitle>
+
+<header class="workspace-heading">
+    <div>
+        <p class="eyebrow">Área do paciente</p>
+        <h1 class="page-title">Pagamento seguro</h1>
+        <p class="page-description">O valor vem do agendamento e o pagamento acontece no ambiente protegido do PagBank.</p>
+    </div>
+    <span class="badge badge--brand">Checkout externo</span>
+</header>
+
+@if (!string.IsNullOrWhiteSpace(Notice))
+{
+    <div class="notice @(NoticeIsError ? "notice--error" : "notice--success")" role="@(NoticeIsError ? "alert" : "status")">@Notice</div>
+}
+
+@if (AppointmentId is null or 0)
+{
+    <InterfaceState Title="Escolha um atendimento"
+                    Description="Abra sua agenda e selecione Pagar no atendimento pendente. Assim o valor correto será recuperado pelo servidor."
+                    Icon="card"
+                    ActionLabel="Ir para minha agenda"
+                    ActionHref="/paciente/agenda#agenda" />
+}
+else if (IsLoading)
+{
+    <section class="surface payment-panel"><LoadingSkeleton Lines="5" /></section>
+}
+else if (Payment is null)
+{
+    <section class="surface payment-panel" aria-labelledby="new-payment-title">
+        <p class="eyebrow">Agendamento #@AppointmentId</p>
+        <h2 id="new-payment-title">Gerar checkout</h2>
+        <p>O backend confirmará o agendamento, o valor e sua titularidade antes de solicitar um link ao PagBank.</p>
+        <button class="button" type="button" @onclick="CreateCheckoutAsync" disabled="@IsBusy">Gerar checkout seguro</button>
+    </section>
+}
+else
+{
+    <section class="surface payment-panel" aria-labelledby="payment-title">
+        <div class="payment-heading">
+            <div>
+                <p class="eyebrow">Agendamento #@Payment.AppointmentId</p>
+                <h2 id="payment-title">@Money(Payment.Amount)</h2>
+            </div>
+            <span class="badge @StatusBadge(Payment.StatusCode)">@StatusLabel(Payment.StatusCode)</span>
+        </div>
+        <dl class="payment-details">
+            <div><dt>Moeda</dt><dd>@Payment.CurrencyCode</dd></div>
+            <div><dt>Última atualização</dt><dd>@LocalTime(Payment.UpdatedAtUtc)</dd></div>
+            <div><dt>Referência</dt><dd>#@Payment.Id</dd></div>
+        </dl>
+        <div class="panel-actions">
+            @if (CanPay(Payment))
+            {
+                <button class="button" type="button" @onclick="OpenCheckoutAsync" disabled="@IsBusy">Continuar no PagBank</button>
+            }
+            <button class="button button--secondary" type="button" @onclick="RefreshAsync" disabled="@IsBusy">Atualizar situação</button>
+            <a class="button button--secondary" href="/paciente/agenda#agenda">Voltar à agenda</a>
+        </div>
+        <p class="field-hint">A confirmação do atendimento só ocorre após o servidor validar a notificação ou consultar o PagBank.</p>
+    </section>
+}
+
+@code {
+    private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("pt-BR");
+    private IJSObjectReference? module;
+    private WebPayment? Payment;
+    private bool IsLoading = true;
+    private bool IsBusy;
+    private string? Notice;
+    private bool NoticeIsError;
+
+    [SupplyParameterFromQuery(Name = "appointmentId")]
+    public string? AppointmentIdQuery { get; set; }
+
+    private ulong? AppointmentId => ulong.TryParse(
+        AppointmentIdQuery,
+        NumberStyles.None,
+        CultureInfo.InvariantCulture,
+        out var value)
+        ? value
+        : null;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/patient-scheduling.js");
+            if (AppointmentId is > 0)
+            {
+                await LoadAsync(refresh: true, tolerateMissing: true);
+            }
+        }
+        catch (JSException exception)
+        {
+            ShowError(exception.Message);
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CreateCheckoutAsync()
+    {
+        if (module is null || AppointmentId is null or 0)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        ClearNotice();
+        try
+        {
+            Payment = await module.InvokeAsync<WebPayment>(
+                "send",
+                Backend.BaseUrl.ToString(),
+                $"api/v1/patient/appointments/{AppointmentId}/payment/checkout",
+                "POST",
+                new { },
+                $"payment-{Guid.NewGuid():N}");
+            Notice = "Checkout criado. Confira o valor antes de continuar.";
+        }
+        catch (JSException exception)
+        {
+            ShowError(exception.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        IsBusy = true;
+        ClearNotice();
+        try
+        {
+            await LoadAsync(refresh: true, tolerateMissing: false);
+            Notice = "Situação atualizada pelo servidor.";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task LoadAsync(bool refresh, bool tolerateMissing)
+    {
+        try
+        {
+            Payment = await module!.InvokeAsync<WebPayment>(
+                "get",
+                Backend.BaseUrl.ToString(),
+                $"api/v1/patient/appointments/{AppointmentId}/payment?refresh={refresh.ToString().ToLowerInvariant()}");
+        }
+        catch (JSException exception) when (tolerateMissing && exception.Message.Contains("Pagamento não encontrado", StringComparison.OrdinalIgnoreCase))
+        {
+            Payment = null;
+        }
+        catch (JSException exception)
+        {
+            ShowError(exception.Message);
+        }
+    }
+
+    private async Task OpenCheckoutAsync()
+    {
+        if (Payment?.CheckoutUrl is null)
+        {
+            return;
+        }
+
+        await module!.InvokeVoidAsync("redirectTo", Payment.CheckoutUrl);
+    }
+
+    private void ClearNotice() { Notice = null; NoticeIsError = false; }
+    private void ShowError(string message) { Notice = message; NoticeIsError = true; }
+    private static bool CanPay(WebPayment payment) => payment.StatusCode is "pending" or "authorized" && payment.CheckoutUrl is not null;
+    private static string Money(decimal value) => value.ToString("C", Culture);
+    private static string LocalTime(DateTime value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm", Culture);
+    private static string StatusLabel(string value) => value switch
+    {
+        "pending" => "Aguardando pagamento",
+        "authorized" => "Em análise",
+        "paid" => "Pago",
+        "failed" => "Não aprovado",
+        "canceled" => "Cancelado",
+        "refunded" => "Reembolsado",
+        _ => "Em processamento",
+    };
+    private static string StatusBadge(string value) => value switch
+    {
+        "paid" => "badge--success",
+        "authorized" or "pending" => "badge--warning",
+        _ => "badge--danger",
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (module is not null)
+        {
+            try { await module.DisposeAsync(); } catch (JSDisconnectedException) { }
+        }
+    }
+}

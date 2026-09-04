@@ -65,3 +65,12 @@ export async function send(baseUrl, path, method, body, idempotencyKey) {
     });
     return await readResponse(response);
 }
+
+export function redirectTo(url) {
+    const target = new URL(url);
+    if (target.protocol !== "https:") {
+        throw new Error("O endereço seguro do PagBank é inválido.");
+    }
+
+    window.location.assign(target.toString());
+}

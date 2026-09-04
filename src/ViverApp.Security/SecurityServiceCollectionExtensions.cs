@@ -69,7 +69,7 @@ public static class SecurityServiceCollectionExtensions
                         "traceparent",
                         "tracestate",
                         "baggage")
-                    .WithExposedHeaders(CorrelationIdMiddleware.HeaderName, "Retry-After")
+                    .WithExposedHeaders(CorrelationIdMiddleware.HeaderName, "Retry-After", "Idempotent-Replayed")
                     .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
             });
         });

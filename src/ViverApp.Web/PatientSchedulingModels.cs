@@ -71,3 +71,17 @@ public sealed record WebAppointmentRescheduleRequest(
     TimeOnly LocalStartsAt,
     string? Reason,
     ulong RowVersion);
+
+public sealed record WebPayment(
+    ulong Id,
+    ulong AppointmentId,
+    string StatusCode,
+    decimal Amount,
+    string CurrencyCode,
+    string? CheckoutUrl,
+    DateTime? CheckoutExpiresAtUtc,
+    string? ProviderStatusCode,
+    DateTime UpdatedAtUtc,
+    DateTime? PaidAtUtc,
+    DateTime? RefundedAtUtc,
+    ulong RowVersion);

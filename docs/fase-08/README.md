@@ -1,6 +1,6 @@
 # Fase 8 — Jornadas de médico e gestor
 
-**Estado:** implementada na branch `codex/fase-08-jornadas-medico-gestor`; ainda não integrada à `main`.
+**Estado:** concluída e integrada à `main` no commit `09382d3`.
 
 Esta fase transforma os shells de médico e gestor em uma operação clínica funcional. A API permanece como autoridade de acesso: trocar a URL ou manipular a interface não amplia o conjunto de consultas, pacientes ou relatórios visíveis.
 

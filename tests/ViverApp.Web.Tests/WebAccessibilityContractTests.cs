@@ -88,6 +88,20 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.Contains("24 horas de antecedência", html, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task PatientPayments_ExplainsServerAuthoritativeCheckout()
+    {
+        using var client = CreateClient();
+
+        using var response = await client.GetAsync("/paciente/pagamentos");
+        var html = await ReadUtf8Async(response.Content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Pagamento seguro", html, StringComparison.Ordinal);
+        Assert.Contains("o valor correto será recuperado pelo servidor", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Ir para minha agenda", html, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("/medico/agenda", "Agenda clínica")]
     [InlineData("/medico/historico", "Histórico de atendimentos")]

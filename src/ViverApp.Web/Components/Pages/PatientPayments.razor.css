@@ -1,0 +1,46 @@
+.payment-panel {
+    display: grid;
+    gap: var(--space-5);
+    max-width: 48rem;
+    margin-inline: auto;
+    padding: clamp(var(--space-5), 4vw, var(--space-8));
+}
+
+.payment-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+}
+
+.payment-details {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+    margin: 0;
+}
+
+.payment-details div {
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-muted);
+}
+
+.payment-details dt {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.payment-details dd {
+    margin: var(--space-1) 0 0;
+    font-weight: 700;
+}
+
+@media (max-width: 42rem) {
+    .payment-heading,
+    .payment-details {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+}
+

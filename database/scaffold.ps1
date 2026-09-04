@@ -50,6 +50,8 @@ $tables = @(
     'medical_reports',
     'appointment_documents',
     'payments',
+    'payment_webhook_receipts',
+    'payment_events',
     'premium_plans',
     'premium_memberships',
     'outbox_messages',

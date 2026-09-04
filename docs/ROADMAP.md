@@ -195,7 +195,7 @@ Cada fase deve:
 
 ## Fase 8 — Jornadas de médico e gestor
 
-**Estado:** implementada em `codex/fase-08-jornadas-medico-gestor`; ainda não integrada à `main`.
+**Estado:** concluída e integrada à `main` no commit `09382d3`.
 
 **Objetivo:** entregar operação clínica e gestão de pacientes.
 
@@ -214,6 +214,8 @@ Cada fase deve:
 
 ## Fase 9 — PagBank Checkout em produção
 
+**Estado:** implementada em `codex/fase-09-pagbank-checkout`; ainda não integrada à `main`. A ativação externa permanece deliberadamente pendente de ambiente público e autorização explícita.
+
 **Objetivo:** reimplementar cobrança sem confiar no navegador nem no comportamento frágil legado.
 
 **Entregas:**
@@ -229,6 +231,8 @@ Cada fase deve:
 - testes sandbox, testes de contrato e roteiro controlado para produção sem cobrança acidental.
 
 **Saída:** cenários duplicados, atrasados, forjados e fora de ordem cobertos; ativação de produção exige autorização explícita.
+
+**Artefatos:** [índice da Fase 9](fase-09/README.md), [integração e estados](fase-09/INTEGRACAO-E-ESTADOS.md), [segurança e idempotência](fase-09/SEGURANCA-E-IDEMPOTENCIA.md) e [runbook de produção](fase-09/RUNBOOK-PRODUCAO.md).
 
 ## Fase 10 — Anexos, Cloudflare R2, domínio e CDN
 

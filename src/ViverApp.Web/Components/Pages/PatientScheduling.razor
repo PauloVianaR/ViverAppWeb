@@ -257,6 +257,10 @@
                         <small>@ModalityLabel(appointment.ModalityCode) • @appointment.TimezoneName • #@appointment.Id</small>
                     </div>
                     <div class="appointment-actions">
+                        @if (appointment.StatusCode == "pending")
+                        {
+                            <a class="button button--small" href="/paciente/pagamentos?appointmentId=@appointment.Id">Pagar</a>
+                        }
                         <button class="button button--secondary button--small" type="button" @onclick="() => BeginRescheduleAsync(appointment)" disabled="@IsBusy">Reagendar</button>
                         <button class="button button--danger button--small" type="button" @onclick="() => BeginCancel(appointment)" disabled="@IsBusy">Cancelar</button>
                     </div>

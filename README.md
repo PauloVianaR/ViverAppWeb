@@ -7,13 +7,13 @@ Reimplementação web do ViverApp em .NET 10, composta inicialmente por:
 - `ViverApp.Web`: Blazor Web App com interatividade Server;
 - `ViverApp.Api`: ASP.NET Core Web API;
 - `docs/ROADMAP.md`: plano completo e incremental da reimplementação;
-- `docs/fase-01/` a `docs/fase-08/`: documentação incremental das fases;
+- `docs/fase-01/` a `docs/fase-09/`: documentação incremental das fases;
 - `docs/adr/`: decisões arquiteturais duráveis;
 - `AGENTS.md`: regras obrigatórias para agentes de IA.
 
-As Fases 0 a 7 estão integradas à `main`, incluindo o design system, a identidade visual oficial, os shells responsivos e a jornada transacional do paciente.
+As Fases 0 a 8 estão integradas à `main`, incluindo o design system, a identidade visual oficial, os shells responsivos e as jornadas de paciente, médico e gestor.
 
-A Fase 8 está implementada na branch `codex/fase-08-jornadas-medico-gestor`, ainda sem integração à `main`. Ela acrescenta as jornadas clínicas de médico e gestor.
+A Fase 9 está implementada na branch `codex/fase-09-pagbank-checkout`, ainda sem integração à `main`. Ela acrescenta o Checkout PagBank com proteção contra replay, reconciliação e ativação de produção bloqueada por padrão.
 
 ## Pré-requisitos
 
@@ -39,15 +39,16 @@ O projeto `ViverApp.Api` possui um `UserSecretsId`. As credenciais legadas neces
 - `PagBank:TokenSandbox`;
 - `PagBank:ProductionUrl`;
 - `PagBank:TokenProduction`;
+- `PagBank:ApiPublicBaseUrl` e `PagBank:WebPublicBaseUrl`;
 - `SmsBarato:ApiKey` e `SmsBarato:BaseUrl`;
 - `Smtp:Host`, `Smtp:Port`, `Smtp:User` e `Smtp:Password`;
 - `Authentication:ChallengePepper`.
 
 O OAuth Web do Google utiliza `GoogleOAuth:ClientID`, `GoogleOAuth:ProjectID`, `GoogleOAuth:ClientSecret` e `GoogleOAuth:RedirectURI`, todos exclusivamente em user-secrets e sem fallback no repositório.
 
-As connection strings de Azure não foram copiadas. Nenhum valor secreto deve ser incluído no repositório, em exemplos, logs, testes ou documentação.
+As flags `PagBank:Enabled`, `PagBank:ProductionEnabled` e `PagBank:RefundsEnabled` são falsas na configuração versionada. Produção e reembolsos exigem ativações explícitas e independentes fora do Git. As connection strings de Azure não foram copiadas. Nenhum valor secreto deve ser incluído no repositório, em exemplos, logs, testes ou documentação.
 
-O banco legado `viverappmobile` é somente leitura. A aplicação web usa o banco novo `viverappweb`, criado na Fase 2 e governado por migrations SQL antes do scaffold DB-First. As migrations `0001` a `0008` estão aplicadas e o modelo EF foi gerado exclusivamente desse schema.
+O banco legado `viverappmobile` é somente leitura. A aplicação web usa o banco novo `viverappweb`, criado na Fase 2 e governado por migrations SQL antes do scaffold DB-First. As migrations `0001` a `0010` estão aplicadas e o modelo EF foi gerado exclusivamente desse schema.
 
 Para conferir somente os nomes configurados, sem compartilhar valores:
 
@@ -59,6 +60,6 @@ dotnet user-secrets list --project src/ViverApp.Api/ViverApp.Api.csproj |
 
 ## Estado atual
 
-As Fases 1 a 7 estão concluídas e integradas à `main`: [descoberta e arquitetura](docs/fase-01/README.md), [persistência DB-First](docs/fase-02/README.md), [segurança e observabilidade](docs/fase-03/README.md), [identidade e autorização](docs/fase-04/README.md), [cadastros e configuração clínica](docs/fase-05/README.md), [design system e shell responsivo](docs/fase-06/README.md) e [agenda e agendamento do paciente](docs/fase-07/README.md).
+As Fases 1 a 8 estão concluídas e integradas à `main`: [descoberta e arquitetura](docs/fase-01/README.md), [persistência DB-First](docs/fase-02/README.md), [segurança e observabilidade](docs/fase-03/README.md), [identidade e autorização](docs/fase-04/README.md), [cadastros e configuração clínica](docs/fase-05/README.md), [design system e shell responsivo](docs/fase-06/README.md), [agenda e agendamento do paciente](docs/fase-07/README.md) e [jornadas de médico e gestor](docs/fase-08/README.md).
 
-A implementação ainda não integrada da Fase 8 está em [jornadas de médico e gestor](docs/fase-08/README.md).
+A implementação ainda não integrada da Fase 9 está em [PagBank Checkout](docs/fase-09/README.md).

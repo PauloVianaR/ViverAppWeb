@@ -9,7 +9,7 @@ public partial class AppointmentStatusHistory
 
     public ulong AppointmentId { get; set; }
 
-    public ulong ActorAccountId { get; set; }
+    public ulong? ActorAccountId { get; set; }
 
     public string? FromStatusCode { get; set; }
 
@@ -23,7 +23,7 @@ public partial class AppointmentStatusHistory
 
     public DateTime OccurredAtUtc { get; set; }
 
-    public virtual Account ActorAccount { get; set; } = null!;
+    public virtual Account? ActorAccount { get; set; }
 
     public virtual Appointment Appointment { get; set; } = null!;
 }
