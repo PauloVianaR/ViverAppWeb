@@ -1,0 +1,326 @@
+@page "/acesso"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@using System.Globalization
+@inject IJSRuntime JavaScript
+@inject NavigationManager Navigation
+@inject WebBackendOptions Backend
+
+<PageTitle>Acesso | ViverApp</PageTitle>
+
+<section class="access-page">
+    <aside class="access-intro">
+        <a class="access-brand" href="/" aria-label="Voltar ao início">
+            <img src="/images/logo.png" alt="" />
+            <span><strong>Viver</strong><small>Centro Médico</small></span>
+        </a>
+        <div>
+            <p class="eyebrow">Seu cuidado, seu acesso</p>
+            <h1>Entre do seu jeito.</h1>
+            <p>Use Google, e-mail, telefone, senha ou uma chave de acesso. Cada pessoa vê apenas a área permitida para o seu papel.</p>
+        </div>
+        <ul class="access-assurances">
+            <li><AppIcon Name="shield" /> Senhas protegidas por hash adaptativo</li>
+            <li><AppIcon Name="check" /> Médico e Gestor passam por aprovação</li>
+            <li><AppIcon Name="user" /> Uma conta, um único papel</li>
+        </ul>
+    </aside>
+
+    <div class="access-card surface">
+        @if (!string.IsNullOrWhiteSpace(Notice))
+        {
+            <div class="notice @(NoticeIsError ? "notice--error" : "notice--success")" role="@(NoticeIsError ? "alert" : "status")">
+                @Notice
+            </div>
+        }
+
+        @if (IsLoading)
+        {
+            <LoadingSkeleton Lines="5" />
+        }
+        else if (Mode == "login")
+        {
+            <header><p class="eyebrow">Boas-vindas</p><h2>Entrar</h2><p>Acesse com e-mail ou telefone.</p></header>
+            <div class="access-form">
+                <div class="field"><label for="login-identifier">E-mail ou telefone</label><input id="login-identifier" autocomplete="username webauthn" @bind="Identifier" /></div>
+                <div class="field"><label for="login-password">Senha</label><input id="login-password" type="password" autocomplete="current-password" @bind="Password" /></div>
+                <label class="check-field"><input type="checkbox" @bind="RememberMe" /> Manter acesso neste dispositivo</label>
+                <button class="button" type="button" @onclick="LoginAsync" disabled="@IsBusy">Entrar com senha</button>
+                <button class="button button--secondary" type="button" @onclick="PasskeyLoginAsync" disabled="@IsBusy">Usar chave de acesso</button>
+                <a class="button google-button" href="@Backend.GoogleLoginUrl"><span aria-hidden="true">G</span> Continuar com Google</a>
+                <div class="access-links">
+                    <button type="button" @onclick="ShowCodeRequest">Entrar com código</button>
+                    <button type="button" @onclick="ShowRecoveryRequest">Esqueci a senha</button>
+                </div>
+            </div>
+            <footer>Não tem conta? <button type="button" @onclick="ShowRegister">Cadastre-se</button></footer>
+        }
+        else if (Mode is "register" or "google-register")
+        {
+            <header>
+                <p class="eyebrow">@(Mode == "google-register" ? "Complete seu Google" : "Nova conta")</p>
+                <h2>Escolha como você usará o Viver</h2>
+                <p>O papel não poderá ser alterado pelo formulário ou pela URL.</p>
+            </header>
+            <div class="role-grid" role="radiogroup" aria-label="Tipo de conta">
+                @foreach (var role in Roles)
+                {
+                    <label class="role-card @(RoleCode == role.Code ? "role-card--selected" : null)">
+                        <input type="radio" name="role" value="@role.Code" @onchange="() => RoleCode = role.Code" checked="@(RoleCode == role.Code)" />
+                        <strong>@role.Label</strong><small>@role.Help</small>
+                    </label>
+                }
+            </div>
+            <div class="access-form form-grid">
+                @if (Mode == "register")
+                {
+                    <div class="field field--wide"><label for="full-name">Nome completo</label><input id="full-name" autocomplete="name" maxlength="200" @bind="FullName" /></div>
+                    <div class="field"><label for="email">E-mail (opcional)</label><input id="email" type="email" autocomplete="email" maxlength="254" @bind="Email" /></div>
+                }
+                <div class="field"><label for="phone">Telefone com DDD</label><input id="phone" type="tel" autocomplete="tel" placeholder="+5511999999999" maxlength="16" @bind="Phone" /></div>
+                <div class="field"><label for="tax-id">CPF</label><input id="tax-id" inputmode="numeric" autocomplete="off" maxlength="11" @bind="TaxId" /></div>
+                <div class="field"><label for="birth-date">Data de nascimento</label><input id="birth-date" type="date" autocomplete="bday" value="@BirthDateText" @onchange="UpdateBirthDate" /></div>
+                @if (Mode == "register")
+                {
+                    <div class="field"><label for="password">Senha</label><input id="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" @bind="Password" /><p class="field-hint">12+ caracteres, maiúscula, minúscula, número e símbolo.</p></div>
+                    <div class="field"><label for="password-confirm">Confirmar senha</label><input id="password-confirm" type="password" autocomplete="new-password" @bind="PasswordConfirmation" /></div>
+                    <div class="field"><label for="channel">Confirmar por</label><select id="channel" @bind="Channel"><option value="sms">SMS</option><option value="email">E-mail</option></select></div>
+                }
+
+                @if (RoleCode == "patient")
+                {
+                    <h3 class="field--wide form-section-title">Endereço do paciente</h3>
+                    <div class="field"><label for="postal-code">CEP</label><div class="inline-field"><input id="postal-code" inputmode="numeric" maxlength="8" @bind="PostalCode" /><button class="button button--secondary button--small" type="button" @onclick="LookupPostalCodeAsync" disabled="@IsBusy">Buscar</button></div><p class="field-hint">Somente o CEP é consultado no ViaCEP; você pode preencher manualmente.</p></div>
+                    <div class="field field--wide"><label for="street">Logradouro</label><input id="street" autocomplete="street-address" maxlength="200" @bind="Street" /></div>
+                    <div class="field"><label for="number">Número</label><input id="number" maxlength="20" @bind="Number" /></div>
+                    <div class="field"><label for="complement">Complemento</label><input id="complement" maxlength="100" @bind="Complement" /></div>
+                    <div class="field"><label for="district">Bairro</label><input id="district" maxlength="100" @bind="District" /></div>
+                    <div class="field"><label for="city">Cidade</label><input id="city" maxlength="100" @bind="City" /></div>
+                    <div class="field"><label for="state">UF</label><input id="state" maxlength="2" @bind="StateCode" /></div>
+                }
+                else if (RoleCode == "doctor")
+                {
+                    <h3 class="field--wide form-section-title">Dados profissionais</h3>
+                    <div class="field"><label for="title">Título</label><select id="title" @bind="ProfessionalTitle"><option>Dr.</option><option>Dra.</option></select></div>
+                    <div class="field"><label for="license-state">UF do CRM</label><input id="license-state" maxlength="2" @bind="LicenseState" /></div>
+                    <div class="field"><label for="license">CRM</label><input id="license" maxlength="30" @bind="LicenseNumber" /></div>
+                    <div class="field"><label for="experience">Anos de experiência</label><input id="experience" type="number" min="0" max="80" @bind="YearsExperience" /></div>
+                    <div class="field field--wide"><label for="specialty">Especialidade principal</label><select id="specialty" @bind="PrimarySpecialtyId"><option value="0">Selecione</option>@foreach (var specialty in Options.Specialties){<option value="@specialty.Id">@specialty.Name</option>}</select></div>
+                }
+
+                <label class="check-field field--wide"><input type="checkbox" @bind="TermsAccepted" /> Li e aceito os termos de uso e o aviso de privacidade vigentes.</label>
+                <div class="honeypot" aria-hidden="true"><label for="website">Não preencha</label><input id="website" tabindex="-1" autocomplete="off" @bind="Website" /></div>
+                <button class="button field--wide" type="button" @onclick="RegisterAsync" disabled="@IsBusy">@(Mode == "google-register" ? "Concluir cadastro" : "Criar conta")</button>
+            </div>
+            <footer>Já possui conta? <button type="button" @onclick="ShowLogin">Entrar</button></footer>
+        }
+        else if (Mode == "verify")
+        {
+            <AccessCode Title="Confirmar contato" Description="Digite o código recebido. Ele expira e só pode ser usado uma vez." Code="@Code" CodeChanged="@((string value) => Code = value)" Busy="@IsBusy" Submit="VerifyContactAsync" Back="ShowLogin" SecondaryLabel="Reenviar código" Secondary="ResendContactAsync" />
+        }
+        else if (Mode == "code-request")
+        {
+            <ChallengeRequest Title="Entrar com código" Identifier="@Identifier" IdentifierChanged="@((string value) => Identifier = value)" Channel="@Channel" ChannelChanged="@((string value) => Channel = value)" Busy="@IsBusy" Submit="RequestLoginCodeAsync" Back="ShowLogin" />
+        }
+        else if (Mode == "code-complete")
+        {
+            <AccessCode Title="Código de acesso" Description="Informe o código enviado para concluir o login." Code="@Code" CodeChanged="@((string value) => Code = value)" Busy="@IsBusy" Submit="CompleteLoginCodeAsync" Back="ShowLogin" />
+        }
+        else if (Mode == "recovery-request")
+        {
+            <ChallengeRequest Title="Recuperar senha" Identifier="@Identifier" IdentifierChanged="@((string value) => Identifier = value)" Channel="@Channel" ChannelChanged="@((string value) => Channel = value)" Busy="@IsBusy" Submit="RequestRecoveryAsync" Back="ShowLogin" />
+        }
+        else if (Mode == "recovery-complete")
+        {
+            <header><p class="eyebrow">Recuperação</p><h2>Defina uma nova senha</h2></header>
+            <div class="access-form">
+                <div class="field"><label for="recovery-code">Código</label><input id="recovery-code" inputmode="numeric" autocomplete="one-time-code" @bind="Code" /></div>
+                <div class="field"><label for="new-password">Nova senha</label><input id="new-password" type="password" autocomplete="new-password" @bind="Password" /></div>
+                <button class="button" type="button" @onclick="CompleteRecoveryAsync" disabled="@IsBusy">Alterar senha</button>
+                <button class="link-button" type="button" @onclick="ShowLogin">Voltar</button>
+            </div>
+        }
+        else if (Mode == "mfa")
+        {
+            <AccessCode Title="Segundo fator" Description="Informe o código do autenticador ou um recovery code." Code="@Code" CodeChanged="@((string value) => Code = value)" Busy="@IsBusy" Submit="CompleteMfaAsync" Back="ShowLogin" />
+        }
+        else if (Mode == "mfa-setup")
+        {
+            <header><p class="eyebrow">Proteção obrigatória</p><h2>Configure o MFA</h2><p>Adicione a chave ao autenticador e confirme com um código.</p></header>
+            <div class="access-form">
+                @if (RecoveryCodes.Count > 0)
+                {
+                    <div class="recovery-codes" role="status"><strong>Guarde estes recovery codes em local seguro. Eles não serão exibidos novamente.</strong>@foreach (var recoveryCode in RecoveryCodes){<code>@recoveryCode</code>}</div>
+                    <button class="button" type="button" @onclick="RedirectCurrentAccountAsync">Continuar para minha área</button>
+                }
+                else if (string.IsNullOrWhiteSpace(AuthenticatorKey))
+                {
+                    <button class="button" type="button" @onclick="BeginMfaSetupAsync" disabled="@IsBusy">Gerar chave segura</button>
+                }
+                else
+                {
+                    <code class="authenticator-key">@AuthenticatorKey</code>
+                    <div class="field"><label for="mfa-code">Código do autenticador</label><input id="mfa-code" autocomplete="one-time-code" inputmode="numeric" @bind="Code" /></div>
+                    <button class="button" type="button" @onclick="CompleteMfaSetupAsync" disabled="@IsBusy">Ativar MFA</button>
+                }
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "result")] public string? Result { get; set; }
+    [SupplyParameterFromQuery(Name = "onboarding")] public string? OnboardingToken { get; set; }
+    [SupplyParameterFromQuery(Name = "estado")] public string? State { get; set; }
+
+    private IJSObjectReference? module;
+    private WebRegistrationOptions Options = new("2026-09", "2026-09", []);
+    private string Mode = "login";
+    private string Identifier = string.Empty;
+    private string Password = string.Empty;
+    private string PasswordConfirmation = string.Empty;
+    private string FullName = string.Empty;
+    private string? Email;
+    private string Phone = "+55";
+    private string TaxId = string.Empty;
+    private string BirthDateText = string.Empty;
+    private string Channel = "sms";
+    private string RoleCode = "patient";
+    private string PostalCode = string.Empty;
+    private string Street = string.Empty;
+    private string Number = string.Empty;
+    private string? Complement;
+    private string District = string.Empty;
+    private string City = string.Empty;
+    private string StateCode = string.Empty;
+    private string ProfessionalTitle = "Dr.";
+    private string LicenseState = string.Empty;
+    private string LicenseNumber = string.Empty;
+    private ushort YearsExperience;
+    private uint PrimarySpecialtyId;
+    private string Website = string.Empty;
+    private string Code = string.Empty;
+    private string? AuthenticatorKey;
+    private readonly List<string> RecoveryCodes = [];
+    private Guid RequestId;
+    private bool RememberMe;
+    private bool TermsAccepted;
+    private bool IsLoading;
+    private bool IsBusy;
+    private bool NoticeIsError;
+    private string? Notice;
+
+    private static readonly (string Code, string Label, string Help)[] Roles =
+    [
+        ("patient", "Paciente", "Agendar e acompanhar atendimentos"),
+        ("doctor", "Médico", "Atender pacientes após aprovação"),
+        ("manager", "Gestor", "Operar a clínica após aprovação"),
+    ];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/identity-access.js");
+            Options = await module.InvokeAsync<WebRegistrationOptions>("get", Backend.BaseUrl.ToString(), "api/v1/auth/registration/options");
+            if (Result == "google_onboarding" && !string.IsNullOrWhiteSpace(OnboardingToken)) Mode = "google-register";
+            else if (Result == "mfa_required") Mode = "mfa";
+            else if (Result == "mfa_enrollment_required") Mode = "mfa-setup";
+            else if (Result == "success") await RedirectCurrentAccountAsync();
+            else if (State == "aguardando-aprovacao") ShowNotice("Cadastro confirmado. A administração da clínica precisa aprovar seu acesso.");
+            else if (State == "sessao-expirada") ShowError("Sua sessão expirou. Entre novamente para continuar.");
+            else if (Result == "explicit_link_required") ShowError("Já existe uma conta com este e-mail. Entre por senha ou código e vincule o Google nas configurações.");
+            else if (!string.IsNullOrWhiteSpace(Result)) ShowError("O acesso pelo Google não foi concluído. Tente novamente.");
+        }
+        catch (JSException exception) { ShowError(exception.Message); }
+        finally { IsLoading = false; StateHasChanged(); }
+    }
+
+    private async Task LoginAsync()
+    {
+        await RunAsync(async () =>
+        {
+            var result = await SendAsync<WebAuthenticationResult>("api/v1/auth/login/password", new { identifier = Identifier, password = Password, rememberMe = RememberMe });
+            await HandleAuthenticationAsync(result);
+        });
+    }
+
+    private async Task PasskeyLoginAsync() => await RunAsync(async () =>
+    {
+        var result = await module!.InvokeAsync<WebAuthenticationResult>("passkeyLogin", Backend.BaseUrl.ToString(), string.IsNullOrWhiteSpace(Identifier) ? null : Identifier);
+        await HandleAuthenticationAsync(result);
+    });
+
+    private async Task RegisterAsync()
+    {
+        if (!DateOnly.TryParseExact(BirthDateText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var birthDate)) { ShowError("Informe a data de nascimento."); return; }
+        if (Mode == "register" && Password != PasswordConfirmation) { ShowError("A confirmação da senha não corresponde."); return; }
+        var address = RoleCode == "patient" ? new { postalCode = PostalCode, street = Street, number = Number, complement = Complement, district = District, city = City, stateCode = StateCode.ToUpperInvariant() } : null;
+        var doctor = RoleCode == "doctor" ? new { professionalTitle = ProfessionalTitle, licenseStateCode = LicenseState.ToUpperInvariant(), licenseNumber = LicenseNumber, yearsExperience = YearsExperience, primarySpecialtyId = PrimarySpecialtyId } : null;
+        await RunAsync(async () =>
+        {
+            if (Mode == "google-register")
+            {
+                var result = await SendAsync<WebRegistrationCompleted>("api/v1/auth/google/register", new { onboardingToken = OnboardingToken, phone = Phone, roleCode = RoleCode, taxId = Digits(TaxId), birthDate, termsAccepted = TermsAccepted, address, doctor, website = Website });
+                if (result.Authenticated) Navigation.NavigateTo(result.Destination, true);
+                else { Mode = "login"; ShowNotice("Cadastro enviado. Médico e Gestor só entram depois da aprovação administrativa."); }
+            }
+            else
+            {
+                var result = await SendAsync<WebChallengeResult>("api/v1/auth/register", new { fullName = FullName, email = string.IsNullOrWhiteSpace(Email) ? null : Email, phone = Phone, password = Password, verificationChannel = Channel, roleCode = RoleCode, taxId = Digits(TaxId), birthDate, termsAccepted = TermsAccepted, address, doctor, website = Website });
+                RequestId = result.RequestId; Code = string.Empty; Mode = "verify"; ShowNotice(result.Message);
+            }
+        });
+    }
+
+    private async Task LookupPostalCodeAsync() => await RunAsync(async () =>
+    {
+        var postalCode = Digits(PostalCode);
+        if (postalCode.Length != 8) throw new InvalidOperationException("Informe um CEP com oito dígitos.");
+        var result = await module!.InvokeAsync<WebPostalCode>("get", Backend.BaseUrl.ToString(), $"api/v1/registration/postal-code/{postalCode}");
+        PostalCode = postalCode; Street = result.Street; Complement = result.Complement; District = result.District; City = result.City; StateCode = result.StateCode;
+        ShowNotice("Endereço localizado. Revise os dados antes de continuar.");
+    });
+
+    private async Task VerifyContactAsync() => await RunAsync(async () => { await SendAsync<object?>("api/v1/auth/contact/verify", new { requestId = RequestId, code = Code }); Mode = "login"; ShowNotice(RoleCode is "doctor" or "manager" ? "Contato confirmado. Aguarde a aprovação administrativa." : "Contato confirmado. Você já pode entrar."); });
+    private async Task ResendContactAsync() => await RunAsync(async () => { var identifier = Channel == "email" ? Email : Phone; var result = await SendAsync<WebChallengeResult>("api/v1/auth/contact/resend", new { identifier, channel = Channel }); RequestId = result.RequestId; Code = string.Empty; ShowNotice(result.Message); });
+    private async Task RequestLoginCodeAsync() => await RequestChallengeAsync("api/v1/auth/login/code/request", "code-complete");
+    private async Task RequestRecoveryAsync() => await RequestChallengeAsync("api/v1/auth/password/recovery/request", "recovery-complete");
+    private async Task RequestChallengeAsync(string path, string nextMode) => await RunAsync(async () => { var result = await SendAsync<WebChallengeResult>(path, new { identifier = Identifier, channel = Channel }); RequestId = result.RequestId; Code = string.Empty; Mode = nextMode; ShowNotice(result.Message); });
+    private async Task CompleteLoginCodeAsync() => await RunAsync(async () => await HandleAuthenticationAsync(await SendAsync<WebAuthenticationResult>("api/v1/auth/login/code/complete", new { requestId = RequestId, code = Code })));
+    private async Task CompleteRecoveryAsync() => await RunAsync(async () => { await SendAsync<object?>("api/v1/auth/password/recovery/complete", new { requestId = RequestId, code = Code, newPassword = Password }); Mode = "login"; ShowNotice("Senha alterada. Entre com a nova senha."); });
+    private async Task CompleteMfaAsync() => await RunAsync(async () => await HandleAuthenticationAsync(await SendAsync<WebAuthenticationResult>("api/v1/auth/mfa/complete-signin", new { totpCode = Code.All(char.IsAsciiDigit) && Code.Length == 6 ? Code : null, recoveryCode = Code.All(char.IsAsciiDigit) && Code.Length == 6 ? null : Code })));
+    private async Task BeginMfaSetupAsync() => await RunAsync(async () => { var value = await SendAsync<MfaSetup>("api/v1/auth/mfa/authenticator/begin", new { }); AuthenticatorKey = value.SharedKey; });
+    private async Task CompleteMfaSetupAsync() => await RunAsync(async () => { var result = await SendAsync<MfaCompletion>("api/v1/auth/mfa/authenticator/complete", new { totpCode = Code }); RecoveryCodes.Clear(); RecoveryCodes.AddRange(result.RecoveryCodes); AuthenticatorKey = null; Code = string.Empty; ShowNotice("MFA ativado. Salve os códigos antes de continuar."); });
+
+    private async Task HandleAuthenticationAsync(WebAuthenticationResult result)
+    {
+        if (result.RequiresMfaEnrollment) { Mode = "mfa-setup"; return; }
+        if (result.RequiresMfa) { Mode = "mfa"; return; }
+        await RedirectCurrentAccountAsync();
+    }
+
+    private async Task RedirectCurrentAccountAsync()
+    {
+        var account = await module!.InvokeAsync<WebCurrentAccount?>("tryGetCurrent", Backend.BaseUrl.ToString());
+        Navigation.NavigateTo(account?.Destination ?? "/acesso", true);
+    }
+
+    private async Task<T> SendAsync<T>(string path, object body) => await module!.InvokeAsync<T>("send", Backend.BaseUrl.ToString(), path, body);
+    private async Task RunAsync(Func<Task> action) { if (IsBusy) return; IsBusy = true; ClearNotice(); try { await action(); } catch (Exception exception) when (exception is JSException or InvalidOperationException) { ShowError(exception.Message); } finally { IsBusy = false; } }
+    private void SetMode(string value) { Mode = value; ClearNotice(); }
+    private void ShowLogin() => SetMode("login");
+    private void ShowRegister() => SetMode("register");
+    private void ShowCodeRequest() => SetMode("code-request");
+    private void ShowRecoveryRequest() => SetMode("recovery-request");
+    private void UpdateBirthDate(ChangeEventArgs args) => BirthDateText = args.Value?.ToString() ?? string.Empty;
+    private void ShowError(string message) { Notice = message; NoticeIsError = true; }
+    private void ShowNotice(string message) { Notice = message; NoticeIsError = false; }
+    private void ClearNotice() { Notice = null; NoticeIsError = false; }
+    private static string Digits(string value) => new(value.Where(char.IsAsciiDigit).ToArray());
+    private sealed record MfaSetup(string SharedKey, string AuthenticatorUri);
+    private sealed record MfaCompletion(IReadOnlyList<string> RecoveryCodes);
+
+    public async ValueTask DisposeAsync() { if (module is not null) try { await module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+}

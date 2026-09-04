@@ -16,5 +16,5 @@ Conteúdo privado será entregue somente após autorização, por download media
 ## Consequências
 
 - CDN não será um atalho para expor prontuários ou anexos médicos.
-- A Fase 10 deverá revalidar a documentação vigente do R2 antes da implementação.
+- A Fase 15 deverá revalidar a documentação vigente do R2 antes da implementação.
 - Migração exige checksums, reconciliação, dual-read temporário e rollback.

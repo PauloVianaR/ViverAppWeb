@@ -23,7 +23,9 @@ public static class IdentityServiceCollectionExtensions
         services.AddScoped<ViverAppCookieEvents>();
         services.AddScoped<IdentityChallengeService>();
         services.AddScoped<IdentityAuditWriter>();
+        services.AddScoped<IdentityNotificationService>();
         services.AddScoped<PasswordTimingProtector>();
+        services.AddSingleton<GoogleOnboardingProtector>();
         if (configuration.GetValue("Authentication:Delivery:Enabled", true))
         {
             var deliveryOptions = IdentityDeliveryOptions.Load(configuration);

@@ -1,0 +1,30 @@
+<header>
+    <p class="eyebrow">Código temporário</p>
+    <h2>@Title</h2>
+    <p>Por segurança, a resposta não informa se a conta existe.</p>
+</header>
+<div class="access-form">
+    <div class="field">
+        <label for="challenge-identifier">E-mail ou telefone</label>
+        <input id="challenge-identifier" autocomplete="username" value="@Identifier" @oninput="UpdateIdentifier" />
+    </div>
+    <div class="field">
+        <label for="challenge-channel">Enviar por</label>
+        <select id="challenge-channel" value="@Channel" @onchange="UpdateChannel"><option value="email">E-mail</option><option value="sms">SMS</option></select>
+    </div>
+    <button class="button" type="button" @onclick="Submit" disabled="@Busy">Enviar código</button>
+    <button class="link-button" type="button" @onclick="Back" disabled="@Busy">Voltar</button>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Identifier { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> IdentifierChanged { get; set; }
+    [Parameter] public string Channel { get; set; } = "email";
+    [Parameter] public EventCallback<string> ChannelChanged { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback Submit { get; set; }
+    [Parameter] public EventCallback Back { get; set; }
+    private Task UpdateIdentifier(ChangeEventArgs args) => IdentifierChanged.InvokeAsync(args.Value?.ToString() ?? string.Empty);
+    private Task UpdateChannel(ChangeEventArgs args) => ChannelChanged.InvokeAsync(args.Value?.ToString() ?? "email");
+}

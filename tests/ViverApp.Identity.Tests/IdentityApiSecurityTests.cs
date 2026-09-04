@@ -106,6 +106,37 @@ public sealed class IdentityApiSecurityTests : IAsyncLifetime
         Assert.Equal("https://localhost:7176/signin-google", query["redirect_uri"].ToString());
     }
 
+    [Fact]
+    public async Task PublicRegistration_NeverAcceptsAdministratorRole()
+    {
+        using var client = CreateClient();
+        using var tokenResponse = await client.GetAsync("/api/v1/auth/antiforgery");
+        using var tokenDocument = JsonDocument.Parse(await tokenResponse.Content.ReadAsStringAsync());
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/register")
+        {
+            Content = JsonContent.Create(new
+            {
+                fullName = "Pessoa Teste",
+                email = "pessoa@example.com",
+                phone = "+5511999999999",
+                password = "Senha-Forte-2026!",
+                verificationChannel = "email",
+                roleCode = "administrator",
+                taxId = "52998224725",
+                birthDate = "1990-01-01",
+                termsAccepted = true,
+                address = (object?)null,
+                doctor = (object?)null,
+            }),
+        };
+        request.Headers.Add("X-CSRF-TOKEN", tokenDocument.RootElement.GetProperty("requestToken").GetString());
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.DoesNotContain("administrator", await response.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+    }
+
     private HttpClient CreateClient()
     {
         return factory.CreateClient(new WebApplicationFactoryClientOptions

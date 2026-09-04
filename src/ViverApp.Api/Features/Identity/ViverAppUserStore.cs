@@ -57,9 +57,12 @@ public sealed class ViverAppUserStore(
             Email = user.Email,
             NormalizedEmail = user.NormalizedEmail,
             PhoneE164 = user.PhoneNumber,
+            TaxId = user.TaxId,
+            BirthDate = user.BirthDate,
             PasswordHash = user.PasswordHash,
             EmailVerified = user.EmailConfirmed,
             PhoneVerified = user.PhoneNumberConfirmed,
+            PreferredRecoveryChannel = user.PreferredRecoveryChannel,
             SecurityStamp = securityStamp,
             FailedLoginCount = 0,
             CreatedAtUtc = now,
@@ -113,9 +116,12 @@ public sealed class ViverAppUserStore(
         account.Email = user.Email;
         account.NormalizedEmail = user.NormalizedEmail;
         account.PhoneE164 = user.PhoneNumber;
+        account.TaxId = user.TaxId;
+        account.BirthDate = user.BirthDate;
         account.PasswordHash = user.PasswordHash;
         account.EmailVerified = user.EmailConfirmed;
         account.PhoneVerified = user.PhoneNumberConfirmed;
+        account.PreferredRecoveryChannel = user.PreferredRecoveryChannel;
         account.SecurityStamp = SecurityStampToBytes(user.SecurityStamp);
         account.FailedLoginCount = checked((ushort)Math.Clamp(user.AccessFailedCount, 0, ushort.MaxValue));
         account.LockoutEndUtc = user.LockoutEnd?.UtcDateTime;
@@ -815,6 +821,9 @@ public sealed class ViverAppUserStore(
             EmailConfirmed = account.EmailVerified,
             PhoneNumber = account.PhoneE164,
             PhoneNumberConfirmed = account.PhoneVerified,
+            TaxId = account.TaxId,
+            BirthDate = account.BirthDate,
+            PreferredRecoveryChannel = account.PreferredRecoveryChannel,
             PasswordHash = account.PasswordHash,
             SecurityStamp = Convert.ToHexString(account.SecurityStamp),
             AccessFailedCount = account.FailedLoginCount,

@@ -1,0 +1,30 @@
+<header>
+    <p class="eyebrow">Código de segurança</p>
+    <h2>@Title</h2>
+    <p>@Description</p>
+</header>
+<div class="access-form">
+    <div class="field">
+        <label for="access-code">Código</label>
+        <input id="access-code" inputmode="numeric" autocomplete="one-time-code" maxlength="20" value="@Code" @oninput="UpdateCode" />
+    </div>
+    <button class="button" type="button" @onclick="Submit" disabled="@Busy">Confirmar</button>
+    @if (!string.IsNullOrWhiteSpace(SecondaryLabel))
+    {
+        <button class="button button--secondary" type="button" @onclick="Secondary" disabled="@Busy">@SecondaryLabel</button>
+    }
+    <button class="link-button" type="button" @onclick="Back" disabled="@Busy">Voltar</button>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Description { get; set; } = string.Empty;
+    [Parameter] public string Code { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> CodeChanged { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback Submit { get; set; }
+    [Parameter] public EventCallback Back { get; set; }
+    [Parameter] public string? SecondaryLabel { get; set; }
+    [Parameter] public EventCallback Secondary { get; set; }
+    private Task UpdateCode(ChangeEventArgs args) => CodeChanged.InvokeAsync(args.Value?.ToString() ?? string.Empty);
+}

@@ -214,7 +214,7 @@ Cada fase deve:
 
 ## Fase 9 — PagBank Checkout em produção
 
-**Estado:** implementada em `codex/fase-09-pagbank-checkout`; ainda não integrada à `main`. A ativação externa permanece deliberadamente pendente de ambiente público e autorização explícita.
+**Estado:** concluída e integrada à `main` no commit `701dae4`. A ativação externa permanece deliberadamente pendente de ambiente público e autorização explícita.
 
 **Objetivo:** reimplementar cobrança sem confiar no navegador nem no comportamento frágil legado.
 
@@ -234,9 +234,39 @@ Cada fase deve:
 
 **Artefatos:** [índice da Fase 9](fase-09/README.md), [integração e estados](fase-09/INTEGRACAO-E-ESTADOS.md), [segurança e idempotência](fase-09/SEGURANCA-E-IDEMPOTENCIA.md) e [runbook de produção](fase-09/RUNBOOK-PRODUCAO.md).
 
-## Fase 10 — Anexos, Cloudflare R2, domínio e CDN
+## Fase 10 — Acesso e fundação compartilhada
 
-**Objetivo:** migrar documentos e mídia para armazenamento seguro e entrega eficiente.
+**Estado:** concluída na branch `codex/fase-10-acesso-fundacao-compartilhada`; aguardando integração à `main`.
+
+**Plano detalhado:** [Acesso e fundação compartilhada](FASE-10-ACESSO-E-FUNDACAO-COMPARTILHADA.md).
+
+## Fase 11 — Experiência completa do Paciente
+
+**Estado:** planejada; implementação ainda não iniciada.
+
+**Plano detalhado:** [Experiência completa do Paciente](FASE-11-EXPERIENCIA-PACIENTE.md).
+
+## Fase 12 — Experiência completa do Médico
+
+**Estado:** planejada; implementação ainda não iniciada.
+
+**Plano detalhado:** [Experiência completa do Médico](FASE-12-EXPERIENCIA-MEDICO.md).
+
+## Fase 13 — Experiência completa do Gestor
+
+**Estado:** planejada; implementação ainda não iniciada.
+
+**Plano detalhado:** [Experiência completa do Gestor](FASE-13-EXPERIENCIA-GESTOR.md).
+
+## Fase 14 — Experiência completa do Administrador e fechamento da paridade
+
+**Estado:** planejada; implementação ainda não iniciada.
+
+**Plano detalhado:** [Experiência completa do Administrador](FASE-14-EXPERIENCIA-ADMINISTRADOR.md).
+
+## Fase 15 — Anexos, Cloudflare R2, domínio e CDN
+
+**Objetivo:** substituir o armazenamento transitório usado pela paridade funcional por Cloudflare R2, migrar documentos/mídia legados e entregar objetos com segurança e eficiência.
 
 **Entregas:**
 
@@ -251,9 +281,9 @@ Cada fase deve:
 
 **Saída:** 100% dos objetos reconciliados e acesso privado comprovado antes de desligar o storage antigo.
 
-## Fase 11 — E-mail, SMS e jobs dentro da API
+## Fase 16 — E-mail, SMS e jobs dentro da API
 
-**Objetivo:** substituir os workers separados por processamento durável e observável.
+**Objetivo:** ampliar os envios já visíveis na experiência Web e substituir definitivamente os workers separados por processamento durável e observável.
 
 **Entregas:**
 
@@ -268,9 +298,9 @@ Cada fase deve:
 
 **Saída:** workers legados deixam de ser necessários somente após execução paralela controlada e reconciliação.
 
-## Fase 12 — Videochamada segura
+## Fase 17 — Videochamada segura
 
-**Objetivo:** incorporar a sinalização do VideoHub e endurecer a jornada WebRTC.
+**Objetivo:** levar as jornadas WebRTC funcionais das Fases 11 e 12 a uma sinalização distribuída, resiliente e pronta para produção.
 
 **Entregas:**
 
@@ -285,9 +315,9 @@ Cada fase deve:
 
 **Saída:** somente participantes autorizados sinalizam na sala e a solução escala além de uma instância.
 
-## Fase 13 — Pagamentos internos, premium e documentos
+## Fase 18 — Pagamentos internos, premium e documentos
 
-**Objetivo:** reconstruir histórico financeiro e fluxo de usuário premium.
+**Objetivo:** consolidar, reconciliar e preparar para produção o histórico financeiro, o fluxo Premium e seus documentos implementados funcionalmente nas Fases 11 a 14.
 
 **Entregas:**
 
@@ -300,9 +330,9 @@ Cada fase deve:
 
 **Saída:** invariantes financeiras e de premium cobertas por testes e relatórios de reconciliação.
 
-## Fase 14 — Administração, analytics e operação
+## Fase 19 — Administração, analytics e operação
 
-**Objetivo:** reconstruir o backoffice com controles elevados.
+**Objetivo:** endurecer o backoffice e os analytics funcionais da Fase 14 com controles elevados e recursos de operação de produção.
 
 **Entregas:**
 
@@ -315,7 +345,7 @@ Cada fase deve:
 
 **Saída:** trilha auditável e testes de elevação horizontal/vertical de privilégio.
 
-## Fase 15 — Robustez, desempenho e segurança ofensiva
+## Fase 20 — Robustez, desempenho e segurança ofensiva
 
 **Objetivo:** preparar o conjunto funcional para tráfego e ataques reais.
 
@@ -324,14 +354,14 @@ Cada fase deve:
 - testes de carga para login, agenda, checkout, SignalR e workers;
 - otimização de queries/índices medida por evidência;
 - testes de caos de provedores e retomada de jobs;
-- DAST, revisão OWASP ASVS, pentest independente e correção dos achados;
+- DAST convencional, revisão OWASP ASVS, revisão humana/independente e correção dos achados antes do pentest Strix;
 - SBOM, dependências fixadas, assinatura/proveniência dos artefatos e pipeline de atualização;
 - revisão LGPD, acessibilidade e compatibilidade de navegadores;
 - SLOs, alertas acionáveis e runbooks.
 
 **Saída:** nenhum achado crítico/alto aberto e metas de desempenho/SLO atendidas.
 
-## Fase 16 — Infraestrutura, Cloudflare e CI/CD
+## Fase 21 — Infraestrutura, Cloudflare e CI/CD
 
 **Objetivo:** publicar sem Azure, com entrega repetível e origem protegida.
 
@@ -347,7 +377,13 @@ Cada fase deve:
 
 **Saída:** ensaio de deploy/rollback/restore aprovado. Compra e alterações externas exigem autorização do usuário.
 
-## Fase 17 — Migração final e lançamento gradual
+## Fase 22 — Pentest autorizado com Strix
+
+**Estado:** planejada para a release candidate, depois do staging endurecido e antes da migração final.
+
+**Plano detalhado:** [Pentest autorizado com Strix](FASE-22-PENTEST-COM-STRIX.md).
+
+## Fase 23 — Migração final e lançamento gradual
 
 **Objetivo:** migrar dados e usuários com risco controlado.
 
@@ -363,7 +399,7 @@ Cada fase deve:
 
 **Saída:** reconciliação assinada, métricas saudáveis e rollback ainda possível.
 
-## Fase 18 — Desativação controlada do legado
+## Fase 24 — Desativação controlada do legado
 
 **Objetivo:** encerrar componentes antigos somente depois da estabilidade comprovada.
 
@@ -381,9 +417,10 @@ Cada fase deve:
 
 - **Marco A — Base confiável:** Fases 0 a 4.
 - **Marco B — MVP clínico web:** Fases 5 a 8.
-- **Marco C — Ecossistema integrado:** Fases 9 a 13.
-- **Marco D — Produção endurecida:** Fases 14 a 17.
-- **Encerramento:** Fase 18.
+- **Marco C — Paridade funcional por perfil:** Fases 9 a 14.
+- **Marco D — Ecossistema integrado:** Fases 15 a 19.
+- **Marco E — Produção endurecida e validada:** Fases 20 a 23.
+- **Encerramento:** Fase 24.
 
 ## Decisões que deverão ser confirmadas com o proprietário
 
@@ -393,4 +430,5 @@ Cada fase deve:
 - provedor definitivo de TURN e eventual substituição futura, se necessária, do SMTP ou SMSBarato já adotados;
 - necessidade de gravação de chamadas (recomendação inicial: não gravar);
 - política LGPD, prazos de retenção e responsáveis administrativos;
+- provedor LLM, orçamento, execução local/cloud e escopo escrito do pentest Strix;
 - estratégia de recuperação para contas cujo segredo legado não possa ser migrado com segurança.

@@ -54,6 +54,12 @@ builder.Services.AddViverAppDatabase(builder.Configuration);
 builder.Services.AddViverAppIdentity(builder.Configuration);
 builder.Services.AddViverAppPayments(builder.Configuration, builder.Environment);
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddHttpClient("PostalCodeLookup", client =>
+{
+    client.BaseAddress = new Uri("https://viacep.com.br/");
+    client.Timeout = TimeSpan.FromSeconds(4);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("ViverAppWeb/1.0");
+});
 builder.Services.AddScoped<IPatientSchedulingAuditWriter, PatientSchedulingAuditWriter>();
 builder.Services.AddScoped<PatientSchedulingService>();
 builder.Services.AddScoped<IClinicalOperationsAuditWriter, ClinicalOperationsAuditWriter>();

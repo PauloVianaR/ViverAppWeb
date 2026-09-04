@@ -20,6 +20,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<AccountChallenge> AccountChallenges { get; set; }
 
+    public virtual DbSet<AccountConsent> AccountConsents { get; set; }
+
     public virtual DbSet<AccountPasskey> AccountPasskeys { get; set; }
 
     public virtual DbSet<AccountRecoveryCode> AccountRecoveryCodes { get; set; }
@@ -90,7 +92,12 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => e.PhoneE164, "ux_accounts_phone_e164").IsUnique();
 
+            entity.HasIndex(e => e.TaxId, "ux_accounts_tax_id").IsUnique();
+
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.BirthDate)
+                .HasColumnType("date")
+                .HasColumnName("birth_date");
             entity.Property(e => e.CreatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("created_at_utc");
@@ -135,6 +142,10 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(30)
                 .HasDefaultValueSql("'pending_confirmation'")
                 .HasColumnName("status_code");
+            entity.Property(e => e.TaxId)
+                .HasMaxLength(11)
+                .IsFixedLength()
+                .HasColumnName("tax_id");
             entity.Property(e => e.UpdatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");
@@ -254,6 +265,31 @@ public partial class ViverAppDbContext : DbContext
             entity.HasOne(d => d.Account).WithMany(p => p.AccountChallenges)
                 .HasForeignKey(d => d.AccountId)
                 .HasConstraintName("fk_account_challenges_account");
+        });
+
+        modelBuilder.Entity<AccountConsent>(entity =>
+        {
+            entity.HasKey(e => e.AccountId).HasName("PRIMARY");
+
+            entity.ToTable("account_consents");
+
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.AcceptedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("accepted_at_utc");
+            entity.Property(e => e.PrivacyVersion)
+                .HasMaxLength(30)
+                .HasColumnName("privacy_version");
+            entity.Property(e => e.SourceCode)
+                .HasMaxLength(20)
+                .HasColumnName("source_code");
+            entity.Property(e => e.TermsVersion)
+                .HasMaxLength(30)
+                .HasColumnName("terms_version");
+
+            entity.HasOne(d => d.Account).WithOne(p => p.AccountConsent)
+                .HasForeignKey<AccountConsent>(d => d.AccountId)
+                .HasConstraintName("fk_account_consents_account");
         });
 
         modelBuilder.Entity<AccountPasskey>(entity =>
@@ -828,12 +864,17 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(2)
                 .IsFixedLength()
                 .HasColumnName("license_state_code");
+            entity.Property(e => e.ProfessionalTitle)
+                .HasMaxLength(4)
+                .HasDefaultValueSql("'Dr.'")
+                .HasColumnName("professional_title");
             entity.Property(e => e.RowVersion)
                 .HasDefaultValueSql("'1'")
                 .HasColumnName("row_version");
             entity.Property(e => e.UpdatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");
+            entity.Property(e => e.YearsExperience).HasColumnName("years_experience");
 
             entity.HasOne(d => d.Account).WithOne(p => p.DoctorProfile)
                 .HasForeignKey<DoctorProfile>(d => d.AccountId)

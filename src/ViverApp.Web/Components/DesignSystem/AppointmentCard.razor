@@ -1,0 +1,32 @@
+@using System.Globalization
+
+<article class="surface appointment-card-shared">
+    <div class="appointment-card-shared__date" aria-label="@LongDate(Date)"><strong>@Date.Day.ToString("00")</strong><span>@Date.ToString("MMM", Culture).TrimEnd('.')</span></div>
+    <div class="appointment-card-shared__body">
+        <div class="appointment-card-shared__title"><h3>@Title</h3><span class="badge @StatusTone">@StatusLabel</span>@if (!string.IsNullOrWhiteSpace(PaymentStatus)){<span class="badge">@PaymentStatus</span>}</div>
+        <p>@Participant • @StartsAt.ToString("HH:mm")–@EndsAt.ToString("HH:mm")</p>
+        <small>@Modality • @Timezone • #@Id</small>
+        @if (Rescheduled) { <span class="badge badge--warning">Reagendado</span> }
+        @if (!string.IsNullOrWhiteSpace(Notes)) { <p class="appointment-card-shared__notes">@Notes</p> }
+    </div>
+    @if (Actions is not null) { <div class="appointment-card-shared__actions">@Actions</div> }
+</article>
+
+@code {
+    private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("pt-BR");
+    [Parameter] public ulong Id { get; set; }
+    [Parameter] public DateOnly Date { get; set; }
+    [Parameter] public TimeOnly StartsAt { get; set; }
+    [Parameter] public TimeOnly EndsAt { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Participant { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Modality { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Timezone { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string StatusLabel { get; set; } = string.Empty;
+    [Parameter] public string StatusTone { get; set; } = "badge--warning";
+    [Parameter] public string? PaymentStatus { get; set; }
+    [Parameter] public bool Rescheduled { get; set; }
+    [Parameter] public string? Notes { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+    private static string LongDate(DateOnly value) => Culture.TextInfo.ToTitleCase(value.ToString("dddd, dd 'de' MMMM", Culture));
+}

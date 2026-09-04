@@ -7,9 +7,46 @@ namespace ViverApp.Api.Features.Identity;
 public sealed record RegisterRequest(
     [param: Required, StringLength(200, MinimumLength = 3)] string FullName,
     [param: EmailAddress, StringLength(254)] string? Email,
-    [param: StringLength(16)] string? Phone,
+    [param: Required, StringLength(16)] string Phone,
     [param: Required, StringLength(128, MinimumLength = 12)] string Password,
-    [param: Required, RegularExpression("^(email|sms)$")] string VerificationChannel);
+    [param: Required, RegularExpression("^(email|sms)$")] string VerificationChannel,
+    [param: Required, RegularExpression("^(patient|doctor|manager)$")] string RoleCode,
+    [param: Required, RegularExpression("^[0-9]{11}$")] string TaxId,
+    DateOnly BirthDate,
+    bool TermsAccepted,
+    RegistrationAddressRequest? Address,
+    DoctorRegistrationRequest? Doctor,
+    [param: StringLength(100)] string? Website = null);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record RegistrationAddressRequest(
+    [param: Required, RegularExpression("^[0-9]{8}$")] string PostalCode,
+    [param: Required, StringLength(200, MinimumLength = 2)] string Street,
+    [param: Required, StringLength(20, MinimumLength = 1)] string Number,
+    [param: StringLength(100)] string? Complement,
+    [param: Required, StringLength(100, MinimumLength = 2)] string District,
+    [param: Required, StringLength(100, MinimumLength = 2)] string City,
+    [param: Required, RegularExpression("^[A-Z]{2}$")] string StateCode);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record DoctorRegistrationRequest(
+    [param: Required, RegularExpression("^(Dr\\.|Dra\\.)$")] string ProfessionalTitle,
+    [param: Required, RegularExpression("^[A-Z]{2}$")] string LicenseStateCode,
+    [param: Required, StringLength(30, MinimumLength = 1)] string LicenseNumber,
+    [param: Range(0, 80)] ushort YearsExperience,
+    [param: Range(typeof(uint), "1", "4294967295")] uint PrimarySpecialtyId);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record GoogleRegistrationRequest(
+    [param: Required, StringLength(8192)] string OnboardingToken,
+    [param: Required, StringLength(16)] string Phone,
+    [param: Required, RegularExpression("^(patient|doctor|manager)$")] string RoleCode,
+    [param: Required, RegularExpression("^[0-9]{11}$")] string TaxId,
+    DateOnly BirthDate,
+    bool TermsAccepted,
+    RegistrationAddressRequest? Address,
+    DoctorRegistrationRequest? Doctor,
+    [param: StringLength(100)] string? Website = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record IdentifierChallengeRequest(
@@ -60,10 +97,25 @@ public sealed record AuthenticationResponse(
 public sealed record CurrentAccountResponse(
     string Id,
     string Role,
+    string Status,
     string FullName,
     bool EmailVerified,
     bool PhoneVerified,
-    bool MfaSatisfied);
+    bool MfaSatisfied,
+    string Destination);
+
+public sealed record RegistrationOption(uint Id, string Name);
+
+public sealed record RegistrationOptionsResponse(
+    string TermsVersion,
+    string PrivacyVersion,
+    IReadOnlyList<RegistrationOption> Specialties);
+
+public sealed record RegistrationCompletedResponse(
+    string Status,
+    string Role,
+    bool Authenticated,
+    string Destination);
 
 public sealed record SessionResponse(
     Guid Id,
@@ -73,3 +125,8 @@ public sealed record SessionResponse(
     DateTime CreatedAtUtc,
     DateTime ExpiresAtUtc,
     DateTime? LastSeenAtUtc);
+
+public sealed record PasskeyResponse(
+    string CredentialId,
+    string DisplayName,
+    DateTime CreatedAtUtc);

@@ -19,7 +19,7 @@ Esta fase transforma os shells de médico e gestor em uma operação clínica fu
 ## Limites deliberados
 
 - consultas pendentes não podem ser concluídas; a confirmação financeira pertence à Fase 9;
-- anexos e armazenamento de documentos pertencem à Fase 10;
+- a experiência funcional de anexos entra nas Fases 11 e 12; migração e armazenamento definitivo no Cloudflare R2 pertencem à Fase 15;
 - o relatório publicado não pode ser editado silenciosamente; eventual retificação exigirá um fluxo próprio e auditável;
 - gestor e administrador veem metadados do relatório, nunca seu conteúdo;
 - não existe tenancy ou vínculo multiclínica.

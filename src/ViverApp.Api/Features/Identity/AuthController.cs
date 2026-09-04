@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
+using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 using ViverApp.Security;
 
 namespace ViverApp.Api.Features.Identity;
@@ -24,6 +25,7 @@ public sealed class AuthController(
     IdentityAuditWriter auditWriter,
     IdentitySecurityOptions securityOptions,
     PasswordTimingProtector passwordTimingProtector,
+    GoogleOnboardingProtector googleOnboardingProtector,
     ViverAppDbContext database,
     IAntiforgery antiforgery) : ControllerBase
 {
@@ -45,21 +47,38 @@ public sealed class AuthController(
         [FromBody] RegisterRequest request,
         CancellationToken cancellationToken)
     {
+        if (!string.IsNullOrWhiteSpace(request.Website))
+        {
+            await AddEnumerationDelayAsync(cancellationToken);
+            return Accepted(new ChallengeAcceptedResponse(
+                IdentityChallengeService.CreateOpaqueRequestId(),
+                GenericChallengeMessage));
+        }
+
         var email = string.IsNullOrWhiteSpace(request.Email)
             ? null
             : IdentifierNormalizer.NormalizeEmail(request.Email);
-        var phone = string.IsNullOrWhiteSpace(request.Phone)
-            ? null
-            : IdentifierNormalizer.NormalizePhone(request.Phone);
+        var phone = IdentifierNormalizer.NormalizePhone(request.Phone);
         if ((request.Email is not null && email is null)
-            || (request.Phone is not null && phone is null)
-            || (email is null && phone is null)
+            || phone is null
             || (request.VerificationChannel == "email" && email is null)
-            || (request.VerificationChannel == "sms" && phone is null))
+            || !await ValidateRegistrationAsync(
+                request.RoleCode,
+                request.TaxId,
+                request.BirthDate,
+                request.TermsAccepted,
+                request.Address,
+                request.Doctor,
+                cancellationToken))
         {
+            if (!ModelState.IsValid)
+            {
+                return ValidationProblem(ModelState);
+            }
+
             return InvalidRequest(new Dictionary<string, string[]>
             {
-                ["contact"] = ["Informe um e-mail válido e/ou telefone no formato E.164."],
+                ["contact"] = ["Informe telefone no formato E.164 e, quando escolhido, um e-mail válido."],
             });
         }
 
@@ -68,12 +87,15 @@ public sealed class AuthController(
         {
             UserName = email ?? phone,
             NormalizedUserName = email ?? phone,
-            RoleCode = ViverAppRoles.Patient,
+            RoleCode = request.RoleCode,
             StatusCode = "pending_confirmation",
             FullName = request.FullName.Trim(),
             Email = request.Email?.Trim(),
             NormalizedEmail = email,
             PhoneNumber = phone,
+            TaxId = request.TaxId,
+            BirthDate = request.BirthDate.ToDateTime(TimeOnly.MinValue),
+            PreferredRecoveryChannel = request.VerificationChannel,
         };
         var created = await userManager.CreateAsync(user, request.Password);
         if (!created.Succeeded)
@@ -90,7 +112,29 @@ public sealed class AuthController(
             return InvalidRequest(ToValidationErrors(created));
         }
 
-        var destination = request.VerificationChannel == "email" ? email! : phone!;
+        try
+        {
+            await AddRegistrationDetailsAsync(
+                user.Id,
+                request.RoleCode,
+                request.TaxId,
+                request.BirthDate,
+                request.Address,
+                request.Doctor,
+                "local",
+                cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Não foi possível concluir o cadastro com os dados informados.",
+            });
+        }
+
+        var destination = request.VerificationChannel == "email" ? email! : phone;
         var requestId = await challengeService.CreateAsync(
             user,
             "contact_verification",
@@ -104,6 +148,19 @@ public sealed class AuthController(
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return Accepted(new ChallengeAcceptedResponse(requestId, GenericChallengeMessage));
+    }
+
+    [AllowAnonymous]
+    [HttpGet("registration/options")]
+    public async Task<ActionResult<RegistrationOptionsResponse>> RegistrationOptions(
+        CancellationToken cancellationToken)
+    {
+        var specialties = await database.Specialties.AsNoTracking()
+            .Where(item => item.IsActive)
+            .OrderBy(item => item.Name)
+            .Select(item => new RegistrationOption(item.Id, item.Name))
+            .ToListAsync(cancellationToken);
+        return Ok(new RegistrationOptionsResponse("2026-09", "2026-09", specialties));
     }
 
     [AllowAnonymous]
@@ -376,10 +433,12 @@ public sealed class AuthController(
         return Ok(new CurrentAccountResponse(
             user.Id.ToString(),
             user.RoleCode,
+            user.StatusCode,
             user.FullName,
             user.EmailConfirmed,
             user.PhoneNumberConfirmed,
-            User.HasClaim(ViverAppClaimTypes.MfaSatisfied, bool.TrueString)));
+            User.HasClaim(ViverAppClaimTypes.MfaSatisfied, bool.TrueString),
+            RoleDestination(user.RoleCode)));
     }
 
     [Authorize(Policy = ViverAppPolicies.MfaEnrollment)]
@@ -508,6 +567,141 @@ public sealed class AuthController(
 
     [AllowAnonymous]
     [EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
+    [HttpPost("google/register")]
+    public async Task<ActionResult<RegistrationCompletedResponse>> CompleteGoogleRegistration(
+        [FromBody] GoogleRegistrationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(request.Website)
+            || !googleOnboardingProtector.TryUnprotect(request.OnboardingToken, out var identity))
+        {
+            return InvalidRequest(new Dictionary<string, string[]>
+            {
+                ["onboardingToken"] = ["O cadastro Google expirou. Inicie novamente."],
+            });
+        }
+
+        var phone = IdentifierNormalizer.NormalizePhone(request.Phone);
+        var normalizedEmail = IdentifierNormalizer.NormalizeEmail(identity!.Email);
+        if (phone is null
+            || normalizedEmail is null
+            || !await ValidateRegistrationAsync(
+                request.RoleCode,
+                request.TaxId,
+                request.BirthDate,
+                request.TermsAccepted,
+                request.Address,
+                request.Doctor,
+                cancellationToken))
+        {
+            if (!ModelState.IsValid)
+            {
+                return ValidationProblem(ModelState);
+            }
+
+            return InvalidRequest(new Dictionary<string, string[]>
+            {
+                ["phone"] = ["Informe um telefone válido no formato E.164."],
+            });
+        }
+
+        if (await userManager.FindByLoginAsync(GoogleDefaults.AuthenticationScheme, identity.ProviderSubject) is not null
+            || await userManager.FindByEmailAsync(normalizedEmail) is not null)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Esta identidade Google já está vinculada. Entre na conta ou faça o vínculo explícito.",
+            });
+        }
+
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        var status = request.RoleCode is ViverAppRoles.Doctor or ViverAppRoles.Manager
+            ? "pending_approval"
+            : "active";
+        var user = new ViverAppUser
+        {
+            UserName = identity.Email,
+            NormalizedUserName = normalizedEmail,
+            RoleCode = request.RoleCode,
+            StatusCode = status,
+            FullName = identity.FullName.Trim(),
+            Email = identity.Email.Trim(),
+            NormalizedEmail = normalizedEmail,
+            EmailConfirmed = true,
+            PhoneNumber = phone,
+            TaxId = request.TaxId,
+            BirthDate = request.BirthDate.ToDateTime(TimeOnly.MinValue),
+            PreferredRecoveryChannel = "email",
+        };
+        var created = await userManager.CreateAsync(user);
+        if (!created.Succeeded)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Não foi possível concluir o cadastro com os dados informados.",
+            });
+        }
+
+        var login = new UserLoginInfo(
+            GoogleDefaults.AuthenticationScheme,
+            identity.ProviderSubject,
+            GoogleDefaults.DisplayName);
+        var linked = await userManager.AddLoginAsync(user, login);
+        if (!linked.Succeeded)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return Conflict();
+        }
+
+        try
+        {
+            await AddRegistrationDetailsAsync(
+                user.Id,
+                request.RoleCode,
+                request.TaxId,
+                request.BirthDate,
+                request.Address,
+                request.Doctor,
+                "google",
+                cancellationToken);
+            await MarkGoogleEmailVerifiedAsync(
+                user.Id,
+                identity.ProviderSubject,
+                identity.Email,
+                cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Não foi possível concluir o cadastro com os dados informados.",
+            });
+        }
+
+        await auditWriter.WriteAsync("identity.google_account_registered", user.Id, null, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        var authenticated = status == "active";
+        if (authenticated)
+        {
+            await sessionService.SignInAsync(user, "google", true, false, cancellationToken);
+        }
+
+        await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+        return Ok(new RegistrationCompletedResponse(
+            status,
+            request.RoleCode,
+            authenticated,
+            authenticated ? RoleDestination(request.RoleCode) : "/acesso?estado=aguardando-aprovacao"));
+    }
+
+    [AllowAnonymous]
+    [EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
     [HttpGet("google/start")]
     public ActionResult StartGoogleLogin()
     {
@@ -549,30 +743,12 @@ public sealed class AuthController(
                 return Redirect(securityOptions.BuildWebReturnUrl("explicit_link_required"));
             }
 
-            await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
-            user = new ViverAppUser
-            {
-                UserName = email,
-                NormalizedUserName = normalizedEmail,
-                RoleCode = ViverAppRoles.Patient,
-                StatusCode = "active",
-                FullName = info.Principal.FindFirstValue(ClaimTypes.Name) ?? "Usuário",
-                Email = email,
-                NormalizedEmail = normalizedEmail,
-                EmailConfirmed = true,
-            };
-            var created = await userManager.CreateAsync(user);
-            var loginAdded = created.Succeeded
-                ? await userManager.AddLoginAsync(user, info)
-                : IdentityResult.Failed();
-            if (!created.Succeeded || !loginAdded.Succeeded)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
-                return Redirect(securityOptions.BuildWebReturnUrl("google_failed"));
-            }
-
-            await transaction.CommitAsync(cancellationToken);
+            var token = googleOnboardingProtector.Protect(
+                info.ProviderKey,
+                email!,
+                info.Principal.FindFirstValue(ClaimTypes.Name) ?? "Usuário");
+            await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+            return Redirect(securityOptions.BuildWebReturnUrl("google_onboarding", "onboarding", token));
         }
 
         await MarkGoogleEmailVerifiedAsync(user.Id, info.ProviderKey, email!, cancellationToken);
@@ -596,7 +772,7 @@ public sealed class AuthController(
 
     [Authorize]
     [EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
-    [HttpPost("google/link/start")]
+    [HttpGet("google/link/start")]
     public ActionResult StartGoogleLink()
     {
         if (!securityOptions.GoogleEnabled)
@@ -693,6 +869,24 @@ public sealed class AuthController(
             assertion.User.RoleCode,
             requiresMfa,
             assertion.User.RoleCode == ViverAppRoles.Administrator && !twoFactorEnabled));
+    }
+
+    [Authorize]
+    [EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
+    [HttpGet("passkeys")]
+    public async Task<ActionResult<IReadOnlyList<PasskeyResponse>>> ListPasskeys(CancellationToken cancellationToken)
+    {
+        var user = await userManager.GetUserAsync(User);
+        if (user is null) return Unauthorized();
+        var items = await database.AccountPasskeys.AsNoTracking()
+            .Where(item => item.AccountId == user.Id)
+            .OrderBy(item => item.CreatedAtUtc)
+            .Select(item => new PasskeyResponse(
+                WebEncoders.Base64UrlEncode(item.CredentialId),
+                item.DisplayName ?? "Chave de acesso",
+                item.CreatedAtUtc))
+            .ToListAsync(cancellationToken);
+        return Ok(items);
     }
 
     [Authorize]
@@ -850,6 +1044,156 @@ public sealed class AuthController(
     {
         return Ok(new { result });
     }
+
+    private async Task<bool> ValidateRegistrationAsync(
+        string roleCode,
+        string taxId,
+        DateOnly birthDate,
+        bool termsAccepted,
+        RegistrationAddressRequest? address,
+        DoctorRegistrationRequest? doctor,
+        CancellationToken cancellationToken)
+    {
+        if (roleCode is not (ViverAppRoles.Patient or ViverAppRoles.Doctor or ViverAppRoles.Manager))
+        {
+            ModelState.AddModelError(nameof(roleCode), "O papel escolhido não permite cadastro público.");
+        }
+
+        if (!BrazilianDocumentValidator.IsValidCpf(taxId))
+        {
+            ModelState.AddModelError(nameof(taxId), "Informe um CPF válido.");
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (birthDate < new DateOnly(1900, 1, 1) || birthDate > today)
+        {
+            ModelState.AddModelError(nameof(birthDate), "Informe uma data de nascimento válida.");
+        }
+        else if (roleCode is ViverAppRoles.Doctor or ViverAppRoles.Manager
+            && birthDate > today.AddYears(-18))
+        {
+            ModelState.AddModelError(nameof(birthDate), "Médicos e gestores devem ser maiores de 18 anos.");
+        }
+
+        if (!termsAccepted)
+        {
+            ModelState.AddModelError(nameof(termsAccepted), "O aceite dos termos e do aviso de privacidade é obrigatório.");
+        }
+
+        if (roleCode == ViverAppRoles.Patient)
+        {
+            if (address is null)
+            {
+                ModelState.AddModelError(nameof(address), "O endereço completo é obrigatório para pacientes.");
+            }
+
+            if (doctor is not null)
+            {
+                ModelState.AddModelError(nameof(doctor), "Dados médicos não são aceitos para pacientes.");
+            }
+        }
+        else if (address is not null)
+        {
+            ModelState.AddModelError(nameof(address), "Endereço residencial não é aceito neste cadastro profissional.");
+        }
+
+        if (roleCode == ViverAppRoles.Doctor)
+        {
+            if (doctor is null)
+            {
+                ModelState.AddModelError(nameof(doctor), "Os dados profissionais são obrigatórios para médicos.");
+            }
+            else if (!await database.Specialties.AsNoTracking().AnyAsync(
+                item => item.Id == doctor.PrimarySpecialtyId && item.IsActive,
+                cancellationToken))
+            {
+                ModelState.AddModelError(nameof(doctor.PrimarySpecialtyId), "A especialidade informada não está disponível.");
+            }
+        }
+        else if (doctor is not null)
+        {
+            ModelState.AddModelError(nameof(doctor), "Dados médicos são aceitos somente no cadastro de Médico.");
+        }
+
+        return ModelState.IsValid;
+    }
+
+    private async Task AddRegistrationDetailsAsync(
+        ulong accountId,
+        string roleCode,
+        string taxId,
+        DateOnly birthDate,
+        RegistrationAddressRequest? address,
+        DoctorRegistrationRequest? doctor,
+        string sourceCode,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        database.AccountConsents.Add(new AccountConsent
+        {
+            AccountId = accountId,
+            TermsVersion = "2026-09",
+            PrivacyVersion = "2026-09",
+            AcceptedAtUtc = now,
+            SourceCode = sourceCode,
+        });
+
+        if (roleCode == ViverAppRoles.Patient)
+        {
+            database.PatientProfiles.Add(new PatientProfile
+            {
+                AccountId = accountId,
+                TaxId = taxId,
+                BirthDate = birthDate.ToDateTime(TimeOnly.MinValue),
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+            });
+            database.AccountAddresses.Add(new AccountAddress
+            {
+                AccountId = accountId,
+                PostalCode = address!.PostalCode,
+                Street = address.Street.Trim(),
+                Number = address.Number.Trim(),
+                Complement = string.IsNullOrWhiteSpace(address.Complement) ? null : address.Complement.Trim(),
+                District = address.District.Trim(),
+                City = address.City.Trim(),
+                StateCode = address.StateCode,
+                UpdatedAtUtc = now,
+            });
+        }
+        else if (roleCode == ViverAppRoles.Doctor)
+        {
+            database.DoctorProfiles.Add(new DoctorProfile
+            {
+                AccountId = accountId,
+                ProfessionalTitle = doctor!.ProfessionalTitle,
+                LicenseStateCode = doctor.LicenseStateCode,
+                LicenseNumber = doctor.LicenseNumber.Trim(),
+                YearsExperience = doctor.YearsExperience,
+                DefaultAppointmentDurationMinutes = 30,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+                RowVersion = 1,
+            });
+            database.DoctorSpecialties.Add(new DoctorSpecialty
+            {
+                DoctorAccountId = accountId,
+                SpecialtyId = doctor.PrimarySpecialtyId,
+                IsPrimary = true,
+            });
+        }
+
+        await database.SaveChangesAsync(cancellationToken);
+    }
+
+    private static string RoleDestination(string roleCode) => roleCode switch
+    {
+        ViverAppRoles.Patient => "/paciente",
+        ViverAppRoles.Doctor => "/medico",
+        ViverAppRoles.Manager => "/gestao",
+        ViverAppRoles.Administrator => "/administracao",
+        _ => "/acesso",
+    };
 
     private async Task<ActionResult<ChallengeAcceptedResponse>> RequestChallengeAsync(
         IdentifierChallengeRequest request,

@@ -49,17 +49,12 @@ public sealed class ViverAppCookieEvents(ViverAppDbContext database) : CookieAut
             && CryptographicOperations.FixedTimeEquals(stampBytes, claimBytes);
         var mfaClaim = context.Principal?.FindFirstValue(ViverAppClaimTypes.MfaSatisfied);
         var mfaMatches = bool.TryParse(mfaClaim, out var claimMfa) && claimMfa == record?.MfaSatisfied;
-        var administratorAuthorized = record?.RoleCode != ViverAppRoles.Administrator
-            || record.MfaSatisfied
-            || !context.Principal!.IsInRole(ViverAppRoles.Administrator);
-
         if (record is null
             || record.RevokedAtUtc is not null
             || record.ExpiresAtUtc <= now
             || record.AccountStatus != "active"
             || !stampMatches
-            || !mfaMatches
-            || !administratorAuthorized)
+            || !mfaMatches)
         {
             await RejectAsync(context);
             return;

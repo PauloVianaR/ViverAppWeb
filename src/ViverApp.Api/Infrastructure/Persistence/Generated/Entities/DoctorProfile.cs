@@ -7,11 +7,15 @@ public partial class DoctorProfile
 {
     public ulong AccountId { get; set; }
 
+    public string ProfessionalTitle { get; set; } = null!;
+
     public string LicenseStateCode { get; set; } = null!;
 
     public string LicenseNumber { get; set; } = null!;
 
     public string? Biography { get; set; }
+
+    public ushort YearsExperience { get; set; }
 
     public ushort DefaultAppointmentDurationMinutes { get; set; }
 

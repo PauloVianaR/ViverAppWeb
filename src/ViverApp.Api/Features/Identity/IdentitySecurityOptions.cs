@@ -100,4 +100,10 @@ public sealed class IdentitySecurityOptions
 
         return QueryHelpers.AddQueryString(WebReturnUrl.ToString(), "result", result);
     }
+
+    public string BuildWebReturnUrl(string result, string name, string value)
+    {
+        var returnUrl = BuildWebReturnUrl(result);
+        return QueryHelpers.AddQueryString(returnUrl, name, value);
+    }
 }

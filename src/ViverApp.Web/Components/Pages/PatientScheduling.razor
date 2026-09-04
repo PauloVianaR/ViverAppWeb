@@ -23,7 +23,7 @@
         <span>@Notice</span>
         @if (NoticeIsUnauthorized)
         {
-            <a class="button button--small" href="@Backend.GoogleLoginUrl">Entrar com Google</a>
+            <a class="button button--small" href="/acesso">Entrar</a>
         }
     </div>
 }
@@ -243,28 +243,26 @@
         <div class="appointment-list">
             @foreach (var appointment in Appointments)
             {
-                <article class="surface appointment-card">
-                    <div class="appointment-date" aria-label="@LongDate(appointment.LocalDate)">
-                        <strong>@appointment.LocalDate.Day.ToString("00")</strong>
-                        <span>@appointment.LocalDate.ToString("MMM", Culture).TrimEnd('.')</span>
-                    </div>
-                    <div class="appointment-copy">
-                        <div class="appointment-title-row">
-                            <h3>@appointment.AppointmentTypeName</h3>
-                            <span class="badge @StatusBadge(appointment.StatusCode)">@StatusLabel(appointment.StatusCode)</span>
-                        </div>
-                        <p>@appointment.DoctorName • @appointment.LocalStartsAt.ToString("HH:mm")–@appointment.LocalEndsAt.ToString("HH:mm")</p>
-                        <small>@ModalityLabel(appointment.ModalityCode) • @appointment.TimezoneName • #@appointment.Id</small>
-                    </div>
-                    <div class="appointment-actions">
+                <AppointmentCard Id="@appointment.Id"
+                                 Date="@appointment.LocalDate"
+                                 StartsAt="@appointment.LocalStartsAt"
+                                 EndsAt="@appointment.LocalEndsAt"
+                                 Title="@appointment.AppointmentTypeName"
+                                 Participant="@appointment.DoctorName"
+                                 Modality="@ModalityLabel(appointment.ModalityCode)"
+                                 Timezone="@appointment.TimezoneName"
+                                 StatusLabel="@StatusLabel(appointment.StatusCode)"
+                                 StatusTone="@StatusBadge(appointment.StatusCode)"
+                                 Rescheduled="@(appointment.RescheduledFromAppointmentId.HasValue)">
+                    <Actions>
                         @if (appointment.StatusCode == "pending")
                         {
                             <a class="button button--small" href="/paciente/pagamentos?appointmentId=@appointment.Id">Pagar</a>
                         }
                         <button class="button button--secondary button--small" type="button" @onclick="() => BeginRescheduleAsync(appointment)" disabled="@IsBusy">Reagendar</button>
                         <button class="button button--danger button--small" type="button" @onclick="() => BeginCancel(appointment)" disabled="@IsBusy">Cancelar</button>
-                    </div>
-                </article>
+                    </Actions>
+                </AppointmentCard>
             }
         </div>
     }

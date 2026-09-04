@@ -32,7 +32,7 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(32, applicationEntities.Length);
+        Assert.Equal(33, applicationEntities.Length);
         Assert.DoesNotContain(
             applicationEntities,
             entity => string.Equals(entity.GetTableName(), "__schema_migrations", StringComparison.Ordinal));
@@ -72,7 +72,26 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011", migrations);
+
+        var accessFoundation = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_schema = 'viverappweb'
+              AND ((table_name = 'accounts' AND column_name IN ('tax_id', 'birth_date'))
+                OR (table_name = 'doctor_profiles' AND column_name IN ('professional_title', 'years_experience')))
+            """);
+        Assert.Equal("4", accessFoundation);
+
+        var consentTable = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_schema = 'viverappweb' AND table_name = 'account_consents'
+            """);
+        Assert.Equal("1", consentTable);
 
         var forbiddenColumns = await ExecuteScalarAsync(
             connection,

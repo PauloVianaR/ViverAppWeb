@@ -17,7 +17,7 @@
 
 1. O visitante escolhe entrar com Google ou com credencial local.
 2. No cadastro local, informa somente os dados necessários à finalidade e confirma contato.
-3. O sistema vincula um ou mais papéis à conta sem confiar em escolha privilegiada do cliente.
+3. O sistema vincula exatamente um papel à conta, validando no servidor a escolha pública permitida e nunca confiando em valores arbitrários do cliente.
 4. Médico/gestor aguardam análise quando a política exigir; paciente pode seguir conforme regra aprovada.
 5. A sessão usa cookie seguro de servidor, é revalidada e pode ser revogada.
 6. Administrador passa por MFA obrigatório e step-up em ações críticas.

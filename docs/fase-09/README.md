@@ -1,6 +1,6 @@
 # Fase 9 — PagBank Checkout
 
-**Estado:** implementada na branch `codex/fase-09-pagbank-checkout`; ainda não integrada à `main`.
+**Estado:** concluída e integrada à `main` no commit `701dae4`.
 
 Esta fase implementa a cobrança de consultas pelo Checkout PagBank sem confiar em valores ou estados enviados pelo navegador.
 

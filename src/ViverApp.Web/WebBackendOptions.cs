@@ -8,11 +8,14 @@ public sealed class WebBackendOptions
     {
         BaseUrl = baseUrl;
         GoogleLoginUrl = new Uri(baseUrl, "api/v1/auth/google/start").ToString();
+        GoogleLinkUrl = new Uri(baseUrl, "api/v1/auth/google/link/start").ToString();
     }
 
     public Uri BaseUrl { get; }
 
     public string GoogleLoginUrl { get; }
+
+    public string GoogleLinkUrl { get; }
 
     public static WebBackendOptions Load(IConfiguration configuration, IHostEnvironment environment)
     {

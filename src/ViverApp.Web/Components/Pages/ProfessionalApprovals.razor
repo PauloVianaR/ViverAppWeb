@@ -1,0 +1,107 @@
+@page "/administracao/aprovacoes"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@inject IJSRuntime JavaScript
+@inject WebBackendOptions Backend
+
+<PageTitle>Aprovações | ViverApp</PageTitle>
+
+<header class="workspace-heading">
+    <div><p class="eyebrow">Administração segura</p><h1 class="page-title">Aprovações profissionais</h1><p class="page-description">Confira os dados antes de liberar Médicos e Gestores. Toda decisão fica auditada e exige sessão administrativa com MFA.</p></div>
+    <span class="badge badge--danger">MFA obrigatório</span>
+</header>
+
+@if (!string.IsNullOrWhiteSpace(Notice))
+{
+    <div class="notice @(NoticeIsError ? "notice--error" : "notice--success")" role="@(NoticeIsError ? "alert" : "status")">@Notice</div>
+}
+
+<section class="approval-toolbar surface" aria-label="Filtros">
+    <div class="field"><label for="approval-role">Papel</label><select id="approval-role" @bind="RoleFilter"><option value="">Todos</option><option value="doctor">Médicos</option><option value="manager">Gestores</option></select></div>
+    <button class="button button--secondary" type="button" @onclick="LoadAsync" disabled="@IsBusy">Atualizar</button>
+</section>
+
+@if (IsLoading)
+{
+    <LoadingSkeleton Lines="6" />
+}
+else if (Items.Count == 0)
+{
+    <InterfaceState Title="Nenhuma aprovação pendente" Description="Novos cadastros de Médico e Gestor aparecerão aqui depois da confirmação de contato." Icon="check" Tone="success" />
+}
+else
+{
+    <div class="approval-list">
+        @foreach (var item in Items)
+        {
+            <article class="approval-card surface">
+                <div class="approval-card__heading"><div><span class="badge badge--warning">@RoleLabel(item.RoleCode)</span><h2>@item.FullName</h2></div><strong>#@item.AccountId</strong></div>
+                <dl>
+                    <div><dt>Contato</dt><dd>@(item.Email ?? item.PhoneE164 ?? "Não informado")</dd></div>
+                    <div><dt>CPF</dt><dd>@MaskTaxId(item.TaxId)</dd></div>
+                    <div><dt>Nascimento</dt><dd>@(item.BirthDate?.ToString("dd/MM/yyyy") ?? "Não informado")</dd></div>
+                    @if (item.RoleCode == "doctor")
+                    {
+                        <div><dt>CRM</dt><dd>@item.ProfessionalTitle @item.LicenseStateCode @item.LicenseNumber</dd></div>
+                        <div><dt>Especialidade</dt><dd>@(item.Specialties.FirstOrDefault(option => option.Id == item.PrimarySpecialtyId)?.Name ?? "Não informada")</dd></div>
+                        <div><dt>Experiência</dt><dd>@item.YearsExperience ano(s)</dd></div>
+                    }
+                </dl>
+                <div class="field"><label for="reason-@item.AccountId">Motivo (obrigatório na rejeição)</label><textarea id="reason-@item.AccountId" maxlength="500" @bind="Reasons[item.AccountId]"></textarea></div>
+                <div class="approval-actions">
+                    <button class="button" type="button" @onclick='() => ReviewAsync(item, "approved")' disabled="@IsBusy">Aprovar</button>
+                    <button class="button button--danger" type="button" @onclick='() => ReviewAsync(item, "rejected")' disabled="@IsBusy">Rejeitar</button>
+                </div>
+            </article>
+        }
+    </div>
+}
+
+@code {
+    private IJSObjectReference? module;
+    private readonly List<WebProfessional> Items = [];
+    private readonly Dictionary<ulong, string> Reasons = [];
+    private string RoleFilter = string.Empty;
+    private string? Notice;
+    private bool NoticeIsError;
+    private bool IsBusy;
+    private bool IsLoading = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/identity-access.js");
+        await LoadAsync();
+        StateHasChanged();
+    }
+    private async Task LoadAsync()
+    {
+        if (module is null) return;
+        IsLoading = true; ClearNotice();
+        try
+        {
+            var path = "api/v1/professionals?page=1&pageSize=100&status=pending_approval" + (string.IsNullOrWhiteSpace(RoleFilter) ? "" : $"&role={RoleFilter}");
+            var page = await module.InvokeAsync<WebPage<WebProfessional>>("get", Backend.BaseUrl.ToString(), path);
+            Items.Clear(); Items.AddRange(page.Items); Reasons.Clear(); foreach (var item in Items) Reasons[item.AccountId] = string.Empty;
+        }
+        catch (JSException exception) { ShowError(exception.Message); }
+        finally { IsLoading = false; }
+    }
+    private async Task ReviewAsync(WebProfessional item, string decision)
+    {
+        if (decision == "rejected" && Reasons[item.AccountId].Trim().Length < 5) { ShowError("Informe uma justificativa com pelo menos cinco caracteres."); return; }
+        IsBusy = true; ClearNotice();
+        try
+        {
+            await module!.InvokeAsync<WebProfessional>("send", Backend.BaseUrl.ToString(), $"api/v1/professionals/{item.AccountId}/review", new { decisionCode = decision, reason = string.IsNullOrWhiteSpace(Reasons[item.AccountId]) ? null : Reasons[item.AccountId].Trim(), accountRowVersion = item.AccountRowVersion });
+            Items.Remove(item); Reasons.Remove(item.AccountId); Notice = decision == "approved" ? "Cadastro aprovado." : "Cadastro rejeitado.";
+        }
+        catch (JSException exception) { ShowError(exception.Message); }
+        finally { IsBusy = false; }
+    }
+    private void ShowError(string message) { Notice = message; NoticeIsError = true; }
+    private void ClearNotice() { Notice = null; NoticeIsError = false; }
+    private static string RoleLabel(string role) => role == "doctor" ? "Médico" : "Gestor";
+    private static string MaskTaxId(string? value) => value?.Length == 11 ? $"***.{value[3..6]}.{value[6..9]}-**" : "Não informado";
+    public async ValueTask DisposeAsync() { if (module is not null) try { await module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+}

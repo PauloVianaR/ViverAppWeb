@@ -19,6 +19,10 @@ public partial class Account
 
     public string? PhoneE164 { get; set; }
 
+    public string? TaxId { get; set; }
+
+    public DateTime? BirthDate { get; set; }
+
     public string? PasswordHash { get; set; }
 
     public bool EmailVerified { get; set; }
@@ -46,6 +50,8 @@ public partial class Account
     public virtual AccountAuthenticator? AccountAuthenticator { get; set; }
 
     public virtual ICollection<AccountChallenge> AccountChallenges { get; set; } = new List<AccountChallenge>();
+
+    public virtual AccountConsent? AccountConsent { get; set; }
 
     public virtual ICollection<AccountPasskey> AccountPasskeys { get; set; } = new List<AccountPasskey>();
 

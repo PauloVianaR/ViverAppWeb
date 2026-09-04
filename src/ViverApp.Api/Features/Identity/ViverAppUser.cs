@@ -24,6 +24,12 @@ public sealed class ViverAppUser
 
     public bool PhoneNumberConfirmed { get; set; }
 
+    public string? TaxId { get; set; }
+
+    public DateTime? BirthDate { get; set; }
+
+    public string? PreferredRecoveryChannel { get; set; }
+
     public string? PasswordHash { get; set; }
 
     public string SecurityStamp { get; set; } = string.Empty;

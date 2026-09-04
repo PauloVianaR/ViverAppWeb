@@ -34,11 +34,11 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData("/paciente", "Área do paciente", "Pagamentos")]
-    [InlineData("/medico", "Área médica", "Pacientes")]
-    [InlineData("/gestao", "Área do gestor", "Cadastros")]
-    [InlineData("/administracao", "Área administrativa", "Indicadores")]
-    public async Task ProfileShells_RenderExpectedContext(string path, string heading, string navigationItem)
+    [InlineData("/paciente")]
+    [InlineData("/medico")]
+    [InlineData("/gestao")]
+    [InlineData("/administracao")]
+    public async Task ProtectedAreas_DoNotPrerenderContentBeforeIdentityResolution(string path)
     {
         using var client = CreateClient();
 
@@ -46,10 +46,8 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         var html = await ReadUtf8Async(response.Content);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains(heading, html, StringComparison.Ordinal);
-        Assert.Contains(navigationItem, html, StringComparison.Ordinal);
-        Assert.Contains("A API valida cada permissão", html, StringComparison.Ordinal);
-        Assert.DoesNotContain("Lorem ipsum", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Validando acesso", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("Shell pronto", html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -79,13 +77,8 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         var html = await ReadUtf8Async(response.Content);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("Etapas do agendamento", html, StringComparison.Ordinal);
-        Assert.Contains("Escolha o atendimento", html, StringComparison.Ordinal);
-        Assert.Contains("Profissional", html, StringComparison.Ordinal);
-        Assert.Contains("Data e horário", html, StringComparison.Ordinal);
-        Assert.Contains("Resumo", html, StringComparison.Ordinal);
-        Assert.Contains("Minha agenda", html, StringComparison.Ordinal);
-        Assert.Contains("24 horas de antecedência", html, StringComparison.Ordinal);
+        Assert.Contains("Validando acesso", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("Minha agenda", html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -97,9 +90,8 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         var html = await ReadUtf8Async(response.Content);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("Pagamento seguro", html, StringComparison.Ordinal);
-        Assert.Contains("o valor correto será recuperado pelo servidor", html, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Ir para minha agenda", html, StringComparison.Ordinal);
+        Assert.Contains("Validando acesso", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("Pagamento seguro", html, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -118,10 +110,8 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         var html = await ReadUtf8Async(response.Content);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains(heading, html, StringComparison.Ordinal);
-        Assert.Contains("aria-label=\"Operação clínica\"", html, StringComparison.Ordinal);
-        Assert.Contains("Carregando operação clínica", html, StringComparison.Ordinal);
-        Assert.DoesNotContain("Lorem ipsum", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Validando acesso", html, StringComparison.Ordinal);
+        Assert.DoesNotContain(heading, html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -147,6 +137,32 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     public void NavigationCatalog_ResolvesProfileWithoutGrantingAuthorization(string path, ShellProfile expected)
     {
         Assert.Equal(expected, ShellNavigationCatalog.Resolve(path).Profile);
+    }
+
+    [Theory]
+    [InlineData("patient", "/paciente", true)]
+    [InlineData("patient", "/gestao", false)]
+    [InlineData("doctor", "/medico/agenda", true)]
+    [InlineData("manager", "/administracao", false)]
+    [InlineData("administrator", "/administracao/aprovacoes", true)]
+    public void NavigationCatalog_UsesAuthenticatedRoleToOwnRoutes(string role, string path, bool expected)
+    {
+        Assert.Equal(expected, ShellNavigationCatalog.OwnsPath(role, path));
+    }
+
+    [Fact]
+    public async Task AccessPage_OffersAllSupportedAuthenticationAndRegistrationRoles()
+    {
+        using var client = CreateClient();
+        using var response = await client.GetAsync("/acesso");
+        var html = await ReadUtf8Async(response.Content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Entrar com senha", html, StringComparison.Ordinal);
+        Assert.Contains("Continuar com Google", html, StringComparison.Ordinal);
+        Assert.Contains("Usar chave de acesso", html, StringComparison.Ordinal);
+        Assert.Contains("Entrar com código", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("value=\"administrator\"", html, StringComparison.Ordinal);
     }
 
     [Theory]

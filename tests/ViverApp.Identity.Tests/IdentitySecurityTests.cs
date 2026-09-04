@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
@@ -201,6 +202,38 @@ public sealed class IdentitySecurityTests
         Assert.Equal(
             ["administrator", "doctor", "manager", "patient"],
             ViverAppRoles.All.Order(StringComparer.Ordinal).ToArray());
+    }
+
+    [Theory]
+    [InlineData("52998224725", true)]
+    [InlineData("11111111111", false)]
+    [InlineData("52998224724", false)]
+    public void CpfValidation_RejectsInvalidAndRepeatedDigits(string value, bool expected)
+    {
+        Assert.Equal(expected, BrazilianDocumentValidator.IsValidCpf(value));
+    }
+
+    [Fact]
+    public void PublicRegistrationContract_RejectsAdministratorRole()
+    {
+        var request = new RegisterRequest(
+            "Pessoa Teste",
+            "pessoa@example.com",
+            "+5511999999999",
+            "Senha-Forte-2026!",
+            "email",
+            "administrator",
+            "52998224725",
+            new DateOnly(1990, 1, 1),
+            true,
+            null,
+            null);
+
+        var roleParameter = typeof(RegisterRequest).GetConstructors().Single()
+            .GetParameters()[5];
+        var rule = Assert.Single(roleParameter.GetCustomAttributes(typeof(RegularExpressionAttribute), false)
+            .Cast<RegularExpressionAttribute>());
+        Assert.False(rule.IsValid(request.RoleCode));
     }
 
     [Fact]

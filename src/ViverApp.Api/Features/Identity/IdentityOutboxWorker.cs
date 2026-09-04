@@ -223,6 +223,14 @@ public sealed partial class IdentityOutboxWorker(
                 "Redefinição de senha ViverApp",
                 $"Seu código para redefinir a senha é {code}. Ele expira em 10 minutos. Não compartilhe este código.",
                 "sms_recuperacao_senha"),
+            "identity.professional_approved" => new IdentityTemplate(
+                "Cadastro profissional aprovado",
+                "Seu cadastro profissional foi aprovado. Você já pode entrar no ViverApp.",
+                "sms_cadastro_aprovado"),
+            "identity.professional_rejected" => new IdentityTemplate(
+                "Atualização do cadastro profissional",
+                "Seu cadastro profissional não foi aprovado. Entre em contato com a clínica para mais informações.",
+                "sms_cadastro_rejeitado"),
             _ => throw new InvalidOperationException("identity_template_invalid"),
         };
     }

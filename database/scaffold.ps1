@@ -29,6 +29,7 @@ $tables = @(
     'roles',
     'clinic',
     'accounts',
+    'account_consents',
     'account_addresses',
     'external_logins',
     'auth_sessions',

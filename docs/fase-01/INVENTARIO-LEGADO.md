@@ -132,7 +132,7 @@ Destino: SignalR dentro da API, sala ligada a agendamento autorizado, grant efê
 | Integração | Uso observado | Decisão inicial |
 |---|---|---|
 | PagBank Checkout | criar checkout, redirecionar e receber webhook | Reimplementar conforme documentação oficial vigente na Fase 9 |
-| Backblaze B2/S3 | documentos premium e anexos | Migrar para Cloudflare R2 na Fase 10 |
+| Backblaze B2/S3 | documentos premium e anexos | Migrar para Cloudflare R2 na Fase 15 |
 | SMTP | confirmação, recuperação e mensagens | Encapsular provedor e usar outbox |
 | SMS Barato | confirmação e recuperação | Manter com segredo externo, limites, retry e auditoria |
 | Firebase Cloud Messaging | push Android | Remover; Firebase/push não fazem parte do novo produto |

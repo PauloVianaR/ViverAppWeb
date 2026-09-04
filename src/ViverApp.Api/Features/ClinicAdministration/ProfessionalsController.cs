@@ -19,6 +19,7 @@ public sealed class ProfessionalsController(
     ViverAppDbContext database,
     UserManager<ViverAppUser> userManager,
     IdentityChallengeService challengeService,
+    IdentityNotificationService notificationService,
     IdentityAuditWriter auditWriter) : ControllerBase
 {
     [HttpGet]
@@ -140,9 +141,11 @@ public sealed class ProfessionalsController(
             var profile = new DoctorProfile
             {
                 AccountId = user.Id,
+                ProfessionalTitle = "Dr.",
                 LicenseStateCode = request.LicenseStateCode!.Trim().ToUpperInvariant(),
                 LicenseNumber = request.LicenseNumber!.Trim().ToUpperInvariant(),
                 Biography = ClinicAdministrationSupport.OptionalText(request.Biography),
+                YearsExperience = 0,
                 DefaultAppointmentDurationMinutes = request.DefaultAppointmentDurationMinutes!.Value,
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now,
@@ -315,6 +318,7 @@ public sealed class ProfessionalsController(
         }
 
         await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        var previousStatus = account.StatusCode;
         var newStatus = request.DecisionCode switch
         {
             "approved" or "reactivated" => "active",
@@ -345,6 +349,7 @@ public sealed class ProfessionalsController(
             Reason = ClinicAdministrationSupport.OptionalText(request.Reason),
             OccurredAtUtc = DateTime.UtcNow,
         });
+        notificationService.QueueProfessionalReview(account, request.DecisionCode);
         try
         {
             await database.SaveChangesAsync(cancellationToken);
@@ -359,7 +364,12 @@ public sealed class ProfessionalsController(
         ActorId,
         "account",
         accountId.ToString(),
-        new Dictionary<string, string> { ["decision"] = request.DecisionCode },
+        new Dictionary<string, string>
+        {
+            ["decision"] = request.DecisionCode,
+            ["previousStatus"] = previousStatus,
+            ["newStatus"] = newStatus,
+        },
         cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         var updated = await ProfessionalQuery().SingleAsync(item => item.Id == accountId, cancellationToken);
@@ -682,9 +692,13 @@ public sealed class ProfessionalsController(
             account.StatusCode,
             account.Email,
             account.PhoneE164,
+            account.TaxId,
+            account.BirthDate.HasValue ? DateOnly.FromDateTime(account.BirthDate.Value) : null,
+            account.DoctorProfile?.ProfessionalTitle,
             account.DoctorProfile?.LicenseStateCode,
             account.DoctorProfile?.LicenseNumber,
             account.DoctorProfile?.Biography,
+            account.DoctorProfile?.YearsExperience,
             account.DoctorProfile?.DefaultAppointmentDurationMinutes,
             links.Select(link => new SpecialtyResponse(
                 link.Specialty.Id,

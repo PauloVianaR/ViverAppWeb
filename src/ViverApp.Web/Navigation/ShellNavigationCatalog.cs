@@ -73,7 +73,7 @@ public static class ShellNavigationCatalog
             new("Clínica", "/administracao#clinica", "clinic"),
             new("Consultas", "/administracao#consultas", "calendar"),
             new("Indicadores", "/administracao#indicadores", "chart"),
-            new("Usuários", "/administracao#usuarios", "users"),
+            new("Aprovações", "/administracao/aprovacoes", "users"),
         ]);
 
     public static ShellDefinition Resolve(string absolutePath)
@@ -100,6 +100,26 @@ public static class ShellNavigationCatalog
         }
 
         return Public;
+    }
+
+    public static ShellDefinition ResolveRole(string? roleCode) => roleCode switch
+    {
+        "patient" => Patient,
+        "doctor" => Doctor,
+        "manager" => Manager,
+        "administrator" => Administrator,
+        _ => Public,
+    };
+
+    public static bool IsWorkspacePath(string absolutePath) =>
+        MatchesArea(absolutePath, "/seguranca")
+        || AllProfiles.Any(profile => MatchesArea(absolutePath, profile.Items[0].Href));
+
+    public static bool OwnsPath(string roleCode, string absolutePath)
+    {
+        if (MatchesArea(absolutePath, "/seguranca")) return ResolveRole(roleCode).Profile != ShellProfile.Public;
+        var shell = ResolveRole(roleCode);
+        return shell.Profile != ShellProfile.Public && MatchesArea(absolutePath, shell.Items[0].Href);
     }
 
     private static bool MatchesArea(string path, string area) =>
