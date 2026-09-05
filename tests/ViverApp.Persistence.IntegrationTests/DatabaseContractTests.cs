@@ -72,7 +72,17 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012", migrations);
+
+        var recognizedSpecialties = await ExecuteScalarAsync(
+            connection,
+            "SELECT COUNT(*) FROM specialties WHERE is_active = 1");
+        Assert.Equal("55", recognizedSpecialties);
+
+        var ophthalmology = await ExecuteScalarAsync(
+            connection,
+            "SELECT COUNT(*) FROM specialties WHERE normalized_name = 'OFTALMOLOGIA' AND is_active = 1");
+        Assert.Equal("1", ophthalmology);
 
         var accessFoundation = await ExecuteScalarAsync(
             connection,

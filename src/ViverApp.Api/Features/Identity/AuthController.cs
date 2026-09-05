@@ -586,7 +586,7 @@ public sealed class AuthController(
         if (phone is null
             || normalizedEmail is null
             || !await ValidateRegistrationAsync(
-                request.RoleCode,
+                identity.RoleCode,
                 request.TaxId,
                 request.BirthDate,
                 request.TermsAccepted,
@@ -616,14 +616,14 @@ public sealed class AuthController(
         }
 
         await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
-        var status = request.RoleCode is ViverAppRoles.Doctor or ViverAppRoles.Manager
+        var status = identity.RoleCode is ViverAppRoles.Doctor or ViverAppRoles.Manager
             ? "pending_approval"
             : "active";
         var user = new ViverAppUser
         {
             UserName = identity.Email,
             NormalizedUserName = normalizedEmail,
-            RoleCode = request.RoleCode,
+            RoleCode = identity.RoleCode,
             StatusCode = status,
             FullName = identity.FullName.Trim(),
             Email = identity.Email.Trim(),
@@ -660,7 +660,7 @@ public sealed class AuthController(
         {
             await AddRegistrationDetailsAsync(
                 user.Id,
-                request.RoleCode,
+                identity.RoleCode,
                 request.TaxId,
                 request.BirthDate,
                 request.Address,
@@ -695,15 +695,15 @@ public sealed class AuthController(
         await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
         return Ok(new RegistrationCompletedResponse(
             status,
-            request.RoleCode,
+            identity.RoleCode,
             authenticated,
-            authenticated ? RoleDestination(request.RoleCode) : "/acesso?estado=aguardando-aprovacao"));
+            authenticated ? RoleDestination(identity.RoleCode) : "/acesso?estado=aguardando-aprovacao"));
     }
 
     [AllowAnonymous]
     [EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
     [HttpGet("google/start")]
-    public ActionResult StartGoogleLogin()
+    public ActionResult StartGoogleLogin([FromQuery] string? role = null)
     {
         if (!securityOptions.GoogleEnabled)
         {
@@ -712,9 +712,24 @@ public sealed class AuthController(
                 title: "Login Google ainda não está configurado.");
         }
 
+        if (role is not null
+            && role is not ViverAppRoles.Patient and not ViverAppRoles.Doctor and not ViverAppRoles.Manager)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "O tipo de cadastro informado não está disponível.",
+            });
+        }
+
         var properties = signInManager.ConfigureExternalAuthenticationProperties(
             GoogleDefaults.AuthenticationScheme,
             Url.ActionLink(nameof(CompleteGoogleLogin))!);
+        if (role is not null)
+        {
+            properties.Items["registration_role"] = role;
+        }
+
         return Challenge(properties, GoogleDefaults.AuthenticationScheme);
     }
 
@@ -733,6 +748,18 @@ public sealed class AuthController(
         var user = await userManager.FindByLoginAsync(info!.LoginProvider, info.ProviderKey);
         if (user is null)
         {
+            var registrationRole = info.AuthenticationProperties is { } authenticationProperties
+                && authenticationProperties.Items.TryGetValue("registration_role", out var storedRole)
+                    ? storedRole
+                    : null;
+            if (registrationRole is not ViverAppRoles.Patient
+                and not ViverAppRoles.Doctor
+                and not ViverAppRoles.Manager)
+            {
+                await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+                return Redirect(securityOptions.BuildWebReturnUrl("google_registration_role_required"));
+            }
+
             var normalizedEmail = IdentifierNormalizer.NormalizeEmail(email);
             var existing = normalizedEmail is null
                 ? null
@@ -746,9 +773,11 @@ public sealed class AuthController(
             var token = googleOnboardingProtector.Protect(
                 info.ProviderKey,
                 email!,
-                info.Principal.FindFirstValue(ClaimTypes.Name) ?? "Usuário");
+                info.Principal.FindFirstValue(ClaimTypes.Name) ?? "Usuário",
+                registrationRole);
             await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
-            return Redirect(securityOptions.BuildWebReturnUrl("google_onboarding", "onboarding", token));
+            var returnUrl = securityOptions.BuildWebReturnUrl("google_onboarding", "onboarding", token);
+            return Redirect(QueryHelpers.AddQueryString(returnUrl, "role", registrationRole));
         }
 
         await MarkGoogleEmailVerifiedAsync(user.Id, info.ProviderKey, email!, cancellationToken);

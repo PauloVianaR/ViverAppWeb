@@ -8,14 +8,15 @@ public sealed class GoogleOnboardingProtector(IDataProtectionProvider provider)
 {
     private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(30);
     private readonly ITimeLimitedDataProtector protector = provider
-        .CreateProtector("ViverApp.Identity.GoogleOnboarding.v1")
+        .CreateProtector("ViverApp.Identity.GoogleOnboarding.v2")
         .ToTimeLimitedDataProtector();
 
-    public string Protect(string providerSubject, string email, string fullName) =>
+    public string Protect(string providerSubject, string email, string fullName, string roleCode) =>
         protector.Protect(JsonSerializer.Serialize(new GoogleOnboardingIdentity(
             providerSubject,
             email,
-            fullName)), Lifetime);
+            fullName,
+            roleCode)), Lifetime);
 
     public bool TryUnprotect(string token, out GoogleOnboardingIdentity? identity)
     {
@@ -25,7 +26,8 @@ public sealed class GoogleOnboardingProtector(IDataProtectionProvider provider)
             identity = JsonSerializer.Deserialize<GoogleOnboardingIdentity>(protector.Unprotect(token));
             return identity is not null
                 && !string.IsNullOrWhiteSpace(identity.ProviderSubject)
-                && IdentifierNormalizer.NormalizeEmail(identity.Email) is not null;
+                && IdentifierNormalizer.NormalizeEmail(identity.Email) is not null
+                && identity.RoleCode is ViverAppRoles.Patient or ViverAppRoles.Doctor or ViverAppRoles.Manager;
         }
         catch (Exception exception) when (exception is CryptographicException or JsonException)
         {
@@ -34,4 +36,8 @@ public sealed class GoogleOnboardingProtector(IDataProtectionProvider provider)
     }
 }
 
-public sealed record GoogleOnboardingIdentity(string ProviderSubject, string Email, string FullName);
+public sealed record GoogleOnboardingIdentity(
+    string ProviderSubject,
+    string Email,
+    string FullName,
+    string RoleCode);

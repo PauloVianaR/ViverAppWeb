@@ -107,6 +107,34 @@ public sealed class IdentityApiSecurityTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GoogleRegistrationStart_AcceptsOnlyPublicRoles()
+    {
+        using var client = CreateClient();
+
+        using var validResponse = await client.GetAsync("/api/v1/auth/google/start?role=doctor");
+        using var invalidResponse = await client.GetAsync("/api/v1/auth/google/start?role=administrator");
+
+        Assert.Equal(HttpStatusCode.Redirect, validResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task RegistrationOptions_ListEveryRecognizedMedicalSpecialty()
+    {
+        using var client = CreateClient();
+
+        using var response = await client.GetAsync("/api/v1/auth/registration/options");
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var specialties = body.RootElement.GetProperty("specialties");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(55, specialties.GetArrayLength());
+        Assert.Contains(
+            specialties.EnumerateArray(),
+            item => item.GetProperty("name").GetString() == "Oftalmologia");
+    }
+
+    [Fact]
     public async Task PublicRegistration_NeverAcceptsAdministratorRole()
     {
         using var client = CreateClient();

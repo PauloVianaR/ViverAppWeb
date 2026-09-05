@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.Http;
@@ -234,6 +235,25 @@ public sealed class IdentitySecurityTests
         var rule = Assert.Single(roleParameter.GetCustomAttributes(typeof(RegularExpressionAttribute), false)
             .Cast<RegularExpressionAttribute>());
         Assert.False(rule.IsValid(request.RoleCode));
+    }
+
+    [Theory]
+    [InlineData("patient")]
+    [InlineData("doctor")]
+    [InlineData("manager")]
+    public void GoogleOnboardingToken_BindsTheSelectedPublicRole(string roleCode)
+    {
+        var protector = new GoogleOnboardingProtector(new EphemeralDataProtectionProvider());
+
+        var token = protector.Protect(
+            "google-subject",
+            "pessoa@example.com",
+            "Pessoa Teste",
+            roleCode);
+
+        Assert.True(protector.TryUnprotect(token, out var identity));
+        Assert.NotNull(identity);
+        Assert.Equal(roleCode, identity.RoleCode);
     }
 
     [Fact]

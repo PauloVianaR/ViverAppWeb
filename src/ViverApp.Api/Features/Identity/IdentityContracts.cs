@@ -40,7 +40,6 @@ public sealed record DoctorRegistrationRequest(
 public sealed record GoogleRegistrationRequest(
     [param: Required, StringLength(8192)] string OnboardingToken,
     [param: Required, StringLength(16)] string Phone,
-    [param: Required, RegularExpression("^(patient|doctor|manager)$")] string RoleCode,
     [param: Required, RegularExpression("^[0-9]{11}$")] string TaxId,
     DateOnly BirthDate,
     bool TermsAccepted,

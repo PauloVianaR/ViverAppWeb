@@ -48,7 +48,7 @@ O OAuth Web do Google utiliza `GoogleOAuth:ClientID`, `GoogleOAuth:ProjectID`, `
 
 As flags `PagBank:Enabled`, `PagBank:ProductionEnabled` e `PagBank:RefundsEnabled` são falsas na configuração versionada. Produção e reembolsos exigem ativações explícitas e independentes fora do Git. As connection strings de Azure não foram copiadas. Nenhum valor secreto deve ser incluído no repositório, em exemplos, logs, testes ou documentação.
 
-O banco legado `viverappmobile` é somente leitura. A aplicação web usa o banco novo `viverappweb`, criado na Fase 2 e governado por migrations SQL antes do scaffold DB-First. As migrations `0001` a `0010` estão aplicadas e o modelo EF foi gerado exclusivamente desse schema.
+O banco legado `viverappmobile` é somente leitura. A aplicação web usa o banco novo `viverappweb`, criado na Fase 2 e governado por migrations SQL antes do scaffold DB-First. As migrations `0001` a `0012` estão aplicadas e o modelo EF foi gerado exclusivamente desse schema.
 
 Para conferir somente os nomes configurados, sem compartilhar valores:
 

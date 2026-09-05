@@ -216,6 +216,11 @@ Validar 320, 390/412, 768, 1024, 1366 e 1920 px, além de zoom a 200%. Todos os 
 - card canônico de agendamento e componentes reutilizáveis para código, desafios, loading e estados de interface;
 - busca assistida de CEP pelo backend, com limite de tempo, rate limit e possibilidade de edição manual;
 - migration `0011`, rollback simétrico, migration aplicada no MySQL 8.0.41 e scaffold DB-First regenerado;
-- build sem avisos, suíte completa executada de forma serial e validação visual em desktop e 390 px.
+- ajuste complementar com cadastro Google como opção principal para Paciente, Médico e Gestor, mantendo o formulário clássico como alternativa;
+- papel escolhido protegido durante o OAuth e formulário complementar exibido somente após o vínculo Google;
+- aviso explícito de aprovação administrativa nos cadastros de Médico e Gestor;
+- CEP com máscara `XXXXX-XXX`, consulta automática ao completar oito dígitos e preenchimento assistido do endereço;
+- migration `0012` aplicada no MySQL 8.0.41 com as 55 especialidades reconhecidas pela Resolução CFM nº 2.380/2024, rollback correspondente e Oftalmologia como seleção inicial no formulário médico;
+- scaffold DB-First regenerado, build sem avisos, 130 testes executados de forma serial e validação visual em desktop e 390 px.
 
 Nenhuma tela funcional completa da experiência do Paciente prevista para a Fase 11 foi adicionada nesta entrega.

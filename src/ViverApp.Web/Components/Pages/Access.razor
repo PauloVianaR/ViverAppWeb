@@ -58,60 +58,95 @@
         else if (Mode is "register" or "google-register")
         {
             <header>
-                <p class="eyebrow">@(Mode == "google-register" ? "Complete seu Google" : "Nova conta")</p>
-                <h2>Escolha como você usará o Viver</h2>
-                <p>O papel não poderá ser alterado pelo formulário ou pela URL.</p>
+                <p class="eyebrow">@(Mode == "google-register" ? "Conta Google vinculada" : "Nova conta")</p>
+                <h2>@(Mode == "google-register" ? "Agora complete seu cadastro" : "Crie sua conta com Google")</h2>
+                <p>@(Mode == "google-register" ? "O vínculo foi concluído. Informe os dados restantes para criar seu acesso." : "Escolha seu perfil e vincule sua conta Google. É rápido e você não precisa criar outra senha.")</p>
             </header>
-            <div class="role-grid" role="radiogroup" aria-label="Tipo de conta">
-                @foreach (var role in Roles)
-                {
-                    <label class="role-card @(RoleCode == role.Code ? "role-card--selected" : null)">
-                        <input type="radio" name="role" value="@role.Code" @onchange="() => RoleCode = role.Code" checked="@(RoleCode == role.Code)" />
-                        <strong>@role.Label</strong><small>@role.Help</small>
-                    </label>
-                }
-            </div>
-            <div class="access-form form-grid">
-                @if (Mode == "register")
-                {
-                    <div class="field field--wide"><label for="full-name">Nome completo</label><input id="full-name" autocomplete="name" maxlength="200" @bind="FullName" /></div>
-                    <div class="field"><label for="email">E-mail (opcional)</label><input id="email" type="email" autocomplete="email" maxlength="254" @bind="Email" /></div>
-                }
-                <div class="field"><label for="phone">Telefone com DDD</label><input id="phone" type="tel" autocomplete="tel" placeholder="+5511999999999" maxlength="16" @bind="Phone" /></div>
-                <div class="field"><label for="tax-id">CPF</label><input id="tax-id" inputmode="numeric" autocomplete="off" maxlength="11" @bind="TaxId" /></div>
-                <div class="field"><label for="birth-date">Data de nascimento</label><input id="birth-date" type="date" autocomplete="bday" value="@BirthDateText" @onchange="UpdateBirthDate" /></div>
-                @if (Mode == "register")
-                {
-                    <div class="field"><label for="password">Senha</label><input id="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" @bind="Password" /><p class="field-hint">12+ caracteres, maiúscula, minúscula, número e símbolo.</p></div>
-                    <div class="field"><label for="password-confirm">Confirmar senha</label><input id="password-confirm" type="password" autocomplete="new-password" @bind="PasswordConfirmation" /></div>
-                    <div class="field"><label for="channel">Confirmar por</label><select id="channel" @bind="Channel"><option value="sms">SMS</option><option value="email">E-mail</option></select></div>
-                }
 
-                @if (RoleCode == "patient")
-                {
-                    <h3 class="field--wide form-section-title">Endereço do paciente</h3>
-                    <div class="field"><label for="postal-code">CEP</label><div class="inline-field"><input id="postal-code" inputmode="numeric" maxlength="8" @bind="PostalCode" /><button class="button button--secondary button--small" type="button" @onclick="LookupPostalCodeAsync" disabled="@IsBusy">Buscar</button></div><p class="field-hint">Somente o CEP é consultado no ViaCEP; você pode preencher manualmente.</p></div>
-                    <div class="field field--wide"><label for="street">Logradouro</label><input id="street" autocomplete="street-address" maxlength="200" @bind="Street" /></div>
-                    <div class="field"><label for="number">Número</label><input id="number" maxlength="20" @bind="Number" /></div>
-                    <div class="field"><label for="complement">Complemento</label><input id="complement" maxlength="100" @bind="Complement" /></div>
-                    <div class="field"><label for="district">Bairro</label><input id="district" maxlength="100" @bind="District" /></div>
-                    <div class="field"><label for="city">Cidade</label><input id="city" maxlength="100" @bind="City" /></div>
-                    <div class="field"><label for="state">UF</label><input id="state" maxlength="2" @bind="StateCode" /></div>
-                }
-                else if (RoleCode == "doctor")
-                {
-                    <h3 class="field--wide form-section-title">Dados profissionais</h3>
-                    <div class="field"><label for="title">Título</label><select id="title" @bind="ProfessionalTitle"><option>Dr.</option><option>Dra.</option></select></div>
-                    <div class="field"><label for="license-state">UF do CRM</label><input id="license-state" maxlength="2" @bind="LicenseState" /></div>
-                    <div class="field"><label for="license">CRM</label><input id="license" maxlength="30" @bind="LicenseNumber" /></div>
-                    <div class="field"><label for="experience">Anos de experiência</label><input id="experience" type="number" min="0" max="80" @bind="YearsExperience" /></div>
-                    <div class="field field--wide"><label for="specialty">Especialidade principal</label><select id="specialty" @bind="PrimarySpecialtyId"><option value="0">Selecione</option>@foreach (var specialty in Options.Specialties){<option value="@specialty.Id">@specialty.Name</option>}</select></div>
-                }
+            @if (Mode == "register")
+            {
+                <div class="role-grid" role="radiogroup" aria-label="Tipo de conta">
+                    @foreach (var role in Roles)
+                    {
+                        <label class="role-card @(RoleCode == role.Code ? "role-card--selected" : null)">
+                            <input type="radio" name="role" value="@role.Code" @onchange="() => SelectRole(role.Code)" checked="@(RoleCode == role.Code)" />
+                            <strong>@role.Label</strong><small>@role.Help</small>
+                        </label>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="selected-role" aria-label="Perfil escolhido">
+                    <span>Perfil</span><strong>@SelectedRole.Label</strong><small>@SelectedRole.Help</small>
+                </div>
+            }
 
-                <label class="check-field field--wide"><input type="checkbox" @bind="TermsAccepted" /> Li e aceito os termos de uso e o aviso de privacidade vigentes.</label>
-                <div class="honeypot" aria-hidden="true"><label for="website">Não preencha</label><input id="website" tabindex="-1" autocomplete="off" @bind="Website" /></div>
-                <button class="button field--wide" type="button" @onclick="RegisterAsync" disabled="@IsBusy">@(Mode == "google-register" ? "Concluir cadastro" : "Criar conta")</button>
-            </div>
+            @if (RequiresAdministrativeApproval)
+            {
+                <div class="approval-advice" role="note">
+                    <AppIcon Name="history" />
+                    <p><strong>Este cadastro precisa de aprovação.</strong> Depois de enviar os dados, um administrador da clínica analisará a solicitação antes de liberar o acesso.</p>
+                </div>
+            }
+
+            @if (Mode == "register" && !UseClassicRegistration)
+            {
+                <div class="google-registration">
+                    <a class="button google-button google-button--primary" href="@GoogleRegistrationUrl"><span aria-hidden="true">G</span> Continuar com Google como @SelectedRole.Label</a>
+                    <p>Primeiro você confirma sua conta Google. Em seguida, volta para preencher os dados de @SelectedRole.Label.ToLowerInvariant().</p>
+                    <div class="method-divider"><span>ou</span></div>
+                    <button class="button button--secondary" type="button" @onclick="ShowClassicRegistration">Cadastrar com e-mail ou telefone</button>
+                </div>
+            }
+            else
+            {
+                <div class="access-form form-grid">
+                    @if (Mode == "register")
+                    {
+                        <div class="classic-heading field--wide"><strong>Cadastro com e-mail ou telefone</strong><button type="button" @onclick="ShowGoogleRegistration">Preferir Google</button></div>
+                    }
+                    @if (Mode == "register")
+                    {
+                        <div class="field field--wide"><label for="full-name">Nome completo</label><input id="full-name" autocomplete="name" maxlength="200" @bind="FullName" /></div>
+                        <div class="field"><label for="email">E-mail (opcional)</label><input id="email" type="email" autocomplete="email" maxlength="254" @bind="Email" /></div>
+                    }
+                    <div class="field"><label for="phone">Telefone com DDD</label><input id="phone" type="tel" autocomplete="tel" placeholder="+5511999999999" maxlength="16" @bind="Phone" /></div>
+                    <div class="field"><label for="tax-id">CPF</label><input id="tax-id" inputmode="numeric" autocomplete="off" maxlength="11" @bind="TaxId" /></div>
+                    <div class="field"><label for="birth-date">Data de nascimento</label><input id="birth-date" type="date" autocomplete="bday" value="@BirthDateText" @onchange="UpdateBirthDate" /></div>
+                    @if (Mode == "register")
+                    {
+                        <div class="field"><label for="password">Senha</label><input id="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" @bind="Password" /><p class="field-hint">12+ caracteres, maiúscula, minúscula, número e símbolo.</p></div>
+                        <div class="field"><label for="password-confirm">Confirmar senha</label><input id="password-confirm" type="password" autocomplete="new-password" @bind="PasswordConfirmation" /></div>
+                        <div class="field"><label for="channel">Confirmar por</label><select id="channel" @bind="Channel"><option value="sms">SMS</option><option value="email">E-mail</option></select></div>
+                    }
+
+                    @if (RoleCode == "patient")
+                    {
+                        <h3 class="field--wide form-section-title">Endereço do paciente</h3>
+                        <div class="field"><label for="postal-code">CEP</label><input id="postal-code" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000" maxlength="9" value="@PostalCode" @oninput="HandlePostalCodeInputAsync" aria-describedby="postal-code-status" /><p id="postal-code-status" class="field-hint" aria-live="polite">@(PostalCodeStatus ?? "Ao completar o CEP, buscaremos o endereço automaticamente. Você ainda poderá corrigi-lo manualmente.")</p></div>
+                        <div class="field field--wide"><label for="street">Logradouro</label><input id="street" autocomplete="street-address" maxlength="200" @bind="Street" /></div>
+                        <div class="field"><label for="number">Número</label><input id="number" maxlength="20" @bind="Number" /></div>
+                        <div class="field"><label for="complement">Complemento</label><input id="complement" maxlength="100" @bind="Complement" /></div>
+                        <div class="field"><label for="district">Bairro</label><input id="district" maxlength="100" @bind="District" /></div>
+                        <div class="field"><label for="city">Cidade</label><input id="city" maxlength="100" @bind="City" /></div>
+                        <div class="field"><label for="state">UF</label><input id="state" maxlength="2" @bind="StateCode" /></div>
+                    }
+                    else if (RoleCode == "doctor")
+                    {
+                        <h3 class="field--wide form-section-title">Dados profissionais</h3>
+                        <div class="field"><label for="title">Título</label><select id="title" @bind="ProfessionalTitle"><option>Dr.</option><option>Dra.</option></select></div>
+                        <div class="field"><label for="license-state">UF do CRM</label><input id="license-state" maxlength="2" @bind="LicenseState" /></div>
+                        <div class="field"><label for="license">CRM</label><input id="license" maxlength="30" @bind="LicenseNumber" /></div>
+                        <div class="field"><label for="experience">Anos de experiência</label><input id="experience" type="number" min="0" max="80" @bind="YearsExperience" /></div>
+                        <div class="field field--wide"><label for="specialty">Especialidade principal</label><select id="specialty" @bind="PrimarySpecialtyId">@foreach (var specialty in Options.Specialties){<option value="@specialty.Id">@specialty.Name</option>}</select></div>
+                    }
+
+                    <label class="check-field field--wide"><input type="checkbox" @bind="TermsAccepted" /> Li e aceito os termos de uso e o aviso de privacidade vigentes.</label>
+                    <div class="honeypot" aria-hidden="true"><label for="website">Não preencha</label><input id="website" tabindex="-1" autocomplete="off" @bind="Website" /></div>
+                    <button class="button field--wide" type="button" @onclick="RegisterAsync" disabled="@(IsBusy || IsPostalCodeLoading)">@(Mode == "google-register" ? "Concluir cadastro" : "Criar conta")</button>
+                </div>
+            }
             <footer>Já possui conta? <button type="button" @onclick="ShowLogin">Entrar</button></footer>
         }
         else if (Mode == "verify")
@@ -172,6 +207,8 @@
     [SupplyParameterFromQuery(Name = "result")] public string? Result { get; set; }
     [SupplyParameterFromQuery(Name = "onboarding")] public string? OnboardingToken { get; set; }
     [SupplyParameterFromQuery(Name = "estado")] public string? State { get; set; }
+    [SupplyParameterFromQuery(Name = "role")] public string? RegistrationRole { get; set; }
+    [SupplyParameterFromQuery(Name = "modo")] public string? InitialMode { get; set; }
 
     private IJSObjectReference? module;
     private WebRegistrationOptions Options = new("2026-09", "2026-09", []);
@@ -187,6 +224,9 @@
     private string Channel = "sms";
     private string RoleCode = "patient";
     private string PostalCode = string.Empty;
+    private string? LastPostalCodeLookup;
+    private string? PostalCodeStatus;
+    private int PostalCodeRequestVersion;
     private string Street = string.Empty;
     private string Number = string.Empty;
     private string? Complement;
@@ -205,9 +245,12 @@
     private Guid RequestId;
     private bool RememberMe;
     private bool TermsAccepted;
+    private bool UseClassicRegistration;
+    private bool IsPostalCodeLoading;
     private bool IsLoading;
     private bool IsBusy;
     private bool NoticeIsError;
+    private bool InitialQueryApplied;
     private string? Notice;
 
     private static readonly (string Code, string Label, string Help)[] Roles =
@@ -217,6 +260,31 @@
         ("manager", "Gestor", "Operar a clínica após aprovação"),
     ];
 
+    private (string Code, string Label, string Help) SelectedRole =>
+        Roles.Single(role => role.Code == RoleCode);
+    private bool RequiresAdministrativeApproval =>
+        RoleCode is "doctor" or "manager";
+    private string GoogleRegistrationUrl =>
+        $"{Backend.GoogleLoginUrl}?role={Uri.EscapeDataString(RoleCode)}";
+
+    protected override void OnParametersSet()
+    {
+        if (InitialQueryApplied) return;
+        InitialQueryApplied = true;
+
+        if (Result == "google_onboarding"
+            && !string.IsNullOrWhiteSpace(OnboardingToken)
+            && IsPublicRegistrationRole(RegistrationRole))
+        {
+            RoleCode = RegistrationRole!;
+            Mode = "google-register";
+        }
+        else if (string.IsNullOrWhiteSpace(Result) && InitialMode == "cadastro")
+        {
+            Mode = "register";
+        }
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -224,14 +292,23 @@
         {
             module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/identity-access.js");
             Options = await module.InvokeAsync<WebRegistrationOptions>("get", Backend.BaseUrl.ToString(), "api/v1/auth/registration/options");
-            if (Result == "google_onboarding" && !string.IsNullOrWhiteSpace(OnboardingToken)) Mode = "google-register";
+            SetDefaultSpecialty();
+            if (Result == "google_onboarding"
+                && !string.IsNullOrWhiteSpace(OnboardingToken)
+                && IsPublicRegistrationRole(RegistrationRole))
+            {
+                RoleCode = RegistrationRole!;
+                Mode = "google-register";
+            }
             else if (Result == "mfa_required") Mode = "mfa";
             else if (Result == "mfa_enrollment_required") Mode = "mfa-setup";
             else if (Result == "success") await RedirectCurrentAccountAsync();
             else if (State == "aguardando-aprovacao") ShowNotice("Cadastro confirmado. A administração da clínica precisa aprovar seu acesso.");
             else if (State == "sessao-expirada") ShowError("Sua sessão expirou. Entre novamente para continuar.");
+            else if (Result == "google_registration_role_required") { Mode = "register"; ShowError("Escolha primeiro se o cadastro é de Paciente, Médico ou Gestor e continue novamente com Google."); }
             else if (Result == "explicit_link_required") ShowError("Já existe uma conta com este e-mail. Entre por senha ou código e vincule o Google nas configurações.");
             else if (!string.IsNullOrWhiteSpace(Result)) ShowError("O acesso pelo Google não foi concluído. Tente novamente.");
+            else if (InitialMode == "cadastro") Mode = "register";
         }
         catch (JSException exception) { ShowError(exception.Message); }
         finally { IsLoading = false; StateHasChanged(); }
@@ -256,15 +333,15 @@
     {
         if (!DateOnly.TryParseExact(BirthDateText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var birthDate)) { ShowError("Informe a data de nascimento."); return; }
         if (Mode == "register" && Password != PasswordConfirmation) { ShowError("A confirmação da senha não corresponde."); return; }
-        var address = RoleCode == "patient" ? new { postalCode = PostalCode, street = Street, number = Number, complement = Complement, district = District, city = City, stateCode = StateCode.ToUpperInvariant() } : null;
+        var address = RoleCode == "patient" ? new { postalCode = Digits(PostalCode), street = Street, number = Number, complement = Complement, district = District, city = City, stateCode = StateCode.ToUpperInvariant() } : null;
         var doctor = RoleCode == "doctor" ? new { professionalTitle = ProfessionalTitle, licenseStateCode = LicenseState.ToUpperInvariant(), licenseNumber = LicenseNumber, yearsExperience = YearsExperience, primarySpecialtyId = PrimarySpecialtyId } : null;
         await RunAsync(async () =>
         {
             if (Mode == "google-register")
             {
-                var result = await SendAsync<WebRegistrationCompleted>("api/v1/auth/google/register", new { onboardingToken = OnboardingToken, phone = Phone, roleCode = RoleCode, taxId = Digits(TaxId), birthDate, termsAccepted = TermsAccepted, address, doctor, website = Website });
+                var result = await SendAsync<WebRegistrationCompleted>("api/v1/auth/google/register", new { onboardingToken = OnboardingToken, phone = Phone, taxId = Digits(TaxId), birthDate, termsAccepted = TermsAccepted, address, doctor, website = Website });
                 if (result.Authenticated) Navigation.NavigateTo(result.Destination, true);
-                else { Mode = "login"; ShowNotice("Cadastro enviado. Médico e Gestor só entram depois da aprovação administrativa."); }
+                else { Mode = "login"; ShowNotice("Cadastro enviado. Seu acesso será liberado depois da aprovação de um administrador da clínica."); }
             }
             else
             {
@@ -274,14 +351,52 @@
         });
     }
 
-    private async Task LookupPostalCodeAsync() => await RunAsync(async () =>
+    private async Task HandlePostalCodeInputAsync(ChangeEventArgs args)
     {
-        var postalCode = Digits(PostalCode);
-        if (postalCode.Length != 8) throw new InvalidOperationException("Informe um CEP com oito dígitos.");
-        var result = await module!.InvokeAsync<WebPostalCode>("get", Backend.BaseUrl.ToString(), $"api/v1/registration/postal-code/{postalCode}");
-        PostalCode = postalCode; Street = result.Street; Complement = result.Complement; District = result.District; City = result.City; StateCode = result.StateCode;
-        ShowNotice("Endereço localizado. Revise os dados antes de continuar.");
-    });
+        var digits = Digits(args.Value?.ToString() ?? string.Empty);
+        if (digits.Length > 8) digits = digits[..8];
+        PostalCode = FormatPostalCode(digits);
+        if (digits.Length != 8)
+        {
+            PostalCodeRequestVersion++;
+            LastPostalCodeLookup = null;
+            PostalCodeStatus = null;
+            IsPostalCodeLoading = false;
+            return;
+        }
+
+        if (LastPostalCodeLookup == digits) return;
+        LastPostalCodeLookup = digits;
+        var requestVersion = ++PostalCodeRequestVersion;
+        IsPostalCodeLoading = true;
+        PostalCodeStatus = "Buscando endereço…";
+        try
+        {
+            var result = await module!.InvokeAsync<WebPostalCode>("get", Backend.BaseUrl.ToString(), $"api/v1/registration/postal-code/{digits}");
+            if (requestVersion != PostalCodeRequestVersion || Digits(PostalCode) != digits) return;
+            Street = result.Street;
+            Complement = result.Complement;
+            District = result.District;
+            City = result.City;
+            StateCode = result.StateCode;
+            PostalCodeStatus = "Endereço preenchido automaticamente. Revise os dados e informe o número.";
+        }
+        catch (Exception exception) when (exception is JSException or InvalidOperationException)
+        {
+            if (requestVersion == PostalCodeRequestVersion)
+            {
+                LastPostalCodeLookup = null;
+                PostalCodeStatus = "Não foi possível consultar este CEP agora. Preencha o endereço manualmente ou tente novamente.";
+            }
+        }
+        finally
+        {
+            if (requestVersion == PostalCodeRequestVersion)
+            {
+                IsPostalCodeLoading = false;
+            }
+        }
+    }
 
     private async Task VerifyContactAsync() => await RunAsync(async () => { await SendAsync<object?>("api/v1/auth/contact/verify", new { requestId = RequestId, code = Code }); Mode = "login"; ShowNotice(RoleCode is "doctor" or "manager" ? "Contato confirmado. Aguarde a aprovação administrativa." : "Contato confirmado. Você já pode entrar."); });
     private async Task ResendContactAsync() => await RunAsync(async () => { var identifier = Channel == "email" ? Email : Phone; var result = await SendAsync<WebChallengeResult>("api/v1/auth/contact/resend", new { identifier, channel = Channel }); RequestId = result.RequestId; Code = string.Empty; ShowNotice(result.Message); });
@@ -311,7 +426,10 @@
     private async Task RunAsync(Func<Task> action) { if (IsBusy) return; IsBusy = true; ClearNotice(); try { await action(); } catch (Exception exception) when (exception is JSException or InvalidOperationException) { ShowError(exception.Message); } finally { IsBusy = false; } }
     private void SetMode(string value) { Mode = value; ClearNotice(); }
     private void ShowLogin() => SetMode("login");
-    private void ShowRegister() => SetMode("register");
+    private void ShowRegister() { UseClassicRegistration = false; SetMode("register"); }
+    private void ShowClassicRegistration() { UseClassicRegistration = true; ClearNotice(); }
+    private void ShowGoogleRegistration() { UseClassicRegistration = false; ClearNotice(); }
+    private void SelectRole(string roleCode) { RoleCode = roleCode; SetDefaultSpecialty(); ClearNotice(); }
     private void ShowCodeRequest() => SetMode("code-request");
     private void ShowRecoveryRequest() => SetMode("recovery-request");
     private void UpdateBirthDate(ChangeEventArgs args) => BirthDateText = args.Value?.ToString() ?? string.Empty;
@@ -319,6 +437,16 @@
     private void ShowNotice(string message) { Notice = message; NoticeIsError = false; }
     private void ClearNotice() { Notice = null; NoticeIsError = false; }
     private static string Digits(string value) => new(value.Where(char.IsAsciiDigit).ToArray());
+    private static string FormatPostalCode(string digits) =>
+        digits.Length <= 5 ? digits : $"{digits[..5]}-{digits[5..]}";
+    private static bool IsPublicRegistrationRole(string? roleCode) =>
+        roleCode is "patient" or "doctor" or "manager";
+    private void SetDefaultSpecialty()
+    {
+        if (RoleCode != "doctor" || PrimarySpecialtyId != 0) return;
+        PrimarySpecialtyId = Options.Specialties
+            .FirstOrDefault(item => string.Equals(item.Name, "Oftalmologia", StringComparison.OrdinalIgnoreCase))?.Id ?? 0;
+    }
     private sealed record MfaSetup(string SharedKey, string AuthenticatorUri);
     private sealed record MfaCompletion(IReadOnlyList<string> RecoveryCodes);
 

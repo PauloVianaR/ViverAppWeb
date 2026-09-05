@@ -31,6 +31,9 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.Contains("Ir para o conteúdo principal", html, StringComparison.Ordinal);
         Assert.Contains("id=\"main-content\"", html, StringComparison.Ordinal);
         Assert.Contains("class=\"public-navigation\"", html, StringComparison.Ordinal);
+        Assert.Contains("Cadastro rápido com Google", html, StringComparison.Ordinal);
+        Assert.Contains("Criar conta com Google", html, StringComparison.Ordinal);
+        Assert.Contains("Escolha seu perfil", html, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -163,6 +166,35 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.Contains("Usar chave de acesso", html, StringComparison.Ordinal);
         Assert.Contains("Entrar com código", html, StringComparison.Ordinal);
         Assert.DoesNotContain("value=\"administrator\"", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RegistrationJourney_UsesGoogleFirstAndKeepsClassicAsAlternative()
+    {
+        using var client = CreateClient();
+        using var response = await client.GetAsync("/acesso?modo=cadastro");
+        var html = await ReadUtf8Async(response.Content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Crie sua conta com Google", html, StringComparison.Ordinal);
+        Assert.Contains("Continuar com Google como Paciente", html, StringComparison.Ordinal);
+        Assert.Contains("Cadastrar com e-mail ou telefone", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("id=\"full-name\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("value=\"administrator\"", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GoogleOnboarding_LocksProfessionalRoleAndShowsApprovalBeforeForm()
+    {
+        using var client = CreateClient();
+        using var response = await client.GetAsync("/acesso?result=google_onboarding&onboarding=test-token&role=doctor");
+        var html = await ReadUtf8Async(response.Content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Conta Google vinculada", html, StringComparison.Ordinal);
+        Assert.Contains("Este cadastro precisa de aprovação", html, StringComparison.Ordinal);
+        Assert.Contains("Dados profissionais", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("name=\"role\"", html, StringComparison.Ordinal);
     }
 
     [Theory]

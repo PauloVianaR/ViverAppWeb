@@ -20,14 +20,18 @@
     [SupplyParameterFromQuery(Name = "onboarding")]
     public string? Onboarding { get; set; }
 
+    [SupplyParameterFromQuery(Name = "role")]
+    public string? Role { get; set; }
+
     private string ContinueUrl => Result == "google_onboarding" && !string.IsNullOrWhiteSpace(Onboarding)
-        ? $"/acesso?result=google_onboarding&onboarding={Uri.EscapeDataString(Onboarding)}"
+        ? $"/acesso?result=google_onboarding&onboarding={Uri.EscapeDataString(Onboarding)}&role={Uri.EscapeDataString(Role ?? string.Empty)}"
         : $"/acesso?result={Uri.EscapeDataString(Result ?? "google_failed")}";
 
     private ResultPresentation Presentation => Result switch
     {
         "success" => new(true, "✓", "Acesso concluído", "Sua conta Google foi autenticada com segurança."),
-        "google_onboarding" => new(true, "→", "Complete seu cadastro", "Escolha seu papel e informe os dados necessários antes de criar a conta."),
+        "google_onboarding" => new(true, "→", "Conta Google vinculada", "Agora informe os dados necessários para concluir o cadastro no perfil que você escolheu."),
+        "google_registration_role_required" => new(false, "!", "Escolha seu perfil", "Antes de criar uma conta Google, informe se o cadastro é de Paciente, Médico ou Gestor."),
         "mfa_required" => new(true, "→", "Confirme seu segundo fator", "A conta foi reconhecida e requer a confirmação do MFA."),
         "mfa_enrollment_required" => new(true, "→", "Configure o MFA", "Administradores precisam configurar o segundo fator antes de continuar."),
         "explicit_link_required" => new(false, "!", "Vínculo necessário", "Já existe uma conta com este e-mail. Entre pelo método atual e vincule o Google nas configurações de segurança."),
