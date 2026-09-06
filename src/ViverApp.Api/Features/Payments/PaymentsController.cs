@@ -14,7 +14,7 @@ namespace ViverApp.Api.Features.Payments;
 public sealed class PatientPaymentsController(PaymentService payments) : ControllerBase
 {
     [HttpPost("checkout")]
-    [EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
+    [EnableRateLimiting(SecurityPolicyNames.CheckoutRateLimit)]
     public async Task<ActionResult<PaymentResponse>> CreateCheckout(
         ulong appointmentId,
         [FromHeader(Name = "Idempotency-Key")] string idempotencyKey,

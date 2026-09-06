@@ -24,7 +24,7 @@ public sealed class IdentityChallengeService(
         string destination,
         CancellationToken cancellationToken)
     {
-        if (purpose is not ("login" or "password_reset" or "contact_verification"))
+        if (purpose is not ("login" or "password_reset" or "contact_verification" or "contact_change"))
         {
             throw new ArgumentOutOfRangeException(nameof(purpose));
         }

@@ -1,0 +1,33 @@
+@page "/paciente"
+@inherits PatientPageBase
+@using static ViverApp.Web.PatientLabels
+<PageTitle>Meu cuidado | ViverApp</PageTitle>
+<header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">@(Home is null ? "Seu cuidado começa aqui" : $"Olá, {Home.FullName}!")</h1><p class="page-description">Tudo para cuidar da sua saúde, em um só lugar.</p></div>@if (Home?.IsPremium == true) { <a class="badge badge--brand" href="/paciente/perfil#premium">Premium</a> }</header>
+@if (Notice is not null) { <p class="notice notice--error" role="alert">@Notice</p><button class="button" @onclick="() => Run(Load)">Tentar novamente</button> }
+@if (Loading) { <LoadingSkeleton Lines="5" /> }
+else if (Home is not null)
+{
+    <section class="patient-home-grid" aria-label="Seu próximo cuidado">
+        <div>@if (Home.NextAppointment is not null) { <PatientVisitCard Model="Home.NextAppointment" Clinic="Home.Clinic" /> }
+            else { <section class="surface patient-panel patient-welcome"><AppIcon Name="calendar" /><h2>Sua próxima consulta começa aqui</h2><p>Escolha um serviço, conheça os profissionais e encontre o melhor horário para você.</p><a class="button" href="/paciente/agendar">Agendar atendimento</a></section> }</div>
+        <aside class="surface patient-panel"><h2>Como podemos ajudar?</h2><div class="patient-shortcuts"><a href="/paciente/agendar">Novo agendamento →</a><a href="/paciente/agenda">Minha agenda e histórico →</a><a href="/paciente/pagamentos">Pagamentos →</a><a href="/paciente/perfil">Meu perfil e Premium →</a></div><p class="muted">@Home.Clinic.Name</p><p>@Home.Clinic.Address</p></aside>
+    </section>
+    <section class="patient-section" aria-labelledby="catalog-title"><div class="section-heading"><div><p class="eyebrow">Cuidado completo</p><h2 id="catalog-title">Exames e cirurgias</h2></div><a href="/paciente/agendar">Ver todos os serviços →</a></div>
+        <div class="patient-grid">@foreach (var item in Services) { <article class="surface patient-panel"><span class="badge">@Category(item.CategoryCode)</span><h3>@item.Name</h3><p>@item.Description</p><p>@item.DurationMinutes minutos · @Money(item.PriceAmount)</p>@if(item.DiscountPercent > 0){<p>Premium: @item.DiscountPercent% de desconto</p>}<a class="button button--secondary" href="/paciente/agendar?service=@item.Id">Escolher este serviço</a></article> }</div>
+        @if (Services.Count == 0) { <p class="muted">Os serviços disponíveis aparecerão aqui assim que forem cadastrados pela clínica.</p> }
+    </section>
+    @if (Home.Promotions.Count > 0)
+    {
+        var promotion = Home.Promotions[PromotionIndex];
+        <section class="surface patient-panel patient-promotion" aria-roledescription="carrossel" aria-label="Novidades da clínica"><p class="eyebrow">Novidades · @(PromotionIndex + 1) de @Home.Promotions.Count</p><div aria-live="polite"><h2>@promotion.Title</h2><p>@promotion.Description</p>@if (promotion.Url is not null) { <a href="@promotion.Url" target="_blank" rel="noopener noreferrer">Conhecer em @(new Uri(promotion.Url).Host) ↗</a> }</div><div class="patient-actions"><button class="button button--secondary" @onclick="PreviousPromotion">Anterior</button><button class="button button--secondary" @onclick="NextPromotion">Próximo</button></div></section>
+    }
+    @if (!Home.IsPremium) { <section class="surface patient-panel patient-premium"><p class="eyebrow">Viver Premium</p><h2>Mais benefícios para o seu cuidado</h2><p>Prioridade no atendimento, ausência de anúncios internos e desconto conforme o plano aprovado.</p><a class="button" href="/paciente/perfil#premium">Conhecer e solicitar Premium</a></section> }
+}
+@code {
+    private PatientHomeData? Home;
+    private IReadOnlyList<PatientService> Services = [];
+    private int PromotionIndex;
+    protected override async Task Load() { Home = await Get<PatientHomeData>("api/v1/patient/experience/home"); var exams = await Get<WebPage<PatientService>>("api/v1/patient/experience/services?category=examination&pageSize=3"); var surgeries = await Get<WebPage<PatientService>>("api/v1/patient/experience/services?category=surgery&pageSize=3"); Services = (exams?.Items ?? []).Concat(surgeries?.Items ?? []).ToArray(); }
+    private void PreviousPromotion() => PromotionIndex = (PromotionIndex + Home!.Promotions.Count - 1) % Home.Promotions.Count;
+    private void NextPromotion() => PromotionIndex = (PromotionIndex + 1) % Home!.Promotions.Count;
+}

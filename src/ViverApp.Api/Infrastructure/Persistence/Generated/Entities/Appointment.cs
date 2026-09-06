@@ -51,7 +51,15 @@ public partial class Appointment
 
     public ulong RowVersion { get; set; }
 
+    public decimal? BasePriceAmount { get; set; }
+
+    public decimal DiscountPercent { get; set; }
+
+    public string PaymentLocationCode { get; set; } = null!;
+
     public virtual ICollection<AppointmentDocument> AppointmentDocuments { get; set; } = new List<AppointmentDocument>();
+
+    public virtual AppointmentReview? AppointmentReview { get; set; }
 
     public virtual ICollection<AppointmentStatusHistory> AppointmentStatusHistories { get; set; } = new List<AppointmentStatusHistory>();
 
@@ -73,7 +81,11 @@ public partial class Appointment
 
     public virtual Account PatientAccount { get; set; } = null!;
 
-    public virtual Payment? Payment { get; set; }
+    public virtual Payment? PaymentAppointment { get; set; }
+
+    public virtual ICollection<Payment> PaymentProviderReferenceAppointments { get; set; } = new List<Payment>();
 
     public virtual Appointment? RescheduledFromAppointment { get; set; }
+
+    public virtual ICollection<TeleconsultationPeer> TeleconsultationPeers { get; set; } = new List<TeleconsultationPeer>();
 }

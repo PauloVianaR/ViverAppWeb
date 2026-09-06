@@ -802,8 +802,10 @@ public sealed class AuthController(
     [Authorize]
     [EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
     [HttpGet("google/link/start")]
-    public ActionResult StartGoogleLink()
+    public async Task<ActionResult> StartGoogleLink([FromServices] PatientExperience.RecentAuthentication recent, CancellationToken cancellationToken)
     {
+        if (!await recent.IsRecentAsync(User, cancellationToken))
+            return Redirect(securityOptions.BuildWebReturnUrl("reauthentication_required"));
         if (!securityOptions.GoogleEnabled)
         {
             return Problem(statusCode: StatusCodes.Status503ServiceUnavailable);

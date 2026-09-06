@@ -53,6 +53,8 @@ public sealed class ViverAppCookieEvents(ViverAppDbContext database) : CookieAut
             || record.RevokedAtUtc is not null
             || record.ExpiresAtUtc <= now
             || record.AccountStatus != "active"
+            || context.Principal?.FindFirstValue(ViverAppClaimTypes.RoleCode) != record.RoleCode
+            || (record.MfaSatisfied && !context.Principal!.IsInRole(record.RoleCode))
             || !stampMatches
             || !mfaMatches)
         {

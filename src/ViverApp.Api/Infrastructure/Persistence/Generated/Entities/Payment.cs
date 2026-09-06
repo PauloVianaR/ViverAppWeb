@@ -51,7 +51,13 @@ public partial class Payment
 
     public ulong RowVersion { get; set; }
 
+    public string? MethodCode { get; set; }
+
+    public ulong? ProviderReferenceAppointmentId { get; set; }
+
     public virtual Appointment Appointment { get; set; } = null!;
 
     public virtual ICollection<PaymentEvent> PaymentEvents { get; set; } = new List<PaymentEvent>();
+
+    public virtual Appointment? ProviderReferenceAppointment { get; set; }
 }

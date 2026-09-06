@@ -1,5 +1,4 @@
 @page "/acesso"
-@rendermode InteractiveServer
 @implements IAsyncDisposable
 @using System.Globalization
 @inject IJSRuntime JavaScript
@@ -42,8 +41,8 @@
         {
             <header><p class="eyebrow">Boas-vindas</p><h2>Entrar</h2><p>Acesse com e-mail ou telefone.</p></header>
             <div class="access-form">
-                <div class="field"><label for="login-identifier">E-mail ou telefone</label><input id="login-identifier" autocomplete="username webauthn" @bind="Identifier" /></div>
-                <div class="field"><label for="login-password">Senha</label><input id="login-password" type="password" autocomplete="current-password" @bind="Password" /></div>
+                <div class="field"><label for="login-identifier">E-mail ou telefone</label><input id="login-identifier" autocomplete="username webauthn" @bind="Identifier" @bind:event="oninput" /></div>
+                <div class="field"><label for="login-password">Senha</label><input id="login-password" type="password" autocomplete="current-password" @bind="Password" @bind:event="oninput" /></div>
                 <label class="check-field"><input type="checkbox" @bind="RememberMe" /> Manter acesso neste dispositivo</label>
                 <button class="button" type="button" @onclick="LoginAsync" disabled="@IsBusy">Entrar com senha</button>
                 <button class="button button--secondary" type="button" @onclick="PasskeyLoginAsync" disabled="@IsBusy">Usar chave de acesso</button>
@@ -310,7 +309,7 @@
             else if (!string.IsNullOrWhiteSpace(Result)) ShowError("O acesso pelo Google não foi concluído. Tente novamente.");
             else if (InitialMode == "cadastro") Mode = "register";
         }
-        catch (JSException exception) { ShowError(exception.Message); }
+        catch (JSException exception) { ShowError(ToUserMessage(exception)); }
         finally { IsLoading = false; StateHasChanged(); }
     }
 
@@ -423,7 +422,7 @@
     }
 
     private async Task<T> SendAsync<T>(string path, object body) => await module!.InvokeAsync<T>("send", Backend.BaseUrl.ToString(), path, body);
-    private async Task RunAsync(Func<Task> action) { if (IsBusy) return; IsBusy = true; ClearNotice(); try { await action(); } catch (Exception exception) when (exception is JSException or InvalidOperationException) { ShowError(exception.Message); } finally { IsBusy = false; } }
+    private async Task RunAsync(Func<Task> action) { if (IsBusy) return; IsBusy = true; ClearNotice(); try { await action(); } catch (Exception exception) when (exception is JSException or InvalidOperationException) { ShowError(ToUserMessage(exception)); } finally { IsBusy = false; } }
     private void SetMode(string value) { Mode = value; ClearNotice(); }
     private void ShowLogin() => SetMode("login");
     private void ShowRegister() { UseClassicRegistration = false; SetMode("register"); }
@@ -436,6 +435,25 @@
     private void ShowError(string message) { Notice = message; NoticeIsError = true; }
     private void ShowNotice(string message) { Notice = message; NoticeIsError = false; }
     private void ClearNotice() { Notice = null; NoticeIsError = false; }
+    private static string ToUserMessage(Exception exception)
+    {
+        var message = exception.Message;
+        var javascriptStackStart = message.IndexOf(" Error:", StringComparison.Ordinal);
+        if (javascriptStackStart >= 0)
+        {
+            message = message[..javascriptStackStart];
+        }
+
+        var lineBreak = message.IndexOfAny(['\r', '\n']);
+        if (lineBreak >= 0)
+        {
+            message = message[..lineBreak];
+        }
+
+        return string.IsNullOrWhiteSpace(message)
+            ? "Não foi possível concluir a solicitação. Tente novamente."
+            : message.Trim();
+    }
     private static string Digits(string value) => new(value.Where(char.IsAsciiDigit).ToArray());
     private static string FormatPostalCode(string digits) =>
         digits.Length <= 5 ? digits : $"{digits[..5]}-{digits[5..]}";

@@ -1,222 +1,75 @@
 @page "/paciente/pagamentos"
 @page "/paciente/pagamentos/retorno"
-@rendermode InteractiveServer
-@implements IAsyncDisposable
+@inherits PatientPageBase
 @using System.Globalization
-@inject IJSRuntime JavaScript
-@inject WebBackendOptions Backend
-
+@using static ViverApp.Web.PatientLabels
 <PageTitle>Pagamentos | ViverApp</PageTitle>
-
-<header class="workspace-heading">
-    <div>
-        <p class="eyebrow">Área do paciente</p>
-        <h1 class="page-title">Pagamento seguro</h1>
-        <p class="page-description">O valor vem do agendamento e o pagamento acontece no ambiente protegido do PagBank.</p>
-    </div>
-    <span class="badge badge--brand">Checkout externo</span>
-</header>
-
-@if (!string.IsNullOrWhiteSpace(Notice))
+<header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Meus pagamentos</h1><p class="page-description">Confira valores, escolha como pagar e acompanhe a confirmação.</p></div><a class="button button--secondary" href="/paciente/agenda">Minha agenda</a></header>
+@if(Notice is not null){<p class="notice @(NoticeError?"notice--error":"notice--success")" role="alert">@Notice</p>}
+<div class="patient-tabs" aria-label="Visualização de pagamentos"><button class="button @(View=="pending"?null:"button--secondary")" aria-pressed="@(View=="pending")" disabled="@Busy" @onclick='()=>ChangeView("pending")'>Pagar</button><button class="button @(View=="history"?null:"button--secondary")" aria-pressed="@(View=="history")" disabled="@Busy" @onclick='()=>ChangeView("history")'>Histórico</button></div>
+<section class="surface patient-panel"><form @onsubmit="Apply" @onsubmit:preventDefault><div class="patient-filter-grid">
+    <div class="field"><label for="payments-from">De</label><input id="payments-from" type="date" @bind="From" /></div><div class="field"><label for="payments-until">Até</label><input id="payments-until" type="date" @bind="Until" /></div>
+    <div class="field"><label for="payments-min">Valor mínimo</label><input id="payments-min" type="number" min="0" step="0.01" @bind="Min" /></div><div class="field"><label for="payments-max">Valor máximo</label><input id="payments-max" type="number" min="0" step="0.01" @bind="Max" /></div>
+    <div class="field"><label for="payments-method">Método</label><select id="payments-method" @bind="MethodFilter"><option value="">Todos</option>@foreach(var method in new[]{"PIX","CREDIT_CARD","DEBIT_CARD","BOLETO"}){<option value="@method">@Method(method)</option>}</select></div>
+    <div class="field"><label for="payments-location">Local</label><select id="payments-location" @bind="Location"><option value="">Todos</option><option value="web">Pelo site</option><option value="clinic">Na clínica</option></select></div>
+    <div class="field"><label for="payments-status">Estado</label><select id="payments-status" @bind="StatusFilter"><option value="">Todos</option>@foreach(var status in new[]{"unpaid","pending","authorized","paid","failed","canceled","refunded"}){<option value="@status">@Status(status)</option>}</select></div>
+    </div><div class="patient-actions"><button class="button" disabled="@Busy">Aplicar filtros</button><button type="button" class="button button--secondary" @onclick="Clear" disabled="@Busy">Limpar filtros</button></div></form></section>
+@if(Loading){<LoadingSkeleton Lines="4" />}
+else if(PageData?.Items.Count>0){<p class="muted" role="status">@PageData.TotalCount registro(s)</p><div class="patient-grid">@foreach(var item in PageData.Items){<article class="surface patient-panel"><span class="badge">@Status(item.StatusCode)</span><h2>@item.Service</h2><p>@item.DoctorName · @AtClinic(item.StartsAtUtc)</p><strong>@Money(item.Amount)</strong><p>@(item.Location=="clinic"?"Na clínica":"Pelo site") · @Method(item.Method)</p>@if(item.ModalityCode=="online"){<p>Atendimento online: pagamento pelo site.</p>}<button class="button button--secondary" @onclick="()=>Select(item.AppointmentId)" disabled="@Busy">@(item.CanPay?"Escolher pagamento":"Ver detalhe / recibo")</button></article>}</div>}
+else{<InterfaceState Title="Nenhum pagamento encontrado" Description="Quando houver uma cobrança, ela aparecerá aqui. Você também pode ajustar os filtros." Icon="card" />}
+<nav class="patient-pagination" aria-label="Páginas de pagamentos"><button class="button button--secondary" @onclick="()=>PageChange(-1)" disabled="@(Busy||Page==1)">Anterior</button><span>Página @Page</span><button class="button button--secondary" @onclick="()=>PageChange(1)" disabled="@(Busy||Page*12>=(PageData?.TotalCount??0))">Próxima</button></nav>
+@if(Selected is not null)
 {
-    <div class="notice @(NoticeIsError ? "notice--error" : "notice--success")" role="@(NoticeIsError ? "alert" : "status")">@Notice</div>
-}
-
-@if (AppointmentId is null or 0)
-{
-    <InterfaceState Title="Escolha um atendimento"
-                    Description="Abra sua agenda e selecione Pagar no atendimento pendente. Assim o valor correto será recuperado pelo servidor."
-                    Icon="card"
-                    ActionLabel="Ir para minha agenda"
-                    ActionHref="/paciente/agenda#agenda" />
-}
-else if (IsLoading)
-{
-    <section class="surface payment-panel"><LoadingSkeleton Lines="5" /></section>
-}
-else if (Payment is null)
-{
-    <section class="surface payment-panel" aria-labelledby="new-payment-title">
-        <p class="eyebrow">Agendamento #@AppointmentId</p>
-        <h2 id="new-payment-title">Gerar checkout</h2>
-        <p>O backend confirmará o agendamento, o valor e sua titularidade antes de solicitar um link ao PagBank.</p>
-        <button class="button" type="button" @onclick="CreateCheckoutAsync" disabled="@IsBusy">Gerar checkout seguro</button>
-    </section>
-}
-else
-{
-    <section class="surface payment-panel" aria-labelledby="payment-title">
-        <div class="payment-heading">
-            <div>
-                <p class="eyebrow">Agendamento #@Payment.AppointmentId</p>
-                <h2 id="payment-title">@Money(Payment.Amount)</h2>
+    <section id="payment-detail" class="surface patient-panel patient-section" tabindex="-1" aria-labelledby="payment-title"><p class="eyebrow">Atendimento #@Selected.Appointment.Id</p><h2 id="payment-title">@(Payment?.StatusCode=="paid"?"Recibo de pagamento":"Pagamento seguro")</h2><p>@Selected.Appointment.AppointmentTypeName · @Selected.Appointment.DoctorName</p><h3>@Money(Payment?.Amount??Selected.Appointment.PriceAmount)</h3><p role="status">@Status(Payment?.StatusCode??Selected.PaymentStatus)</p>
+        @if(Payment is not null){<dl class="patient-facts"><div><dt>Referência</dt><dd>#@Payment.Id</dd></div><div><dt>Atualizado em</dt><dd>@AtClinic(Payment.UpdatedAtUtc)</dd></div>@if(Payment.PaidAtUtc.HasValue){<div><dt>Pago em</dt><dd>@AtClinic(Payment.PaidAtUtc.Value)</dd></div>}@if(Payment.CheckoutExpiresAtUtc.HasValue){<div><dt>Checkout válido até</dt><dd>@AtClinic(Payment.CheckoutExpiresAtUtc.Value)</dd></div>}</dl>}
+        @if(Selected.CanPay)
+        {
+            <div class="patient-actions">@if(Payment is null){<button class="button" @onclick="CreateCheckout" disabled="@Busy">Pagar pelo site com PagBank</button>@if(Selected.Appointment.ModalityCode=="in_person" && CanClinic){<button class="button button--secondary" @onclick="OpenClinicConfirmation" disabled="@Busy">Pagar na clínica</button>}}
+                @if(Payment?.CheckoutUrl is not null && Payment.StatusCode is "pending" or "authorized" && Payment.CheckoutExpiresAtUtc > DateTime.UtcNow){<a class="button" href="@Payment.CheckoutUrl" rel="noreferrer">Continuar no PagBank ↗</a>}
             </div>
-            <span class="badge @StatusBadge(Payment.StatusCode)">@StatusLabel(Payment.StatusCode)</span>
-        </div>
-        <dl class="payment-details">
-            <div><dt>Moeda</dt><dd>@Payment.CurrencyCode</dd></div>
-            <div><dt>Última atualização</dt><dd>@LocalTime(Payment.UpdatedAtUtc)</dd></div>
-            <div><dt>Referência</dt><dd>#@Payment.Id</dd></div>
-        </dl>
-        <div class="panel-actions">
-            @if (CanPay(Payment))
-            {
-                <button class="button" type="button" @onclick="OpenCheckoutAsync" disabled="@IsBusy">Continuar no PagBank</button>
-            }
-            <button class="button button--secondary" type="button" @onclick="RefreshAsync" disabled="@IsBusy">Atualizar situação</button>
-            <a class="button button--secondary" href="/paciente/agenda#agenda">Voltar à agenda</a>
-        </div>
-        <p class="field-hint">A confirmação do atendimento só ocorre após o servidor validar a notificação ou consultar o PagBank.</p>
+        }
+        @if(Payment is not null){<button class="button button--secondary" @onclick="()=>Run(RefreshPayment)" disabled="@Busy">Atualizar situação</button>}
+        @if(Payment?.CheckoutExpiresAtUtc<=DateTime.UtcNow && Payment.StatusCode=="pending"){<p>O checkout expirou. Atualize a situação antes de tentar pagar novamente ou fale com a clínica.</p>}
+        <p class="field-hint">A situação é consultada automaticamente a cada 30 segundos enquanto houver pagamento em andamento, por até 10 minutos. Voltar do checkout não confirma o pagamento.</p>
     </section>
+    <dialog id="clinic-payment" class="patient-dialog" aria-labelledby="clinic-payment-title"><h2 id="clinic-payment-title">Pagar na clínica?</h2><p>O valor de @Money(Selected.Appointment.PriceAmount) continuará pendente até a clínica registrar o recebimento.</p><div class="patient-actions"><button class="button" @onclick="ChooseClinic" disabled="@Busy">Confirmar escolha</button><button class="button button--secondary" @onclick="CloseClinic">Voltar</button></div></dialog>
 }
-
 @code {
-    private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("pt-BR");
-    private IJSObjectReference? module;
+    [SupplyParameterFromQuery(Name="appointmentId")] public string? AppointmentQuery {get;set;}
+    private WebPage<PatientPayment>? PageData;
+    private PatientAppointment? Selected;
+    private PatientClinic? Clinic;
     private WebPayment? Payment;
-    private bool IsLoading = true;
-    private bool IsBusy;
-    private string? Notice;
-    private bool NoticeIsError;
-
-    [SupplyParameterFromQuery(Name = "appointmentId")]
-    public string? AppointmentIdQuery { get; set; }
-
-    private ulong? AppointmentId => ulong.TryParse(
-        AppointmentIdQuery,
-        NumberStyles.None,
-        CultureInfo.InvariantCulture,
-        out var value)
-        ? value
-        : null;
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    private bool CanClinic;
+    private bool FocusPayment;
+    private string View="pending", MethodFilter="", Location="", StatusFilter="";
+    private string? CheckoutKey;
+    private int Page=1;
+    private DateTime? From,Until;
+    private decimal? Min,Max;
+    private readonly CancellationTokenSource PollCancellation=new();
+    private Task? PollTask;
+    protected override async Task OnAfterRenderAsync(bool firstRender) { await base.OnAfterRenderAsync(firstRender); if (!firstRender && FocusPayment && Module is not null) { FocusPayment = false; await Module.InvokeVoidAsync("focus", "payment-detail"); } }
+    protected override async Task Load(){Clinic=await Get<PatientClinic>("api/v1/patient/experience/clinic");await LoadList();if(ulong.TryParse(AppointmentQuery,out var id))await SelectCore(id);PollTask??=Poll();}
+    private async Task LoadList()=>PageData=await Get<WebPage<PatientPayment>>($"api/v1/patient/experience/payments?page={Page}&view={View}&from={From:yyyy-MM-dd}&until={Until:yyyy-MM-dd}&min={Min?.ToString(CultureInfo.InvariantCulture)}&max={Max?.ToString(CultureInfo.InvariantCulture)}&method={MethodFilter}&location={Location}&status={StatusFilter}");
+    private Task Apply()=>Run(async()=>{Page=1;await LoadList();});
+    private Task Clear()=>Run(async()=>{From=Until=null;Min=Max=null;MethodFilter=Location=StatusFilter="";Page=1;await LoadList();});
+    private Task ChangeView(string view)=>Run(async()=>{View=view;Page=1;await LoadList();});
+    private Task PageChange(int delta)=>Run(async()=>{Page+=delta;await LoadList();});
+    private Task Select(ulong id)=>Run(async()=>{await SelectCore(id);StateHasChanged();});
+    private async Task SelectCore(ulong id)
     {
-        if (!firstRender)
-        {
-            return;
-        }
-
-        try
-        {
-            module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/patient-scheduling.js");
-            if (AppointmentId is > 0)
-            {
-                await LoadAsync(refresh: true, tolerateMissing: true);
-            }
-        }
-        catch (JSException exception)
-        {
-            ShowError(exception.Message);
-        }
-        finally
-        {
-            IsLoading = false;
-            StateHasChanged();
-        }
+        Selected=await Get<PatientAppointment>($"api/v1/patient/experience/appointments/{id}");Payment=null;CheckoutKey=$"checkout-{Guid.NewGuid():N}";FocusPayment=true;
+        if (Selected?.Appointment.RescheduledToAppointmentId is ulong successor) { Navigation.NavigateTo($"/paciente/pagamentos?appointmentId={successor}", true); return; }
+        CanClinic=Selected?.CanChooseClinic??false;
+        if(Selected?.PaymentStatus!="unpaid")Payment=await Get<WebPayment>($"api/v1/patient/appointments/{id}/payment");
     }
-
-    private async Task CreateCheckoutAsync()
-    {
-        if (module is null || AppointmentId is null or 0)
-        {
-            return;
-        }
-
-        IsBusy = true;
-        ClearNotice();
-        try
-        {
-            Payment = await module.InvokeAsync<WebPayment>(
-                "send",
-                Backend.BaseUrl.ToString(),
-                $"api/v1/patient/appointments/{AppointmentId}/payment/checkout",
-                "POST",
-                new { },
-                $"payment-{Guid.NewGuid():N}");
-            Notice = "Checkout criado. Confira o valor antes de continuar.";
-        }
-        catch (JSException exception)
-        {
-            ShowError(exception.Message);
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    private async Task RefreshAsync()
-    {
-        IsBusy = true;
-        ClearNotice();
-        try
-        {
-            await LoadAsync(refresh: true, tolerateMissing: false);
-            Notice = "Situação atualizada pelo servidor.";
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    private async Task LoadAsync(bool refresh, bool tolerateMissing)
-    {
-        try
-        {
-            Payment = await module!.InvokeAsync<WebPayment>(
-                "get",
-                Backend.BaseUrl.ToString(),
-                $"api/v1/patient/appointments/{AppointmentId}/payment?refresh={refresh.ToString().ToLowerInvariant()}");
-        }
-        catch (JSException exception) when (tolerateMissing && exception.Message.Contains("Pagamento não encontrado", StringComparison.OrdinalIgnoreCase))
-        {
-            Payment = null;
-        }
-        catch (JSException exception)
-        {
-            ShowError(exception.Message);
-        }
-    }
-
-    private async Task OpenCheckoutAsync()
-    {
-        if (Payment?.CheckoutUrl is null)
-        {
-            return;
-        }
-
-        await module!.InvokeVoidAsync("redirectTo", Payment.CheckoutUrl);
-    }
-
-    private void ClearNotice() { Notice = null; NoticeIsError = false; }
-    private void ShowError(string message) { Notice = message; NoticeIsError = true; }
-    private static bool CanPay(WebPayment payment) => payment.StatusCode is "pending" or "authorized" && payment.CheckoutUrl is not null;
-    private static string Money(decimal value) => value.ToString("C", Culture);
-    private static string LocalTime(DateTime value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm", Culture);
-    private static string StatusLabel(string value) => value switch
-    {
-        "pending" => "Aguardando pagamento",
-        "authorized" => "Em análise",
-        "paid" => "Pago",
-        "failed" => "Não aprovado",
-        "canceled" => "Cancelado",
-        "refunded" => "Reembolsado",
-        _ => "Em processamento",
-    };
-    private static string StatusBadge(string value) => value switch
-    {
-        "paid" => "badge--success",
-        "authorized" or "pending" => "badge--warning",
-        _ => "badge--danger",
-    };
-
-    public async ValueTask DisposeAsync()
-    {
-        if (module is not null)
-        {
-            try { await module.DisposeAsync(); } catch (JSDisconnectedException) { }
-        }
-    }
+    private Task CreateCheckout()=>Run(async()=>{Payment=await Request<WebPayment>($"api/v1/patient/appointments/{Selected!.Appointment.Id}/payment/checkout","POST",new{},CheckoutKey);Notice="Confira o valor e continue no ambiente do PagBank.";});
+    private async Task RefreshPayment(){if(Selected is not null && Payment is not null){Payment=await Get<WebPayment>($"api/v1/patient/appointments/{Selected.Appointment.Id}/payment?refresh=true");Selected=await Get<PatientAppointment>($"api/v1/patient/experience/appointments/{Selected.Appointment.Id}");}}
+    private async Task OpenClinicConfirmation()=>await Module!.InvokeVoidAsync("showDialog","clinic-payment");
+    private async Task CloseClinic()=>await Module!.InvokeVoidAsync("closeDialog","clinic-payment");
+    private Task ChooseClinic()=>Run(async()=>{await CloseClinic();await Request<object>($"api/v1/patient/experience/appointments/{Selected!.Appointment.Id}/pay-at-clinic","POST",new{});Selected=await Get<PatientAppointment>($"api/v1/patient/experience/appointments/{Selected.Appointment.Id}");await LoadList();Notice="Pagamento na clínica selecionado. O valor ainda está pendente.";});
+    private async Task Poll(){using var timer=new PeriodicTimer(TimeSpan.FromSeconds(30));try{for(var i=0;i<20 && await timer.WaitForNextTickAsync(PollCancellation.Token);i++){await InvokeAsync(async()=>{if(!Busy && Payment?.StatusCode is "pending" or "authorized"){await Run(RefreshPayment);StateHasChanged();}});}}catch(OperationCanceledException){}}
+    private string AtClinic(DateTime value)=>TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.SpecifyKind(value,DateTimeKind.Utc),Clinic?.Timezone??"America/Sao_Paulo").ToString("dd/MM/yyyy HH:mm");
+    public override async ValueTask DisposeAsync(){await PollCancellation.CancelAsync();if(PollTask is not null)await PollTask;PollCancellation.Dispose();await base.DisposeAsync();}
 }

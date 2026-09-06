@@ -1,5 +1,4 @@
 @page "/seguranca"
-@rendermode InteractiveServer
 @implements IAsyncDisposable
 @inject IJSRuntime JavaScript
 @inject WebBackendOptions Backend
@@ -58,9 +57,9 @@
         finally { IsLoading = false; }
     }
     private async Task CreatePasskeyAsync() => await RunAsync(async () => { await module!.InvokeVoidAsync("createPasskey", Backend.BaseUrl.ToString(), $"Dispositivo {Passkeys.Count + 1}"); Notice = "Chave de acesso adicionada."; await LoadAsync(); });
-    private async Task RemovePasskeyAsync(WebPasskey item) => await RunAsync(async () => { await module!.InvokeAsync<object?>("sendMethod", Backend.BaseUrl.ToString(), $"api/v1/auth/passkeys/{Uri.EscapeDataString(item.CredentialId)}", "DELETE", null); Passkeys.Remove(item); Notice = "Chave removida."; });
-    private async Task RevokeSessionAsync(WebSession item) => await RunAsync(async () => { await module!.InvokeAsync<object?>("sendMethod", Backend.BaseUrl.ToString(), $"api/v1/auth/sessions/{item.Id}", "DELETE", null); Sessions.Remove(item); Notice = "Sessão revogada."; });
-    private async Task RevokeAllAsync() => await RunAsync(async () => { await module!.InvokeAsync<object?>("send", Backend.BaseUrl.ToString(), "api/v1/auth/sessions/revoke-all", new { }); Navigation.NavigateTo("/acesso", true); });
+    private async Task RemovePasskeyAsync(WebPasskey item) => await RunAsync(async () => { if (!await JavaScript.InvokeAsync<bool>("confirm", "Remover esta chave de acesso? Confira se possui outra forma de entrar.")) return; await module!.InvokeAsync<object?>("sendMethod", Backend.BaseUrl.ToString(), $"api/v1/auth/passkeys/{Uri.EscapeDataString(item.CredentialId)}", "DELETE", null); Passkeys.Remove(item); Notice = "Chave removida."; });
+    private async Task RevokeSessionAsync(WebSession item) => await RunAsync(async () => { if (!await JavaScript.InvokeAsync<bool>("confirm", "Encerrar o acesso neste dispositivo?")) return; await module!.InvokeAsync<object?>("sendMethod", Backend.BaseUrl.ToString(), $"api/v1/auth/sessions/{item.Id}", "DELETE", null); Sessions.Remove(item); Notice = "Sessão revogada."; });
+    private async Task RevokeAllAsync() => await RunAsync(async () => { if (!await JavaScript.InvokeAsync<bool>("confirm", "Sair de todos os dispositivos, incluindo este?")) return; await module!.InvokeAsync<object?>("send", Backend.BaseUrl.ToString(), "api/v1/auth/sessions/revoke-all", new { }); Navigation.NavigateTo("/acesso", true); });
     private async Task RunAsync(Func<Task> action) { if (IsBusy) return; IsBusy = true; Notice = null; NoticeIsError = false; try { await action(); } catch (JSException exception) { Error(exception.Message); } finally { IsBusy = false; } }
     private void Error(string value) { Notice = value; NoticeIsError = true; }
     private static string MethodLabel(string value) => value switch { "google" => "Google", "passkey" => "Passkey", "sms_code" => "Código SMS", "email_code" => "Código por e-mail", _ => "Senha" };

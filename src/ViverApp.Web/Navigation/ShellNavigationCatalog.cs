@@ -37,7 +37,7 @@ public static class ShellNavigationCatalog
             new("Agendar", "/paciente/agendar", "plus"),
             new("Agenda", "/paciente/agenda", "calendar"),
             new("Pagamentos", "/paciente/pagamentos", "card"),
-            new("Perfil", "/paciente#perfil", "user"),
+            new("Perfil", "/paciente/perfil", "user"),
         ]);
 
     private static readonly ShellDefinition Doctor = new(

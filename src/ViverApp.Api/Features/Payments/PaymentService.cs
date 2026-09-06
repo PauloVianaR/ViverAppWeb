@@ -89,6 +89,7 @@ public sealed class PaymentService(
             payment = new Payment
             {
                 AppointmentId = appointmentId,
+                ProviderReferenceAppointmentId = appointmentId,
                 ProviderCode = "pagbank",
                 StatusCode = "pending",
                 Amount = appointment.PriceAmount,
@@ -129,6 +130,9 @@ public sealed class PaymentService(
         ValidateCheckout(provider, reference);
 
         payment.ProviderCheckoutId = provider.Id;
+        appointment.PaymentLocationCode = "web";
+        appointment.UpdatedAtUtc = now;
+        appointment.RowVersion++;
         payment.CheckoutUrl = provider.PayUrl!.AbsoluteUri;
         payment.CheckoutExpiresAtUtc = provider.ExpiresAtUtc ?? expiration.UtcDateTime;
         payment.ProviderStatusCode = provider.Status;
@@ -441,7 +445,7 @@ public sealed class PaymentService(
         }
 
         return await database.Payments
-            .FromSqlInterpolated($"SELECT * FROM payments WHERE (appointment_id = {appointmentId} AND {appointmentId} > 0) OR provider_checkout_id = {resource.Id} OR provider_transaction_id = {resource.Id} LIMIT 1 FOR UPDATE")
+            .FromSqlInterpolated($"SELECT * FROM payments WHERE ((provider_reference_appointment_id = {appointmentId} OR (provider_reference_appointment_id IS NULL AND appointment_id = {appointmentId})) AND {appointmentId} > 0) OR provider_checkout_id = {resource.Id} OR provider_transaction_id = {resource.Id} LIMIT 1 FOR UPDATE")
             .SingleOrDefaultAsync(cancellationToken);
     }
 
@@ -465,6 +469,7 @@ public sealed class PaymentService(
         }
 
         payment.StatusCode = transition.TargetStatus;
+        if (resource.MethodCode is "PIX" or "CREDIT_CARD" or "DEBIT_CARD" or "BOLETO") payment.MethodCode = resource.MethodCode;
         payment.ProviderStatusCode = resource.Status;
         payment.ProviderEventAtUtc = resource.OccurredAtUtc ?? now;
         if (resource.RawKind == "charge")

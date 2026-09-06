@@ -211,6 +211,10 @@ public sealed partial class IdentityOutboxWorker(
     {
         return key switch
         {
+            "identity.contact_change" => new IdentityTemplate(
+                "Confirme seu novo contato ViverApp",
+                $"Seu código para confirmar o novo contato é {code}. Ele expira em 10 minutos. Se não solicitou esta mudança, não compartilhe o código.",
+                "sms_cadastro"),
             "identity.contact_verification" => new IdentityTemplate(
                 "Confirme sua conta ViverApp",
                 $"Seu código para confirmar a conta é {code}. Ele expira em 10 minutos. Não compartilhe este código.",

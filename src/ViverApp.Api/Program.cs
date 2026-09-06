@@ -4,6 +4,7 @@ using ViverApp.Api.Features.ClinicalOperations;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.PatientScheduling;
 using ViverApp.Api.Features.Payments;
+using ViverApp.Api.Features.PatientExperience;
 using ViverApp.Api.Infrastructure.Persistence;
 using ViverApp.Security;
 
@@ -64,6 +65,14 @@ builder.Services.AddScoped<IPatientSchedulingAuditWriter, PatientSchedulingAudit
 builder.Services.AddScoped<PatientSchedulingService>();
 builder.Services.AddScoped<IClinicalOperationsAuditWriter, ClinicalOperationsAuditWriter>();
 builder.Services.AddScoped<ClinicalOperationsService>();
+builder.Services.AddScoped<PatientExperienceService>();
+builder.Services.AddScoped<PrivateDocumentStore>();
+builder.Services.AddScoped<IDocumentMalwareScanner, WindowsDocumentMalwareScanner>();
+builder.Services.AddScoped<PatientExperienceExceptionFilter>();
+builder.Services.AddScoped<RecentAuthentication>();
+builder.Services.AddScoped<TeleconsultationAccess>();
+builder.Services.AddSingleton<VideoInvocationLimiter>();
+builder.Services.AddSignalR(options => { options.EnableDetailedErrors = false; options.MaximumReceiveMessageSize = 65536; options.MaximumParallelInvocationsPerClient = 1; });
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), ["live"])
     .AddCheck<DatabaseReadinessHealthCheck>("database", tags: ["ready"]);
@@ -82,9 +91,9 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseRouting();
 app.UseCors();
-app.UseRateLimiter();
 app.UseRequestTimeouts();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.UseAntiforgery();
 
@@ -109,6 +118,7 @@ app.MapHealthChecks(
     .DisableRateLimiting()
     .DisableRequestTimeout();
 app.MapControllers().RequireCors(SecurityPolicyNames.WebClientCors);
+app.MapHub<TeleconsultationHub>("/hubs/teleconsultation").RequireCors(SecurityPolicyNames.WebClientCors).RequireRateLimiting(SecurityPolicyNames.VideoRateLimit).DisableRequestTimeout();
 
 app.Run();
 

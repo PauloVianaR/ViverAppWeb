@@ -1,5 +1,7 @@
 # Fase 11 — Experiência completa do Paciente
 
+**Acompanhamento:** [Implementação, rastreabilidade e validações pendentes](FASE-11-IMPLEMENTACAO-E-VALIDACAO.md). A implementação e a validação local foram concluídas; homologações externas continuam registradas localmente.
+
 ## Objetivo
 
 Entregar todas as capacidades do perfil Paciente observadas no MAUI, redesenhadas para Web responsiva e integradas às fundações das Fases 7, 9 e 10.
