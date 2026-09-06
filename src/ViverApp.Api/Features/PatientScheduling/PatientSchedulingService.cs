@@ -68,6 +68,9 @@ public sealed class PatientSchedulingService(
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
+        var doctorIds = accounts.Select(x => x.Id).ToArray();
+        var reviews = await database.AppointmentReviews.AsNoTracking().Where(x => doctorIds.Contains(x.Appointment.DoctorAccountId))
+            .GroupBy(x => x.Appointment.DoctorAccountId).Select(x => new { Id = x.Key, Average = x.Average(r => (double)r.Rating), Count = x.Count() }).ToDictionaryAsync(x => x.Id, cancellationToken);
         var items = accounts.Select(account => new BookingProfessionalResponse(
             account.Id,
             account.FullName,
@@ -80,7 +83,10 @@ public sealed class PatientSchedulingService(
                 .OrderByDescending(link => link.IsPrimary)
                 .ThenBy(link => link.Specialty.Name)
                 .Select(link => new BookingSpecialtyResponse(link.SpecialtyId, link.Specialty.Name, link.IsPrimary))
-                .ToArray())).ToArray();
+                .ToArray(), account.DoctorProfile.YearsExperience,
+            reviews.TryGetValue(account.Id, out var rating) ? rating.Average : null,
+            reviews.TryGetValue(account.Id, out var count) ? count.Count : 0,
+            modality != "in_person")).ToArray();
         return new SchedulingPage<BookingProfessionalResponse>(items, page, pageSize, total);
     }
 
@@ -219,6 +225,9 @@ public sealed class PatientSchedulingService(
             excludedAppointmentId: null,
             cancellationToken);
         var now = timeProvider.GetUtcNow().UtcDateTime;
+        var discount = await database.PremiumMemberships.AsNoTracking()
+            .Where(x => x.AccountId == patientId && x.StatusCode == "active" && x.StartsAtUtc <= now && (x.EndsAtUtc == null || x.EndsAtUtc > now) && x.PremiumPlan.IsActive)
+            .Select(x => (decimal?)x.PremiumPlan.AppointmentDiscountPercent).MaxAsync(cancellationToken) ?? 0;
         var entity = new Appointment
         {
             PatientAccountId = patientId,
@@ -229,7 +238,10 @@ public sealed class PatientSchedulingService(
             ModalityCode = request.ModalityCode,
             StartsAtUtc = slot.StartsAtUtc,
             EndsAtUtc = slot.EndsAtUtc,
-            PriceAmount = type.PriceAmount,
+            PriceAmount = PatientExperience.PatientExperienceService.DiscountedPrice(type.PriceAmount, discount),
+            BasePriceAmount = type.PriceAmount,
+            DiscountPercent = discount,
+            PaymentLocationCode = "web",
             CurrencyCode = "BRL",
             PatientNotes = OptionalText(request.PatientNotes),
             CreatedAtUtc = now,
@@ -380,6 +392,9 @@ public sealed class PatientSchedulingService(
             StartsAtUtc = slot.StartsAtUtc,
             EndsAtUtc = slot.EndsAtUtc,
             PriceAmount = original.PriceAmount,
+            BasePriceAmount = original.BasePriceAmount,
+            DiscountPercent = original.DiscountPercent,
+            PaymentLocationCode = original.PaymentLocationCode,
             CurrencyCode = original.CurrencyCode,
             PatientNotes = original.PatientNotes,
             RescheduledFromAppointmentId = original.Id,
@@ -394,7 +409,16 @@ public sealed class PatientSchedulingService(
         database.Appointments.Add(replacement);
         AddHistory(original, patientId, previous, "rescheduled", OptionalText(request.Reason), now);
         await database.SaveChangesAsync(cancellationToken);
-        AddHistory(replacement, patientId, null, "pending", OptionalText(request.Reason), now);
+        var payment = await database.Payments.FromSqlInterpolated($"SELECT * FROM payments WHERE appointment_id = {original.Id} FOR UPDATE").SingleOrDefaultAsync(cancellationToken);
+        if (payment is not null)
+        {
+            payment.ProviderReferenceAppointmentId ??= original.Id;
+            payment.AppointmentId = replacement.Id;
+            payment.UpdatedAtUtc = now;
+            payment.RowVersion++;
+            if (payment.StatusCode == "paid") replacement.StatusCode = "confirmed";
+        }
+        AddHistory(replacement, patientId, null, replacement.StatusCode, OptionalText(request.Reason), now);
         var response = BuildResponse(replacement, doctor.FullName, type.Name, timezoneName, timezone, null);
         StoreIdempotency(
             scope,
@@ -445,6 +469,12 @@ public sealed class PatientSchedulingService(
             policy,
             excludedAppointmentId,
             cancellationToken);
+        var limitJson = await database.ApplicationSettings.Where(x => x.SettingKey == "appointments.patient_daily_limit").Select(x => x.ValueJson).SingleOrDefaultAsync(cancellationToken);
+        var dailyLimit = int.TryParse(limitJson, out var configuredLimit) && configuredLimit is > 0 and <= 50 ? configuredLimit : 3;
+        var dayStart = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(date.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified), timezone);
+        var dayEnd = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(date.AddDays(1).ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified), timezone);
+        if (await database.Appointments.CountAsync(x => x.PatientAccountId == patientId && x.Id != excludedAppointmentId && ActiveStatuses.Contains(x.StatusCode) && x.StartsAtUtc >= dayStart && x.StartsAtUtc < dayEnd, cancellationToken) >= dailyLimit)
+            throw Conflict("Você atingiu o limite diário de agendamentos. Escolha outra data.");
         return slots.SingleOrDefault(item => item.StartsAt == startsAt)
             ?? throw Conflict("O horário não está mais disponível. Atualize a agenda e escolha outro.");
     }
@@ -485,9 +515,17 @@ public sealed class PatientSchedulingService(
                 && item.HolidayDate <= until.ToDateTime(TimeOnly.MinValue))
             .ToListAsync(cancellationToken);
         var earliest = timeProvider.GetUtcNow().UtcDateTime.AddMinutes(policy.MinimumLeadMinutes);
+        var limitJson = await database.ApplicationSettings.Where(x => x.SettingKey == "appointments.patient_daily_limit").Select(x => x.ValueJson).SingleOrDefaultAsync(cancellationToken);
+        var dailyLimit = int.TryParse(limitJson, out var configuredLimit) && configuredLimit is > 0 and <= 50 ? configuredLimit : 3;
+        var patientDates = (await database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == patientId && x.Id != excludedAppointmentId
+            && ActiveStatuses.Contains(x.StatusCode) && x.StartsAtUtc >= fromUtc && x.StartsAtUtc < untilUtc)
+            .Select(x => x.StartsAtUtc).ToArrayAsync(cancellationToken))
+            .GroupBy(x => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(x, DateTimeKind.Utc), timezone)))
+            .Where(x => x.Count() >= dailyLimit).Select(x => x.Key).ToHashSet();
         var result = new List<AvailableSlotResponse>();
         for (var date = from; date <= until; date = date.AddDays(1))
         {
+            if (patientDates.Contains(date)) continue;
             var dateValue = date.ToDateTime(TimeOnly.MinValue);
             var day = (byte)date.DayOfWeek;
             var doctorWindows = doctorHours

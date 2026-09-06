@@ -33,7 +33,8 @@ public sealed record PagBankResource(
     DateTime? ExpiresAtUtc,
     long? TotalCents,
     long? RefundedCents,
-    string RawKind);
+    string RawKind,
+    string? MethodCode = null);
 
 internal sealed class PagBankClient(HttpClient httpClient, PagBankOptions options) : IPagBankClient
 {
@@ -191,7 +192,8 @@ internal static class PagBankResourceParser
             expires,
             total,
             refunded,
-            charge.HasValue ? "charge" : "checkout");
+            charge.HasValue ? "charge" : "checkout",
+            selected.TryGetProperty("payment_method", out var method) ? ReadString(method, "type") : null);
     }
 
     private static JsonElement? FindObject(JsonElement element, Func<JsonElement, bool> predicate)

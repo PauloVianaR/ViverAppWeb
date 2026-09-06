@@ -21,7 +21,21 @@ public partial class PremiumMembership
 
     public DateTime UpdatedAtUtc { get; set; }
 
+    public Guid? ProofDocumentId { get; set; }
+
+    public string? RejectionReason { get; set; }
+
+    public DateTime? ReviewedAtUtc { get; set; }
+
+    public ulong RowVersion { get; set; }
+
+    public ulong? OpenAccountId { get; set; }
+
     public virtual Account Account { get; set; } = null!;
 
     public virtual PremiumPlan PremiumPlan { get; set; } = null!;
+
+    public virtual PrivateDocument? PrivateDocument { get; set; }
+
+    public virtual PrivateDocument? ProofDocument { get; set; }
 }

@@ -59,6 +59,11 @@ $tables = @(
     'audit_events',
     'application_settings',
     'idempotency_records'
+    'patient_preferences'
+    'appointment_reviews'
+    'private_documents'
+    'contact_change_requests'
+    'teleconsultation_peers'
 )
 
 $arguments = @(

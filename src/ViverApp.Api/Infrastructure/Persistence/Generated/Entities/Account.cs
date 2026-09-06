@@ -77,17 +77,25 @@ public partial class Account
 
     public virtual ICollection<AuthSession> AuthSessions { get; set; } = new List<AuthSession>();
 
+    public virtual ICollection<ContactChangeRequest> ContactChangeRequests { get; set; } = new List<ContactChangeRequest>();
+
     public virtual DoctorProfile? DoctorProfile { get; set; }
 
     public virtual ICollection<ExternalLogin> ExternalLogins { get; set; } = new List<ExternalLogin>();
 
+    public virtual PatientPreference? PatientPreference { get; set; }
+
     public virtual PatientProfile? PatientProfile { get; set; }
 
     public virtual ICollection<PremiumMembership> PremiumMemberships { get; set; } = new List<PremiumMembership>();
+
+    public virtual ICollection<PrivateDocument> PrivateDocuments { get; set; } = new List<PrivateDocument>();
 
     public virtual ICollection<ProfessionalReview> ProfessionalReviewProfessionalAccounts { get; set; } = new List<ProfessionalReview>();
 
     public virtual ICollection<ProfessionalReview> ProfessionalReviewReviewerAccounts { get; set; } = new List<ProfessionalReview>();
 
     public virtual Role RoleCodeNavigation { get; set; } = null!;
+
+    public virtual ICollection<TeleconsultationPeer> TeleconsultationPeers { get; set; } = new List<TeleconsultationPeer>();
 }

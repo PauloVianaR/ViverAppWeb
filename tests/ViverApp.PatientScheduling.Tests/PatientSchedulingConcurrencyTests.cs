@@ -15,8 +15,10 @@ namespace ViverApp.PatientScheduling.Tests;
 
 public sealed class PatientSchedulingConcurrencyTests
 {
-    [Fact]
-    public async Task ReschedulePreservesOriginal_AndCancellationAddsHistory()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReschedulePreservesOriginal_AndCancellationAddsHistory(bool paid)
     {
         var configuration = LoadConfiguration();
         await DeleteStaleFixturesAsync(configuration);
@@ -38,6 +40,12 @@ public sealed class PatientSchedulingConcurrencyTests
                 fixture.UtcNow,
                 CancellationToken.None);
             var created = Assert.IsType<AppointmentResponse>(createdAttempt.Response);
+            if (paid)
+            {
+                await using var db = CreateContext(configuration);
+                db.Payments.Add(new() { AppointmentId = created.Id, ProviderReferenceAppointmentId = created.Id, ProviderCode = "pagbank", StatusCode = "paid", Amount = created.PriceAmount, CurrencyCode = "BRL", CreatedAtUtc = fixture.UtcNow.UtcDateTime, UpdatedAtUtc = fixture.UtcNow.UtcDateTime, RowVersion = 1 });
+                await db.SaveChangesAsync();
+            }
 
             var rescheduled = await RescheduleAsync(
                 configuration,
@@ -45,7 +53,15 @@ public sealed class PatientSchedulingConcurrencyTests
                 created,
                 new TimeOnly(11, 0));
             Assert.Equal(created.Id, rescheduled.RescheduledFromAppointmentId);
-            Assert.Equal("pending", rescheduled.StatusCode);
+            Assert.Equal(paid ? "confirmed" : "pending", rescheduled.StatusCode);
+            if (paid)
+            {
+                await using var db = CreateContext(configuration);
+                var payment = await db.Payments.SingleAsync(x => x.AppointmentId == rescheduled.Id);
+                Assert.Equal(created.Id, payment.ProviderReferenceAppointmentId);
+                Assert.Equal("paid", payment.StatusCode);
+                Assert.Equal(created.PriceAmount, payment.Amount);
+            }
 
             var canceled = await CancelAsync(configuration, fixture, rescheduled);
             Assert.Equal("canceled", canceled.StatusCode);
@@ -249,6 +265,7 @@ public sealed class PatientSchedulingConcurrencyTests
             .ToArrayAsync();
         await database.IdempotencyRecords.Where(item => item.ScopeCode.EndsWith($":{fixture.PatientId}"))
             .ExecuteDeleteAsync();
+        await database.Payments.Where(item => appointmentIds.Contains(item.AppointmentId)).ExecuteDeleteAsync();
         await database.AppointmentStatusHistories.Where(item => appointmentIds.Contains(item.AppointmentId))
             .ExecuteDeleteAsync();
         await database.Appointments

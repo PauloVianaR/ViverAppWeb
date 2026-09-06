@@ -1,0 +1,24 @@
+@using static ViverApp.Web.PatientLabels
+<article class="surface patient-visit" aria-label="@($"{Model.Appointment.AppointmentTypeName}, {Model.Appointment.LocalDate:dd/MM/yyyy}")">
+    <div class="patient-visit__top"><div><span class="eyebrow">@Category(Model.CategoryCode)</span><h2>@Model.Appointment.AppointmentTypeName</h2><p>@Model.Appointment.DoctorName</p><p class="muted">@Model.Specialties</p></div><span class="badge">@Status(Model.Appointment.StatusCode)</span></div>
+    <dl class="patient-facts">
+        <div><dt>Quando</dt><dd>@Model.Appointment.LocalDate.ToString("dd/MM/yyyy") às @Model.Appointment.LocalStartsAt.ToString("HH:mm")</dd></div>
+        <div><dt>Duração</dt><dd>@((int)(Model.Appointment.EndsAtUtc - Model.Appointment.StartsAtUtc).TotalMinutes) minutos</dd></div>
+        <div><dt>Modalidade</dt><dd>@(Model.Appointment.ModalityCode == "online" ? "Online" : "Presencial")</dd></div>
+        <div><dt>Pagamento</dt><dd>@Status(Model.PaymentStatus) · @Money(Model.Appointment.PriceAmount) @(Model.PaymentLocation == "clinic" ? "(na clínica)" : null)</dd></div>
+        @if (Model.DiscountPercent > 0) { <div><dt>Premium</dt><dd>@Model.DiscountPercent% de desconto · original @Money(Model.BasePrice)</dd></div> }
+        @if (Clinic is not null && Model.Appointment.ModalityCode == "in_person") { <div class="patient-facts__wide"><dt>Local</dt><dd>@Clinic.Name · @Clinic.Address</dd></div> }
+    </dl>
+    @if (!string.IsNullOrEmpty(Model.Appointment.PatientNotes)) { <p class="patient-notes"><strong>Observações:</strong> @Model.Appointment.PatientNotes</p> }
+    @if (Model.Appointment.CancellationReason is not null) { <p><strong>Motivo do cancelamento:</strong> @Model.Appointment.CancellationReason</p> }
+    @if (Model.Appointment.RescheduledFromAppointmentId.HasValue || Model.Appointment.RescheduledToAppointmentId.HasValue) { <p class="badge">Atendimento reagendado</p> }
+    <div class="patient-actions">
+        @if (Model.Appointment.RescheduledToAppointmentId is ulong next) { <a class="button button--secondary button--small" href="/paciente/atendimentos/@next">Ver novo atendimento</a> }
+        @if (Model.CanPay) { <a class="button button--small" href="/paciente/pagamentos?appointmentId=@Model.Appointment.Id">Pagar</a> }
+        <a class="button button--secondary button--small" href="/paciente/atendimentos/@Model.Appointment.Id">Detalhes e ações</a>
+        @if (Model.CanJoinOnline) { <a class="button button--small" href="/paciente/online/@Model.Appointment.Id">Entrar online</a> }
+        @if (Clinic?.RouteUrl is not null && Model.Appointment.ModalityCode == "in_person") { <a class="button button--secondary button--small" href="@Clinic.RouteUrl" target="_blank" rel="noopener noreferrer">Rota no Google Maps ↗</a> }
+        @if (Clinic?.Phone is not null) { <a class="button button--secondary button--small" href="tel:@Clinic.Phone">Ligar para a clínica</a> }
+    </div>
+</article>
+@code { [Parameter, EditorRequired] public PatientAppointment Model { get; set; } = null!; [Parameter] public PatientClinic? Clinic { get; set; } }

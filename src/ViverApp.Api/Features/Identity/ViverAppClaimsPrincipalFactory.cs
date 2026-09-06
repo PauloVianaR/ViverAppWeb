@@ -13,6 +13,7 @@ public sealed class ViverAppClaimsPrincipalFactory(
     {
         var identity = await base.GenerateClaimsAsync(user);
         identity.AddClaim(new Claim(ViverAppClaimTypes.RoleCode, user.RoleCode));
+        identity.AddClaim(new Claim(identity.RoleClaimType, user.RoleCode));
         return identity;
     }
 }

@@ -236,13 +236,13 @@ Cada fase deve:
 
 ## Fase 10 — Acesso e fundação compartilhada
 
-**Estado:** concluída na branch `codex/fase-10-acesso-fundacao-compartilhada`; aguardando integração à `main`.
+**Estado:** concluída e integrada à `main`.
 
 **Plano detalhado:** [Acesso e fundação compartilhada](FASE-10-ACESSO-E-FUNDACAO-COMPARTILHADA.md).
 
 ## Fase 11 — Experiência completa do Paciente
 
-**Estado:** planejada; implementação ainda não iniciada.
+**Estado:** implementação concluída e validada localmente na branch `codex/fase-11-experiencia-paciente`; homologações externas permanecem pendentes. Evidências e limitações em [Implementação e validação](FASE-11-IMPLEMENTACAO-E-VALIDACAO.md).
 
 **Plano detalhado:** [Experiência completa do Paciente](FASE-11-EXPERIENCIA-PACIENTE.md).
 

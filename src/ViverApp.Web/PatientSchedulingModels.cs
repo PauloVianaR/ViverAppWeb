@@ -24,7 +24,11 @@ public sealed record WebBookingProfessional(
     string LicenseStateCode,
     string LicenseNumber,
     ushort DefaultAppointmentDurationMinutes,
-    IReadOnlyList<WebBookingSpecialty> Specialties);
+    IReadOnlyList<WebBookingSpecialty> Specialties,
+    ushort YearsExperience = 0,
+    double? AverageRating = null,
+    int ReviewCount = 0,
+    bool SupportsOnline = true);
 
 public sealed record WebAvailableSlot(
     DateOnly Date,

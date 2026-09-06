@@ -37,6 +37,13 @@ public partial class ViverAppDbContext
         modelBuilder.Entity<Payment>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
+        modelBuilder.Entity<PremiumMembership>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
+        // O scaffold Oracle não identifica esta coluna gerada no MySQL (migration 0014).
+        modelBuilder.Entity<PremiumMembership>()
+            .Property(entity => entity.OpenAccountId)
+            .ValueGeneratedOnAddOrUpdate();
         modelBuilder.Entity<Specialty>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();

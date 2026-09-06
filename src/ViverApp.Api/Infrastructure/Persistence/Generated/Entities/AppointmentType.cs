@@ -27,5 +27,7 @@ public partial class AppointmentType
 
     public ulong RowVersion { get; set; }
 
+    public string CategoryCode { get; set; } = null!;
+
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
 }

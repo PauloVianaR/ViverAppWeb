@@ -1,0 +1,99 @@
+@page "/paciente/perfil"
+@inherits PatientPageBase
+@using static ViverApp.Web.PatientLabels
+<PageTitle>Meu perfil e Premium | ViverApp</PageTitle>
+<header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Meu perfil</h1><p class="page-description">Seus dados, suas preferências e os benefícios do seu cuidado.</p></div><a class="button button--secondary" href="/seguranca">Passkeys e sessões</a></header>
+@if (Notice is not null) { <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="alert">@Notice</p> }
+<nav class="patient-tabs" aria-label="Seções do perfil"><a class="button button--secondary" href="#dados">Dados pessoais</a><a class="button button--secondary" href="#contatos">Contatos e segurança</a><a class="button button--secondary" href="#premium">Premium</a></nav>
+@if (Loading) { <LoadingSkeleton Lines="5" /> }
+else if (Profile is not null)
+{
+    <section id="dados" class="surface patient-panel patient-section"><h2>Dados pessoais</h2><form @onsubmit="Save" @onsubmit:preventDefault>
+        <div class="patient-filter-grid">
+            <div class="field"><label for="profile-name">Nome completo</label><input id="profile-name" @bind="FullName" autocomplete="name" required minlength="3" maxlength="200" /></div>
+            <div class="field"><label for="profile-cpf">CPF</label><input id="profile-cpf" @bind="TaxId" inputmode="numeric" required maxlength="14" /></div>
+            <div class="field"><label for="profile-birth">Nascimento</label><input id="profile-birth" type="date" @bind="BirthDate" required /></div>
+            <div class="field"><label for="profile-cep">CEP</label><input id="profile-cep" value="@PostalCode" @oninput="PostalInput" inputmode="numeric" autocomplete="postal-code" maxlength="9" required /><p class="field-hint" role="status">@PostalNotice</p></div>
+            <div class="field"><label for="profile-street">Rua / Avenida</label><input id="profile-street" @bind="Street" autocomplete="address-line1" required maxlength="200" /></div>
+            <div class="field"><label for="profile-number">Número</label><input id="profile-number" @bind="Number" required maxlength="20" /></div>
+            <div class="field"><label for="profile-complement">Complemento</label><input id="profile-complement" @bind="Complement" autocomplete="address-line2" maxlength="100" /></div>
+            <div class="field"><label for="profile-district">Bairro</label><input id="profile-district" @bind="District" required maxlength="100" /></div>
+            <div class="field"><label for="profile-city">Cidade</label><input id="profile-city" @bind="City" autocomplete="address-level2" required maxlength="100" /></div>
+            <div class="field"><label for="profile-state">UF</label><select id="profile-state" @bind="StateCode" required><option value="">Selecione</option>@foreach(var state in States){<option>@state</option>}</select></div>
+        </div>
+        <fieldset class="patient-section"><legend>Preferências de comunicação</legend><label class="patient-check"><input type="checkbox" @bind="EmailEnabled" /> Receber lembretes e novidades por e-mail</label><label class="patient-check"><input type="checkbox" @bind="SmsEnabled" /> Receber lembretes e novidades por SMS</label><p class="field-hint">Códigos de acesso e avisos essenciais de segurança continuam disponíveis.</p></fieldset>
+        <button class="button" disabled="@Busy">Salvar meus dados</button>
+    </form></section>
+    <section id="contatos" class="surface patient-panel patient-section"><h2>Contatos e segurança</h2><p>E-mail: @(Profile.Email ?? "Não informado") · @(Profile.EmailConfirmed ? "Confirmado" : "Não confirmado")</p><p>Telefone: @(Profile.Phone ?? "Não informado") · @(Profile.PhoneConfirmed ? "Confirmado" : "Não confirmado")</p>
+        @if (Security?.RecentAuthentication != true) { <p>Para mudar contatos ou vínculos, confirme sua identidade entrando novamente. Depois, volte ao perfil.</p><a class="button button--secondary" href="/acesso">Confirmar minha identidade</a> }
+        <form @onsubmit="RequestContact" @onsubmit:preventDefault><h3>Confirmar um novo contato</h3><div class="patient-filter-grid"><div class="field"><label for="contact-channel">Canal</label><select id="contact-channel" @bind="Channel"><option value="email">E-mail</option><option value="sms">SMS</option></select></div><div class="field"><label for="contact-destination">Novo contato</label><input id="contact-destination" @bind="Destination" type="@(Channel == "email" ? "email" : "tel")" placeholder="@(Channel == "email" ? "voce@exemplo.com" : "+5531999999999")" required maxlength="254" /></div></div><button class="button button--secondary" disabled="@(Busy || Security?.RecentAuthentication != true)">Enviar código de confirmação</button></form>
+        @if (ContactRequest.HasValue) { <form @onsubmit="ConfirmContact" @onsubmit:preventDefault><div class="field"><label for="contact-code">Código recebido no novo contato</label><input id="contact-code" @bind="ContactCode" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required /></div><button class="button" disabled="@Busy">Confirmar e substituir contato</button></form> }
+        <p class="field-hint">O contato atual só será substituído após a confirmação. Em seguida, entre novamente com o contato atualizado.</p>
+        <h3>Conta Google</h3><p>@(Security?.GoogleLinked == true ? "Google vinculado à sua conta." : "Vincule sua conta Google para facilitar o acesso.")</p>
+        @if (Security?.GoogleLinked == true) { <button class="button button--danger" disabled="@(Busy || Security?.RecentAuthentication != true)" @onclick='() => Open("unlink-google")'>Desvincular Google</button> }
+        else if(Security?.RecentAuthentication == true) { <a class="button button--secondary" href="@Backend.GoogleLinkUrl">Vincular Google</a> }
+        <h3>Senha</h3>
+        @if (Security?.HasPassword == true) { <form @onsubmit="ChangePassword" @onsubmit:preventDefault><div class="patient-filter-grid"><div class="field"><label for="current-password">Senha atual</label><input id="current-password" type="password" @bind="CurrentPassword" autocomplete="current-password" required maxlength="128" /></div><div class="field"><label for="new-password">Nova senha</label><input id="new-password" type="password" @bind="NewPassword" autocomplete="new-password" required minlength="12" maxlength="128" /></div><div class="field"><label for="confirm-password">Confirmar nova senha</label><input id="confirm-password" type="password" @bind="ConfirmPassword" autocomplete="new-password" required minlength="12" maxlength="128" /></div></div><p>Use pelo menos 12 caracteres, maiúsculas, minúsculas, números e símbolo.</p><button class="button button--secondary" disabled="@Busy">Alterar senha e encerrar sessões</button></form> }
+        else { <p>Você usa Google ou códigos de acesso. Para configurar uma senha, use a recuperação com um contato confirmado.</p><a href="/acesso">Acessar recuperação de senha</a> }
+        <div class="patient-actions patient-section"><a class="button button--secondary" href="/seguranca">Gerenciar passkeys e dispositivos</a><button class="button button--secondary" disabled="@Busy" @onclick="RevokeOthers">Encerrar outras sessões</button></div>
+    </section>
+    @if (Premium is not null)
+    {
+        <section id="premium" class="surface patient-panel patient-premium patient-section"><p class="eyebrow">Viver Premium</p><h2>Mais cuidado, mais benefícios</h2><p>Prioridade no atendimento, ausência de anúncios internos e desconto conforme seu plano aprovado.</p><p class="badge">@(Premium.StatusCode == "pending" ? "Aguardando aprovação" : Status(Premium.StatusCode))</p>
+            @if (Premium.IsPremium) { <p>Seu benefício está ativo. Desconto vigente: @Premium.DiscountPercent%.</p> }
+            @if (Premium.RejectionReason is not null) { <p><strong>Motivo da rejeição:</strong> @Premium.RejectionReason</p><p>Revisado em @Premium.ReviewedAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p> }
+            @if (Premium.NextRequestAtUtc > DateTime.UtcNow) { <p>Você poderá enviar uma nova solicitação após @Premium.NextRequestAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm"). O prazo é de três dias após a rejeição.</p> }
+            @if (Premium.ProofDocumentId.HasValue) { <button class="button button--secondary" @onclick="() => Download(Premium.ProofDocumentId.Value)" disabled="@Busy">Baixar meu comprovante</button> }
+            @if (Premium.CanRequest)
+            {
+                <div class="field"><label for="premium-plan">Plano</label><select id="premium-plan" @bind="PlanId">@foreach(var plan in Premium.Plans){<option value="@plan.Id">@plan.Name · @plan.DiscountPercent% de desconto</option>}</select></div>
+                <div class="field"><label for="premium-proof">Comprovante de plano de saúde</label><input id="premium-proof" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" disabled="@Busy" /><p>PDF, PNG ou JPEG de até 5 MB. O comprovante é privado e passará por verificação de segurança.</p></div>
+                <label for="premium-progress">Progresso do envio</label><progress id="premium-progress" max="100" value="0">0%</progress>
+                <button class="button" disabled="@Busy" @onclick="Upload">@(Busy ? "Enviando e verificando…" : "Enviar solicitação Premium")</button>
+            }
+            @if (Premium.Plans.Count == 0) { <p>A clínica ainda não disponibilizou planos para solicitação.</p> }
+            @if (Premium.StatusCode is "pending" or "active") { <button class="button button--danger" disabled="@Busy" @onclick='() => Open("cancel-premium")'>@(Premium.IsPremium ? "Cancelar benefício Premium" : "Cancelar solicitação")</button> }
+        </section>
+    }
+    <dialog id="cancel-premium" class="patient-dialog" aria-labelledby="cancel-premium-title"><h2 id="cancel-premium-title">Confirmar cancelamento?</h2><p>O benefício deixará de valer para novos agendamentos. Atendimentos já reservados mantêm o valor acordado.</p><div class="patient-actions"><button class="button button--danger" @onclick="CancelPremium" disabled="@Busy">Confirmar cancelamento</button><button class="button button--secondary" @onclick='() => Close("cancel-premium")'>Voltar</button></div></dialog>
+    <dialog id="unlink-google" class="patient-dialog" aria-labelledby="unlink-title"><h2 id="unlink-title">Desvincular Google?</h2><p>Você precisará de outro método confirmado para entrar. Suas sessões serão encerradas.</p><div class="patient-actions"><button class="button button--danger" @onclick="Unlink" disabled="@Busy">Confirmar desvínculo</button><button class="button button--secondary" @onclick='() => Close("unlink-google")'>Manter vínculo</button></div></dialog>
+}
+@code {
+    private PatientProfileData? Profile;
+    private PatientPremium? Premium;
+    private PatientSecurity? Security;
+    private string FullName="", TaxId="", PostalCode="", Street="", Number="", Complement="", District="", City="", StateCode="";
+    private string Channel="email", Destination="", ContactCode="", CurrentPassword="", NewPassword="", ConfirmPassword="";
+    private DateTime? BirthDate;
+    private bool EmailEnabled, SmsEnabled;
+    private Guid? ContactRequest;
+    private uint PlanId;
+    private int PostalVersion;
+    private string PostalNotice="Ao completar o CEP, buscaremos o endereço. Você também pode preencher manualmente.";
+    private static readonly string[] States=["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
+    protected override async Task Load()
+    {
+        Profile=await Get<PatientProfileData>("api/v1/patient/experience/profile"); Premium=await Get<PatientPremium>("api/v1/patient/experience/premium"); Security=await Get<PatientSecurity>("api/v1/patient/account/security");
+        if(Profile is not null){FullName=Profile.FullName;TaxId=Profile.TaxId??"";BirthDate=Profile.BirthDate?.ToDateTime(TimeOnly.MinValue);EmailEnabled=Profile.EmailEnabled;SmsEnabled=Profile.SmsEnabled;var a=Profile.Address;PostalCode=Mask(a?.PostalCode??"");Street=a?.Street??"";Number=a?.Number??"";Complement=a?.Complement??"";District=a?.District??"";City=a?.City??"";StateCode=a?.StateCode??"";}
+        PlanId=Premium?.Plans.FirstOrDefault()?.Id??0;
+    }
+    private static string Digits(string value)=>new(value.Where(char.IsAsciiDigit).ToArray());
+    private static string Mask(string digits)=>digits.Length>5?digits[..5]+"-"+digits[5..]:digits;
+    private async Task PostalInput(ChangeEventArgs args)
+    {
+        var digits=Digits(args.Value?.ToString()??"");if(digits.Length>8)digits=digits[..8];PostalCode=Mask(digits);var version=++PostalVersion;
+        if(digits.Length!=8)return;PostalNotice="Buscando endereço…";
+        try{var address=await Get<WebPostalCode>($"api/v1/registration/postal-code/{digits}");if(version!=PostalVersion)return;if(address is not null){Street=address.Street;District=address.District;City=address.City;StateCode=address.StateCode;PostalNotice="Endereço preenchido. Confira o número e complemento.";}}
+        catch(Exception error) when(error is PatientUiException or JSException){if(version==PostalVersion)PostalNotice="Não foi possível buscar. Preencha o endereço manualmente.";}
+    }
+    private Task Save()=>Run(async()=>{if(BirthDate is null)throw new PatientUiException("Informe o nascimento.");await Request<object>("api/v1/patient/experience/profile","PUT",new{fullName=FullName,taxId=Digits(TaxId),birthDate=DateOnly.FromDateTime(BirthDate.Value),address=new PatientAddress(Digits(PostalCode),Street,Number,Complement,District,City,StateCode),emailEnabled=EmailEnabled,smsEnabled=SmsEnabled,rowVersion=Profile!.RowVersion});await Load();Notice="Dados atualizados.";});
+    private Task RequestContact()=>Run(async()=>{var result=await Request<WebChallengeResult>("api/v1/patient/account/contact/request","POST",new{channel=Channel,destination=Destination});ContactRequest=result!.RequestId;Notice=result.Message;});
+    private Task ConfirmContact()=>Run(async()=>{await Request<object>("api/v1/patient/account/contact/confirm","POST",new{requestId=ContactRequest,code=ContactCode});Navigation.NavigateTo("/acesso",true);});
+    private Task ChangePassword()=>Run(async()=>{if(NewPassword!=ConfirmPassword)throw new PatientUiException("A confirmação da senha não corresponde.");await Request<object>("api/v1/patient/account/password","POST",new{currentPassword=CurrentPassword,newPassword=NewPassword});Navigation.NavigateTo("/acesso",true);});
+    private Task RevokeOthers()=>Run(async()=>{await Request<object>("api/v1/patient/account/sessions/revoke-others","POST",new{});Notice="Outras sessões encerradas. Este dispositivo continua conectado.";});
+    private async Task Open(string id)=>await Module!.InvokeVoidAsync("showDialog",id);
+    private async Task Close(string id)=>await Module!.InvokeVoidAsync("closeDialog",id);
+    private Task Unlink()=>Run(async()=>{await Close("unlink-google");await Request<object>("api/v1/patient/account/google/unlink","POST",new{});Navigation.NavigateTo("/acesso",true);});
+    private Task CancelPremium()=>Run(async()=>{await Close("cancel-premium");await Request<object>($"api/v1/patient/experience/premium/{Premium!.MembershipId}/cancel","POST",new{rowVersion=Premium.RowVersion});Premium=await Get<PatientPremium>("api/v1/patient/experience/premium");Notice="Cancelamento registrado.";});
+    private Task Upload()=>Run(async()=>{var result=await Module!.InvokeAsync<PatientApiResult<PatientPremium>>("upload",Backend.BaseUrl.ToString(),"premium-proof",PlanId,"premium-progress");if(!result.Ok)throw new PatientUiException(result.Error??"Não foi possível enviar o comprovante.");Premium=result.Data;Notice="Solicitação enviada. Aguarde a análise da administração.";});
+}

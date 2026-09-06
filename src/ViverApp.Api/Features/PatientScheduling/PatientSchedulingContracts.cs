@@ -18,7 +18,11 @@ public sealed record BookingProfessionalResponse(
     string LicenseStateCode,
     string LicenseNumber,
     ushort DefaultAppointmentDurationMinutes,
-    IReadOnlyList<BookingSpecialtyResponse> Specialties);
+    IReadOnlyList<BookingSpecialtyResponse> Specialties,
+    ushort YearsExperience = 0,
+    double? AverageRating = null,
+    int ReviewCount = 0,
+    bool SupportsOnline = true);
 
 public sealed record AvailableSlotResponse(
     DateOnly Date,

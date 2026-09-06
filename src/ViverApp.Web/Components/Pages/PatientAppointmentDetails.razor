@@ -1,0 +1,45 @@
+@page "/paciente/atendimentos/{Id:long}"
+@inherits PatientPageBase
+@using static ViverApp.Web.PatientLabels
+<PageTitle>Detalhes do atendimento | ViverApp</PageTitle>
+<header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Detalhes do atendimento</h1></div><a class="button button--secondary" href="/paciente/agenda">Voltar à agenda</a></header>
+@if (Notice is not null) { <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="alert">@Notice</p> }
+@if (Loading) { <LoadingSkeleton Lines="5" /> }
+else if (Visit is not null)
+{
+    <PatientVisitCard Model="Visit" Clinic="Clinic" />
+    <section class="surface patient-panel patient-section"><h2>Gerenciar atendimento</h2><div class="patient-actions">
+        @if (Visit.CanReschedule) { <a class="button button--secondary" href="/paciente/agendar?reschedule=@Id">Reagendar</a> }
+        @if (Visit.CanCancel) { <button class="button button--danger" disabled="@Busy" @onclick='() => Open("cancel-visit")'>Cancelar com motivo</button> }
+        @if (Visit.Appointment.ModalityCode == "online" && !Visit.CanJoinOnline) { <p>Você poderá entrar na sala a partir de 15 minutos antes, durante um atendimento confirmado e pago.</p> }
+        @if (!Visit.CanCancel && !Visit.CanReschedule) { <p>Alterações indisponíveis para o estado ou antecedência deste atendimento. Se precisar de ajuda, fale com a clínica.</p> }
+    </div></section>
+    @if (Visit.HasReport)
+    {
+        <section class="surface patient-panel patient-section"><h2>Laudo publicado</h2>@if (Report is not null) { <p>Publicado em @Report.PublishedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm") por @Report.DoctorName</p><h3>Resumo clínico</h3><p class="patient-report">@Report.ClinicalSummary</p><h3>Recomendações</h3><p class="patient-report">@Report.Recommendations</p> }<h3>Anexos privados</h3>@if (Documents.Count == 0) { <p>Nenhum anexo publicado.</p> }@foreach(var item in Documents){<div class="patient-document"><span>@item.Name · @(item.SizeBytes / 1024) KB</span><button class="button button--secondary" disabled="@Busy" @onclick="() => Download(item.Id)">Baixar</button></div>}</section>
+    }
+    @if (Visit.HasReport && DocumentTotal > 20) { <nav class="patient-pagination" aria-label="Páginas de anexos"><button class="button button--secondary" disabled="@(Busy || DocumentPage == 1)" @onclick="() => ChangeDocumentPage(-1)">Anteriores</button><span>Página @DocumentPage</span><button class="button button--secondary" disabled="@(Busy || DocumentPage * 20 >= DocumentTotal)" @onclick="() => ChangeDocumentPage(1)">Próximos anexos</button></nav> }
+    @if (Visit.Appointment.StatusCode == "completed")
+    {
+        <section class="surface patient-panel patient-section"><h2>Sua experiência</h2>@if (Visit.Rating.HasValue) { <p>Avaliação enviada: @Visit.Rating de 5 estrelas. Obrigado pelo retorno.</p> } else { <p>Conte como foi seu atendimento. A avaliação pode ser enviada uma vez.</p><button class="button" @onclick='() => Open("review-visit")' disabled="@Busy">Avaliar atendimento</button> }</section>
+    }
+    <dialog id="cancel-visit" class="patient-dialog" aria-labelledby="cancel-title"><form @onsubmit="Cancel" @onsubmit:preventDefault><h2 id="cancel-title">Cancelar este atendimento?</h2><p>O horário será liberado. Pagamentos já realizados seguem a análise de reembolso da clínica.</p><div class="field"><label for="cancel-reason">Motivo</label><textarea id="cancel-reason" @bind="CancelReason" required minlength="5" maxlength="500"></textarea></div><div class="patient-actions"><button class="button button--danger" disabled="@(Busy || CancelReason.Trim().Length < 5)">Confirmar cancelamento</button><button type="button" class="button button--secondary" @onclick='() => Close("cancel-visit")'>Manter atendimento</button></div></form></dialog>
+    <dialog id="review-visit" class="patient-dialog" aria-labelledby="review-title"><form @onsubmit="Review" @onsubmit:preventDefault><h2 id="review-title">Como foi o atendimento?</h2><fieldset><legend>De uma a cinco estrelas</legend><div class="patient-actions">@for(byte i = 1; i <= 5; i++){var rating=i;<label><input type="radio" name="rating" checked="@(Rating == rating)" @onchange="() => Rating = rating" /> @rating ★</label>}</div></fieldset><div class="field"><label for="review-comment">Comentário (opcional)</label><textarea id="review-comment" @bind="Comment" maxlength="1000"></textarea></div><p>Evite incluir documentos ou informações médicas pessoais.</p><div class="patient-actions"><button class="button" disabled="@Busy">Enviar avaliação</button><button type="button" class="button button--secondary" @onclick='() => Close("review-visit")'>Voltar</button></div></form></dialog>
+}
+@code {
+    [Parameter] public long Id { get; set; }
+    private PatientAppointment? Visit;
+    private PatientClinic? Clinic;
+    private PatientReport? Report;
+    private IReadOnlyList<PatientDocument> Documents = [];
+    private int DocumentPage = 1, DocumentTotal;
+    private string CancelReason = "", Comment = "";
+    private byte Rating = 5;
+    protected override async Task Load() { Report = null; Documents = []; DocumentPage = 1; Visit = await Get<PatientAppointment>($"api/v1/patient/experience/appointments/{Id}"); Clinic ??= await Get<PatientClinic>("api/v1/patient/experience/clinic"); if (Visit?.HasReport == true) { Report = await Get<PatientReport>($"api/v1/patient/appointments/{Id}/medical-report"); await LoadDocuments(); } }
+    private async Task LoadDocuments() { var page = await Get<WebPage<PatientDocument>>($"api/v1/patient/experience/appointments/{Id}/documents?page={DocumentPage}"); Documents = page?.Items ?? []; DocumentTotal = page?.TotalCount ?? 0; }
+    private Task ChangeDocumentPage(int delta) => Run(async () => { DocumentPage += delta; await LoadDocuments(); });
+    private async Task Open(string id) => await Module!.InvokeVoidAsync("showDialog", id);
+    private async Task Close(string id) => await Module!.InvokeVoidAsync("closeDialog", id);
+    private Task Cancel() => Run(async () => { await Close("cancel-visit"); await Request<object>($"api/v1/patient/appointments/{Id}/cancel", "POST", new { reason = CancelReason.Trim(), rowVersion = Visit!.Appointment.RowVersion }); await Load(); Notice = "Atendimento cancelado."; });
+    private Task Review() => Run(async () => { await Close("review-visit"); await Request<object>($"api/v1/patient/experience/appointments/{Id}/review", "POST", new { rating = Rating, comment = Comment }); await Load(); Notice = "Avaliação enviada."; });
+}

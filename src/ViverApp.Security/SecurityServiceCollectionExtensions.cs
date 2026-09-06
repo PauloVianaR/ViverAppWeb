@@ -204,6 +204,8 @@ public static class SecurityServiceCollectionExtensions
                     GetPartitionKey(context),
                     _ => CreateFixedWindowOptions(30, TimeSpan.FromMinutes(1))));
             options.OnRejected = OnRateLimitRejectedAsync;
+            foreach (var (name, limit) in new[] { (SecurityPolicyNames.UploadRateLimit, 3), (SecurityPolicyNames.SlotRateLimit, 30), (SecurityPolicyNames.CheckoutRateLimit, 5), (SecurityPolicyNames.VideoRateLimit, 10) })
+                options.AddPolicy(name, context => RateLimitPartition.GetFixedWindowLimiter(GetPartitionKey(context), _ => CreateFixedWindowOptions(limit, TimeSpan.FromMinutes(1))));
         });
     }
 
@@ -223,7 +225,7 @@ public static class SecurityServiceCollectionExtensions
 
     private static string GetPartitionKey(HttpContext context)
     {
-        var accountId = context.User.FindFirst("sub")?.Value;
+        var accountId = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         return context.User.Identity?.IsAuthenticated == true && !string.IsNullOrWhiteSpace(accountId)
             ? $"account:{accountId}"
             : $"address:{context.Connection.RemoteIpAddress?.ToString() ?? "unknown"}";

@@ -13,13 +13,14 @@
     <link rel="apple-touch-icon" href="@Assets["images/logo.png"]" />
     <ResourcePreloader />
     <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["patient.css"]" />
     <link rel="stylesheet" href="@Assets["ViverApp.Web.styles.css"]" />
     <ImportMap nonce="@CspNonce" />
-    <HeadOutlet />
+    <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 
 <body>
-    <Routes />
+    <Routes @rendermode="InteractiveServer" />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]" nonce="@CspNonce"></script>
 </body>

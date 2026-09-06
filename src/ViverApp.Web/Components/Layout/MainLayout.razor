@@ -5,7 +5,7 @@
 @inject IJSRuntime JavaScript
 
 <a class="skip-link" href="#main-content">Ir para o conteúdo principal</a>
-<div class="app-shell @(IsWorkspace ? "app-shell--workspace" : "app-shell--public")">
+<div class="app-shell @(IsWorkspace ? "app-shell--workspace" : "app-shell--public") app-shell--@Shell.Profile.ToString().ToLowerInvariant()">
     <header class="topbar">
         <a class="brand" href="/" aria-label="Centro Médico Viver — início">
             <img class="brand-logo" src="/images/logo.png" alt="" />

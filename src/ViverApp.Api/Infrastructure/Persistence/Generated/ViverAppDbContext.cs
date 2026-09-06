@@ -32,6 +32,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<AppointmentDocument> AppointmentDocuments { get; set; }
 
+    public virtual DbSet<AppointmentReview> AppointmentReviews { get; set; }
+
     public virtual DbSet<AppointmentStatusHistory> AppointmentStatusHistories { get; set; }
 
     public virtual DbSet<AppointmentType> AppointmentTypes { get; set; }
@@ -43,6 +45,8 @@ public partial class ViverAppDbContext : DbContext
     public virtual DbSet<Clinic> Clinics { get; set; }
 
     public virtual DbSet<ClinicWeeklyHour> ClinicWeeklyHours { get; set; }
+
+    public virtual DbSet<ContactChangeRequest> ContactChangeRequests { get; set; }
 
     public virtual DbSet<DoctorProfile> DoctorProfiles { get; set; }
 
@@ -60,6 +64,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<OutboxMessage> OutboxMessages { get; set; }
 
+    public virtual DbSet<PatientPreference> PatientPreferences { get; set; }
+
     public virtual DbSet<PatientProfile> PatientProfiles { get; set; }
 
     public virtual DbSet<Payment> Payments { get; set; }
@@ -72,11 +78,15 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<PremiumPlan> PremiumPlans { get; set; }
 
+    public virtual DbSet<PrivateDocument> PrivateDocuments { get; set; }
+
     public virtual DbSet<ProfessionalReview> ProfessionalReviews { get; set; }
 
     public virtual DbSet<Role> Roles { get; set; }
 
     public virtual DbSet<Specialty> Specialties { get; set; }
+
+    public virtual DbSet<TeleconsultationPeer> TeleconsultationPeers { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -428,6 +438,9 @@ public partial class ViverAppDbContext : DbContext
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.AppointmentTypeId).HasColumnName("appointment_type_id");
+            entity.Property(e => e.BasePriceAmount)
+                .HasPrecision(13)
+                .HasColumnName("base_price_amount");
             entity.Property(e => e.CanceledAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("canceled_at_utc");
@@ -448,6 +461,9 @@ public partial class ViverAppDbContext : DbContext
                 .HasDefaultValueSql("'BRL'")
                 .IsFixedLength()
                 .HasColumnName("currency_code");
+            entity.Property(e => e.DiscountPercent)
+                .HasPrecision(5)
+                .HasColumnName("discount_percent");
             entity.Property(e => e.DoctorAccountId).HasColumnName("doctor_account_id");
             entity.Property(e => e.EndsAtUtc)
                 .HasMaxLength(6)
@@ -463,6 +479,10 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.PatientNotes)
                 .HasMaxLength(1000)
                 .HasColumnName("patient_notes");
+            entity.Property(e => e.PaymentLocationCode)
+                .HasMaxLength(10)
+                .HasDefaultValueSql("'web'")
+                .HasColumnName("payment_location_code");
             entity.Property(e => e.PriceAmount)
                 .HasPrecision(13)
                 .HasColumnName("price_amount");
@@ -576,6 +596,27 @@ public partial class ViverAppDbContext : DbContext
                 .HasConstraintName("fk_appointment_documents_uploader");
         });
 
+        modelBuilder.Entity<AppointmentReview>(entity =>
+        {
+            entity.HasKey(e => e.AppointmentId).HasName("PRIMARY");
+
+            entity.ToTable("appointment_reviews");
+
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.Comment)
+                .HasMaxLength(1000)
+                .HasColumnName("comment");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.Rating).HasColumnName("rating");
+
+            entity.HasOne(d => d.Appointment).WithOne(p => p.AppointmentReview)
+                .HasForeignKey<AppointmentReview>(d => d.AppointmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointment_reviews_appointment");
+        });
+
         modelBuilder.Entity<AppointmentStatusHistory>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
@@ -626,6 +667,10 @@ public partial class ViverAppDbContext : DbContext
             entity.ToTable("appointment_types");
 
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CategoryCode)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'consultation'")
+                .HasColumnName("category_code");
             entity.Property(e => e.CreatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("created_at_utc");
@@ -837,6 +882,39 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.UpdatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");
+        });
+
+        modelBuilder.Entity<ContactChangeRequest>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("contact_change_requests");
+
+            entity.HasIndex(e => e.AccountId, "fk_contact_change_account");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.ChallengeId)
+                .HasMaxLength(16)
+                .IsFixedLength()
+                .HasColumnName("challenge_id");
+            entity.Property(e => e.ChannelCode)
+                .HasMaxLength(10)
+                .HasColumnName("channel_code");
+            entity.Property(e => e.CompletedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("completed_at_utc");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.Destination)
+                .HasMaxLength(254)
+                .HasColumnName("destination");
+
+            entity.HasOne(d => d.Account).WithMany(p => p.ContactChangeRequests)
+                .HasForeignKey(d => d.AccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_contact_change_account");
         });
 
         modelBuilder.Entity<DoctorProfile>(entity =>
@@ -1134,6 +1212,25 @@ public partial class ViverAppDbContext : DbContext
                 .HasColumnName("template_key");
         });
 
+        modelBuilder.Entity<PatientPreference>(entity =>
+        {
+            entity.HasKey(e => e.AccountId).HasName("PRIMARY");
+
+            entity.ToTable("patient_preferences");
+
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.EmailEnabled).HasColumnName("email_enabled");
+            entity.Property(e => e.SmsEnabled).HasColumnName("sms_enabled");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.Account).WithOne(p => p.PatientPreference)
+                .HasForeignKey<PatientPreference>(d => d.AccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_patient_preferences_account");
+        });
+
         modelBuilder.Entity<PatientProfile>(entity =>
         {
             entity.HasKey(e => e.AccountId).HasName("PRIMARY");
@@ -1170,6 +1267,8 @@ public partial class ViverAppDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("PRIMARY");
 
             entity.ToTable("payments");
+
+            entity.HasIndex(e => e.ProviderReferenceAppointmentId, "ix_payments_provider_reference");
 
             entity.HasIndex(e => new { e.StatusCode, e.NextReconciliationAtUtc }, "ix_payments_reconciliation");
 
@@ -1209,6 +1308,9 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.LastReconciledAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("last_reconciled_at_utc");
+            entity.Property(e => e.MethodCode)
+                .HasMaxLength(30)
+                .HasColumnName("method_code");
             entity.Property(e => e.NextReconciliationAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("next_reconciliation_at_utc");
@@ -1224,6 +1326,7 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.ProviderEventAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("provider_event_at_utc");
+            entity.Property(e => e.ProviderReferenceAppointmentId).HasColumnName("provider_reference_appointment_id");
             entity.Property(e => e.ProviderStatusCode)
                 .HasMaxLength(50)
                 .HasColumnName("provider_status_code");
@@ -1248,10 +1351,15 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");
 
-            entity.HasOne(d => d.Appointment).WithOne(p => p.Payment)
+            entity.HasOne(d => d.Appointment).WithOne(p => p.PaymentAppointment)
                 .HasForeignKey<Payment>(d => d.AppointmentId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_payments_appointment");
+
+            entity.HasOne(d => d.ProviderReferenceAppointment).WithMany(p => p.PaymentProviderReferenceAppointments)
+                .HasForeignKey(d => d.ProviderReferenceAppointmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_payments_provider_reference");
         });
 
         modelBuilder.Entity<PaymentEvent>(entity =>
@@ -1355,7 +1463,11 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => e.PremiumPlanId, "fk_premium_memberships_plan");
 
+            entity.HasIndex(e => new { e.ProofDocumentId, e.AccountId }, "fk_premium_memberships_proof_owner");
+
             entity.HasIndex(e => new { e.AccountId, e.StatusCode, e.EndsAtUtc }, "ix_premium_memberships_account_status");
+
+            entity.HasIndex(e => e.OpenAccountId, "ux_premium_memberships_open").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.AccountId).HasColumnName("account_id");
@@ -1365,7 +1477,18 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.EndsAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("ends_at_utc");
+            entity.Property(e => e.OpenAccountId).HasColumnName("open_account_id");
             entity.Property(e => e.PremiumPlanId).HasColumnName("premium_plan_id");
+            entity.Property(e => e.ProofDocumentId).HasColumnName("proof_document_id");
+            entity.Property(e => e.RejectionReason)
+                .HasMaxLength(1000)
+                .HasColumnName("rejection_reason");
+            entity.Property(e => e.ReviewedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("reviewed_at_utc");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
             entity.Property(e => e.StartsAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("starts_at_utc");
@@ -1386,6 +1509,17 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey(d => d.PremiumPlanId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_premium_memberships_plan");
+
+            entity.HasOne(d => d.ProofDocument).WithMany(p => p.PremiumMembershipProofDocuments)
+                .HasForeignKey(d => d.ProofDocumentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_premium_memberships_proof");
+
+            entity.HasOne(d => d.PrivateDocument).WithMany(p => p.PremiumMembershipPrivateDocuments)
+                .HasPrincipalKey(p => new { p.Id, p.OwnerAccountId })
+                .HasForeignKey(d => new { d.ProofDocumentId, d.AccountId })
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_premium_memberships_proof_owner");
         });
 
         modelBuilder.Entity<PremiumPlan>(entity =>
@@ -1412,6 +1546,45 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");
             entity.Property(e => e.ValidityDays).HasColumnName("validity_days");
+        });
+
+        modelBuilder.Entity<PrivateDocument>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("private_documents");
+
+            entity.HasIndex(e => e.OwnerAccountId, "fk_private_documents_owner");
+
+            entity.HasIndex(e => new { e.Id, e.OwnerAccountId }, "ux_private_documents_owner").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ContentType)
+                .HasMaxLength(127)
+                .HasColumnName("content_type");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.OriginalFileName)
+                .HasMaxLength(255)
+                .HasColumnName("original_file_name");
+            entity.Property(e => e.OwnerAccountId).HasColumnName("owner_account_id");
+            entity.Property(e => e.ProtectedContent)
+                .HasColumnType("mediumblob")
+                .HasColumnName("protected_content");
+            entity.Property(e => e.Sha256)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("sha256");
+            entity.Property(e => e.SizeBytes).HasColumnName("size_bytes");
+            entity.Property(e => e.StatusCode)
+                .HasMaxLength(20)
+                .HasColumnName("status_code");
+
+            entity.HasOne(d => d.OwnerAccount).WithMany(p => p.PrivateDocuments)
+                .HasForeignKey(d => d.OwnerAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_private_documents_owner");
         });
 
         modelBuilder.Entity<ProfessionalReview>(entity =>
@@ -1488,6 +1661,34 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.UpdatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");
+        });
+
+        modelBuilder.Entity<TeleconsultationPeer>(entity =>
+        {
+            entity.HasKey(e => new { e.AppointmentId, e.AccountId }).HasName("PRIMARY");
+
+            entity.ToTable("teleconsultation_peers");
+
+            entity.HasIndex(e => e.AccountId, "fk_teleconsultation_account");
+
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.ConnectionId)
+                .HasMaxLength(128)
+                .HasColumnName("connection_id");
+            entity.Property(e => e.ExpiresAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("expires_at_utc");
+
+            entity.HasOne(d => d.Account).WithMany(p => p.TeleconsultationPeers)
+                .HasForeignKey(d => d.AccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_teleconsultation_account");
+
+            entity.HasOne(d => d.Appointment).WithMany(p => p.TeleconsultationPeers)
+                .HasForeignKey(d => d.AppointmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_teleconsultation_appointment");
         });
 
         OnModelCreatingPartial(modelBuilder);

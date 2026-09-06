@@ -32,6 +32,7 @@ public sealed class PatientAppointmentsController(PatientSchedulingService sched
             cancellationToken));
 
     [HttpGet("booking/slots")]
+    [EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
     public Task<ActionResult<IReadOnlyList<AvailableSlotResponse>>> GetAvailableSlots(
         [FromQuery] ulong doctorAccountId,
         [FromQuery] uint appointmentTypeId,
