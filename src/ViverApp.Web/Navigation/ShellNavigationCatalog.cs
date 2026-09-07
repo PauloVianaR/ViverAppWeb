@@ -57,11 +57,11 @@ public static class ShellNavigationCatalog
         "Gestor",
         "Gestão clínica",
         [
-            new("Visão geral", "/gestao", "home"),
+            new("Início", "/gestao", "home"),
             new("Agenda", "/gestao/agenda", "calendar"),
             new("Pacientes", "/gestao/pacientes", "users"),
-            new("Disponibilidade", "/gestao/disponibilidade", "settings"),
-            new("Cadastros", "/gestao/cadastros", "settings"),
+            new("Histórico", "/gestao/historico", "history"),
+            new("Perfil", "/gestao/perfil", "user"),
         ]);
 
     private static readonly ShellDefinition Administrator = new(

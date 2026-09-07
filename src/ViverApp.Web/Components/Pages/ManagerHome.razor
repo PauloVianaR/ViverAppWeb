@@ -1,0 +1,12 @@
+@page "/gestao"
+@inherits ManagerPageBase
+<PageTitle>Gestão clínica | ViverApp</PageTitle>
+<header class="workspace-heading"><div><p class="eyebrow">Gestor</p><h1 class="page-title">@(Home is null?"Operação da clínica":$"Olá, {Home.Profile.FullName}")</h1><p class="page-description">Acompanhe o dia, pagamentos e a agenda da clínica em um só lugar.</p></div><a class="button button--secondary" href="/gestao/perfil">Meu perfil</a></header>
+@if(Notice is not null){<p class="notice notice--error" role="alert">@Notice</p>}
+@if(Loading){<LoadingSkeleton Lines="6" />}
+else if(Home is not null){
+<section class="surface patient-panel manager-welcome"><p class="eyebrow">Hoje</p><h2>Visão operacional</h2><p>Os indicadores são calculados no servidor e refletem toda a clínica.</p></section>
+<section class="manager-kpis" aria-label="Indicadores de hoje"><article class="surface manager-kpi"><strong>@Home.Counters.Today</strong><span>Atendimentos</span></article><article class="surface manager-kpi"><strong>@Home.Counters.Doctors</strong><span>Médicos do dia</span></article><article class="surface manager-kpi"><strong>@Home.Counters.Paid</strong><span>Pagos</span></article><article class="surface manager-kpi"><strong>@Home.Counters.PendingPayment</strong><span>Pagamento pendente</span></article><article class="surface manager-kpi"><strong>@Home.Counters.Online</strong><span>Online</span></article><article class="surface manager-kpi"><strong>@Home.Counters.InPerson</strong><span>Presenciais</span></article></section>
+<section class="patient-section"><div class="section-heading"><div><p class="eyebrow">Agenda geral</p><h2>Atendimentos de hoje</h2></div><a href="/gestao/agenda">Ver agenda completa →</a></div>@if(Home.Today.Count>0){<div class="patient-grid">@foreach(var item in Home.Today){<ManagerVisitCard Model="item" />}</div>}else{<InterfaceState Title="Agenda livre hoje" Description="Nenhum atendimento foi encontrado para esta data." Icon="calendar" />}</section>
+<nav class="patient-actions" aria-label="Atalhos"><a class="button" href="/gestao/agenda">Agenda</a><a class="button button--secondary" href="/gestao/pacientes">Pacientes</a><a class="button button--secondary" href="/gestao/historico">Histórico</a><a class="button button--secondary" href="/gestao/premium">Análises Premium</a></nav>}
+@code { private ManagerHomeData? Home; protected override async Task Load()=>Home=await Get<ManagerHomeData>("api/v1/manager/home"); }

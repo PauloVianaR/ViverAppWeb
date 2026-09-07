@@ -154,19 +154,19 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         if (term is not null) visible = visible.Where(x => x.FullName.Contains(term) || x.Email != null && x.Email.Contains(term) || x.PhoneE164 != null && x.PhoneE164.Contains(term));
         if (status is not null) visible = visible.Where(x => x.StatusCode == status);
         var now = clock.GetUtcNow().UtcDateTime;
-        if (premium.HasValue) visible = visible.Where(x => x.PremiumMemberships.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)) == premium.Value);
+        if (premium.HasValue) visible = visible.Where(x => x.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)) == premium.Value);
         var all = database.Accounts.AsNoTracking().Where(x => x.RoleCode == ViverAppRoles.Patient &&
             (x.AppointmentPatientAccounts.Any(a => a.DoctorAccountId == doctor) || database.DoctorPatientLinks.Any(l => l.DoctorAccountId == doctor && l.PatientAccountId == x.Id && l.StatusCode == "active")));
-        var counters = new DoctorPatientCounters(await all.CountAsync(ct), await all.CountAsync(x => x.PremiumMemberships.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)), ct),
+        var counters = new DoctorPatientCounters(await all.CountAsync(ct), await all.CountAsync(x => x.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)), ct),
             await all.CountAsync(x => x.StatusCode == "active", ct), await all.CountAsync(x => x.StatusCode == "blocked", ct));
-        var total = await visible.CountAsync(ct); var rows = await visible.Include(x => x.PatientProfile).Include(x => x.PremiumMemberships)
+        var total = await visible.CountAsync(ct); var rows = await visible.Include(x => x.PatientProfile).Include(x => x.PremiumMembershipAccounts)
             .OrderBy(x => x.FullName).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(ct);
         var ids = rows.Select(x => x.Id).ToArray(); var appts = await database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && ids.Contains(x.PatientAccountId)).ToArrayAsync(ct);
         var result = rows.Select(x =>
         {
             var history = appts.Where(a => a.PatientAccountId == x.Id).ToArray(); return new DoctorPatientResponse(x.Id, x.FullName,
             x.PatientProfile?.PreferredName, x.Email, x.PhoneE164, x.PatientProfile?.BirthDate is { } birth ? DateOnly.FromDateTime(birth) : null,
-            x.StatusCode, x.PremiumMemberships.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)),
+            x.StatusCode, x.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)),
             history.Length, history.Where(a => a.StartsAtUtc < now).Select(a => (DateTime?)a.StartsAtUtc).Max(),
             history.Where(a => a.StartsAtUtc >= now && a.StatusCode is "pending" or "confirmed").Select(a => (DateTime?)a.StartsAtUtc).Min(), x.RowVersion);
         }).ToArray();
@@ -186,13 +186,13 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
     public async Task<DoctorPatientResponse> PatientAsync(ulong doctor, ulong patientId, CancellationToken ct)
     {
         if (!await VisiblePatientAsync(doctor, patientId, ct)) throw Missing();
-        var patient = await database.Accounts.AsNoTracking().Include(x => x.PatientProfile).Include(x => x.PremiumMemberships)
+        var patient = await database.Accounts.AsNoTracking().Include(x => x.PatientProfile).Include(x => x.PremiumMembershipAccounts)
             .SingleAsync(x => x.Id == patientId, ct);
         var now = clock.GetUtcNow().UtcDateTime;
         var history = await database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && x.PatientAccountId == patientId).ToArrayAsync(ct);
         return new(patient.Id, patient.FullName, patient.PatientProfile?.PreferredName, patient.Email, patient.PhoneE164,
             patient.PatientProfile?.BirthDate is { } birth ? DateOnly.FromDateTime(birth) : null, patient.StatusCode,
-            patient.PremiumMemberships.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)),
+            patient.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)),
             history.Length, history.Where(x => x.StartsAtUtc < now).Select(x => (DateTime?)x.StartsAtUtc).Max(),
             history.Where(x => x.StartsAtUtc >= now && x.StatusCode is "pending" or "confirmed").Select(x => (DateTime?)x.StartsAtUtc).Min(), patient.RowVersion);
     }

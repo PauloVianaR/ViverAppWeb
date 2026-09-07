@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using ViverApp.Api.Features.ClinicalOperations;
 using ViverApp.Api.Features.DoctorExperience;
 using ViverApp.Api.Features.Identity;
+using ViverApp.Api.Features.ManagerExperience;
 using Xunit;
 
 namespace ViverApp.ClinicalOperations.Tests;
@@ -116,5 +117,34 @@ public sealed class ClinicalOperationsApiTests : IAsyncLifetime
         var rectification = new DoctorReportRectificationRequest(1, "curto", null, "x");
         var rectificationResults = new List<ValidationResult>();
         Assert.False(Validator.TryValidateObject(rectification, new ValidationContext(rectification), rectificationResults, true));
+    }
+
+    [Theory]
+    [InlineData("/api/v1/manager/home")]
+    [InlineData("/api/v1/manager/profile")]
+    [InlineData("/api/v1/manager/patients")]
+    [InlineData("/api/v1/manager/agenda?from=2026-01-01&to=2026-01-02")]
+    [InlineData("/api/v1/manager/premium")]
+    public async Task ManagerEndpoints_RequireAuthentication(string path)
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost"),
+        });
+        using var response = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public void ManagerContracts_RejectForgedCardAndWeakPatientData()
+    {
+        var card = new ManagerPaymentConfirmRequest("credit_card", DateTime.UtcNow, "12ab", null, 0);
+        var cardResults = new List<ValidationResult>();
+        Assert.False(Validator.TryValidateObject(card, new ValidationContext(card), cardResults, true));
+
+        var patient = new ManagerPatientCreateRequest("A", "invalid", null, null);
+        var patientResults = new List<ValidationResult>();
+        Assert.False(Validator.TryValidateObject(patient, new ValidationContext(patient), patientResults, true));
     }
 }

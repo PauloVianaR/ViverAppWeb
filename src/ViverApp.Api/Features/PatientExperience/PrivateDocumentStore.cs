@@ -165,6 +165,22 @@ public sealed class PrivateDocumentStore(ViverAppDbContext database, IDataProtec
         return (bytes, document.ContentType, document.OriginalFileName);
     }
 
+    public async Task<(byte[] Content, string Mime, string Name, Guid DocumentId)> DownloadPremiumForManagerAsync(
+        ulong manager,
+        ulong membershipId,
+        CancellationToken ct)
+    {
+        if (!await database.Accounts.AsNoTracking().AnyAsync(x => x.Id == manager && x.RoleCode == "manager" && x.StatusCode == "active", ct))
+            throw PatientExperienceService.Missing();
+        var document = await database.PremiumMemberships.AsNoTracking()
+            .Where(x => x.Id == membershipId && x.ProofDocumentId != null && x.ProofDocument!.StatusCode == "available")
+            .Select(x => x.ProofDocument!)
+            .SingleOrDefaultAsync(ct) ?? throw PatientExperienceService.Missing();
+        var bytes = protector.Unprotect(document.ProtectedContent);
+        if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(bytes), document.Sha256)) throw PatientExperienceService.Missing();
+        return (bytes, document.ContentType, document.OriginalFileName, document.Id);
+    }
+
     public async Task<PatientScheduling.SchedulingPage<PatientDocumentResponse>> ListAsync(ulong actor, ulong appointment, int page, int pageSize, CancellationToken ct)
     {
         PatientExperienceService.ValidatePage(page, pageSize);

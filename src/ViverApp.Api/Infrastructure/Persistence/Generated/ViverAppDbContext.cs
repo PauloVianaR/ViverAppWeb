@@ -68,6 +68,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<IdempotencyRecord> IdempotencyRecords { get; set; }
 
+    public virtual DbSet<ManagerPreference> ManagerPreferences { get; set; }
+
     public virtual DbSet<MedicalReport> MedicalReports { get; set; }
 
     public virtual DbSet<MedicalReportVersion> MedicalReportVersions { get; set; }
@@ -1277,6 +1279,27 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.ResponseStatusCode).HasColumnName("response_status_code");
         });
 
+        modelBuilder.Entity<ManagerPreference>(entity =>
+        {
+            entity.HasKey(e => e.ManagerAccountId).HasName("PRIMARY");
+
+            entity.ToTable("manager_preferences");
+
+            entity.Property(e => e.ManagerAccountId).HasColumnName("manager_account_id");
+            entity.Property(e => e.EmailEnabled).HasColumnName("email_enabled");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.SmsEnabled).HasColumnName("sms_enabled");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.ManagerAccount).WithOne(p => p.ManagerPreference)
+                .HasForeignKey<ManagerPreference>(d => d.ManagerAccountId)
+                .HasConstraintName("fk_manager_preferences_account");
+        });
+
         modelBuilder.Entity<MedicalReport>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
@@ -1472,6 +1495,8 @@ public partial class ViverAppDbContext : DbContext
 
             entity.ToTable("payments");
 
+            entity.HasIndex(e => new { e.ConfirmedByAccountId, e.PaidAtUtc }, "ix_payments_confirmer");
+
             entity.HasIndex(e => e.ProviderReferenceAppointmentId, "ix_payments_provider_reference");
 
             entity.HasIndex(e => new { e.StatusCode, e.NextReconciliationAtUtc }, "ix_payments_reconciliation");
@@ -1491,15 +1516,23 @@ public partial class ViverAppDbContext : DbContext
                 .HasPrecision(13)
                 .HasColumnName("amount");
             entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.AuthorizationReference)
+                .HasMaxLength(100)
+                .HasColumnName("authorization_reference");
             entity.Property(e => e.CanceledAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("canceled_at_utc");
+            entity.Property(e => e.CardLastFour)
+                .HasMaxLength(4)
+                .IsFixedLength()
+                .HasColumnName("card_last_four");
             entity.Property(e => e.CheckoutExpiresAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("checkout_expires_at_utc");
             entity.Property(e => e.CheckoutUrl)
                 .HasMaxLength(500)
                 .HasColumnName("checkout_url");
+            entity.Property(e => e.ConfirmedByAccountId).HasColumnName("confirmed_by_account_id");
             entity.Property(e => e.CreatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("created_at_utc");
@@ -1559,6 +1592,11 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey<Payment>(d => d.AppointmentId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_payments_appointment");
+
+            entity.HasOne(d => d.ConfirmedByAccount).WithMany(p => p.Payments)
+                .HasForeignKey(d => d.ConfirmedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_payments_confirmer");
 
             entity.HasOne(d => d.ProviderReferenceAppointment).WithMany(p => p.PaymentProviderReferenceAppointments)
                 .HasForeignKey(d => d.ProviderReferenceAppointmentId)
@@ -1671,6 +1709,8 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => new { e.AccountId, e.StatusCode, e.EndsAtUtc }, "ix_premium_memberships_account_status");
 
+            entity.HasIndex(e => new { e.ReviewedByAccountId, e.ReviewedAtUtc }, "ix_premium_memberships_reviewer");
+
             entity.HasIndex(e => e.OpenAccountId, "ux_premium_memberships_open").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
@@ -1687,9 +1727,13 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.RejectionReason)
                 .HasMaxLength(1000)
                 .HasColumnName("rejection_reason");
+            entity.Property(e => e.ReviewNotes)
+                .HasMaxLength(1000)
+                .HasColumnName("review_notes");
             entity.Property(e => e.ReviewedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("reviewed_at_utc");
+            entity.Property(e => e.ReviewedByAccountId).HasColumnName("reviewed_by_account_id");
             entity.Property(e => e.RowVersion)
                 .HasDefaultValueSql("'1'")
                 .HasColumnName("row_version");
@@ -1704,7 +1748,7 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");
 
-            entity.HasOne(d => d.Account).WithMany(p => p.PremiumMemberships)
+            entity.HasOne(d => d.Account).WithMany(p => p.PremiumMembershipAccounts)
                 .HasForeignKey(d => d.AccountId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_premium_memberships_account");
@@ -1718,6 +1762,11 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey(d => d.ProofDocumentId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_premium_memberships_proof");
+
+            entity.HasOne(d => d.ReviewedByAccount).WithMany(p => p.PremiumMembershipReviewedByAccounts)
+                .HasForeignKey(d => d.ReviewedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_premium_memberships_reviewer");
 
             entity.HasOne(d => d.PrivateDocument).WithMany(p => p.PremiumMembershipPrivateDocuments)
                 .HasPrincipalKey(p => new { p.Id, p.OwnerAccountId })

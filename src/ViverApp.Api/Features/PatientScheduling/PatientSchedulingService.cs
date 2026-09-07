@@ -339,6 +339,132 @@ public sealed class PatientSchedulingService(
         return (response, false);
     }
 
+    public async Task<(AppointmentResponse Response, bool Replayed)> CreateForManagerAsync(
+        ulong managerId,
+        string idempotencyKey,
+        ViverApp.Api.Features.ManagerExperience.ManagerAppointmentCreateRequest request,
+        CancellationToken cancellationToken)
+    {
+        ValidateIdempotencyKey(idempotencyKey);
+        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        await LockPatientAsync(request.PatientAccountId, cancellationToken);
+        var requestHash = HashRequest(managerId, $"manager-create:{request.PatientAccountId}", request);
+        var scope = $"appointment.manager-create:{managerId}";
+        var replay = await TryReplayAsync(scope, idempotencyKey, requestHash, cancellationToken);
+        if (replay is not null) { await transaction.CommitAsync(cancellationToken); return (replay, true); }
+        await LockDoctorAsync(request.DoctorAccountId, cancellationToken);
+        var type = await RequireAppointmentTypeAsync(request.AppointmentTypeId, request.ModalityCode, cancellationToken);
+        var doctor = await RequireActiveDoctorAsync(request.DoctorAccountId, cancellationToken);
+        var hasConfiguredServices = await database.DoctorServices.AnyAsync(x => x.DoctorAccountId == request.DoctorAccountId, cancellationToken);
+        if (hasConfiguredServices && !await database.DoctorServices.AnyAsync(x => x.DoctorAccountId == request.DoctorAccountId
+            && x.AppointmentTypeId == type.Id && x.IsActive, cancellationToken)) throw Conflict("Este serviço não é oferecido pelo médico.");
+        var (policy, timezoneName, timezone) = await LoadConfigurationAsync(cancellationToken);
+        var slot = await RequireSlotAsync(request.PatientAccountId, request.DoctorAccountId, type, request.ModalityCode,
+            request.LocalDate, request.LocalStartsAt, timezoneName, timezone, policy, null, cancellationToken);
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var discount = await database.PremiumMemberships.AsNoTracking()
+            .Where(x => x.AccountId == request.PatientAccountId && x.StatusCode == "active" && x.StartsAtUtc <= now
+                && (x.EndsAtUtc == null || x.EndsAtUtc > now) && x.PremiumPlan.IsActive)
+            .Select(x => (decimal?)x.PremiumPlan.AppointmentDiscountPercent).MaxAsync(cancellationToken) ?? 0;
+        var entity = new Appointment
+        {
+            PatientAccountId = request.PatientAccountId,
+            DoctorAccountId = request.DoctorAccountId,
+            AppointmentTypeId = type.Id,
+            CreatedByAccountId = managerId,
+            StatusCode = "pending",
+            ModalityCode = request.ModalityCode,
+            StartsAtUtc = slot.StartsAtUtc,
+            EndsAtUtc = slot.EndsAtUtc,
+            PriceAmount = PatientExperience.PatientExperienceService.DiscountedPrice(type.PriceAmount, discount),
+            BasePriceAmount = type.PriceAmount,
+            DiscountPercent = discount,
+            PaymentLocationCode = request.ModalityCode == "in_person" ? "clinic" : "web",
+            CurrencyCode = "BRL",
+            PatientNotes = OptionalText(request.PatientNotes),
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        };
+        database.Appointments.Add(entity); await database.SaveChangesAsync(cancellationToken);
+        AddHistory(entity, managerId, null, "pending", null, now);
+        var response = BuildResponse(entity, doctor.FullName, type.Name, timezoneName, timezone, null);
+        StoreIdempotency(scope, idempotencyKey, requestHash, response, StatusCodes.Status201Created, now);
+        await database.SaveChangesAsync(cancellationToken);
+        await auditWriter.WriteAsync("appointment.created_by_manager", managerId, entity.Id,
+            new Dictionary<string, string> { ["doctorAccountId"] = request.DoctorAccountId.ToString(CultureInfo.InvariantCulture), ["modality"] = request.ModalityCode }, cancellationToken);
+        await transaction.CommitAsync(cancellationToken); return (response, false);
+    }
+
+    public async Task<AppointmentResponse> CancelForManagerAsync(ulong managerId, ulong appointmentId,
+        AppointmentCancelRequest request, CancellationToken cancellationToken)
+    {
+        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        var entity = await database.Appointments.FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {appointmentId} FOR UPDATE").SingleOrDefaultAsync(cancellationToken) ?? throw NotFound("Agendamento não encontrado.");
+        if (!ActiveStatuses.Contains(entity.StatusCode)) throw Conflict("Somente agendamentos pendentes ou confirmados podem ser cancelados.");
+        if (entity.RowVersion != request.RowVersion) throw Conflict("O agendamento foi alterado por outra sessão.");
+        var previous = entity.StatusCode; var now = timeProvider.GetUtcNow().UtcDateTime;
+        entity.StatusCode = "canceled"; entity.CancellationReason = request.Reason.Trim(); entity.CanceledByAccountId = managerId;
+        entity.CanceledAtUtc = now; entity.UpdatedAtUtc = now; entity.RowVersion++;
+        AddHistory(entity, managerId, previous, "canceled", entity.CancellationReason, now); await database.SaveChangesAsync(cancellationToken);
+        await auditWriter.WriteAsync("appointment.canceled_by_manager", managerId, entity.Id, null, cancellationToken);
+        await transaction.CommitAsync(cancellationToken); var (_, timezoneName, timezone) = await LoadConfigurationAsync(cancellationToken);
+        var hydrated = await IncludeAppointmentGraph(database.Appointments.AsNoTracking()).SingleAsync(x => x.Id == entity.Id, cancellationToken);
+        return await ToResponseAsync(hydrated, timezoneName, timezone, cancellationToken);
+    }
+
+    public async Task<(AppointmentResponse Response, bool Replayed)> RescheduleForManagerAsync(ulong managerId,
+        ulong appointmentId, string idempotencyKey, AppointmentRescheduleRequest request, CancellationToken cancellationToken)
+    {
+        ValidateIdempotencyKey(idempotencyKey);
+        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        var original = await database.Appointments.FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {appointmentId} FOR UPDATE").SingleOrDefaultAsync(cancellationToken) ?? throw NotFound("Agendamento não encontrado.");
+        if (!ActiveStatuses.Contains(original.StatusCode)) throw Conflict("Somente agendamentos pendentes ou confirmados podem ser reagendados.");
+        if (original.RowVersion != request.RowVersion) throw Conflict("O agendamento foi alterado por outra sessão.");
+        var requestHash = HashRequest(managerId, $"manager-reschedule:{appointmentId}", request); var scope = $"appointment.manager-move:{managerId}";
+        var replay = await TryReplayAsync(scope, idempotencyKey, requestHash, cancellationToken);
+        if (replay is not null) { await transaction.CommitAsync(cancellationToken); return (replay, true); }
+        await LockDoctorAsync(original.DoctorAccountId, cancellationToken);
+        var type = await RequireAppointmentTypeAsync(original.AppointmentTypeId, original.ModalityCode, cancellationToken);
+        var doctor = await RequireActiveDoctorAsync(original.DoctorAccountId, cancellationToken);
+        var (policy, timezoneName, timezone) = await LoadConfigurationAsync(cancellationToken);
+        var slot = await RequireSlotAsync(original.PatientAccountId, original.DoctorAccountId, type, original.ModalityCode,
+            request.LocalDate, request.LocalStartsAt, timezoneName, timezone, policy, original.Id, cancellationToken);
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var replacement = new Appointment
+        {
+            PatientAccountId = original.PatientAccountId,
+            DoctorAccountId = original.DoctorAccountId,
+            AppointmentTypeId = original.AppointmentTypeId,
+            CreatedByAccountId = managerId,
+            StatusCode = "pending",
+            ModalityCode = original.ModalityCode,
+            StartsAtUtc = slot.StartsAtUtc,
+            EndsAtUtc = slot.EndsAtUtc,
+            PriceAmount = original.PriceAmount,
+            BasePriceAmount = original.BasePriceAmount,
+            DiscountPercent = original.DiscountPercent,
+            PaymentLocationCode = original.PaymentLocationCode,
+            CurrencyCode = original.CurrencyCode,
+            PatientNotes = original.PatientNotes,
+            RescheduledFromAppointmentId = original.Id,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1
+        };
+        var previous = original.StatusCode; original.StatusCode = "rescheduled"; original.UpdatedAtUtc = now; original.RowVersion++;
+        database.Appointments.Add(replacement); AddHistory(original, managerId, previous, "rescheduled", OptionalText(request.Reason), now);
+        await database.SaveChangesAsync(cancellationToken);
+        var payment = await database.Payments.FromSqlInterpolated($"SELECT * FROM payments WHERE appointment_id = {original.Id} FOR UPDATE").SingleOrDefaultAsync(cancellationToken);
+        if (payment is not null) { payment.ProviderReferenceAppointmentId ??= original.Id; payment.AppointmentId = replacement.Id; payment.UpdatedAtUtc = now; payment.RowVersion++; if (payment.StatusCode == "paid") replacement.StatusCode = "confirmed"; }
+        AddHistory(replacement, managerId, null, replacement.StatusCode, OptionalText(request.Reason), now);
+        var response = BuildResponse(replacement, doctor.FullName, type.Name, timezoneName, timezone, null);
+        StoreIdempotency(scope, idempotencyKey, requestHash, response, 200, now); await database.SaveChangesAsync(cancellationToken);
+        await auditWriter.WriteAsync("appointment.rescheduled_by_manager", managerId, replacement.Id,
+            new Dictionary<string, string> { ["previousAppointmentId"] = original.Id.ToString(CultureInfo.InvariantCulture) }, cancellationToken);
+        await transaction.CommitAsync(cancellationToken); return (response, false);
+    }
+
     public async Task<AppointmentResponse> CancelForDoctorAsync(ulong doctorId, ulong appointmentId,
         AppointmentCancelRequest request, CancellationToken cancellationToken)
     {

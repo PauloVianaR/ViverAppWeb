@@ -89,11 +89,17 @@ public partial class Account
 
     public virtual ICollection<ExternalLogin> ExternalLogins { get; set; } = new List<ExternalLogin>();
 
+    public virtual ManagerPreference? ManagerPreference { get; set; }
+
     public virtual PatientPreference? PatientPreference { get; set; }
 
     public virtual PatientProfile? PatientProfile { get; set; }
 
-    public virtual ICollection<PremiumMembership> PremiumMemberships { get; set; } = new List<PremiumMembership>();
+    public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
+
+    public virtual ICollection<PremiumMembership> PremiumMembershipAccounts { get; set; } = new List<PremiumMembership>();
+
+    public virtual ICollection<PremiumMembership> PremiumMembershipReviewedByAccounts { get; set; } = new List<PremiumMembership>();
 
     public virtual ICollection<PrivateDocument> PrivateDocuments { get; set; } = new List<PrivateDocument>();
 

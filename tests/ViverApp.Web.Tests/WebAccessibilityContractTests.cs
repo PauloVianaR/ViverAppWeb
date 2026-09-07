@@ -104,7 +104,9 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     [InlineData("/medico/disponibilidade", "Minha disponibilidade")]
     [InlineData("/gestao/agenda", "Agenda clínica")]
     [InlineData("/gestao/pacientes", "Pacientes vinculados")]
-    [InlineData("/gestao/disponibilidade", "Minha disponibilidade")]
+    [InlineData("/gestao/historico", "Histórico dos atendimentos")]
+    [InlineData("/gestao/perfil", "Meu perfil gerencial")]
+    [InlineData("/gestao/premium", "Solicitações Premium")]
     public async Task ClinicalWorkspace_ExposesRoleAwareResponsiveJourneys(string path, string heading)
     {
         using var client = CreateClient();
