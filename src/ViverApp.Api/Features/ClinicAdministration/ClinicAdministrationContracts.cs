@@ -109,7 +109,8 @@ public sealed record DoctorWeeklyHourWriteRequest(
     DateOnly? ValidFrom,
     DateOnly? ValidUntil,
     bool IsActive,
-    [param: Range(0, long.MaxValue)] ulong RowVersion = 0);
+    [param: Range(0, long.MaxValue)] ulong RowVersion = 0,
+    [param: RegularExpression("^(in_person|online|both)$")] string ModalityCode = "both");
 
 public sealed record DoctorWeeklyHourResponse(
     ulong Id,
@@ -119,7 +120,8 @@ public sealed record DoctorWeeklyHourResponse(
     DateOnly? ValidFrom,
     DateOnly? ValidUntil,
     bool IsActive,
-    ulong RowVersion);
+    ulong RowVersion,
+    string ModalityCode);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record HolidayWriteRequest(

@@ -48,13 +48,14 @@ public sealed class PrivateDocumentStore(ViverAppDbContext database, IDataProtec
     IDocumentMalwareScanner scanner, IWebHostEnvironment environment)
 {
     public const int MaximumBytes = 5 * 1024 * 1024;
+    public const int MaximumClinicalBytes = 10 * 1024 * 1024;
     private readonly IDataProtector protector = protection.CreateProtector("ViverApp.PrivateDocuments.v1");
 
-    public static string ValidateContent(string name, string mime, byte[] content)
+    public static string ValidateContent(string name, string mime, byte[] content, int maximumBytes = MaximumBytes)
     {
         if (name.Length is < 1 or > 200 || name.Any(c => char.IsControl(c) || c is '/' or '\\' or ':') || name.Contains("..", StringComparison.Ordinal))
             throw PatientExperienceService.Invalid("Nome de arquivo inválido.");
-        if (content.Length is 0 or > MaximumBytes) throw PatientExperienceService.Invalid("Envie um arquivo de até 5 MB.");
+        if (content.Length == 0 || content.Length > maximumBytes) throw PatientExperienceService.Invalid($"Envie um arquivo de até {maximumBytes / 1024 / 1024} MB.");
         var extension = Path.GetExtension(name).ToLowerInvariant();
         var valid = extension switch
         {
@@ -78,7 +79,7 @@ public sealed class PrivateDocumentStore(ViverAppDbContext database, IDataProtec
         while (offset <= bytes.Length - 12)
         {
             var length = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(offset, 4));
-            if (length > MaximumBytes || offset + 12L + length > bytes.Length) return false;
+            if (length > MaximumClinicalBytes || offset + 12L + length > bytes.Length) return false;
             var type = Encoding.ASCII.GetString(bytes, offset + 4, 4);
             var crc = uint.MaxValue;
             foreach (var value in bytes.AsSpan(offset + 4, checked((int)length + 4)))
@@ -103,21 +104,27 @@ public sealed class PrivateDocumentStore(ViverAppDbContext database, IDataProtec
         return false;
     }
 
-    public async Task<PrivateDocument> PrepareAsync(ulong owner, IFormFile file, CancellationToken ct)
+    public Task<PrivateDocument> PrepareAsync(ulong owner, IFormFile file, CancellationToken ct) =>
+        PrepareAsync(owner, file, MaximumBytes, ct);
+
+    public Task<PrivateDocument> PrepareClinicalAsync(ulong patientOwner, IFormFile file, CancellationToken ct) =>
+        PrepareAsync(patientOwner, file, MaximumClinicalBytes, ct);
+
+    private async Task<PrivateDocument> PrepareAsync(ulong owner, IFormFile file, int maximumBytes, CancellationToken ct)
     {
         if (!environment.IsDevelopment()) throw new PatientExperienceException(503, "O armazenamento privado ainda não está habilitado neste ambiente.");
-        if (file.Length is <= 0 or > MaximumBytes) throw PatientExperienceService.Invalid("Envie um arquivo de até 5 MB.");
+        if (file.Length <= 0 || file.Length > maximumBytes) throw PatientExperienceService.Invalid($"Envie um arquivo de até {maximumBytes / 1024 / 1024} MB.");
         using var content = new MemoryStream();
         await using var stream = file.OpenReadStream();
         var buffer = new byte[81920];
         int read;
         while ((read = await stream.ReadAsync(buffer, ct)) > 0)
         {
-            if (content.Length + read > MaximumBytes) throw PatientExperienceService.Invalid("O arquivo excede 5 MB.");
+            if (content.Length + read > maximumBytes) throw PatientExperienceService.Invalid($"O arquivo excede {maximumBytes / 1024 / 1024} MB.");
             await content.WriteAsync(buffer.AsMemory(0, read), ct);
         }
         var bytes = content.ToArray();
-        var mime = ValidateContent(file.FileName, file.ContentType, bytes);
+        var mime = ValidateContent(file.FileName, file.ContentType, bytes, maximumBytes);
         if (!await scanner.IsCleanAsync(bytes, ct)) throw new PatientExperienceException(422, "O arquivo não pôde ser aprovado pela verificação de segurança. Tente outro documento ou entre em contato com a clínica.");
         return new()
         {
@@ -141,6 +148,18 @@ public sealed class PrivateDocumentStore(ViverAppDbContext database, IDataProtec
         var clinical = await database.AppointmentDocuments.AnyAsync(x => x.ObjectKey == key && x.StatusCode == "available" && x.Appointment.PatientAccountId == actor
             && x.Appointment.MedicalReport != null && x.Appointment.MedicalReport.StatusCode == "published", ct);
         if (!premium && !clinical) throw PatientExperienceService.Missing();
+        var bytes = protector.Unprotect(document.ProtectedContent);
+        if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(bytes), document.Sha256)) throw PatientExperienceService.Missing();
+        return (bytes, document.ContentType, document.OriginalFileName);
+    }
+
+    public async Task<(byte[] Content, string Mime, string Name)> DownloadForDoctorAsync(ulong doctor, ulong documentId, CancellationToken ct)
+    {
+        var link = await database.AppointmentDocuments.AsNoTracking().SingleOrDefaultAsync(x => x.Id == documentId
+            && x.StatusCode == "available" && x.Appointment.DoctorAccountId == doctor, ct) ?? throw PatientExperienceService.Missing();
+        if (!Guid.TryParse(link.ObjectKey, out var privateId)) throw PatientExperienceService.Missing();
+        var document = await database.PrivateDocuments.AsNoTracking().SingleOrDefaultAsync(x => x.Id == privateId && x.StatusCode == "available", ct)
+            ?? throw PatientExperienceService.Missing();
         var bytes = protector.Unprotect(document.ProtectedContent);
         if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(bytes), document.Sha256)) throw PatientExperienceService.Missing();
         return (bytes, document.ContentType, document.OriginalFileName);

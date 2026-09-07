@@ -48,7 +48,15 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<ContactChangeRequest> ContactChangeRequests { get; set; }
 
+    public virtual DbSet<DoctorAvailabilityException> DoctorAvailabilityExceptions { get; set; }
+
+    public virtual DbSet<DoctorPatientLink> DoctorPatientLinks { get; set; }
+
+    public virtual DbSet<DoctorPreference> DoctorPreferences { get; set; }
+
     public virtual DbSet<DoctorProfile> DoctorProfiles { get; set; }
+
+    public virtual DbSet<DoctorService> DoctorServices { get; set; }
 
     public virtual DbSet<DoctorSpecialty> DoctorSpecialties { get; set; }
 
@@ -61,6 +69,8 @@ public partial class ViverAppDbContext : DbContext
     public virtual DbSet<IdempotencyRecord> IdempotencyRecords { get; set; }
 
     public virtual DbSet<MedicalReport> MedicalReports { get; set; }
+
+    public virtual DbSet<MedicalReportVersion> MedicalReportVersions { get; set; }
 
     public virtual DbSet<OutboxMessage> OutboxMessages { get; set; }
 
@@ -548,6 +558,8 @@ public partial class ViverAppDbContext : DbContext
 
             entity.ToTable("appointment_documents");
 
+            entity.HasIndex(e => e.DeletedByAccountId, "fk_appointment_documents_deleted_by");
+
             entity.HasIndex(e => e.UploadedByAccountId, "fk_appointment_documents_uploader");
 
             entity.HasIndex(e => new { e.AppointmentId, e.CreatedAtUtc }, "ix_appointment_documents_appointment");
@@ -568,12 +580,19 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.CreatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("created_at_utc");
+            entity.Property(e => e.DeletedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("deleted_at_utc");
+            entity.Property(e => e.DeletedByAccountId).HasColumnName("deleted_by_account_id");
             entity.Property(e => e.ObjectKey)
                 .HasMaxLength(512)
                 .HasColumnName("object_key");
             entity.Property(e => e.OriginalFileName)
                 .HasMaxLength(255)
                 .HasColumnName("original_file_name");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
             entity.Property(e => e.Sha256)
                 .HasMaxLength(32)
                 .IsFixedLength()
@@ -590,7 +609,12 @@ public partial class ViverAppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_appointment_documents_appointment");
 
-            entity.HasOne(d => d.UploadedByAccount).WithMany(p => p.AppointmentDocuments)
+            entity.HasOne(d => d.DeletedByAccount).WithMany(p => p.AppointmentDocumentDeletedByAccounts)
+                .HasForeignKey(d => d.DeletedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointment_documents_deleted_by");
+
+            entity.HasOne(d => d.UploadedByAccount).WithMany(p => p.AppointmentDocumentUploadedByAccounts)
                 .HasForeignKey(d => d.UploadedByAccountId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_appointment_documents_uploader");
@@ -917,6 +941,113 @@ public partial class ViverAppDbContext : DbContext
                 .HasConstraintName("fk_contact_change_account");
         });
 
+        modelBuilder.Entity<DoctorAvailabilityException>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("doctor_availability_exceptions");
+
+            entity.HasIndex(e => new { e.DoctorAccountId, e.ExceptionDate }, "ix_doctor_availability_exception_date");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.DoctorAccountId).HasColumnName("doctor_account_id");
+            entity.Property(e => e.EndTime)
+                .HasColumnType("time")
+                .HasColumnName("end_time");
+            entity.Property(e => e.ExceptionDate)
+                .HasColumnType("date")
+                .HasColumnName("exception_date");
+            entity.Property(e => e.IsAvailable).HasColumnName("is_available");
+            entity.Property(e => e.ModalityCode)
+                .HasMaxLength(10)
+                .HasColumnName("modality_code");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.StartTime)
+                .HasColumnType("time")
+                .HasColumnName("start_time");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.DoctorAccount).WithMany(p => p.DoctorAvailabilityExceptions)
+                .HasForeignKey(d => d.DoctorAccountId)
+                .HasConstraintName("fk_doctor_availability_exception_doctor");
+        });
+
+        modelBuilder.Entity<DoctorPatientLink>(entity =>
+        {
+            entity.HasKey(e => new { e.DoctorAccountId, e.PatientAccountId }).HasName("PRIMARY");
+
+            entity.ToTable("doctor_patient_links");
+
+            entity.HasIndex(e => e.CreatedByAccountId, "fk_doctor_patient_links_creator");
+
+            entity.HasIndex(e => new { e.PatientAccountId, e.StatusCode }, "ix_doctor_patient_links_patient");
+
+            entity.Property(e => e.DoctorAccountId).HasColumnName("doctor_account_id");
+            entity.Property(e => e.PatientAccountId).HasColumnName("patient_account_id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.CreatedByAccountId).HasColumnName("created_by_account_id");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.StatusCode)
+                .HasMaxLength(10)
+                .HasColumnName("status_code");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.CreatedByAccount).WithMany(p => p.DoctorPatientLinkCreatedByAccounts)
+                .HasForeignKey(d => d.CreatedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_doctor_patient_links_creator");
+
+            entity.HasOne(d => d.DoctorAccount).WithMany(p => p.DoctorPatientLinks)
+                .HasForeignKey(d => d.DoctorAccountId)
+                .HasConstraintName("fk_doctor_patient_links_doctor");
+
+            entity.HasOne(d => d.PatientAccount).WithMany(p => p.DoctorPatientLinkPatientAccounts)
+                .HasForeignKey(d => d.PatientAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_doctor_patient_links_patient");
+        });
+
+        modelBuilder.Entity<DoctorPreference>(entity =>
+        {
+            entity.HasKey(e => e.DoctorAccountId).HasName("PRIMARY");
+
+            entity.ToTable("doctor_preferences");
+
+            entity.Property(e => e.DoctorAccountId).HasColumnName("doctor_account_id");
+            entity.Property(e => e.EmailEnabled).HasColumnName("email_enabled");
+            entity.Property(e => e.MaxInPersonDaily)
+                .HasDefaultValueSql("'16'")
+                .HasColumnName("max_in_person_daily");
+            entity.Property(e => e.MaxOnlineDaily)
+                .HasDefaultValueSql("'8'")
+                .HasColumnName("max_online_daily");
+            entity.Property(e => e.OnlineEnabled).HasColumnName("online_enabled");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.SmsEnabled).HasColumnName("sms_enabled");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.DoctorAccount).WithOne(p => p.DoctorPreference)
+                .HasForeignKey<DoctorPreference>(d => d.DoctorAccountId)
+                .HasConstraintName("fk_doctor_preferences_doctor");
+        });
+
         modelBuilder.Entity<DoctorProfile>(entity =>
         {
             entity.HasKey(e => e.AccountId).HasName("PRIMARY");
@@ -959,6 +1090,37 @@ public partial class ViverAppDbContext : DbContext
                 .HasConstraintName("fk_doctor_profiles_account");
         });
 
+        modelBuilder.Entity<DoctorService>(entity =>
+        {
+            entity.HasKey(e => new { e.DoctorAccountId, e.AppointmentTypeId }).HasName("PRIMARY");
+
+            entity.ToTable("doctor_services");
+
+            entity.HasIndex(e => new { e.AppointmentTypeId, e.IsActive }, "ix_doctor_services_type_active");
+
+            entity.Property(e => e.DoctorAccountId).HasColumnName("doctor_account_id");
+            entity.Property(e => e.AppointmentTypeId).HasColumnName("appointment_type_id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.AppointmentType).WithMany(p => p.DoctorServices)
+                .HasForeignKey(d => d.AppointmentTypeId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_doctor_services_type");
+
+            entity.HasOne(d => d.DoctorAccount).WithMany(p => p.DoctorServices)
+                .HasForeignKey(d => d.DoctorAccountId)
+                .HasConstraintName("fk_doctor_services_doctor");
+        });
+
         modelBuilder.Entity<DoctorSpecialty>(entity =>
         {
             entity.HasKey(e => new { e.DoctorAccountId, e.SpecialtyId }).HasName("PRIMARY");
@@ -987,7 +1149,7 @@ public partial class ViverAppDbContext : DbContext
 
             entity.ToTable("doctor_weekly_hours");
 
-            entity.HasIndex(e => new { e.DoctorAccountId, e.DayOfWeek, e.StartTime, e.EndTime, e.ValidFrom }, "ux_doctor_weekly_hours").IsUnique();
+            entity.HasIndex(e => new { e.DoctorAccountId, e.DayOfWeek, e.ModalityCode, e.StartTime, e.EndTime, e.ValidFrom }, "ux_doctor_weekly_hours").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.CreatedAtUtc)
@@ -999,6 +1161,10 @@ public partial class ViverAppDbContext : DbContext
                 .HasColumnType("time")
                 .HasColumnName("end_time");
             entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.ModalityCode)
+                .HasMaxLength(10)
+                .HasDefaultValueSql("'both'")
+                .HasColumnName("modality_code");
             entity.Property(e => e.RowVersion)
                 .HasDefaultValueSql("'1'")
                 .HasColumnName("row_version");
@@ -1158,6 +1324,44 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey(d => d.AuthorDoctorAccountId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_medical_reports_author");
+        });
+
+        modelBuilder.Entity<MedicalReportVersion>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("medical_report_versions");
+
+            entity.HasIndex(e => new { e.AuthorDoctorAccountId, e.CreatedAtUtc }, "ix_medical_report_versions_author");
+
+            entity.HasIndex(e => new { e.MedicalReportId, e.VersionNumber }, "ux_medical_report_versions_number").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AuthorDoctorAccountId).HasColumnName("author_doctor_account_id");
+            entity.Property(e => e.ChangeReason)
+                .HasMaxLength(1000)
+                .HasColumnName("change_reason");
+            entity.Property(e => e.ClinicalSummary)
+                .HasColumnType("text")
+                .HasColumnName("clinical_summary");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.MedicalReportId).HasColumnName("medical_report_id");
+            entity.Property(e => e.Recommendations)
+                .HasColumnType("text")
+                .HasColumnName("recommendations");
+            entity.Property(e => e.VersionNumber).HasColumnName("version_number");
+
+            entity.HasOne(d => d.AuthorDoctorAccount).WithMany(p => p.MedicalReportVersions)
+                .HasForeignKey(d => d.AuthorDoctorAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_report_versions_author");
+
+            entity.HasOne(d => d.MedicalReport).WithMany(p => p.MedicalReportVersions)
+                .HasForeignKey(d => d.MedicalReportId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_report_versions_report");
         });
 
         modelBuilder.Entity<OutboxMessage>(entity =>

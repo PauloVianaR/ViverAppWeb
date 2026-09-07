@@ -29,9 +29,19 @@ public partial class DoctorProfile
 
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
 
+    public virtual ICollection<DoctorAvailabilityException> DoctorAvailabilityExceptions { get; set; } = new List<DoctorAvailabilityException>();
+
+    public virtual ICollection<DoctorPatientLink> DoctorPatientLinks { get; set; } = new List<DoctorPatientLink>();
+
+    public virtual DoctorPreference? DoctorPreference { get; set; }
+
+    public virtual ICollection<DoctorService> DoctorServices { get; set; } = new List<DoctorService>();
+
     public virtual ICollection<DoctorSpecialty> DoctorSpecialties { get; set; } = new List<DoctorSpecialty>();
 
     public virtual ICollection<DoctorWeeklyHour> DoctorWeeklyHours { get; set; } = new List<DoctorWeeklyHour>();
+
+    public virtual ICollection<MedicalReportVersion> MedicalReportVersions { get; set; } = new List<MedicalReportVersion>();
 
     public virtual ICollection<MedicalReport> MedicalReports { get; set; } = new List<MedicalReport>();
 }

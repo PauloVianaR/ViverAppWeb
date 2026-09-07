@@ -270,6 +270,153 @@ public sealed class PatientSchedulingService(
         return (response, false);
     }
 
+    public async Task<(AppointmentResponse Response, bool Replayed)> CreateForDoctorAsync(
+        ulong doctorId,
+        string idempotencyKey,
+        DoctorAppointmentCreateRequest request,
+        CancellationToken cancellationToken)
+    {
+        ValidateIdempotencyKey(idempotencyKey);
+        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        await LockPatientAsync(request.PatientAccountId, cancellationToken);
+        var isLinked = await database.DoctorPatientLinks.AnyAsync(x => x.DoctorAccountId == doctorId
+            && x.PatientAccountId == request.PatientAccountId && x.StatusCode == "active", cancellationToken)
+            || await database.Appointments.AnyAsync(x => x.DoctorAccountId == doctorId && x.PatientAccountId == request.PatientAccountId, cancellationToken);
+        if (!isLinked) throw NotFound("Paciente não encontrado.");
+        var requestHash = HashRequest(doctorId, $"doctor-create:{request.PatientAccountId}", request);
+        var scope = $"appointment.doctor-create:{doctorId}";
+        var replay = await TryReplayAsync(scope, idempotencyKey, requestHash, cancellationToken);
+        if (replay is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return (replay, true);
+        }
+
+        await LockDoctorAsync(doctorId, cancellationToken);
+        var type = await RequireAppointmentTypeAsync(request.AppointmentTypeId, request.ModalityCode, cancellationToken);
+        var doctor = await RequireActiveDoctorAsync(doctorId, cancellationToken);
+        var hasConfiguredServices = await database.DoctorServices.AnyAsync(x => x.DoctorAccountId == doctorId, cancellationToken);
+        if (hasConfiguredServices && !await database.DoctorServices.AnyAsync(x => x.DoctorAccountId == doctorId
+            && x.AppointmentTypeId == type.Id && x.IsActive, cancellationToken))
+            throw Conflict("Este serviço não está ativo no seu perfil.");
+        var (policy, timezoneName, timezone) = await LoadConfigurationAsync(cancellationToken);
+        var slot = await RequireSlotAsync(request.PatientAccountId, doctorId, type, request.ModalityCode,
+            request.LocalDate, request.LocalStartsAt, timezoneName, timezone, policy, null, cancellationToken);
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var discount = await database.PremiumMemberships.AsNoTracking()
+            .Where(x => x.AccountId == request.PatientAccountId && x.StatusCode == "active" && x.StartsAtUtc <= now
+                && (x.EndsAtUtc == null || x.EndsAtUtc > now) && x.PremiumPlan.IsActive)
+            .Select(x => (decimal?)x.PremiumPlan.AppointmentDiscountPercent).MaxAsync(cancellationToken) ?? 0;
+        var entity = new Appointment
+        {
+            PatientAccountId = request.PatientAccountId,
+            DoctorAccountId = doctorId,
+            AppointmentTypeId = type.Id,
+            CreatedByAccountId = doctorId,
+            StatusCode = "pending",
+            ModalityCode = request.ModalityCode,
+            StartsAtUtc = slot.StartsAtUtc,
+            EndsAtUtc = slot.EndsAtUtc,
+            PriceAmount = PatientExperience.PatientExperienceService.DiscountedPrice(type.PriceAmount, discount),
+            BasePriceAmount = type.PriceAmount,
+            DiscountPercent = discount,
+            PaymentLocationCode = request.ModalityCode == "in_person" ? "clinic" : "web",
+            CurrencyCode = "BRL",
+            PatientNotes = OptionalText(request.PatientNotes),
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        };
+        database.Appointments.Add(entity);
+        await database.SaveChangesAsync(cancellationToken);
+        AddHistory(entity, doctorId, null, "pending", null, now);
+        var response = BuildResponse(entity, doctor.FullName, type.Name, timezoneName, timezone, null);
+        StoreIdempotency(scope, idempotencyKey, requestHash, response, StatusCodes.Status201Created, now);
+        await database.SaveChangesAsync(cancellationToken);
+        await auditWriter.WriteAsync("appointment.created_by_doctor", doctorId, entity.Id,
+            new Dictionary<string, string> { ["modality"] = request.ModalityCode }, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return (response, false);
+    }
+
+    public async Task<AppointmentResponse> CancelForDoctorAsync(ulong doctorId, ulong appointmentId,
+        AppointmentCancelRequest request, CancellationToken cancellationToken)
+    {
+        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        var entity = await database.Appointments.FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {appointmentId} FOR UPDATE")
+            .SingleOrDefaultAsync(cancellationToken);
+        if (entity is null || entity.DoctorAccountId != doctorId) throw NotFound("Agendamento não encontrado.");
+        if (!ActiveStatuses.Contains(entity.StatusCode)) throw Conflict("Somente agendamentos pendentes ou confirmados podem ser cancelados.");
+        if (entity.RowVersion != request.RowVersion) throw Conflict("O agendamento foi alterado por outra sessão. Recarregue e tente novamente.");
+        var previous = entity.StatusCode; var now = timeProvider.GetUtcNow().UtcDateTime;
+        entity.StatusCode = "canceled"; entity.CancellationReason = request.Reason.Trim(); entity.CanceledByAccountId = doctorId;
+        entity.CanceledAtUtc = now; entity.UpdatedAtUtc = now; entity.RowVersion++;
+        AddHistory(entity, doctorId, previous, "canceled", entity.CancellationReason, now);
+        await database.SaveChangesAsync(cancellationToken);
+        await auditWriter.WriteAsync("appointment.canceled_by_doctor", doctorId, entity.Id, null, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        var (_, timezoneName, timezone) = await LoadConfigurationAsync(cancellationToken);
+        var hydrated = await IncludeAppointmentGraph(database.Appointments.AsNoTracking()).SingleAsync(x => x.Id == entity.Id, cancellationToken);
+        return await ToResponseAsync(hydrated, timezoneName, timezone, cancellationToken);
+    }
+
+    public async Task<(AppointmentResponse Response, bool Replayed)> RescheduleForDoctorAsync(ulong doctorId,
+        ulong appointmentId, string idempotencyKey, AppointmentRescheduleRequest request, CancellationToken cancellationToken)
+    {
+        ValidateIdempotencyKey(idempotencyKey);
+        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        var original = await database.Appointments.FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {appointmentId} FOR UPDATE")
+            .SingleOrDefaultAsync(cancellationToken);
+        if (original is null || original.DoctorAccountId != doctorId) throw NotFound("Agendamento não encontrado.");
+        if (!ActiveStatuses.Contains(original.StatusCode)) throw Conflict("Somente agendamentos pendentes ou confirmados podem ser reagendados.");
+        if (original.RowVersion != request.RowVersion) throw Conflict("O agendamento foi alterado por outra sessão. Recarregue e tente novamente.");
+        var requestHash = HashRequest(doctorId, $"doctor-reschedule:{appointmentId}", request);
+        var scope = $"appointment.doctor-move:{doctorId}";
+        var replay = await TryReplayAsync(scope, idempotencyKey, requestHash, cancellationToken);
+        if (replay is not null) { await transaction.CommitAsync(cancellationToken); return (replay, true); }
+        await LockDoctorAsync(doctorId, cancellationToken);
+        var type = await RequireAppointmentTypeAsync(original.AppointmentTypeId, original.ModalityCode, cancellationToken);
+        var doctor = await RequireActiveDoctorAsync(doctorId, cancellationToken);
+        var (policy, timezoneName, timezone) = await LoadConfigurationAsync(cancellationToken);
+        var slot = await RequireSlotAsync(original.PatientAccountId, doctorId, type, original.ModalityCode,
+            request.LocalDate, request.LocalStartsAt, timezoneName, timezone, policy, original.Id, cancellationToken);
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var replacement = new Appointment
+        {
+            PatientAccountId = original.PatientAccountId,
+            DoctorAccountId = doctorId,
+            AppointmentTypeId = original.AppointmentTypeId,
+            CreatedByAccountId = doctorId,
+            StatusCode = "pending",
+            ModalityCode = original.ModalityCode,
+            StartsAtUtc = slot.StartsAtUtc,
+            EndsAtUtc = slot.EndsAtUtc,
+            PriceAmount = original.PriceAmount,
+            BasePriceAmount = original.BasePriceAmount,
+            DiscountPercent = original.DiscountPercent,
+            PaymentLocationCode = original.PaymentLocationCode,
+            CurrencyCode = original.CurrencyCode,
+            PatientNotes = original.PatientNotes,
+            RescheduledFromAppointmentId = original.Id,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        };
+        var previous = original.StatusCode; original.StatusCode = "rescheduled"; original.UpdatedAtUtc = now; original.RowVersion++;
+        database.Appointments.Add(replacement); AddHistory(original, doctorId, previous, "rescheduled", OptionalText(request.Reason), now);
+        await database.SaveChangesAsync(cancellationToken);
+        var payment = await database.Payments.FromSqlInterpolated($"SELECT * FROM payments WHERE appointment_id = {original.Id} FOR UPDATE").SingleOrDefaultAsync(cancellationToken);
+        if (payment is not null) { payment.ProviderReferenceAppointmentId ??= original.Id; payment.AppointmentId = replacement.Id; payment.UpdatedAtUtc = now; payment.RowVersion++; if (payment.StatusCode == "paid") replacement.StatusCode = "confirmed"; }
+        AddHistory(replacement, doctorId, null, replacement.StatusCode, OptionalText(request.Reason), now);
+        var response = BuildResponse(replacement, doctor.FullName, type.Name, timezoneName, timezone, null);
+        StoreIdempotency(scope, idempotencyKey, requestHash, response, StatusCodes.Status200OK, now);
+        await database.SaveChangesAsync(cancellationToken);
+        await auditWriter.WriteAsync("appointment.rescheduled_by_doctor", doctorId, replacement.Id,
+            new Dictionary<string, string> { ["previousAppointmentId"] = original.Id.ToString(CultureInfo.InvariantCulture) }, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return (response, false);
+    }
+
     public async Task<AppointmentResponse> CancelAsync(
         ulong patientId,
         ulong appointmentId,
@@ -492,6 +639,13 @@ public sealed class PatientSchedulingService(
         ulong? excludedAppointmentId,
         CancellationToken cancellationToken)
     {
+        var hasConfiguredServices = await database.DoctorServices.AsNoTracking().AnyAsync(x => x.DoctorAccountId == doctorId, cancellationToken);
+        if (hasConfiguredServices && !await database.DoctorServices.AsNoTracking().AnyAsync(x => x.DoctorAccountId == doctorId
+            && x.AppointmentTypeId == type.Id && x.IsActive, cancellationToken))
+            return [];
+        var preferences = await database.DoctorPreferences.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.DoctorAccountId == doctorId, cancellationToken);
+        if (modality == "online" && preferences is { OnlineEnabled: false }) return [];
         var fromLocal = DateTime.SpecifyKind(from.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified);
         var untilLocal = DateTime.SpecifyKind(until.AddDays(1).ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified);
         var fromUtc = TimeZoneInfo.ConvertTimeToUtc(fromLocal, timezone);
@@ -514,6 +668,11 @@ public sealed class PatientSchedulingService(
             .Where(item => item.HolidayDate >= from.ToDateTime(TimeOnly.MinValue)
                 && item.HolidayDate <= until.ToDateTime(TimeOnly.MinValue))
             .ToListAsync(cancellationToken);
+        var exceptions = await database.DoctorAvailabilityExceptions.AsNoTracking()
+            .Where(x => x.DoctorAccountId == doctorId && x.ExceptionDate >= from.ToDateTime(TimeOnly.MinValue)
+                && x.ExceptionDate <= until.ToDateTime(TimeOnly.MinValue)
+                && (x.ModalityCode == modality || x.ModalityCode == "both"))
+            .ToListAsync(cancellationToken);
         var earliest = timeProvider.GetUtcNow().UtcDateTime.AddMinutes(policy.MinimumLeadMinutes);
         var limitJson = await database.ApplicationSettings.Where(x => x.SettingKey == "appointments.patient_daily_limit").Select(x => x.ValueJson).SingleOrDefaultAsync(cancellationToken);
         var dailyLimit = int.TryParse(limitJson, out var configuredLimit) && configuredLimit is > 0 and <= 50 ? configuredLimit : 3;
@@ -522,17 +681,30 @@ public sealed class PatientSchedulingService(
             .Select(x => x.StartsAtUtc).ToArrayAsync(cancellationToken))
             .GroupBy(x => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(x, DateTimeKind.Utc), timezone)))
             .Where(x => x.Count() >= dailyLimit).Select(x => x.Key).ToHashSet();
+        var modalityLimit = modality == "online" ? preferences?.MaxOnlineDaily ?? 8 : preferences?.MaxInPersonDaily ?? 16;
+        if (modalityLimit == 0) return [];
+        var doctorFullDates = (await database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctorId
+            && x.Id != excludedAppointmentId && x.ModalityCode == modality && ActiveStatuses.Contains(x.StatusCode)
+            && x.StartsAtUtc >= fromUtc && x.StartsAtUtc < untilUtc).Select(x => x.StartsAtUtc).ToArrayAsync(cancellationToken))
+            .GroupBy(x => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(x, DateTimeKind.Utc), timezone)))
+            .Where(x => modalityLimit == 0 || x.Count() >= modalityLimit).Select(x => x.Key).ToHashSet();
         var result = new List<AvailableSlotResponse>();
         for (var date = from; date <= until; date = date.AddDays(1))
         {
-            if (patientDates.Contains(date)) continue;
+            if (patientDates.Contains(date) || doctorFullDates.Contains(date)) continue;
             var dateValue = date.ToDateTime(TimeOnly.MinValue);
             var day = (byte)date.DayOfWeek;
-            var doctorWindows = doctorHours
+            var dateExceptions = exceptions.Where(x => x.ExceptionDate.Date == dateValue.Date).ToArray();
+            if (dateExceptions.Any(x => !x.IsAvailable)) continue;
+            var weeklyWindows = doctorHours
                 .Where(item => item.DayOfWeek == day
+                    && (item.ModalityCode == modality || item.ModalityCode == "both")
                     && (!item.ValidFrom.HasValue || item.ValidFrom.Value.Date <= dateValue)
                     && (!item.ValidUntil.HasValue || item.ValidUntil.Value.Date >= dateValue))
-                .Select(item => new LocalAvailabilityWindow(item.StartTime, item.EndTime));
+                .Select(item => new LocalAvailabilityWindow(item.StartTime, item.EndTime)).ToArray();
+            var overrideWindows = dateExceptions.Where(x => x.IsAvailable)
+                .Select(x => new LocalAvailabilityWindow(x.StartTime!.Value, x.EndTime!.Value)).ToArray();
+            var doctorWindows = overrideWindows.Length > 0 ? overrideWindows : weeklyWindows;
             var clinicWindows = clinicHours
                 .Where(item => item.DayOfWeek == day)
                 .Select(item => new LocalAvailabilityWindow(item.StartTime, item.EndTime));

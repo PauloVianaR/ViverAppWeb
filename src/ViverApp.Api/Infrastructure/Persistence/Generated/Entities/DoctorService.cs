@@ -3,23 +3,11 @@ using System.Collections.Generic;
 
 namespace ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 
-public partial class DoctorWeeklyHour
+public partial class DoctorService
 {
-    public ulong Id { get; set; }
-
     public ulong DoctorAccountId { get; set; }
 
-    public byte DayOfWeek { get; set; }
-
-    public string ModalityCode { get; set; } = null!;
-
-    public TimeSpan StartTime { get; set; }
-
-    public TimeSpan EndTime { get; set; }
-
-    public DateTime? ValidFrom { get; set; }
-
-    public DateTime? ValidUntil { get; set; }
+    public uint AppointmentTypeId { get; set; }
 
     public bool IsActive { get; set; }
 
@@ -28,6 +16,8 @@ public partial class DoctorWeeklyHour
     public DateTime UpdatedAtUtc { get; set; }
 
     public ulong RowVersion { get; set; }
+
+    public virtual AppointmentType AppointmentType { get; set; } = null!;
 
     public virtual DoctorProfile DoctorAccount { get; set; } = null!;
 }

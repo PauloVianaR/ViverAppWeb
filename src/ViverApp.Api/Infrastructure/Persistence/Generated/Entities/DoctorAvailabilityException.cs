@@ -3,25 +3,21 @@ using System.Collections.Generic;
 
 namespace ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 
-public partial class DoctorWeeklyHour
+public partial class DoctorAvailabilityException
 {
     public ulong Id { get; set; }
 
     public ulong DoctorAccountId { get; set; }
 
-    public byte DayOfWeek { get; set; }
+    public DateTime ExceptionDate { get; set; }
 
     public string ModalityCode { get; set; } = null!;
 
-    public TimeSpan StartTime { get; set; }
+    public bool IsAvailable { get; set; }
 
-    public TimeSpan EndTime { get; set; }
+    public TimeSpan? StartTime { get; set; }
 
-    public DateTime? ValidFrom { get; set; }
-
-    public DateTime? ValidUntil { get; set; }
-
-    public bool IsActive { get; set; }
+    public TimeSpan? EndTime { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
 

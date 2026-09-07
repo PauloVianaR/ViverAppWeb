@@ -64,6 +64,15 @@ public sealed record AppointmentCreateRequest(
     [param: StringLength(1000)] string? PatientNotes);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record DoctorAppointmentCreateRequest(
+    [param: Range(1, long.MaxValue)] ulong PatientAccountId,
+    [param: Range(1, int.MaxValue)] uint AppointmentTypeId,
+    [param: Required, RegularExpression("^(in_person|online)$")] string ModalityCode,
+    DateOnly LocalDate,
+    TimeOnly LocalStartsAt,
+    [param: StringLength(1000)] string? PatientNotes);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AppointmentCancelRequest(
     [param: Required, StringLength(500, MinimumLength = 5)] string Reason,
     [param: Range(1, long.MaxValue)] ulong RowVersion) : IValidatableObject

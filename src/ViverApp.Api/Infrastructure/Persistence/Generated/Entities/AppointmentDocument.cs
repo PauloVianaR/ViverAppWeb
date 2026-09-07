@@ -29,7 +29,15 @@ public partial class AppointmentDocument
 
     public DateTime? AvailableAtUtc { get; set; }
 
+    public DateTime? DeletedAtUtc { get; set; }
+
+    public ulong? DeletedByAccountId { get; set; }
+
+    public ulong RowVersion { get; set; }
+
     public virtual Appointment Appointment { get; set; } = null!;
+
+    public virtual Account? DeletedByAccount { get; set; }
 
     public virtual Account UploadedByAccount { get; set; } = null!;
 }

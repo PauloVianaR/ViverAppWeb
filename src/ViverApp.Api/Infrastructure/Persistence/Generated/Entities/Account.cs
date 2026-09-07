@@ -65,7 +65,9 @@ public partial class Account
 
     public virtual ICollection<Appointment> AppointmentCreatedByAccounts { get; set; } = new List<Appointment>();
 
-    public virtual ICollection<AppointmentDocument> AppointmentDocuments { get; set; } = new List<AppointmentDocument>();
+    public virtual ICollection<AppointmentDocument> AppointmentDocumentDeletedByAccounts { get; set; } = new List<AppointmentDocument>();
+
+    public virtual ICollection<AppointmentDocument> AppointmentDocumentUploadedByAccounts { get; set; } = new List<AppointmentDocument>();
 
     public virtual ICollection<Appointment> AppointmentNoShowRecordedByAccounts { get; set; } = new List<Appointment>();
 
@@ -78,6 +80,10 @@ public partial class Account
     public virtual ICollection<AuthSession> AuthSessions { get; set; } = new List<AuthSession>();
 
     public virtual ICollection<ContactChangeRequest> ContactChangeRequests { get; set; } = new List<ContactChangeRequest>();
+
+    public virtual ICollection<DoctorPatientLink> DoctorPatientLinkCreatedByAccounts { get; set; } = new List<DoctorPatientLink>();
+
+    public virtual ICollection<DoctorPatientLink> DoctorPatientLinkPatientAccounts { get; set; } = new List<DoctorPatientLink>();
 
     public virtual DoctorProfile? DoctorProfile { get; set; }
 

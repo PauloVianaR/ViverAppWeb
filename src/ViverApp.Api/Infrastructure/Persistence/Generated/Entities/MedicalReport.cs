@@ -28,4 +28,6 @@ public partial class MedicalReport
     public virtual Appointment Appointment { get; set; } = null!;
 
     public virtual DoctorProfile AuthorDoctorAccount { get; set; } = null!;
+
+    public virtual ICollection<MedicalReportVersion> MedicalReportVersions { get; set; } = new List<MedicalReportVersion>();
 }

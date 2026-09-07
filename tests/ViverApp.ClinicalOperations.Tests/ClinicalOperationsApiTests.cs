@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ViverApp.Api.Features.ClinicalOperations;
+using ViverApp.Api.Features.DoctorExperience;
 using ViverApp.Api.Features.Identity;
 using Xunit;
 
@@ -85,5 +86,35 @@ public sealed class ClinicalOperationsApiTests : IAsyncLifetime
         var allowedHeaders = string.Join(',', response.Headers.GetValues("Access-Control-Allow-Headers"));
         Assert.Contains("idempotency-key", allowedHeaders, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("x-csrf-token", allowedHeaders, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("/api/v1/doctor/home")]
+    [InlineData("/api/v1/doctor/profile")]
+    [InlineData("/api/v1/doctor/patients")]
+    [InlineData("/api/v1/doctor/agenda?from=2026-01-01&to=2026-01-02")]
+    [InlineData("/api/v1/doctor/appointments/1")]
+    [InlineData("/api/v1/doctor/documents/1")]
+    public async Task DoctorEndpoints_RequireAuthentication(string path)
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost"),
+        });
+        using var response = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public void DoctorContracts_RejectInvalidAvailabilityAndRectification()
+    {
+        var exception = new DoctorAvailabilityExceptionRequest(DateOnly.FromDateTime(DateTime.Today), "online", true, null, null, 0);
+        var exceptionResults = new List<ValidationResult>();
+        Assert.False(Validator.TryValidateObject(exception, new ValidationContext(exception), exceptionResults, true));
+
+        var rectification = new DoctorReportRectificationRequest(1, "curto", null, "x");
+        var rectificationResults = new List<ValidationResult>();
+        Assert.False(Validator.TryValidateObject(rectification, new ValidationContext(rectification), rectificationResults, true));
     }
 }
