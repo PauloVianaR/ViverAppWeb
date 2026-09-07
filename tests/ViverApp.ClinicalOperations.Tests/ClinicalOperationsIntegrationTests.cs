@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using MySql.Data.MySqlClient;
 using ViverApp.Api.Features.ClinicalOperations;
+using ViverApp.Api.Features.DoctorExperience;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
@@ -141,6 +142,45 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
             item => item.AppointmentId == fixture.OtherAppointmentId && item.ToStatusCode == "no_show"));
     }
 
+    [Fact]
+    public async Task DoctorExperience_DoesNotExposeAnotherDoctorsAppointmentOrPatient()
+    {
+        await using var context = CreateContext(configuration);
+        var service = new DoctorExperienceService(context, null!, null!, new NoOpAuditWriter(), new FixedTimeProvider(fixture.NowUtc));
+
+        var agenda = await service.AgendaAsync(fixture.DoctorId,
+            DateOnly.FromDateTime(fixture.NowUtc.AddDays(-2)), DateOnly.FromDateTime(fixture.NowUtc.AddDays(2)),
+            null, null, null, null, 1, 100, CancellationToken.None);
+        Assert.Single(agenda.Page.Items);
+        Assert.Equal(fixture.AppointmentId, agenda.Page.Items[0].Id);
+
+        var appointment = await Assert.ThrowsAsync<DoctorRuleException>(() =>
+            service.AppointmentAsync(fixture.DoctorId, fixture.OtherAppointmentId, CancellationToken.None));
+        Assert.Equal((int)HttpStatusCode.NotFound, appointment.StatusCode);
+        var patient = await Assert.ThrowsAsync<DoctorRuleException>(() =>
+            service.PatientAsync(fixture.DoctorId, fixture.OtherPatientId, CancellationToken.None));
+        Assert.Equal((int)HttpStatusCode.NotFound, patient.StatusCode);
+    }
+
+    [Fact]
+    public async Task PublishedReport_RectificationCreatesImmutableVersionAndPreservesFirstVersion()
+    {
+        await using var context = CreateContext(configuration);
+        var clinical = CreateService(context, fixture.NowUtc);
+        var completed = await clinical.CompleteAsync(fixture.DoctorId, fixture.AppointmentId,
+            new CompleteAppointmentRequest(1, 0, "Primeira versão clínica completa e validada.", "Recomendação inicial."), CancellationToken.None);
+        var service = new DoctorExperienceService(context, null!, null!, new NoOpAuditWriter(), new FixedTimeProvider(fixture.NowUtc.AddMinutes(5)));
+        var versions = await service.RectifyAsync(fixture.DoctorId, fixture.AppointmentId,
+            new DoctorReportRectificationRequest(completed.MedicalReport!.RowVersion,
+                "Segunda versão clínica completa e devidamente retificada.", "Recomendação atualizada.", "Correção de informação clínica."),
+            CancellationToken.None);
+
+        Assert.Equal(2, versions.Count);
+        Assert.Equal(2U, versions[0].VersionNumber);
+        Assert.Equal("Primeira versão clínica completa e validada.", versions[1].ClinicalSummary);
+        Assert.Equal("Correção de informação clínica.", versions[0].ChangeReason);
+    }
+
     private static ClinicalOperationsService CreateService(ViverAppDbContext context, DateTime nowUtc) =>
         new(context, new NoOpAuditWriter(), new FixedTimeProvider(nowUtc));
 
@@ -270,10 +310,16 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
                 .Where(item => ids.Contains(item.PatientAccountId) || ids.Contains(item.DoctorAccountId))
                 .Select(item => item.Id)
                 .ToArrayAsync();
+            var reportIds = await context.MedicalReports.Where(item => appointmentIds.Contains(item.AppointmentId)).Select(item => item.Id).ToArrayAsync();
+            await context.MedicalReportVersions.Where(item => reportIds.Contains(item.MedicalReportId)).ExecuteDeleteAsync();
             await context.MedicalReports.Where(item => appointmentIds.Contains(item.AppointmentId)).ExecuteDeleteAsync();
             await context.AppointmentStatusHistories.Where(item => appointmentIds.Contains(item.AppointmentId)).ExecuteDeleteAsync();
             await context.Appointments.Where(item => appointmentIds.Contains(item.Id)).ExecuteDeleteAsync();
             await context.DoctorWeeklyHours.Where(item => ids.Contains(item.DoctorAccountId)).ExecuteDeleteAsync();
+            await context.DoctorAvailabilityExceptions.Where(item => ids.Contains(item.DoctorAccountId)).ExecuteDeleteAsync();
+            await context.DoctorServices.Where(item => ids.Contains(item.DoctorAccountId)).ExecuteDeleteAsync();
+            await context.DoctorPreferences.Where(item => ids.Contains(item.DoctorAccountId)).ExecuteDeleteAsync();
+            await context.DoctorPatientLinks.Where(item => ids.Contains(item.DoctorAccountId) || ids.Contains(item.PatientAccountId)).ExecuteDeleteAsync();
             await context.DoctorSpecialties.Where(item => ids.Contains(item.DoctorAccountId)).ExecuteDeleteAsync();
             await context.DoctorProfiles.Where(item => ids.Contains(item.AccountId)).ExecuteDeleteAsync();
             await context.PatientProfiles.Where(item => ids.Contains(item.AccountId)).ExecuteDeleteAsync();

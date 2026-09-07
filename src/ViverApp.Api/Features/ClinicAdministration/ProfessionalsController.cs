@@ -153,6 +153,27 @@ public sealed class ProfessionalsController(
             };
             database.DoctorProfiles.Add(profile);
             AddSpecialtyLinks(user.Id, specialties, request.PrimarySpecialtyId);
+            database.DoctorPreferences.Add(new DoctorPreference
+            {
+                DoctorAccountId = user.Id,
+                EmailEnabled = true,
+                SmsEnabled = true,
+                OnlineEnabled = true,
+                MaxOnlineDaily = 8,
+                MaxInPersonDaily = 16,
+                UpdatedAtUtc = now,
+                RowVersion = 1,
+            });
+            var activeServices = await database.AppointmentTypes.AsNoTracking().Where(item => item.IsActive).Select(item => item.Id).ToArrayAsync(cancellationToken);
+            database.DoctorServices.AddRange(activeServices.Select(id => new DoctorService
+            {
+                DoctorAccountId = user.Id,
+                AppointmentTypeId = id,
+                IsActive = true,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+                RowVersion = 1,
+            }));
             try
             {
                 await database.SaveChangesAsync(cancellationToken);
@@ -425,6 +446,7 @@ public sealed class ProfessionalsController(
         {
             DoctorAccountId = accountId,
             DayOfWeek = request.DayOfWeek,
+            ModalityCode = request.ModalityCode,
             StartTime = request.StartTime,
             EndTime = request.EndTime,
             ValidFrom = request.ValidFrom?.ToDateTime(TimeOnly.MinValue),
@@ -480,6 +502,7 @@ public sealed class ProfessionalsController(
 
         ClinicAdministrationSupport.SetConcurrency(database, entity, nameof(DoctorWeeklyHour.RowVersion), request.RowVersion);
         entity.DayOfWeek = request.DayOfWeek;
+        entity.ModalityCode = request.ModalityCode;
         entity.StartTime = request.StartTime;
         entity.EndTime = request.EndTime;
         entity.ValidFrom = request.ValidFrom?.ToDateTime(TimeOnly.MinValue);
@@ -645,6 +668,7 @@ public sealed class ProfessionalsController(
     private bool ValidateDoctorHour(DoctorWeeklyHourWriteRequest request)
     {
         var valid = ClinicAdministrationSupport.HasValidRange(request.StartTime, request.EndTime)
+            && request.ModalityCode is "in_person" or "online" or "both"
             && (!request.ValidUntil.HasValue
                 || !request.ValidFrom.HasValue
                 || request.ValidUntil.Value >= request.ValidFrom.Value);
@@ -668,6 +692,7 @@ public sealed class ProfessionalsController(
             item => item.DoctorAccountId == accountId
                 && item.IsActive
                 && item.DayOfWeek == request.DayOfWeek
+                && (item.ModalityCode == request.ModalityCode || item.ModalityCode == "both" || request.ModalityCode == "both")
                 && (!excludedId.HasValue || item.Id != excludedId.Value)
                 && item.StartTime < request.EndTime
                 && item.EndTime > request.StartTime
@@ -718,5 +743,6 @@ public sealed class ProfessionalsController(
         item.ValidFrom.HasValue ? DateOnly.FromDateTime(item.ValidFrom.Value) : null,
         item.ValidUntil.HasValue ? DateOnly.FromDateTime(item.ValidUntil.Value) : null,
         item.IsActive,
-        item.RowVersion);
+        item.RowVersion,
+        item.ModalityCode);
 }

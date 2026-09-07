@@ -333,6 +333,15 @@ public sealed class ClinicalOperationsService(
         report.Recommendations = recommendations;
         report.UpdatedAtUtc = now;
         report.PublishedAtUtc = now;
+        database.MedicalReportVersions.Add(new MedicalReportVersion
+        {
+            MedicalReport = report,
+            VersionNumber = 1,
+            AuthorDoctorAccountId = actorId,
+            ClinicalSummary = summary,
+            Recommendations = recommendations,
+            CreatedAtUtc = now,
+        });
         appointment.StatusCode = "completed";
         appointment.CompletedByAccountId = actorId;
         appointment.CompletedAtUtc = now;

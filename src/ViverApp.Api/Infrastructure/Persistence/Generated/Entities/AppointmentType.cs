@@ -30,4 +30,6 @@ public partial class AppointmentType
     public string CategoryCode { get; set; } = null!;
 
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
+
+    public virtual ICollection<DoctorService> DoctorServices { get; set; } = new List<DoctorService>();
 }

@@ -49,7 +49,7 @@ public static class ShellNavigationCatalog
             new("Agenda", "/medico/agenda", "calendar"),
             new("Pacientes", "/medico/pacientes", "users"),
             new("Histórico", "/medico/historico", "history"),
-            new("Disponibilidade", "/medico/disponibilidade", "settings"),
+            new("Perfil", "/medico/perfil", "user"),
         ]);
 
     private static readonly ShellDefinition Manager = new(

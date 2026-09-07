@@ -1212,6 +1212,27 @@ public sealed class AuthController(
                 SpecialtyId = doctor.PrimarySpecialtyId,
                 IsPrimary = true,
             });
+            database.DoctorPreferences.Add(new DoctorPreference
+            {
+                DoctorAccountId = accountId,
+                EmailEnabled = true,
+                SmsEnabled = true,
+                OnlineEnabled = true,
+                MaxOnlineDaily = 8,
+                MaxInPersonDaily = 16,
+                UpdatedAtUtc = now,
+                RowVersion = 1,
+            });
+            var activeServices = await database.AppointmentTypes.AsNoTracking().Where(item => item.IsActive).Select(item => item.Id).ToArrayAsync(cancellationToken);
+            database.DoctorServices.AddRange(activeServices.Select(id => new DoctorService
+            {
+                DoctorAccountId = accountId,
+                AppointmentTypeId = id,
+                IsActive = true,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+                RowVersion = 1,
+            }));
         }
 
         await database.SaveChangesAsync(cancellationToken);

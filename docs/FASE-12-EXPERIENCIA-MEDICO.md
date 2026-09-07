@@ -168,3 +168,7 @@ Médico aprovado entra, completa perfil, escolhe serviços, configura disponibil
 - sigilo e autoria resistem aos testes cruzados;
 - migrations/scaffold/build/testes/segurança aprovados;
 - nenhuma funcionalidade de Gestor ou Administrador foi antecipada.
+
+## Estado de implementação
+
+Implementação concluída e validada localmente em `codex/fase-12-experiencia-medico`. O detalhamento das entregas, migrations, testes, validação visual no monitor 3 e homologações externas remanescentes está em [FASE-12-IMPLEMENTACAO-E-VALIDACAO.md](FASE-12-IMPLEMENTACAO-E-VALIDACAO.md).

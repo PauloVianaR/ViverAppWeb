@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using ViverApp.Api.Features.ClinicalOperations;
+using ViverApp.Api.Features.DoctorExperience;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.PatientScheduling;
 using ViverApp.Api.Features.Payments;
@@ -16,7 +17,7 @@ builder.WebHost.ConfigureKestrel(options =>
     options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2);
     options.Limits.MaxConcurrentConnections = 500;
     options.Limits.MaxConcurrentUpgradedConnections = 100;
-    options.Limits.MaxRequestBodySize = 1_048_576;
+    options.Limits.MaxRequestBodySize = 10_600_000;
     options.Limits.MaxRequestHeaderCount = 64;
     options.Limits.MaxRequestHeadersTotalSize = 32_768;
     options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(10);
@@ -65,6 +66,8 @@ builder.Services.AddScoped<IPatientSchedulingAuditWriter, PatientSchedulingAudit
 builder.Services.AddScoped<PatientSchedulingService>();
 builder.Services.AddScoped<IClinicalOperationsAuditWriter, ClinicalOperationsAuditWriter>();
 builder.Services.AddScoped<ClinicalOperationsService>();
+builder.Services.AddScoped<DoctorExperienceService>();
+builder.Services.AddScoped<DoctorExperienceExceptionFilter>();
 builder.Services.AddScoped<PatientExperienceService>();
 builder.Services.AddScoped<PrivateDocumentStore>();
 builder.Services.AddScoped<IDocumentMalwareScanner, WindowsDocumentMalwareScanner>();
