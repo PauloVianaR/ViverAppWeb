@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using ViverApp.Api.Features.ClinicalOperations;
 using ViverApp.Api.Features.DoctorExperience;
 using ViverApp.Api.Features.Identity;
+using ViverApp.Api.Features.ManagerExperience;
 using ViverApp.Api.Features.PatientScheduling;
 using ViverApp.Api.Features.Payments;
 using ViverApp.Api.Features.PatientExperience;
@@ -68,6 +69,8 @@ builder.Services.AddScoped<IClinicalOperationsAuditWriter, ClinicalOperationsAud
 builder.Services.AddScoped<ClinicalOperationsService>();
 builder.Services.AddScoped<DoctorExperienceService>();
 builder.Services.AddScoped<DoctorExperienceExceptionFilter>();
+builder.Services.AddScoped<ManagerExperienceService>();
+builder.Services.AddScoped<ManagerExperienceExceptionFilter>();
 builder.Services.AddScoped<PatientExperienceService>();
 builder.Services.AddScoped<PrivateDocumentStore>();
 builder.Services.AddScoped<IDocumentMalwareScanner, WindowsDocumentMalwareScanner>();

@@ -155,3 +155,7 @@ Gestor aprovado entra, acompanha indicadores, pesquisa agenda/pacientes, cria ou
 - a separação entre operação e conteúdo médico está testada;
 - migrations/scaffold/build/testes/segurança aprovados;
 - a experiência administrativa completa da Fase 14 não foi antecipada.
+
+## Resultado da execução
+
+A implementação e as evidências locais estão consolidadas em [Fase 13 — Implementação e validação](FASE-13-IMPLEMENTACAO-E-VALIDACAO.md). A Fase 14 não foi iniciada.

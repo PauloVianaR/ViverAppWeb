@@ -248,13 +248,13 @@ Cada fase deve:
 
 ## Fase 12 — Experiência completa do Médico
 
-**Estado:** implementação concluída e validada localmente na branch `codex/fase-12-experiencia-medico`; integração à `main` depende de autorização do proprietário. Evidências e limitações em [Implementação e validação](FASE-12-IMPLEMENTACAO-E-VALIDACAO.md).
+**Estado:** concluída e integrada à `main` no commit de merge `b1e7fdf`; homologações externas permanecem registradas localmente. Evidências e limitações em [Implementação e validação](FASE-12-IMPLEMENTACAO-E-VALIDACAO.md).
 
 **Plano detalhado:** [Experiência completa do Médico](FASE-12-EXPERIENCIA-MEDICO.md).
 
 ## Fase 13 — Experiência completa do Gestor
 
-**Estado:** planejada; implementação ainda não iniciada.
+**Estado:** implementação concluída e validada localmente na branch `codex/fase-13-experiencia-gestor`; integração à `main` depende de autorização do proprietário. Evidências e limitações em [Implementação e validação](FASE-13-IMPLEMENTACAO-E-VALIDACAO.md).
 
 **Plano detalhado:** [Experiência completa do Gestor](FASE-13-EXPERIENCIA-GESTOR.md).
 

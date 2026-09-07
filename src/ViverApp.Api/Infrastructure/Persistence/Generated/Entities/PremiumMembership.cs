@@ -31,6 +31,10 @@ public partial class PremiumMembership
 
     public ulong? OpenAccountId { get; set; }
 
+    public ulong? ReviewedByAccountId { get; set; }
+
+    public string? ReviewNotes { get; set; }
+
     public virtual Account Account { get; set; } = null!;
 
     public virtual PremiumPlan PremiumPlan { get; set; } = null!;
@@ -38,4 +42,6 @@ public partial class PremiumMembership
     public virtual PrivateDocument? PrivateDocument { get; set; }
 
     public virtual PrivateDocument? ProofDocument { get; set; }
+
+    public virtual Account? ReviewedByAccount { get; set; }
 }

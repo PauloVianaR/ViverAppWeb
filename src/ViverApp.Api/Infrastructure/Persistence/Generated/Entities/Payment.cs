@@ -55,7 +55,15 @@ public partial class Payment
 
     public ulong? ProviderReferenceAppointmentId { get; set; }
 
+    public ulong? ConfirmedByAccountId { get; set; }
+
+    public string? CardLastFour { get; set; }
+
+    public string? AuthorizationReference { get; set; }
+
     public virtual Appointment Appointment { get; set; } = null!;
+
+    public virtual Account? ConfirmedByAccount { get; set; }
 
     public virtual ICollection<PaymentEvent> PaymentEvents { get; set; } = new List<PaymentEvent>();
 

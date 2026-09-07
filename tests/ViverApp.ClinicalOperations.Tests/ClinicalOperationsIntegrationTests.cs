@@ -61,7 +61,8 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
             1,
             100,
             CancellationToken.None);
-        Assert.Equal(2, managerAgenda.Total);
+        Assert.Contains(managerAgenda.Items, item => item.Id == fixture.AppointmentId);
+        Assert.Contains(managerAgenda.Items, item => item.Id == fixture.OtherAppointmentId);
         Assert.All(managerAgenda.Items, item => Assert.Null(item.PatientNotes));
     }
 

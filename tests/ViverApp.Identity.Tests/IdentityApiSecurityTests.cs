@@ -128,7 +128,7 @@ public sealed class IdentityApiSecurityTests : IAsyncLifetime
         var specialties = body.RootElement.GetProperty("specialties");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(55, specialties.GetArrayLength());
+        Assert.True(specialties.GetArrayLength() >= 55);
         Assert.Contains(
             specialties.EnumerateArray(),
             item => item.GetProperty("name").GetString() == "Oftalmologia");

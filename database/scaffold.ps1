@@ -46,6 +46,7 @@ $tables = @(
     'doctor_weekly_hours',
     'doctor_services',
     'doctor_preferences',
+    'manager_preferences',
     'doctor_availability_exceptions',
     'doctor_patient_links',
     'holidays',

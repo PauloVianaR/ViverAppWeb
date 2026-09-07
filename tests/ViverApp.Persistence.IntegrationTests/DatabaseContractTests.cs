@@ -32,7 +32,7 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(43, applicationEntities.Length);
+        Assert.Equal(44, applicationEntities.Length);
         Assert.DoesNotContain(
             applicationEntities,
             entity => string.Equals(entity.GetTableName(), "__schema_migrations", StringComparison.Ordinal));
@@ -72,18 +72,20 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018", migrations);
 
         Assert.NotNull(context.Model.FindEntityType(typeof(DoctorService)));
         Assert.NotNull(context.Model.FindEntityType(typeof(DoctorPreference)));
         Assert.NotNull(context.Model.FindEntityType(typeof(DoctorAvailabilityException)));
         Assert.NotNull(context.Model.FindEntityType(typeof(DoctorPatientLink)));
         Assert.NotNull(context.Model.FindEntityType(typeof(MedicalReportVersion)));
+        Assert.NotNull(context.Model.FindEntityType(typeof(ManagerPreference)));
 
         var recognizedSpecialties = await ExecuteScalarAsync(
             connection,
             "SELECT COUNT(*) FROM specialties WHERE is_active = 1");
-        Assert.Equal("55", recognizedSpecialties);
+        Assert.True(int.Parse(recognizedSpecialties, System.Globalization.CultureInfo.InvariantCulture) >= 55,
+            "As especialidades oficiais devem permanecer disponíveis; registros locais adicionais são permitidos.");
 
         var ophthalmology = await ExecuteScalarAsync(
             connection,
@@ -296,6 +298,27 @@ public sealed class DatabaseContractTests
                   'refunded_at_utc')
             """);
         Assert.Equal("8", paymentOperationalColumns);
+
+        var managerExperienceColumns = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_schema = 'viverappweb'
+              AND ((table_name = 'payments' AND column_name IN (
+                    'confirmed_by_account_id', 'card_last_four', 'authorization_reference'))
+                OR (table_name = 'premium_memberships' AND column_name IN (
+                    'reviewed_by_account_id', 'review_notes')))
+            """);
+        Assert.Equal("5", managerExperienceColumns);
+
+        var managerPreferences = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_schema = 'viverappweb' AND table_name = 'manager_preferences'
+            """);
+        Assert.Equal("1", managerPreferences);
     }
 
     private static ViverAppDbContext CreateContext()

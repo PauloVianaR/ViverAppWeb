@@ -1,0 +1,10 @@
+@using static ViverApp.Web.ManagerLabels
+<article class="surface patient-visit manager-card" aria-label="@($"{Model.Service}, {Model.StartsAtUtc:dd/MM/yyyy}")">
+    <div class="patient-visit__top"><div><p class="eyebrow">@Category(Model.CategoryCode)</p><h2>@Model.PatientName</h2><p>@Model.Service · @Model.DoctorName</p></div><span class="badge">@Status(Model.StatusCode)</span></div>
+    <div class="manager-card__meta"><span class="badge">@Modality(Model.ModalityCode)</span><span class="badge">@Status(Model.Payment.StatusCode)</span>@if(Model.DiscountPercent>0){<span class="badge badge--brand">Premium -@Model.DiscountPercent%</span>}</div>
+    <dl class="patient-facts"><div><dt>Data e horário</dt><dd>@Model.StartsAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</dd></div><div><dt>Duração</dt><dd>@((int)(Model.EndsAtUtc-Model.StartsAtUtc).TotalMinutes) min</dd></div><div><dt>Valor</dt><dd>@Money(Model.PriceAmount)</dd></div><div><dt>Local</dt><dd>@(Model.ModalityCode=="online"?"Sala online":"Clínica")</dd></div></dl>
+    @if(Model.PatientNotes is not null){<p class="patient-notes"><strong>Observações autorizadas:</strong> @Model.PatientNotes</p>}
+    @if(Model.CancellationReason is not null){<p><strong>Motivo:</strong> @Model.CancellationReason</p>}
+    <div class="patient-actions"><a class="button button--secondary button--small" href="/gestao/atendimentos/@Model.Id">Detalhes e ações</a>@if(Model.PatientPhone is not null){<a class="button button--secondary button--small" href="tel:@Model.PatientPhone">Ligar</a>}@if(Model.RescheduledToAppointmentId is ulong next){<a href="/gestao/atendimentos/@next">Ver novo horário</a>}</div>
+</article>
+@code { [Parameter, EditorRequired] public ManagerAppointment Model { get; set; } = null!; }
