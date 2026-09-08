@@ -10,7 +10,8 @@ A experiência do Administrador foi implementada na branch `codex/fase-14-experi
 - clínica única com edição auditável dos dados, serviços, horários semanais, feriados recorrentes ou pontuais e configurações tipadas do sistema;
 - consultas planejadas e histórico com filtros por texto, período, estado, Médico, tipo, modalidade e pagamento, além de ordenação, paginação e cards responsivos;
 - detalhe operacional com cancelamento, reagendamento e confirmação de pagamento presencial, sem revelar conteúdo clínico reservado;
-- analytics calculado no servidor para períodos predefinidos ou intervalo limitado, com KPIs, comparativo, séries, distribuições, desempenho agregado e alternativas textuais;
+- analytics calculado no servidor para períodos predefinidos ou intervalo limitado, com KPIs e paridade explícita dos nove gráficos MAUI: Evolução da Receita, Receita vs Consultas, Pagamentos por Tipo, Distribuição por Tipo de Pagamento, Tendência pagamentos Online vs Presencial, Online vs Presencial, Distribuição de Serviços, Distribuição de Tipos de Atendimento e Performance dos Médicos;
+- gráficos Web responsivos em SVG, com legenda e tabela de valores acessível, além do estado dos agendamentos como resumo adicional;
 - caixa durável de notificações com filtros, severidade, leitura individual/em massa, dispensa e vínculo autorizado com a entidade relacionada;
 - administração de usuários com aprovação, rejeição, reabertura, bloqueio, permissão de atendimento online e salvaguardas para Administradores;
 - análise e cancelamento de Premium, configuração de plano, concorrência otimista e acesso reautenticado ao comprovante privado;
@@ -29,7 +30,8 @@ O schema passou a representar notificações administrativas duráveis, leitura 
 - filtro de step-up exige sessão iniciada há no máximo cinco minutos para configuração, aprovação, bloqueio, Premium e operações financeiras;
 - rate limits específicos, antiforgery, DTOs explícitos, validação no servidor, concorrência otimista e auditoria append-only;
 - bloqueio contra autoexclusão insegura e contra perda do último Administrador recuperável;
-- analytics limitado e agregado, sem observações, laudos, anexos ou identificadores desnecessários;
+- analytics limitado a 366 dias e agregado no servidor, sem observações, laudos, anexos ou identificadores desnecessários;
+- a sincronização de eventos operacionais usa somente os tipos aceitos pelo schema de notificações, incluindo cancelamento, reagendamento, pagamento e decisões Premium;
 - pagamentos presenciais e estados de agenda permanecem sob autoridade do servidor e usam idempotência;
 - maintenance mode não bloqueia health checks, autenticação nem a própria recuperação administrativa;
 - a rotação da chave do autenticador agora revoga a sessão anterior e emite nova sessão restrita até a confirmação do MFA, evitando que a mudança do security stamp interrompa o cadastro;
@@ -50,8 +52,10 @@ A janela de validação permaneceu no monitor 3. Foram revisados o painel inicia
 
 A inspeção encontrou dois defeitos de apresentação: os atalhos do painel não formavam cards e o sexto destino da navegação móvel quebrava a barra inferior. Ambos foram corrigidos. Após a recriação da aba para atualizar o Web, o controle de viewport do navegador integrado deixou de reaplicar a largura solicitada; a última correção móvel foi então confirmada pelo seletor isolado do shell administrativo e pelo contrato que exige exatamente seis destinos. O viewport temporário foi restaurado ao final.
 
+Em 08/09/2026, a paridade analítica também foi revalidada no monitor 3 com a conta administrativa e o MFA configurados pelo proprietário. A página exibiu os nove gráficos do MAUI, com dados reais do banco local, legendas, percentuais e tabelas acessíveis de valores. Foram inspecionados os estados desktop e responsivo; a revisão levou a duas correções adicionais: cards analíticos passaram a trocar de uma para duas colunas conforme o espaço disponível, sem comprimir os gráficos, e séries de área com apenas um mês passaram a exibir um marcador visível sem uma série zerada encobrir outra.
+
 O certificado HTTPS e o anel de chaves existentes foram preservados. A validação utilizou um escopo local isolado de Data Protection e não limpou nem recriou certificados.
 
 ## Homologações remanescentes
 
-Dependências externas ou manuais continuam registradas em `.local/PENDENCIAS.md`: confirmação do autenticador por TOTP em aparelho real, documentos Premium reais não sensíveis, entrega por e-mail/SMS e remoção da conta administrativa sintética após o proprietário encerrar os testes.
+O TOTP administrativo foi configurado e testado pelo proprietário. As dependências externas ou manuais ainda reais continuam registradas em `.local/PENDENCIAS.md`, incluindo documentos Premium não sensíveis e entrega por e-mail/SMS.

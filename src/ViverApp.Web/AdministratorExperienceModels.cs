@@ -5,8 +5,24 @@ public sealed record AdministratorCounters(int ActiveUsers, int TodayAppointment
 public sealed record AdministratorPendingProfessional(ulong AccountId, string FullName, string RoleCode, string? Contact, string? License, string? Specialty, ushort? YearsExperience, ulong RowVersion);
 public sealed record AdministratorAnalyticsData(DateOnly From, DateOnly To, decimal Revenue, int Appointments, decimal AverageTicket, decimal? Satisfaction,
     decimal PreviousRevenue, int PreviousAppointments, IReadOnlyList<AdministratorMetric> RevenueByMonth, IReadOnlyList<AdministratorMetric> AppointmentsByStatus,
-    IReadOnlyList<AdministratorMetric> PaymentsByMethod, IReadOnlyList<AdministratorMetric> DoctorPerformance);
+    IReadOnlyList<AdministratorMetric> PaymentsByMethod, IReadOnlyList<AdministratorMetric> DoctorPerformance,
+    IReadOnlyList<AdministratorRevenueByUserType> RevenueByUserType,
+    IReadOnlyList<AdministratorPaymentMethodEvolution> PaymentsByTypeEvolution,
+    IReadOnlyList<AdministratorPaymentLocationTrend> PaymentsByLocationTrend,
+    IReadOnlyList<AdministratorMetric> PaymentsByLocation,
+    IReadOnlyList<AdministratorMetric> AppointmentsByService,
+    IReadOnlyList<AdministratorMetric> AppointmentsByCategory);
 public sealed record AdministratorMetric(string Label, decimal Value, int Count);
+public sealed record AdministratorRevenueByUserType(string Label, decimal Regular, decimal Premium);
+public sealed record AdministratorPaymentMethodEvolution(string Label, decimal Card, decimal Pix, decimal Cash, decimal BankSlip);
+public sealed record AdministratorPaymentLocationTrend(string Label, int Online, int InClinic);
+
+public enum AdministratorChartSeriesKind { Bar, Line, Area }
+public enum AdministratorChartValueFormat { Number, Money, Percent, Rating }
+public sealed record AdministratorChartSeries(string Name, string Color, IReadOnlyList<decimal> Values,
+    AdministratorChartSeriesKind Kind = AdministratorChartSeriesKind.Bar,
+    AdministratorChartValueFormat Format = AdministratorChartValueFormat.Number,
+    bool SecondaryAxis = false);
 public sealed record AdministratorSetting(string Key, string ValueJson, string? Description, DateTime UpdatedAtUtc, ulong RowVersion);
 public sealed record AdministratorPremiumPlan(uint Id, string Name, decimal AppointmentDiscountPercent, ushort? ValidityDays, bool IsActive, ulong RowVersion);
 public sealed record AdministratorUser(ulong Id, string FullName, string RoleCode, string StatusCode, string? Email, bool EmailVerified, string? PhoneE164, bool PhoneVerified, DateTime CreatedAtUtc, DateTime? LastLoginAtUtc, ulong RowVersion);
@@ -23,5 +39,20 @@ public static class AdministratorLabels
 {
     public static string Role(string value) => value switch { "administrator" => "Administrador", "manager" => "Gestor", "doctor" => "Médico", _ => "Paciente" };
     public static string Status(string value) => PatientLabels.Status(value);
-    public static string Metric(string value) => value.Replace('_', ' ') switch { "credit card" => "Cartão de crédito", "debit card" => "Cartão de débito", "not informed" => "Não informado", var label => char.ToUpperInvariant(label[0]) + label[1..] };
+    public static string Metric(string value) => value.Replace('_', ' ') switch
+    {
+        "card" => "Cartão",
+        "credit card" => "Cartão de crédito",
+        "debit card" => "Cartão de débito",
+        "bank slip" => "Boleto",
+        "cash" => "Dinheiro",
+        "web" => "Online",
+        "clinic" => "Presencial",
+        "consultation" => "Consulta",
+        "examination" => "Exame",
+        "surgery" => "Cirurgia",
+        "not informed" => "Não informado",
+        var label when label.Length > 0 => char.ToUpperInvariant(label[0]) + label[1..],
+        _ => "Não informado",
+    };
 }

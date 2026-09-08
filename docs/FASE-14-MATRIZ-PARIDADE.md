@@ -6,7 +6,7 @@ Esta matriz fecha o inventário autorizado das Fases 10 a 14. “Coberto” pres
 
 | ID | Tela MAUI / comportamento | Regra e papel | Endpoint / página Web | Evidência automatizada | Estado |
 |---|---|---|---|---|---|
-| PG-01 | `AdminAnalyticsView` — KPIs e gráficos | Administrador + MFA; agregação no servidor | `GET /api/v1/administrator/analytics`; `/administracao/analytics` | contratos Admin/Web + integração MySQL | Coberto |
+| PG-01 | `AdminAnalyticsView` — KPIs e os nove gráficos: evolução da receita, receita versus consultas, pagamentos por tipo, distribuição por tipo, tendência online versus presencial, distribuição online versus presencial, serviços, tipos de atendimento e performance médica | Administrador + MFA; agregação no servidor | `GET /api/v1/administrator/analytics`; `/administracao/analytics` | contrato de cada série + integração MySQL + SVG/tabela acessível | Coberto |
 | PG-02 | `AdminAppointmentsManagementView` — previstos/histórico e filtros | Administrador + MFA | `/api/v1/administrator/agenda`; `/administracao/consultas` | contratos Admin/Web | Coberto |
 | PG-03 | `AdminClinicView` — clínica, serviços, horários e sistema | Administrador + MFA + step-up | `/api/v1/clinic`, `/catalog`, `/administrator/settings`; `/administracao/clinica` | contratos clínica + schema | Coberto |
 | PG-04 | `AdminHomeView` — indicadores, atalhos e aprovações | Administrador + MFA | `GET /api/v1/administrator/home`; `/administracao` | contratos Admin/Web | Coberto |

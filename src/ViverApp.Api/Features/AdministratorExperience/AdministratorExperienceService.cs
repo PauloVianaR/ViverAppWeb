@@ -92,8 +92,27 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         var satisfaction = await query.Where(x => x.AppointmentReview != null).AverageAsync(x => (double?)x.AppointmentReview!.Rating, ct);
         var monthlyRows = await paid.GroupBy(x => new { x.PaidAtUtc!.Value.Year, x.PaidAtUtc.Value.Month })
             .Select(g => new { g.Key.Year, g.Key.Month, Value = g.Sum(x => x.Amount), Count = g.Count() }).OrderBy(x => x.Year).ThenBy(x => x.Month).ToListAsync(ct);
+        var revenueByUserTypeRows = await paid.GroupBy(x => new
+        {
+            x.PaidAtUtc!.Value.Year,
+            x.PaidAtUtc.Value.Month,
+            IsPremium = x.Appointment.DiscountPercent > 0,
+        }).Select(g => new { g.Key.Year, g.Key.Month, g.Key.IsPremium, Value = g.Sum(x => x.Amount) })
+            .OrderBy(x => x.Year).ThenBy(x => x.Month).ToListAsync(ct);
+        var paymentEvolutionRows = await paid.GroupBy(x => new { x.PaidAtUtc!.Value.Year, x.PaidAtUtc.Value.Month, Method = x.MethodCode ?? "not_informed" })
+            .Select(g => new { g.Key.Year, g.Key.Month, g.Key.Method, Value = g.Sum(x => x.Amount) })
+            .OrderBy(x => x.Year).ThenBy(x => x.Month).ToListAsync(ct);
+        var paymentLocationTrendRows = await paid.GroupBy(x => new { x.PaidAtUtc!.Value.Year, x.PaidAtUtc.Value.Month, x.Appointment.PaymentLocationCode })
+            .Select(g => new { g.Key.Year, g.Key.Month, Location = g.Key.PaymentLocationCode, Count = g.Count() })
+            .OrderBy(x => x.Year).ThenBy(x => x.Month).ToListAsync(ct);
+        var paymentLocationRows = await paid.GroupBy(x => x.Appointment.PaymentLocationCode)
+            .Select(g => new { Label = g.Key, Value = g.Sum(x => x.Amount), Count = g.Count() }).OrderByDescending(x => x.Count).ToListAsync(ct);
         var statusRows = await query.GroupBy(x => x.StatusCode).Select(g => new { Label = g.Key, Count = g.Count() }).OrderByDescending(x => x.Count).ToListAsync(ct);
         var methodRows = await paid.GroupBy(x => x.MethodCode ?? "not_informed").Select(g => new { Label = g.Key, Value = g.Sum(x => x.Amount), Count = g.Count() }).OrderByDescending(x => x.Value).ToListAsync(ct);
+        var serviceRows = await query.GroupBy(x => x.AppointmentType.Name)
+            .Select(g => new { Label = g.Key, Value = g.Sum(x => x.PriceAmount), Count = g.Count() }).OrderByDescending(x => x.Count).ToListAsync(ct);
+        var categoryRows = await query.GroupBy(x => x.AppointmentType.CategoryCode)
+            .Select(g => new { Label = g.Key, Value = g.Sum(x => x.PriceAmount), Count = g.Count() }).OrderByDescending(x => x.Count).ToListAsync(ct);
         var doctorRows = await query.GroupBy(x => x.DoctorAccount.Account.FullName).Select(g => new
         {
             Label = g.Key,
@@ -102,11 +121,35 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         }).OrderByDescending(x => x.Count).Take(20).ToListAsync(ct);
         var months = monthlyRows.Select(x => new AdministratorMetricPoint(new DateTime(x.Year, x.Month, 1).ToString("MMM/yyyy", CultureInfo.GetCultureInfo("pt-BR")), x.Value, x.Count)).ToArray();
         var statuses = statusRows.Select(x => new AdministratorMetricPoint(x.Label, 0, x.Count)).ToArray();
-        var methods = methodRows.Select(x => new AdministratorMetricPoint(x.Label, x.Value, x.Count)).ToArray();
+        var methods = methodRows.GroupBy(x => NormalizePaymentMethod(x.Label)).Select(g => new AdministratorMetricPoint(g.Key, g.Sum(x => x.Value), g.Sum(x => x.Count))).OrderByDescending(x => x.Value).ToArray();
         var doctors = doctorRows.Select(x => new AdministratorMetricPoint(x.Label, (decimal)x.Value, x.Count)).ToArray();
+        var revenueByUserType = revenueByUserTypeRows.GroupBy(x => new { x.Year, x.Month }).Select(g => new AdministratorRevenueByUserTypePoint(
+            MonthLabel(g.Key.Year, g.Key.Month), g.Where(x => !x.IsPremium).Sum(x => x.Value), g.Where(x => x.IsPremium).Sum(x => x.Value))).ToArray();
+        var paymentEvolution = paymentEvolutionRows.GroupBy(x => new { x.Year, x.Month }).Select(g => new AdministratorPaymentMethodEvolutionPoint(
+            MonthLabel(g.Key.Year, g.Key.Month),
+            g.Where(x => NormalizePaymentMethod(x.Method) == "card").Sum(x => x.Value),
+            g.Where(x => NormalizePaymentMethod(x.Method) == "pix").Sum(x => x.Value),
+            g.Where(x => NormalizePaymentMethod(x.Method) == "cash").Sum(x => x.Value),
+            g.Where(x => NormalizePaymentMethod(x.Method) == "bank_slip").Sum(x => x.Value))).ToArray();
+        var paymentLocationTrend = paymentLocationTrendRows.GroupBy(x => new { x.Year, x.Month }).Select(g => new AdministratorPaymentLocationTrendPoint(
+            MonthLabel(g.Key.Year, g.Key.Month), g.Where(x => x.Location == "web").Sum(x => x.Count), g.Where(x => x.Location == "clinic").Sum(x => x.Count))).ToArray();
+        var paymentLocations = paymentLocationRows.Select(x => new AdministratorMetricPoint(x.Label, x.Value, x.Count)).ToArray();
+        var services = serviceRows.Select(x => new AdministratorMetricPoint(x.Label, x.Value, x.Count)).ToArray();
+        var categories = categoryRows.Select(x => new AdministratorMetricPoint(x.Label, x.Value, x.Count)).ToArray();
         return new(from, to, revenue, count, count == 0 ? 0 : revenue / count, satisfaction is null ? null : (decimal)satisfaction.Value,
-            previousRevenue, previousAppointments, months, statuses, methods, doctors);
+            previousRevenue, previousAppointments, months, statuses, methods, doctors, revenueByUserType, paymentEvolution,
+            paymentLocationTrend, paymentLocations, services, categories);
     }
+
+    private static string MonthLabel(int year, int month) => new DateTime(year, month, 1).ToString("MMM/yyyy", CultureInfo.GetCultureInfo("pt-BR"));
+    private static string NormalizePaymentMethod(string value) => value switch
+    {
+        "credit_card" or "debit_card" or "card" => "card",
+        "pix" => "pix",
+        "cash" => "cash",
+        "bank_slip" or "boleto" => "bank_slip",
+        _ => "not_informed",
+    };
 
     public async Task<IReadOnlyList<AdministratorSettingResponse>> SettingsAsync(CancellationToken ct) =>
         await database.ApplicationSettings.AsNoTracking().Where(x => !x.IsSecret && EditableSettings.Contains(x.SettingKey)).OrderBy(x => x.SettingKey)
@@ -197,12 +240,12 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         {
             var presentation = item.EventCode switch
             {
-                "appointment.canceled_by_manager" or "appointment.canceled_by_doctor" => ("appointment_canceled", "warning", "Consulta cancelada", "Uma consulta foi cancelada e pode exigir acompanhamento operacional."),
-                "appointment.rescheduled_by_manager" or "appointment.rescheduled_by_doctor" => ("appointment_rescheduled", "info", "Consulta reagendada", "Uma consulta teve data ou horário alterado."),
-                "manager.payment.confirmed" => ("payment_confirmed", "info", "Pagamento confirmado", "Um pagamento presencial foi confirmado."),
-                "administrator.premium.canceled" => ("premium_canceled", "warning", "Benefício Premium cancelado", "Um benefício Premium ativo foi cancelado."),
+                "appointment.canceled_by_manager" or "appointment.canceled_by_doctor" => ("canceled", "warning", "Consulta cancelada", "Uma consulta foi cancelada e pode exigir acompanhamento operacional."),
+                "appointment.rescheduled_by_manager" or "appointment.rescheduled_by_doctor" => ("rescheduled", "info", "Consulta reagendada", "Uma consulta teve data ou horário alterado."),
+                "manager.payment.confirmed" => ("payment_approved", "info", "Pagamento confirmado", "Um pagamento presencial foi confirmado."),
+                "administrator.premium.canceled" => ("premium_decision", "warning", "Benefício Premium cancelado", "Um benefício Premium ativo foi cancelado."),
                 "administrator.setting.updated" => ("system_update", "high", "Configuração alterada", "Uma configuração operacional do sistema foi alterada."),
-                _ => ("premium_plan_updated", "info", "Plano Premium alterado", "As regras de um plano Premium foram atualizadas.")
+                _ => ("system_update", "info", "Plano Premium alterado", "As regras de um plano Premium foram atualizadas.")
             };
             Add($"audit:{item.Id}", presentation.Item1, presentation.Item2, presentation.Item3, presentation.Item4,
                 item.EntityType ?? "audit_event", item.EntityId ?? item.Id.ToString(CultureInfo.InvariantCulture), item.OccurredAtUtc);

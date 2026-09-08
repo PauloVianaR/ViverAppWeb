@@ -13,8 +13,17 @@ public sealed record AdministratorPendingProfessional(ulong AccountId, string Fu
 public sealed record AdministratorAnalyticsResponse(DateOnly From, DateOnly To, decimal Revenue, int Appointments,
     decimal AverageTicket, decimal? Satisfaction, decimal PreviousRevenue, int PreviousAppointments,
     IReadOnlyList<AdministratorMetricPoint> RevenueByMonth, IReadOnlyList<AdministratorMetricPoint> AppointmentsByStatus,
-    IReadOnlyList<AdministratorMetricPoint> PaymentsByMethod, IReadOnlyList<AdministratorMetricPoint> DoctorPerformance);
+    IReadOnlyList<AdministratorMetricPoint> PaymentsByMethod, IReadOnlyList<AdministratorMetricPoint> DoctorPerformance,
+    IReadOnlyList<AdministratorRevenueByUserTypePoint> RevenueByUserType,
+    IReadOnlyList<AdministratorPaymentMethodEvolutionPoint> PaymentsByTypeEvolution,
+    IReadOnlyList<AdministratorPaymentLocationTrendPoint> PaymentsByLocationTrend,
+    IReadOnlyList<AdministratorMetricPoint> PaymentsByLocation,
+    IReadOnlyList<AdministratorMetricPoint> AppointmentsByService,
+    IReadOnlyList<AdministratorMetricPoint> AppointmentsByCategory);
 public sealed record AdministratorMetricPoint(string Label, decimal Value, int Count);
+public sealed record AdministratorRevenueByUserTypePoint(string Label, decimal Regular, decimal Premium);
+public sealed record AdministratorPaymentMethodEvolutionPoint(string Label, decimal Card, decimal Pix, decimal Cash, decimal BankSlip);
+public sealed record AdministratorPaymentLocationTrendPoint(string Label, int Online, int InClinic);
 public sealed record AdministratorSettingResponse(string Key, string ValueJson, string? Description, DateTime UpdatedAtUtc, ulong RowVersion);
 public sealed record AdministratorPremiumPlanResponse(uint Id, string Name, decimal AppointmentDiscountPercent, ushort? ValidityDays, bool IsActive, ulong RowVersion);
 public sealed record AdministratorNotificationResponse(ulong Id, string TypeCode, string SeverityCode, string Title, string Message,

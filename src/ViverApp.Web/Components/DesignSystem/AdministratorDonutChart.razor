@@ -1,0 +1,50 @@
+@using System.Globalization
+<section class="surface administrator-card administrator-chart-card administrator-donut-card">
+    <div class="administrator-chart-heading"><div><h2>@Title</h2><p>@Description</p></div></div>
+    @if (Items.Count == 0 || Total <= 0)
+    {
+        <p class="muted">Sem dados no período.</p>
+    }
+    else
+    {
+        <div class="administrator-donut-layout">
+            <div class="administrator-donut" role="img" aria-label="@AccessibleSummary">
+                <svg viewBox="0 0 220 220" aria-hidden="true" focusable="false">
+                    <circle cx="110" cy="110" r="76" fill="none" stroke="#edf0f4" stroke-width="34" />
+                    @for (var index = 0; index < Items.Count; index++)
+                    {
+                        <circle cx="110" cy="110" r="76" fill="none" stroke="@Color(index)" stroke-width="34" pathLength="100"
+                                stroke-dasharray="@Dash(index)" stroke-dashoffset="@Offset(index)" transform="rotate(-90 110 110)" />
+                    }
+                </svg>
+                <span class="administrator-donut-center"><strong>@TotalLabel</strong><small>total</small></span>
+            </div>
+            <ul class="administrator-donut-legend">
+                @for (var index = 0; index < Items.Count; index++)
+                {
+                    var item = Items[index];
+                    <li><i style="background:@Color(index)"></i><span><strong>@AdministratorLabels.Metric(item.Label)</strong><small>@Format(Value(item)) · @Share(index).ToString("0.#")%</small></span></li>
+                }
+            </ul>
+        </div>
+        <details class="administrator-chart-table"><summary>Consultar valores deste gráfico</summary><div class="data-region"><table class="data-table"><thead><tr><th>Categoria</th><th>Valor</th><th>Participação</th></tr></thead><tbody>@for(var index=0;index<Items.Count;index++){var item=Items[index];<tr><th scope="row">@AdministratorLabels.Metric(item.Label)</th><td>@Format(Value(item))</td><td>@Share(index).ToString("0.#")%</td></tr>}</tbody></table></div></details>
+    }
+</section>
+
+@code {
+    private static readonly string[] Palette = ["#d22c36", "#2667b8", "#ec8a25", "#2f8f67", "#7957b8", "#d45b93", "#62717f", "#aa7a14"];
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Description { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<AdministratorMetric> Items { get; set; } = [];
+    [Parameter] public bool MoneyValues { get; set; }
+
+    private decimal Total => Items.Sum(Value);
+    private string TotalLabel => MoneyValues ? ManagerLabels.Money(Total) : Total.ToString("0");
+    private string AccessibleSummary => $"{Title}. {Description}. Total de {TotalLabel}, distribuído em {Items.Count} categorias. Os valores exatos estão disponíveis na tabela após o gráfico.";
+    private decimal Value(AdministratorMetric item) => MoneyValues ? item.Value : item.Count;
+    private string Color(int index) => Palette[index % Palette.Length];
+    private decimal Share(int index) => Total <= 0 ? 0 : Value(Items[index]) / Total * 100;
+    private string Dash(int index) => $"{Share(index).ToString("0.####", CultureInfo.InvariantCulture)} {(100 - Share(index)).ToString("0.####", CultureInfo.InvariantCulture)}";
+    private string Offset(int index) => (-Items.Take(index).Sum(Value) / Total * 100).ToString("0.####", CultureInfo.InvariantCulture);
+    private string Format(decimal value) => MoneyValues ? ManagerLabels.Money(value) : value.ToString("0");
+}
