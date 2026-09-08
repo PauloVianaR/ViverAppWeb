@@ -6,6 +6,7 @@ using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 using ViverApp.Security;
+using ViverApp.Api.Features.AdministratorExperience;
 
 namespace ViverApp.Api.Features.ClinicAdministration;
 
@@ -13,6 +14,7 @@ namespace ViverApp.Api.Features.ClinicAdministration;
 [Route("api/v1/clinic")]
 [Authorize(Policy = ViverAppPolicies.Management)]
 [EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
+[ServiceFilter(typeof(AdministratorStepUpFilter))]
 public sealed class ClinicConfigurationController(
     ViverAppDbContext database,
     IdentityAuditWriter auditWriter) : ControllerBase
@@ -270,6 +272,7 @@ public sealed class ClinicConfigurationController(
             Name = ClinicAdministrationSupport.RequiredText(request.Name),
             StartTime = request.StartTime,
             EndTime = request.EndTime,
+            IsAnnual = request.IsAnnual,
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
             RowVersion = 1,
@@ -306,6 +309,7 @@ public sealed class ClinicConfigurationController(
         entity.Name = ClinicAdministrationSupport.RequiredText(request.Name);
         entity.StartTime = request.StartTime;
         entity.EndTime = request.EndTime;
+        entity.IsAnnual = request.IsAnnual;
         entity.UpdatedAtUtc = DateTime.UtcNow;
         try
         {
@@ -486,5 +490,6 @@ public sealed class ClinicConfigurationController(
         item.Name,
         item.StartTime,
         item.EndTime,
-        item.RowVersion);
+        item.RowVersion,
+        item.IsAnnual);
 }

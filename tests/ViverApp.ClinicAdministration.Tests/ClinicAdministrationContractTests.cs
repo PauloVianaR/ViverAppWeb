@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using MySql.Data.MySqlClient;
 using ViverApp.Api.Features.ClinicAdministration;
+using ViverApp.Api.Features.AdministratorExperience;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
@@ -44,6 +45,9 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
     [InlineData("/api/v1/catalog/appointment-types")]
     [InlineData("/api/v1/professionals")]
     [InlineData("/api/v1/users")]
+    [InlineData("/api/v1/administrator/home")]
+    [InlineData("/api/v1/administrator/analytics?from=2026-01-01&to=2026-01-31")]
+    [InlineData("/api/v1/administrator/notifications")]
     public async Task MasterDataQueries_RequireAuthentication(string path)
     {
         using var client = CreateClient();
@@ -51,6 +55,167 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
         using var response = await client.GetAsync(path);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public void AdministratorContracts_RejectUnknownMembersAndInvalidDecisions()
+    {
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<AdministratorPremiumCancelRequest>("{\"reason\":\"motivo válido\",\"rowVersion\":1,\"role\":\"administrator\"}", new JsonSerializerOptions { PropertyNameCaseInsensitive = true }));
+        var decision = typeof(AdministratorAccountStatusRequest).GetConstructors().Single().GetParameters().Single(x => x.Name == "DecisionCode");
+        Assert.Equal("^(blocked|reactivated)$", decision.GetCustomAttributes(typeof(RegularExpressionAttribute), true).Cast<RegularExpressionAttribute>().Single().Pattern);
+    }
+
+    [Fact]
+    public void CriticalAdministrationControllers_ApplyStepUpFilter()
+    {
+        var protectedControllers = new[] { typeof(AdministratorExperienceController), typeof(UsersController), typeof(ProfessionalsController), typeof(ClinicConfigurationController), typeof(CatalogController) };
+        foreach (var controller in protectedControllers)
+        {
+            Assert.Contains(controller.GetCustomAttributes(typeof(ServiceFilterAttribute), true).Cast<ServiceFilterAttribute>(),
+                attribute => attribute.ServiceType == typeof(AdministratorStepUpFilter));
+        }
+    }
+
+    [Fact]
+    public async Task AdministratorExperience_ExecutesServerAggregationsAndProtectsCurrentAdministrator()
+    {
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ViverAppDbContext>();
+        var service = scope.ServiceProvider.GetRequiredService<AdministratorExperienceService>();
+        await using var transaction = await database.Database.BeginTransactionAsync();
+        var now = DateTime.UtcNow;
+        var administratorEmail = $"phase14-{Guid.NewGuid():N}@example.test";
+        var administrator = new Account
+        {
+            RoleCode = ViverAppRoles.Administrator,
+            StatusCode = "active",
+            FullName = "Administrador sintético da Fase 14",
+            Email = administratorEmail,
+            NormalizedEmail = administratorEmail.ToUpperInvariant(),
+            EmailVerified = true,
+            PreferredRecoveryChannel = "email",
+            SecurityStamp = RandomNumberGenerator.GetBytes(32),
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        };
+        database.Accounts.Add(administrator);
+        await database.SaveChangesAsync();
+
+        var patient = new Account
+        {
+            RoleCode = ViverAppRoles.Patient,
+            StatusCode = "active",
+            FullName = "Paciente sintético do Analytics",
+            Email = $"phase14-patient-{Guid.NewGuid():N}@example.test",
+            EmailVerified = true,
+            SecurityStamp = RandomNumberGenerator.GetBytes(32),
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        };
+        patient.NormalizedEmail = patient.Email.ToUpperInvariant();
+        var doctor = new Account
+        {
+            RoleCode = ViverAppRoles.Doctor,
+            StatusCode = "active",
+            FullName = "Médica sintética do Analytics",
+            Email = $"phase14-doctor-{Guid.NewGuid():N}@example.test",
+            EmailVerified = true,
+            SecurityStamp = RandomNumberGenerator.GetBytes(32),
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        };
+        doctor.NormalizedEmail = doctor.Email.ToUpperInvariant();
+        database.Accounts.AddRange(patient, doctor);
+        await database.SaveChangesAsync();
+        database.DoctorProfiles.Add(new DoctorProfile
+        {
+            AccountId = doctor.Id,
+            ProfessionalTitle = "Dra.",
+            LicenseStateCode = "SP",
+            LicenseNumber = "149999",
+            DefaultAppointmentDurationMinutes = 30,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        });
+        var appointmentType = new AppointmentType
+        {
+            Name = $"Consulta Analytics {Guid.NewGuid():N}",
+            CategoryCode = "consultation",
+            ModalityCode = "in_person",
+            DurationMinutes = 30,
+            PriceAmount = 180,
+            IsActive = true,
+            DisplayOrder = 999,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        };
+        database.AppointmentTypes.Add(appointmentType);
+        await database.SaveChangesAsync();
+        var appointment = new Appointment
+        {
+            PatientAccountId = patient.Id,
+            DoctorAccountId = doctor.Id,
+            AppointmentTypeId = appointmentType.Id,
+            CreatedByAccountId = administrator.Id,
+            StatusCode = "confirmed",
+            ModalityCode = "in_person",
+            StartsAtUtc = now.AddDays(-1),
+            EndsAtUtc = now.AddDays(-1).AddMinutes(30),
+            PriceAmount = 180,
+            BasePriceAmount = 180,
+            DiscountPercent = 0,
+            PaymentLocationCode = "clinic",
+            CurrencyCode = "BRL",
+            CreatedAtUtc = now.AddDays(-2),
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        };
+        database.Appointments.Add(appointment);
+        await database.SaveChangesAsync();
+        database.Payments.Add(new Payment
+        {
+            AppointmentId = appointment.Id,
+            ProviderCode = "internal",
+            StatusCode = "paid",
+            Amount = 180,
+            CurrencyCode = "BRL",
+            IdempotencyKey = Guid.NewGuid(),
+            MethodCode = "cash",
+            PaidAtUtc = now.AddHours(-1),
+            CreatedAtUtc = now.AddDays(-1),
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        });
+        await database.SaveChangesAsync();
+
+        var home = await service.HomeAsync(administrator.Id, CancellationToken.None);
+        var analytics = await service.AnalyticsAsync(DateOnly.FromDateTime(now.AddMonths(-1)), DateOnly.FromDateTime(now), CancellationToken.None);
+        var settings = await service.SettingsAsync(CancellationToken.None);
+
+        Assert.True(home.Counters.ActiveUsers >= 1);
+        Assert.True(analytics.Appointments >= 1);
+        Assert.Contains(analytics.RevenueByUserType, item => item.Regular >= 180);
+        Assert.Contains(analytics.RevenueByMonth, item => item.Value >= 180 && item.Count >= 1);
+        Assert.Contains(analytics.PaymentsByTypeEvolution, item => item.Cash >= 180);
+        Assert.Contains(analytics.PaymentsByMethod, item => item.Label == "cash" && item.Value >= 180);
+        Assert.Contains(analytics.PaymentsByLocationTrend, item => item.InClinic >= 1);
+        Assert.Contains(analytics.PaymentsByLocation, item => item.Label == "clinic" && item.Count >= 1);
+        Assert.Contains(analytics.AppointmentsByService, item => item.Label == appointmentType.Name && item.Count >= 1);
+        Assert.Contains(analytics.AppointmentsByCategory, item => item.Label == "consultation" && item.Count >= 1);
+        Assert.Contains(analytics.DoctorPerformance, item => item.Label == doctor.FullName && item.Count >= 1);
+        Assert.NotEmpty(settings);
+        var blocked = await Assert.ThrowsAsync<AdministratorRuleException>(() => service.SetAccountStatusAsync(
+            administrator.Id,
+            administrator.Id,
+            new AdministratorAccountStatusRequest("blocked", "Tentativa protegida do teste", administrator.RowVersion),
+            CancellationToken.None));
+        Assert.Equal(409, blocked.StatusCode);
+        await transaction.RollbackAsync();
     }
 
     [Fact]

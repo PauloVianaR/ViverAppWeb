@@ -1,0 +1,117 @@
+@page "/administracao/analytics"
+@inherits AdministratorPageBase
+@using static ViverApp.Web.AdministratorLabels
+@using static ViverApp.Web.ManagerLabels
+<PageTitle>Analytics | ViverApp</PageTitle>
+
+<header class="workspace-heading">
+    <div>
+        <p class="eyebrow">Administrador</p>
+        <h1 class="page-title">Analytics da clínica</h1>
+        <p class="page-description">Os nove painéis analíticos da experiência administrativa original, adaptados para a Web com valores acessíveis.</p>
+    </div>
+</header>
+
+@if (Notice is not null)
+{
+    <p class="notice notice--error">@Notice</p>
+}
+
+<section class="surface patient-panel">
+    <div class="administrator-actions" role="group" aria-label="Período">
+        <button class="button button--secondary" @onclick="() => Period(1)">1 mês</button>
+        <button class="button button--secondary" @onclick="() => Period(3)">3 meses</button>
+        <button class="button button--secondary" @onclick="() => Period(6)">6 meses</button>
+        <button class="button button--secondary" @onclick="() => Period(12)">12 meses</button>
+    </div>
+    <form @onsubmit="Apply" @onsubmit:preventDefault>
+        <div class="administrator-filter-grid">
+            <div class="field"><label for="analytics-from">De</label><input id="analytics-from" type="date" @bind="From" /></div>
+            <div class="field"><label for="analytics-to">Até</label><input id="analytics-to" type="date" @bind="To" /></div>
+        </div>
+        <button class="button">Aplicar intervalo</button>
+    </form>
+</section>
+
+@if (Loading)
+{
+    <LoadingSkeleton Lines="8" />
+}
+else if (Data is not null)
+{
+    <section class="administrator-kpis" aria-label="Indicadores do período">
+        <article class="surface administrator-kpi"><strong>@Money(Data.Revenue)</strong><span>Receita · antes @Money(Data.PreviousRevenue)</span></article>
+        <article class="surface administrator-kpi"><strong>@Data.Appointments</strong><span>Consultas · antes @Data.PreviousAppointments</span></article>
+        <article class="surface administrator-kpi"><strong>@Money(Data.AverageTicket)</strong><span>Ticket médio</span></article>
+        <article class="surface administrator-kpi"><strong>@(Data.Satisfaction?.ToString("0.0") ?? "—")</strong><span>Satisfação / 5</span></article>
+    </section>
+
+    <div class="administrator-analytics-grid">
+        <AdministratorCartesianChart Title="Evolução da Receita" Description="Receita mensal de pacientes Premium e Regulares."
+            Labels="Data.RevenueByUserType.Select(x => x.Label).ToArray()" Series="RevenueByUserTypeSeries" />
+        <AdministratorCartesianChart Title="Receita vs Consultas" Description="Receita recebida e quantidade de atendimentos pagos por mês."
+            Labels="Data.RevenueByMonth.Select(x => x.Label).ToArray()" Series="RevenueVsAppointmentsSeries" />
+        <AdministratorCartesianChart Title="Pagamentos por Tipo" Description="Evolução mensal do valor recebido por cartão, PIX, dinheiro e boleto."
+            Labels="Data.PaymentsByTypeEvolution.Select(x => x.Label).ToArray()" Series="PaymentTypeSeries" />
+        <AdministratorDonutChart Title="Distribuição por Tipo de Pagamento" Description="Participação de cada meio no valor total recebido."
+            Items="Data.PaymentsByMethod" MoneyValues="true" />
+        <AdministratorCartesianChart Title="Tendência pagamentos Online vs Presencial" Description="Quantidade mensal de pagamentos realizados online ou na clínica."
+            Labels="Data.PaymentsByLocationTrend.Select(x => x.Label).ToArray()" Series="PaymentLocationTrendSeries" />
+        <AdministratorDonutChart Title="Online vs Presencial" Description="Distribuição dos pagamentos conforme o local escolhido."
+            Items="Data.PaymentsByLocation" />
+        <AdministratorDonutChart Title="Distribuição de Serviços" Description="Participação dos serviços nos agendamentos do período."
+            Items="Data.AppointmentsByService" />
+        <AdministratorDonutChart Title="Distribuição de Tipos de Atendimento" Description="Consultas, exames e cirurgias realizados no período."
+            Items="Data.AppointmentsByCategory" />
+        <AdministratorCartesianChart Title="Performance dos Médicos" Description="Volume de atendimentos, eficiência pela avaliação e nota média."
+            Labels="Data.DoctorPerformance.Select(x => x.Label).ToArray()" Series="DoctorPerformanceSeries" />
+    </div>
+
+    <section class="patient-section">
+        <div class="section-heading"><div><p class="eyebrow">Resumo adicional</p><h2>Estados dos agendamentos</h2></div></div>
+        <MetricPanel Title="Consultas por estado" Items="Data.AppointmentsByStatus" />
+    </section>
+}
+
+@code {
+    private AdministratorAnalyticsData? Data;
+    private DateTime From = DateTime.Today.AddMonths(-3);
+    private DateTime To = DateTime.Today;
+
+    private IReadOnlyList<AdministratorChartSeries> RevenueByUserTypeSeries => Data is null ? [] :
+    [
+        new("Regular", "#d22c36", Data.RevenueByUserType.Select(x => x.Regular).ToArray(), AdministratorChartSeriesKind.Area, AdministratorChartValueFormat.Money),
+        new("Premium", "#ec8a25", Data.RevenueByUserType.Select(x => x.Premium).ToArray(), AdministratorChartSeriesKind.Area, AdministratorChartValueFormat.Money),
+    ];
+
+    private IReadOnlyList<AdministratorChartSeries> RevenueVsAppointmentsSeries => Data is null ? [] :
+    [
+        new("Receita", "#d22c36", Data.RevenueByMonth.Select(x => x.Value).ToArray(), AdministratorChartSeriesKind.Bar, AdministratorChartValueFormat.Money),
+        new("Atendimentos", "#2667b8", Data.RevenueByMonth.Select(x => (decimal)x.Count).ToArray(), AdministratorChartSeriesKind.Line, AdministratorChartValueFormat.Number, true),
+    ];
+
+    private IReadOnlyList<AdministratorChartSeries> PaymentTypeSeries => Data is null ? [] :
+    [
+        new("Cartão", "#d22c36", Data.PaymentsByTypeEvolution.Select(x => x.Card).ToArray(), AdministratorChartSeriesKind.Bar, AdministratorChartValueFormat.Money),
+        new("PIX", "#2667b8", Data.PaymentsByTypeEvolution.Select(x => x.Pix).ToArray(), AdministratorChartSeriesKind.Bar, AdministratorChartValueFormat.Money),
+        new("Dinheiro", "#2f8f67", Data.PaymentsByTypeEvolution.Select(x => x.Cash).ToArray(), AdministratorChartSeriesKind.Bar, AdministratorChartValueFormat.Money),
+        new("Boleto", "#ec8a25", Data.PaymentsByTypeEvolution.Select(x => x.BankSlip).ToArray(), AdministratorChartSeriesKind.Bar, AdministratorChartValueFormat.Money),
+    ];
+
+    private IReadOnlyList<AdministratorChartSeries> PaymentLocationTrendSeries => Data is null ? [] :
+    [
+        new("Online", "#2667b8", Data.PaymentsByLocationTrend.Select(x => (decimal)x.Online).ToArray(), AdministratorChartSeriesKind.Line),
+        new("Presencial", "#d22c36", Data.PaymentsByLocationTrend.Select(x => (decimal)x.InClinic).ToArray(), AdministratorChartSeriesKind.Line),
+    ];
+
+    private IReadOnlyList<AdministratorChartSeries> DoctorPerformanceSeries => Data is null ? [] :
+    [
+        new("Atendimentos", "#d22c36", Data.DoctorPerformance.Select(x => (decimal)x.Count).ToArray()),
+        new("Eficiência", "#ec8a25", Data.DoctorPerformance.Select(x => Math.Round(x.Value / 5 * 100, 1)).ToArray(), AdministratorChartSeriesKind.Bar, AdministratorChartValueFormat.Percent),
+        new("Avaliação média", "#2667b8", Data.DoctorPerformance.Select(x => x.Value).ToArray(), AdministratorChartSeriesKind.Line, AdministratorChartValueFormat.Rating, true),
+    ];
+
+    protected override async Task Load() => Data = await Get<AdministratorAnalyticsData>($"api/v1/administrator/analytics?from={From:yyyy-MM-dd}&to={To:yyyy-MM-dd}");
+    private Task Apply() => Run(Load);
+    private Task Period(int months) => Run(async () => { To = DateTime.Today; From = To.AddMonths(-months); await Load(); });
+}

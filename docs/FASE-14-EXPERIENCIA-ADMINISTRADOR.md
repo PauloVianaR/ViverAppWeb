@@ -99,11 +99,8 @@ A superfície mínima criada na Fase 10 será absorvida pela administração def
 - períodos de um, três, seis e doze meses, além de intervalo limitado;
 - KPIs de receita, consultas, ticket médio e satisfação;
 - comparação segura com período anterior;
-- receita por tipo/perfil permitido;
-- receita versus consultas;
-- pagamentos por tipo, distribuição e tendência por local;
-- distribuição de consultas por tipo, modalidade e estado;
-- desempenho médico agregado;
+- os nove gráficos do MAUI, sem redução funcional: Evolução da Receita (Premium versus Regular), Receita versus Consultas, Pagamentos por Tipo, Distribuição por Tipo de Pagamento, Tendência pagamentos Online versus Presencial, Online versus Presencial, Distribuição de Serviços, Distribuição de Tipos de Atendimento e Performance dos Médicos;
+- estados dos agendamentos como resumo operacional adicional da Web;
 - queries calculadas no servidor, limitadas, paginadas e medidas;
 - gráficos com resumo textual e tabela acessível;
 - nenhuma métrica expõe laudo, observação ou identificador desnecessário.

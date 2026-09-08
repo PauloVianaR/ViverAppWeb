@@ -8,6 +8,7 @@ using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 using ViverApp.Security;
+using ViverApp.Api.Features.AdministratorExperience;
 
 namespace ViverApp.Api.Features.ClinicAdministration;
 
@@ -15,6 +16,7 @@ namespace ViverApp.Api.Features.ClinicAdministration;
 [Route("api/v1/professionals")]
 [Authorize]
 [EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
+[ServiceFilter(typeof(AdministratorStepUpFilter))]
 public sealed class ProfessionalsController(
     ViverAppDbContext database,
     UserManager<ViverAppUser> userManager,

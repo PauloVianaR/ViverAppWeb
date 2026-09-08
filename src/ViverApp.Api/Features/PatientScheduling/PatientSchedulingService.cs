@@ -791,7 +791,7 @@ public sealed class PatientSchedulingService(
             ? await database.ClinicWeeklyHours.AsNoTracking().Where(item => item.IsActive).ToListAsync(cancellationToken)
             : [];
         var holidayEntities = await database.Holidays.AsNoTracking()
-            .Where(item => item.HolidayDate >= from.ToDateTime(TimeOnly.MinValue)
+            .Where(item => item.IsAnnual || item.HolidayDate >= from.ToDateTime(TimeOnly.MinValue)
                 && item.HolidayDate <= until.ToDateTime(TimeOnly.MinValue))
             .ToListAsync(cancellationToken);
         var exceptions = await database.DoctorAvailabilityExceptions.AsNoTracking()
@@ -834,7 +834,8 @@ public sealed class PatientSchedulingService(
             var clinicWindows = clinicHours
                 .Where(item => item.DayOfWeek == day)
                 .Select(item => new LocalAvailabilityWindow(item.StartTime, item.EndTime));
-            var holidays = holidayEntities.Where(item => item.HolidayDate.Date == dateValue.Date).ToArray();
+            var holidays = holidayEntities.Where(item => item.HolidayDate.Date == dateValue.Date
+                || item.IsAnnual && item.HolidayDate.Month == dateValue.Month && item.HolidayDate.Day == dateValue.Day).ToArray();
             var holidayBlocks = holidays.Select(item => item.StartTime.HasValue
                     ? new LocalAvailabilityWindow(item.StartTime.Value, item.EndTime!.Value)
                     : new LocalAvailabilityWindow(TimeSpan.Zero, TimeSpan.FromDays(1)))

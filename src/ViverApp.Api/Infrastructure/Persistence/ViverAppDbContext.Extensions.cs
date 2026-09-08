@@ -47,5 +47,14 @@ public partial class ViverAppDbContext
         modelBuilder.Entity<Specialty>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
+        modelBuilder.Entity<AdministratorNotification>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
+        modelBuilder.Entity<ApplicationSetting>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
+        modelBuilder.Entity<PremiumPlan>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
     }
 }

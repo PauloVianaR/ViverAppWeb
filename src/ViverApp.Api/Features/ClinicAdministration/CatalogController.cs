@@ -6,6 +6,7 @@ using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 using ViverApp.Security;
+using ViverApp.Api.Features.AdministratorExperience;
 
 namespace ViverApp.Api.Features.ClinicAdministration;
 
@@ -13,6 +14,7 @@ namespace ViverApp.Api.Features.ClinicAdministration;
 [Route("api/v1/catalog")]
 [Authorize]
 [EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
+[ServiceFilter(typeof(AdministratorStepUpFilter))]
 public sealed class CatalogController(
     ViverAppDbContext database,
     IdentityAuditWriter auditWriter) : ControllerBase
@@ -215,6 +217,7 @@ public sealed class CatalogController(
         {
             Name = ClinicAdministrationSupport.RequiredText(request.Name),
             Description = ClinicAdministrationSupport.OptionalText(request.Description),
+            CategoryCode = request.CategoryCode,
             ModalityCode = request.ModalityCode,
             DurationMinutes = request.DurationMinutes,
             PriceAmount = request.PriceAmount,
@@ -256,6 +259,7 @@ public sealed class CatalogController(
         ClinicAdministrationSupport.SetConcurrency(database, entity, nameof(AppointmentType.RowVersion), request.RowVersion);
         entity.Name = ClinicAdministrationSupport.RequiredText(request.Name);
         entity.Description = ClinicAdministrationSupport.OptionalText(request.Description);
+        entity.CategoryCode = request.CategoryCode;
         entity.ModalityCode = request.ModalityCode;
         entity.DurationMinutes = request.DurationMinutes;
         entity.PriceAmount = request.PriceAmount;
@@ -363,6 +367,7 @@ public sealed class CatalogController(
         item.Id,
         item.Name,
         item.Description,
+        item.CategoryCode,
         item.ModalityCode,
         item.DurationMinutes,
         item.PriceAmount,

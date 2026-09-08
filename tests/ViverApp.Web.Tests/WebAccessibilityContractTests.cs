@@ -107,6 +107,11 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     [InlineData("/gestao/historico", "Histórico dos atendimentos")]
     [InlineData("/gestao/perfil", "Meu perfil gerencial")]
     [InlineData("/gestao/premium", "Solicitações Premium")]
+    [InlineData("/administracao/clinica", "Clínica única")]
+    [InlineData("/administracao/consultas", "Consultas planejadas")]
+    [InlineData("/administracao/analytics", "Analytics da clínica")]
+    [InlineData("/administracao/notificacoes", "Notificações operacionais")]
+    [InlineData("/administracao/usuarios", "Usuários e Premium")]
     public async Task ClinicalWorkspace_ExposesRoleAwareResponsiveJourneys(string path, string heading)
     {
         using var client = CreateClient();
@@ -117,6 +122,15 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("Validando acesso", html, StringComparison.Ordinal);
         Assert.DoesNotContain(heading, html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AdministratorNavigation_CoversSixOperationalAreas()
+    {
+        var shell = ShellNavigationCatalog.ResolveRole("administrator");
+        Assert.Equal(ShellProfile.Administrator, shell.Profile);
+        Assert.Equal(6, shell.Items.Count);
+        Assert.Equal(new[] { "/administracao", "/administracao/clinica", "/administracao/consultas", "/administracao/analytics", "/administracao/notificacoes", "/administracao/usuarios" }, shell.Items.Select(x => x.Href));
     }
 
     [Fact]

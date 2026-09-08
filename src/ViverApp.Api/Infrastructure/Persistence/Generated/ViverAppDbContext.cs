@@ -26,6 +26,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<AccountRecoveryCode> AccountRecoveryCodes { get; set; }
 
+    public virtual DbSet<AdministratorNotification> AdministratorNotifications { get; set; }
+
     public virtual DbSet<ApplicationSetting> ApplicationSettings { get; set; }
 
     public virtual DbSet<Appointment> Appointments { get; set; }
@@ -385,6 +387,57 @@ public partial class ViverAppDbContext : DbContext
                 .HasConstraintName("fk_account_recovery_codes_account");
         });
 
+        modelBuilder.Entity<AdministratorNotification>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("administrator_notifications");
+
+            entity.HasIndex(e => new { e.AdministratorAccountId, e.DismissedAtUtc, e.CreatedAtUtc }, "ix_administrator_notifications_feed");
+
+            entity.HasIndex(e => new { e.AdministratorAccountId, e.SourceKey }, "uq_administrator_notifications_source").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AdministratorAccountId).HasColumnName("administrator_account_id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.DismissedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("dismissed_at_utc");
+            entity.Property(e => e.EntityId)
+                .HasMaxLength(80)
+                .HasColumnName("entity_id");
+            entity.Property(e => e.EntityType)
+                .HasMaxLength(40)
+                .HasColumnName("entity_type");
+            entity.Property(e => e.Message)
+                .HasMaxLength(500)
+                .HasColumnName("message");
+            entity.Property(e => e.ReadAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("read_at_utc");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.SeverityCode)
+                .HasMaxLength(16)
+                .HasColumnName("severity_code");
+            entity.Property(e => e.SourceKey)
+                .HasMaxLength(180)
+                .HasColumnName("source_key");
+            entity.Property(e => e.Title)
+                .HasMaxLength(160)
+                .HasColumnName("title");
+            entity.Property(e => e.TypeCode)
+                .HasMaxLength(40)
+                .HasColumnName("type_code");
+
+            entity.HasOne(d => d.AdministratorAccount).WithMany(p => p.AdministratorNotifications)
+                .HasForeignKey(d => d.AdministratorAccountId)
+                .HasConstraintName("fk_administrator_notifications_account");
+        });
+
         modelBuilder.Entity<ApplicationSetting>(entity =>
         {
             entity.HasKey(e => e.SettingKey).HasName("PRIMARY");
@@ -400,6 +453,9 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(500)
                 .HasColumnName("description");
             entity.Property(e => e.IsSecret).HasColumnName("is_secret");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
             entity.Property(e => e.UpdatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");
@@ -1235,6 +1291,7 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.HolidayDate)
                 .HasColumnType("date")
                 .HasColumnName("holiday_date");
+            entity.Property(e => e.IsAnnual).HasColumnName("is_annual");
             entity.Property(e => e.Name)
                 .HasMaxLength(120)
                 .HasColumnName("name");
@@ -1795,6 +1852,9 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.PriceAmount)
                 .HasPrecision(13)
                 .HasColumnName("price_amount");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
             entity.Property(e => e.UpdatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");

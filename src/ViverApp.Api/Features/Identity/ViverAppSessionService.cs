@@ -26,7 +26,10 @@ public sealed class ViverAppSessionService(
         var context = httpContextAccessor.HttpContext
             ?? throw new InvalidOperationException("Não há contexto HTTP para criar a sessão.");
         var now = DateTime.UtcNow;
-        var expires = now.Add(persistent ? TimeSpan.FromDays(30) : TimeSpan.FromHours(8));
+        var administrator = user.RoleCode == ViverAppRoles.Administrator;
+        var expires = now.Add(administrator
+            ? TimeSpan.FromHours(2)
+            : persistent ? TimeSpan.FromDays(30) : TimeSpan.FromHours(8));
         var sessionId = Guid.NewGuid();
         var session = new AuthSession
         {
@@ -76,7 +79,7 @@ public sealed class ViverAppSessionService(
                 {
                     AllowRefresh = false,
                     ExpiresUtc = new DateTimeOffset(expires, TimeSpan.Zero),
-                    IsPersistent = persistent,
+                    IsPersistent = persistent && !administrator,
                     IssuedUtc = new DateTimeOffset(now, TimeSpan.Zero),
                 });
         }

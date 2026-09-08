@@ -21,5 +21,7 @@ public partial class PremiumPlan
 
     public DateTime UpdatedAtUtc { get; set; }
 
+    public ulong RowVersion { get; set; }
+
     public virtual ICollection<PremiumMembership> PremiumMemberships { get; set; } = new List<PremiumMembership>();
 }

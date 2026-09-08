@@ -1,0 +1,164 @@
+@using System.Globalization
+<section class="surface administrator-card administrator-chart-card">
+    <div class="administrator-chart-heading">
+        <div>
+            <h2>@Title</h2>
+            <p>@Description</p>
+        </div>
+        <div class="administrator-chart-legend" aria-label="Legenda">
+            @foreach (var series in Series)
+            {
+                <span><i style="background:@series.Color"></i>@series.Name</span>
+            }
+        </div>
+    </div>
+    @if (Labels.Count == 0 || Series.Count == 0)
+    {
+        <p class="muted">Sem dados no período.</p>
+    }
+    else
+    {
+        <div class="administrator-chart" role="img" aria-label="@AccessibleSummary">
+            <svg viewBox="0 0 760 300" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
+                @foreach (var grid in Enumerable.Range(0, 5))
+                {
+                    var y = PlotTop + ((PlotHeight / 4) * grid);
+                    <line class="administrator-chart-grid" x1="@PlotLeft" y1="@Number(y)" x2="@(PlotLeft + PlotWidth)" y2="@Number(y)" />
+                }
+                @for (var index = 0; index < Series.Count; index++)
+                {
+                    var series = Series[index];
+                    if (series.Kind == AdministratorChartSeriesKind.Area && series.Values.Any(value => value > 0))
+                    {
+                        <polygon points="@AreaPoints(index)" fill="@series.Color" opacity="0.34" />
+                        <polyline points="@AreaTopPoints(index)" fill="none" stroke="@series.Color" stroke-width="3" stroke-linejoin="round" />
+                        @for (var category = 0; category < Labels.Count; category++)
+                        {
+                            if (ValueAt(series, category) > 0)
+                            {
+                                <circle cx="@Number(X(category))" cy="@Number(Y(AreaTopValue(index, category), series.SecondaryAxis))" r="5" fill="white" stroke="@series.Color" stroke-width="3" />
+                            }
+                        }
+                    }
+                }
+                @for (var category = 0; category < Labels.Count; category++)
+                {
+                    for (var bar = 0; bar < BarSeries.Count; bar++)
+                    {
+                        var series = BarSeries[bar];
+                        var value = ValueAt(series, category);
+                        var y = Y(value, series.SecondaryAxis);
+                        <rect x="@Number(BarX(category, bar))" y="@Number(y)" width="@Number(BarWidth)" height="@Number(PlotTop + PlotHeight - y)" rx="4" fill="@series.Color" />
+                    }
+                }
+                @foreach (var series in LineSeries)
+                {
+                    <polyline points="@LinePoints(series)" fill="none" stroke="@series.Color" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+                    @for (var index = 0; index < Labels.Count; index++)
+                    {
+                        <circle cx="@Number(X(index))" cy="@Number(Y(ValueAt(series, index), series.SecondaryAxis))" r="5" fill="white" stroke="@series.Color" stroke-width="3" />
+                    }
+                }
+            </svg>
+            <div class="administrator-chart-labels" style="grid-template-columns:repeat(@Labels.Count,minmax(0,1fr))">
+                @foreach (var label in Labels)
+                {
+                    <span title="@label">@ShortLabel(label)</span>
+                }
+            </div>
+        </div>
+        <details class="administrator-chart-table">
+            <summary>Consultar valores deste gráfico</summary>
+            <div class="data-region">
+                <table class="data-table">
+                    <thead><tr><th>Categoria</th>@foreach (var series in Series){<th>@series.Name</th>}</tr></thead>
+                    <tbody>
+                        @for (var index = 0; index < Labels.Count; index++)
+                        {
+                            <tr><th scope="row">@Labels[index]</th>@foreach (var series in Series){<td>@Format(ValueAt(series, index), series.Format)</td>}</tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    }
+</section>
+
+@code {
+    private const double PlotLeft = 36;
+    private const double PlotTop = 18;
+    private const double PlotWidth = 700;
+    private const double PlotHeight = 220;
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Description { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<string> Labels { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<AdministratorChartSeries> Series { get; set; } = [];
+
+    private IReadOnlyList<AdministratorChartSeries> BarSeries => Series.Where(x => x.Kind == AdministratorChartSeriesKind.Bar).ToArray();
+    private IReadOnlyList<AdministratorChartSeries> LineSeries => Series.Where(x => x.Kind == AdministratorChartSeriesKind.Line).ToArray();
+    private string AccessibleSummary => $"{Title}. {Description}. {Labels.Count} categorias e {Series.Count} séries. Os valores exatos estão disponíveis na tabela após o gráfico.";
+    private double CategoryWidth => PlotWidth / Math.Max(1, Labels.Count);
+    private double BarWidth => Math.Min(42, CategoryWidth * 0.68 / Math.Max(1, BarSeries.Count));
+
+    private decimal PrimaryMax
+    {
+        get
+        {
+            var areaMax = Labels.Select((_, index) => Series.Where(x => !x.SecondaryAxis && x.Kind == AdministratorChartSeriesKind.Area).Sum(x => ValueAt(x, index))).DefaultIfEmpty(0).Max();
+            var seriesMax = Series.Where(x => !x.SecondaryAxis && x.Kind != AdministratorChartSeriesKind.Area).SelectMany(x => x.Values).DefaultIfEmpty(0).Max();
+            return Math.Max(1, Math.Max(areaMax, seriesMax));
+        }
+    }
+
+    private decimal SecondaryMax => Math.Max(1, Series.Where(x => x.SecondaryAxis).SelectMany(x => x.Values).DefaultIfEmpty(0).Max());
+    private double X(int index) => PlotLeft + (CategoryWidth * index) + (CategoryWidth / 2);
+    private double Y(decimal value, bool secondary) => PlotTop + PlotHeight - ((double)(value / (secondary ? SecondaryMax : PrimaryMax)) * PlotHeight);
+    private decimal ValueAt(AdministratorChartSeries series, int index) => index < series.Values.Count ? series.Values[index] : 0;
+    private double BarX(int category, int bar) => X(category) - ((BarWidth * BarSeries.Count) / 2) + (bar * BarWidth);
+
+    private string LinePoints(AdministratorChartSeries series) => string.Join(' ', Labels.Select((_, index) => $"{Number(X(index))},{Number(Y(ValueAt(series, index), series.SecondaryAxis))}"));
+
+    private string AreaTopPoints(int seriesIndex)
+    {
+        var series = Series[seriesIndex];
+        return string.Join(' ', Labels.Select((_, index) =>
+        {
+            return $"{Number(X(index))},{Number(Y(AreaTopValue(seriesIndex, index), series.SecondaryAxis))}";
+        }));
+    }
+
+    private decimal AreaTopValue(int seriesIndex, int categoryIndex)
+    {
+        var series = Series[seriesIndex];
+        return Series.Take(seriesIndex + 1)
+            .Where(x => x.Kind == AdministratorChartSeriesKind.Area && x.SecondaryAxis == series.SecondaryAxis)
+            .Sum(x => ValueAt(x, categoryIndex));
+    }
+
+    private string AreaPoints(int seriesIndex)
+    {
+        var series = Series[seriesIndex];
+        var top = Labels.Select((_, index) =>
+        {
+            var value = Series.Take(seriesIndex + 1).Where(x => x.Kind == AdministratorChartSeriesKind.Area && x.SecondaryAxis == series.SecondaryAxis).Sum(x => ValueAt(x, index));
+            return $"{Number(X(index))},{Number(Y(value, series.SecondaryAxis))}";
+        });
+        var bottom = Labels.Select((_, index) =>
+        {
+            var value = Series.Take(seriesIndex).Where(x => x.Kind == AdministratorChartSeriesKind.Area && x.SecondaryAxis == series.SecondaryAxis).Sum(x => ValueAt(x, index));
+            return $"{Number(X(index))},{Number(Y(value, series.SecondaryAxis))}";
+        }).Reverse();
+        return string.Join(' ', top.Concat(bottom));
+    }
+
+    private static string Number(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+    private static string ShortLabel(string value) => value.Length <= 13 ? value : string.Concat(value.AsSpan(0, 11), "…");
+    private static string Format(decimal value, AdministratorChartValueFormat format) => format switch
+    {
+        AdministratorChartValueFormat.Money => ManagerLabels.Money(value),
+        AdministratorChartValueFormat.Percent => $"{value:0.#}%",
+        AdministratorChartValueFormat.Rating => value.ToString("0.0"),
+        _ => value.ToString("0.##"),
+    };
+}
