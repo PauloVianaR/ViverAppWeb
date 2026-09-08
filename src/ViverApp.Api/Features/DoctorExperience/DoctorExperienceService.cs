@@ -277,7 +277,9 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         DoctorAvailabilityExceptionRequest request, CancellationToken ct)
     {
         if (request.Date < DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime.AddDays(-1))) throw Invalid("A exceção deve ser atual ou futura.");
-        var holiday = await database.Holidays.AsNoTracking().AnyAsync(x => x.HolidayDate == request.Date.ToDateTime(TimeOnly.MinValue), ct);
+        var holidayDate = request.Date.ToDateTime(TimeOnly.MinValue);
+        var holiday = await database.Holidays.AsNoTracking().AnyAsync(x => x.HolidayDate == holidayDate
+            || x.IsAnnual && x.HolidayDate.Month == holidayDate.Month && x.HolidayDate.Day == holidayDate.Day, ct);
         if (request.IsAvailable && holiday) throw Conflict("Não é possível abrir disponibilidade em um feriado cadastrado.");
         var start = request.StartsAt?.ToTimeSpan(); var end = request.EndsAt?.ToTimeSpan();
         if (request.IsAvailable && request.ModalityCode is "in_person" or "both" && !await InsideClinicHours(request.Date, start!.Value, end!.Value, ct))

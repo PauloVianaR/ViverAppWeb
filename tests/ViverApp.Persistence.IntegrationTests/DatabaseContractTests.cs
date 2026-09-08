@@ -32,7 +32,7 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(44, applicationEntities.Length);
+        Assert.Equal(45, applicationEntities.Length);
         Assert.DoesNotContain(
             applicationEntities,
             entity => string.Equals(entity.GetTableName(), "__schema_migrations", StringComparison.Ordinal));
@@ -50,6 +50,12 @@ public sealed class DatabaseContractTests
         var statusHistory = context.Model.FindEntityType(typeof(AppointmentStatusHistory));
         Assert.NotNull(statusHistory);
         Assert.True(statusHistory.FindProperty(nameof(AppointmentStatusHistory.ActorAccountId))!.IsNullable);
+        var administratorNotification = context.Model.FindEntityType(typeof(AdministratorNotification));
+        Assert.NotNull(administratorNotification);
+        Assert.True(administratorNotification.FindProperty(nameof(AdministratorNotification.RowVersion))!.IsConcurrencyToken);
+        Assert.True(context.Model.FindEntityType(typeof(ApplicationSetting))!.FindProperty(nameof(ApplicationSetting.RowVersion))!.IsConcurrencyToken);
+        Assert.True(context.Model.FindEntityType(typeof(PremiumPlan))!.FindProperty(nameof(PremiumPlan.RowVersion))!.IsConcurrencyToken);
+        Assert.NotNull(context.Model.FindEntityType(typeof(Holiday))!.FindProperty(nameof(Holiday.IsAnnual)));
 
         var expectedRoles = new[] { "administrator", "doctor", "manager", "patient" };
         var roles = await context.Roles
@@ -72,7 +78,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020", migrations);
 
         Assert.NotNull(context.Model.FindEntityType(typeof(DoctorService)));
         Assert.NotNull(context.Model.FindEntityType(typeof(DoctorPreference)));
@@ -243,7 +249,20 @@ public sealed class DatabaseContractTests
             FROM application_settings
             WHERE setting_key LIKE 'appointments.%'
             """);
-        Assert.Equal("7", schedulingSettings);
+        Assert.Equal("12", schedulingSettings);
+
+        var administratorSchema = await ExecuteScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_schema = 'viverappweb'
+              AND ((table_name = 'administrator_notifications' AND column_name IN ('source_key', 'read_at_utc', 'dismissed_at_utc', 'row_version'))
+                OR (table_name = 'application_settings' AND column_name = 'row_version')
+                OR (table_name = 'premium_plans' AND column_name = 'row_version')
+                OR (table_name = 'holidays' AND column_name = 'is_annual'))
+            """);
+        Assert.Equal("7", administratorSchema);
 
         var clinicalReportTable = await ExecuteScalarAsync(
             connection,

@@ -20,4 +20,6 @@ public partial class Holiday
     public DateTime UpdatedAtUtc { get; set; }
 
     public ulong RowVersion { get; set; }
+
+    public bool IsAnnual { get; set; }
 }

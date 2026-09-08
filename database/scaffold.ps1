@@ -70,6 +70,7 @@ $tables = @(
     'private_documents'
     'contact_change_requests'
     'teleconsultation_peers'
+    'administrator_notifications'
 )
 
 $arguments = @(

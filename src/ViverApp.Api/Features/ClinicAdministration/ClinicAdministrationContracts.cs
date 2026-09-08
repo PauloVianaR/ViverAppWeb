@@ -72,12 +72,14 @@ public sealed record AppointmentTypeWriteRequest(
     [param: Range(typeof(decimal), "0", "99999999999.99")] decimal PriceAmount,
     bool IsActive,
     ushort DisplayOrder,
-    [param: Range(0, long.MaxValue)] ulong RowVersion = 0);
+    [param: Range(0, long.MaxValue)] ulong RowVersion = 0,
+    [param: Required, RegularExpression("^(consultation|examination|surgery)$")] string CategoryCode = "consultation");
 
 public sealed record AppointmentTypeResponse(
     uint Id,
     string Name,
     string? Description,
+    string CategoryCode,
     string ModalityCode,
     ushort DurationMinutes,
     decimal PriceAmount,
@@ -129,7 +131,8 @@ public sealed record HolidayWriteRequest(
     [param: Required, StringLength(120, MinimumLength = 2)] string Name,
     TimeSpan? StartTime,
     TimeSpan? EndTime,
-    [param: Range(0, long.MaxValue)] ulong RowVersion = 0);
+    [param: Range(0, long.MaxValue)] ulong RowVersion = 0,
+    bool IsAnnual = false);
 
 public sealed record HolidayResponse(
     uint Id,
@@ -137,7 +140,8 @@ public sealed record HolidayResponse(
     string Name,
     TimeSpan? StartTime,
     TimeSpan? EndTime,
-    ulong RowVersion);
+    ulong RowVersion,
+    bool IsAnnual);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record UserUpdateRequest(

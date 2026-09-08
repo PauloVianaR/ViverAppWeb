@@ -61,7 +61,7 @@
     @if (IsWorkspace)
     {
         <nav class="mobile-navigation" aria-label="Navegação móvel da área @Shell.Label">
-            @foreach (var item in Shell.Items.Take(5))
+            @foreach (var item in Shell.Items.Take(Shell.Profile == ShellProfile.Administrator ? 6 : 5))
             {
                 <a class="@ActiveClass(item)" href="@item.Href" aria-current="@AriaCurrent(item)"><AppIcon Name="@item.Icon" /><span>@item.Label</span></a>
             }

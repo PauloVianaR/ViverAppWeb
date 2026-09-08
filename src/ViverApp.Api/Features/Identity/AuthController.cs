@@ -461,12 +461,23 @@ public sealed class AuthController(
             });
         }
 
+        var authenticationMethod = User.FindFirstValue(ViverAppClaimTypes.AuthenticationMethod) ?? "password";
         await userManager.ResetAuthenticatorKeyAsync(user);
         var key = await userManager.GetAuthenticatorKeyAsync(user);
         if (string.IsNullOrWhiteSpace(key))
         {
             return Problem(statusCode: StatusCodes.Status500InternalServerError);
         }
+
+        // ResetAuthenticatorKeyAsync rotates the security stamp. Reissue the restricted
+        // enrollment session so the following confirmation request remains authenticated.
+        await sessionService.RevokeCurrentAsync("mfa_enrollment_started", HttpContext.RequestAborted);
+        await sessionService.SignInAsync(
+            user,
+            authenticationMethod,
+            mfaSatisfied: false,
+            persistent: false,
+            HttpContext.RequestAborted);
 
         var label = user.Email ?? user.PhoneNumber ?? user.Id.ToString();
         var uri = $"otpauth://totp/ViverApp:{Uri.EscapeDataString(label)}?secret={Uri.EscapeDataString(key)}&issuer=ViverApp&digits=6";

@@ -119,7 +119,7 @@ public static class SecurityServiceCollectionExtensions
 
         if (string.IsNullOrWhiteSpace(settings.DataProtectionKeysPath))
         {
-            ConfigureLocalDevelopmentKeyRing(dataProtection, environment, surface);
+            ConfigureLocalDevelopmentKeyRing(dataProtection, environment, surface, settings.LocalDataProtectionScope);
             return;
         }
 
@@ -154,7 +154,8 @@ public static class SecurityServiceCollectionExtensions
     private static void ConfigureLocalDevelopmentKeyRing(
         IDataProtectionBuilder dataProtection,
         IHostEnvironment environment,
-        SecuritySurface surface)
+        SecuritySurface surface,
+        string? localScope)
     {
         if (!environment.IsDevelopment() || !OperatingSystem.IsWindows())
         {
@@ -164,11 +165,13 @@ public static class SecurityServiceCollectionExtensions
         var repositoryRoot = Path.GetFullPath(
             Path.Combine(environment.ContentRootPath, "..", ".."));
         var surfaceDirectory = surface.ToString().ToLowerInvariant();
+        var scopeSegments = string.IsNullOrWhiteSpace(localScope)
+            ? new[] { "data-protection", surfaceDirectory }
+            : new[] { "data-protection", "scopes", localScope, surfaceDirectory };
         var keysPath = Path.Combine(
             repositoryRoot,
             ".local",
-            "data-protection",
-            surfaceDirectory);
+            Path.Combine(scopeSegments));
 
         Directory.CreateDirectory(keysPath);
         dataProtection

@@ -254,13 +254,13 @@ Cada fase deve:
 
 ## Fase 13 — Experiência completa do Gestor
 
-**Estado:** implementação concluída e validada localmente na branch `codex/fase-13-experiencia-gestor`; integração à `main` depende de autorização do proprietário. Evidências e limitações em [Implementação e validação](FASE-13-IMPLEMENTACAO-E-VALIDACAO.md).
+**Estado:** concluída e integrada à `main` no commit de merge `d6469d9`; homologações externas permanecem registradas localmente. Evidências e limitações em [Implementação e validação](FASE-13-IMPLEMENTACAO-E-VALIDACAO.md).
 
 **Plano detalhado:** [Experiência completa do Gestor](FASE-13-EXPERIENCIA-GESTOR.md).
 
 ## Fase 14 — Experiência completa do Administrador e fechamento da paridade
 
-**Estado:** planejada; implementação ainda não iniciada.
+**Estado:** implementação concluída e validada localmente na branch `codex/fase-14-experiencia-administrador`; integração à `main` depende de autorização do proprietário. Evidências em [Implementação e validação](FASE-14-IMPLEMENTACAO-E-VALIDACAO.md) e [Matriz final de paridade](FASE-14-MATRIZ-PARIDADE.md).
 
 **Plano detalhado:** [Experiência completa do Administrador](FASE-14-EXPERIENCIA-ADMINISTRADOR.md).
 

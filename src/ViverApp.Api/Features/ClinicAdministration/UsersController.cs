@@ -7,6 +7,7 @@ using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 using ViverApp.Security;
+using ViverApp.Api.Features.AdministratorExperience;
 
 namespace ViverApp.Api.Features.ClinicAdministration;
 
@@ -14,6 +15,7 @@ namespace ViverApp.Api.Features.ClinicAdministration;
 [Route("api/v1/users")]
 [Authorize]
 [EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
+[ServiceFilter(typeof(AdministratorStepUpFilter))]
 public sealed class UsersController(
     ViverAppDbContext database,
     IdentityAuditWriter auditWriter) : ControllerBase

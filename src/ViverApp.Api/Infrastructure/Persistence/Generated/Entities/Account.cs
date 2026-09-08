@@ -57,6 +57,8 @@ public partial class Account
 
     public virtual ICollection<AccountRecoveryCode> AccountRecoveryCodes { get; set; } = new List<AccountRecoveryCode>();
 
+    public virtual ICollection<AdministratorNotification> AdministratorNotifications { get; set; } = new List<AdministratorNotification>();
+
     public virtual ICollection<ApplicationSetting> ApplicationSettings { get; set; } = new List<ApplicationSetting>();
 
     public virtual ICollection<Appointment> AppointmentCanceledByAccounts { get; set; } = new List<Appointment>();

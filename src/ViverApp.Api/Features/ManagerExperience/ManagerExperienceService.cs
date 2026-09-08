@@ -193,10 +193,10 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
     public async Task<ManagerPremiumRequestResponse> PremiumRequestAsync(ulong id, CancellationToken ct) => MapPremium(
         await database.PremiumMemberships.AsNoTracking().Include(x => x.Account).Include(x => x.PremiumPlan).Include(x => x.ProofDocument).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw Missing());
 
-    public async Task<ManagerPremiumRequestResponse> DecidePremiumAsync(ulong actor, ulong id, ManagerPremiumDecisionRequest request, CancellationToken ct)
+    public async Task<ManagerPremiumRequestResponse> DecidePremiumAsync(ulong actor, ulong id, ManagerPremiumDecisionRequest request, CancellationToken ct, bool administratorOverride = false)
     {
         var allowed = await database.ApplicationSettings.AsNoTracking().Where(x => x.SettingKey == "premium.manager_can_decide").Select(x => x.ValueJson).SingleOrDefaultAsync(ct);
-        if (!string.Equals(allowed, "true", StringComparison.OrdinalIgnoreCase)) throw Forbidden("A decisão final está reservada ao Administrador.");
+        if (!administratorOverride && !string.Equals(allowed, "true", StringComparison.OrdinalIgnoreCase)) throw Forbidden("A decisão final está reservada ao Administrador.");
         await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var item = await database.PremiumMemberships.FromSqlInterpolated($"SELECT * FROM premium_memberships WHERE id={id} FOR UPDATE").SingleOrDefaultAsync(ct) ?? throw Missing();
         if (item.StatusCode != "pending") throw Conflict("A solicitação já foi analisada por outra sessão."); RequireVersion(item.RowVersion, request.RowVersion);

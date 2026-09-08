@@ -17,5 +17,7 @@ public partial class ApplicationSetting
 
     public ulong? UpdatedByAccountId { get; set; }
 
+    public ulong RowVersion { get; set; }
+
     public virtual Account? UpdatedByAccount { get; set; }
 }

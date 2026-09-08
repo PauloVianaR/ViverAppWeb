@@ -128,6 +128,25 @@ public sealed class SecurityBaselineTests
         Assert.Contains("origem inválida", exception.Message);
     }
 
+    [Fact]
+    public void DevelopmentBaseline_RejectsUnsafeLocalDataProtectionScope()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Security:LocalDataProtectionScope"] = "../shared-ring",
+            })
+            .Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new ServiceCollection().AddViverAppSecurityBaseline(
+                configuration,
+                CreateEnvironment(Environments.Development),
+                SecuritySurface.Api));
+
+        Assert.Contains("identificador local simples", exception.Message);
+    }
+
     private static IWebHostEnvironment CreateEnvironment(string name)
     {
         return new TestWebHostEnvironment

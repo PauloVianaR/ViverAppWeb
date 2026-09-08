@@ -17,6 +17,8 @@ public sealed class SecurityBaselineOptions
 
     public string? DataProtectionCertificatePassword { get; set; }
 
+    public string? LocalDataProtectionScope { get; set; }
+
     internal static SecurityBaselineOptions Load(
         IConfiguration configuration,
         IHostEnvironment environment)
@@ -31,6 +33,18 @@ public sealed class SecurityBaselineOptions
         options.AllowedConnectSources = ValidateOrigins(
             options.AllowedConnectSources,
             nameof(AllowedConnectSources));
+
+        if (!string.IsNullOrWhiteSpace(options.LocalDataProtectionScope))
+        {
+            options.LocalDataProtectionScope = options.LocalDataProtectionScope.Trim();
+            if (!environment.IsDevelopment()
+                || options.LocalDataProtectionScope.Length > 40
+                || options.LocalDataProtectionScope.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not '-' and not '_'))
+            {
+                throw new InvalidOperationException(
+                    "Security:LocalDataProtectionScope só aceita um identificador local simples em Development.");
+            }
+        }
 
         if (!environment.IsDevelopment())
         {

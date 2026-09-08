@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using MySql.Data.MySqlClient;
 using ViverApp.Api.Features.ClinicAdministration;
+using ViverApp.Api.Features.AdministratorExperience;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
@@ -44,6 +45,9 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
     [InlineData("/api/v1/catalog/appointment-types")]
     [InlineData("/api/v1/professionals")]
     [InlineData("/api/v1/users")]
+    [InlineData("/api/v1/administrator/home")]
+    [InlineData("/api/v1/administrator/analytics?from=2026-01-01&to=2026-01-31")]
+    [InlineData("/api/v1/administrator/notifications")]
     public async Task MasterDataQueries_RequireAuthentication(string path)
     {
         using var client = CreateClient();
@@ -51,6 +55,67 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
         using var response = await client.GetAsync(path);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public void AdministratorContracts_RejectUnknownMembersAndInvalidDecisions()
+    {
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<AdministratorPremiumCancelRequest>("{\"reason\":\"motivo válido\",\"rowVersion\":1,\"role\":\"administrator\"}", new JsonSerializerOptions { PropertyNameCaseInsensitive = true }));
+        var decision = typeof(AdministratorAccountStatusRequest).GetConstructors().Single().GetParameters().Single(x => x.Name == "DecisionCode");
+        Assert.Equal("^(blocked|reactivated)$", decision.GetCustomAttributes(typeof(RegularExpressionAttribute), true).Cast<RegularExpressionAttribute>().Single().Pattern);
+    }
+
+    [Fact]
+    public void CriticalAdministrationControllers_ApplyStepUpFilter()
+    {
+        var protectedControllers = new[] { typeof(AdministratorExperienceController), typeof(UsersController), typeof(ProfessionalsController), typeof(ClinicConfigurationController), typeof(CatalogController) };
+        foreach (var controller in protectedControllers)
+        {
+            Assert.Contains(controller.GetCustomAttributes(typeof(ServiceFilterAttribute), true).Cast<ServiceFilterAttribute>(),
+                attribute => attribute.ServiceType == typeof(AdministratorStepUpFilter));
+        }
+    }
+
+    [Fact]
+    public async Task AdministratorExperience_ExecutesServerAggregationsAndProtectsCurrentAdministrator()
+    {
+        using var scope = factory.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ViverAppDbContext>();
+        var service = scope.ServiceProvider.GetRequiredService<AdministratorExperienceService>();
+        await using var transaction = await database.Database.BeginTransactionAsync();
+        var now = DateTime.UtcNow;
+        var administratorEmail = $"phase14-{Guid.NewGuid():N}@example.test";
+        var administrator = new Account
+        {
+            RoleCode = ViverAppRoles.Administrator,
+            StatusCode = "active",
+            FullName = "Administrador sintético da Fase 14",
+            Email = administratorEmail,
+            NormalizedEmail = administratorEmail.ToUpperInvariant(),
+            EmailVerified = true,
+            PreferredRecoveryChannel = "email",
+            SecurityStamp = RandomNumberGenerator.GetBytes(32),
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        };
+        database.Accounts.Add(administrator);
+        await database.SaveChangesAsync();
+
+        var home = await service.HomeAsync(administrator.Id, CancellationToken.None);
+        var analytics = await service.AnalyticsAsync(DateOnly.FromDateTime(now.AddMonths(-1)), DateOnly.FromDateTime(now), CancellationToken.None);
+        var settings = await service.SettingsAsync(CancellationToken.None);
+
+        Assert.True(home.Counters.ActiveUsers >= 1);
+        Assert.True(analytics.Appointments >= 0);
+        Assert.NotEmpty(settings);
+        var blocked = await Assert.ThrowsAsync<AdministratorRuleException>(() => service.SetAccountStatusAsync(
+            administrator.Id,
+            administrator.Id,
+            new AdministratorAccountStatusRequest("blocked", "Tentativa protegida do teste", administrator.RowVersion),
+            CancellationToken.None));
+        Assert.Equal(409, blocked.StatusCode);
+        await transaction.RollbackAsync();
     }
 
     [Fact]

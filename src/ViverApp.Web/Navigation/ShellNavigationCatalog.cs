@@ -69,11 +69,12 @@ public static class ShellNavigationCatalog
         "Administrador",
         "Administração",
         [
-            new("Visão geral", "/administracao", "home"),
-            new("Clínica", "/administracao#clinica", "clinic"),
-            new("Consultas", "/administracao#consultas", "calendar"),
-            new("Indicadores", "/administracao#indicadores", "chart"),
-            new("Aprovações", "/administracao/aprovacoes", "users"),
+            new("Início", "/administracao", "home"),
+            new("Clínica", "/administracao/clinica", "clinic"),
+            new("Consultas", "/administracao/consultas", "calendar"),
+            new("Analytics", "/administracao/analytics", "chart"),
+            new("Alertas", "/administracao/notificacoes", "sparkles"),
+            new("Usuários", "/administracao/usuarios", "users"),
         ]);
 
     public static ShellDefinition Resolve(string absolutePath)
