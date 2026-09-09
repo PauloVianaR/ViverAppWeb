@@ -260,13 +260,15 @@ Cada fase deve:
 
 ## Fase 14 — Experiência completa do Administrador e fechamento da paridade
 
-**Estado:** implementação concluída e validada localmente na branch `codex/fase-14-experiencia-administrador`; integração à `main` depende de autorização do proprietário. Evidências em [Implementação e validação](FASE-14-IMPLEMENTACAO-E-VALIDACAO.md) e [Matriz final de paridade](FASE-14-MATRIZ-PARIDADE.md).
+**Estado:** implementação concluída, validada e integrada à `main` em 8 de setembro de 2026. Evidências em [Implementação e validação](FASE-14-IMPLEMENTACAO-E-VALIDACAO.md) e [Matriz final de paridade](FASE-14-MATRIZ-PARIDADE.md).
 
 **Plano detalhado:** [Experiência completa do Administrador](FASE-14-EXPERIENCIA-ADMINISTRADOR.md).
 
 ## Fase 15 — Anexos, Cloudflare R2, domínio e CDN
 
 **Objetivo:** substituir o armazenamento transitório usado pela paridade funcional por Cloudflare R2, migrar documentos/mídia legados e entregar objetos com segurança e eficiência.
+
+**Estado:** implementação concluída e validada em 8 de setembro de 2026 na branch `codex/fase-15-cloudflare-r2-dominio-cdn`. Decisões, inventário, evidências e runbook em [Implementação e operação do armazenamento](FASE-15-IMPLEMENTACAO-E-OPERACAO.md).
 
 **Entregas:**
 

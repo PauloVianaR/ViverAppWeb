@@ -17,6 +17,7 @@ public sealed class PaymentApiTests : IAsyncLifetime
                 {
                     ["Authentication:Delivery:Enabled"] = "false",
                     ["PagBank:Enabled"] = "false",
+                    ["Storage:Private:Provider"] = "Database",
                 }));
         });
 

@@ -6,6 +6,7 @@
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/ViverApp.Database/ViverApp.Database.csproj" />
+    <Project Path="tools/ViverApp.StorageMigration/ViverApp.StorageMigration.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ViverApp.ClinicalOperations.Tests/ViverApp.ClinicalOperations.Tests.csproj" />

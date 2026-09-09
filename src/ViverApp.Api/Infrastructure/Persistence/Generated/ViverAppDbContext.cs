@@ -1869,6 +1869,8 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => e.OwnerAccountId, "fk_private_documents_owner");
 
+            entity.HasIndex(e => e.ObjectKey, "ux_private_documents_object_key").IsUnique();
+
             entity.HasIndex(e => new { e.Id, e.OwnerAccountId }, "ux_private_documents_owner").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
@@ -1878,6 +1880,18 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.CreatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("created_at_utc");
+            entity.Property(e => e.LastVerifiedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("last_verified_at_utc");
+            entity.Property(e => e.LegacyContentRetainedUntilUtc)
+                .HasMaxLength(6)
+                .HasColumnName("legacy_content_retained_until_utc");
+            entity.Property(e => e.MigratedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("migrated_at_utc");
+            entity.Property(e => e.ObjectKey)
+                .HasMaxLength(512)
+                .HasColumnName("object_key");
             entity.Property(e => e.OriginalFileName)
                 .HasMaxLength(255)
                 .HasColumnName("original_file_name");
@@ -1885,6 +1899,9 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.ProtectedContent)
                 .HasColumnType("mediumblob")
                 .HasColumnName("protected_content");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
             entity.Property(e => e.Sha256)
                 .HasMaxLength(32)
                 .IsFixedLength()
@@ -1893,6 +1910,13 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.StatusCode)
                 .HasMaxLength(20)
                 .HasColumnName("status_code");
+            entity.Property(e => e.StorageEtag)
+                .HasMaxLength(128)
+                .HasColumnName("storage_etag");
+            entity.Property(e => e.StorageProviderCode)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'database'")
+                .HasColumnName("storage_provider_code");
 
             entity.HasOne(d => d.OwnerAccount).WithMany(p => p.PrivateDocuments)
                 .HasForeignKey(d => d.OwnerAccountId)

@@ -55,6 +55,7 @@ builder.Services.AddViverAppObservability(
     builder.Environment,
     "ViverApp.Api");
 builder.Services.AddViverAppDatabase(builder.Configuration);
+builder.Services.AddViverAppPrivateStorage(builder.Configuration, builder.Environment);
 builder.Services.AddViverAppIdentity(builder.Configuration);
 builder.Services.AddViverAppPayments(builder.Configuration, builder.Environment);
 builder.Services.AddSingleton(TimeProvider.System);

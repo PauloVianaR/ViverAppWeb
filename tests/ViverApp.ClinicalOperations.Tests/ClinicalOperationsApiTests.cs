@@ -24,6 +24,7 @@ public sealed class ClinicalOperationsApiTests : IAsyncLifetime
                 configuration.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["Authentication:Delivery:Enabled"] = "false",
+                    ["Storage:Private:Provider"] = "Database",
                 }));
         });
 

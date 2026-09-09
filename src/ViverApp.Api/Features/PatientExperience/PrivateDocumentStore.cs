@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 
@@ -44,12 +45,42 @@ public sealed class WindowsDocumentMalwareScanner(IWebHostEnvironment environmen
     }
 }
 
-public sealed class PrivateDocumentStore(ViverAppDbContext database, IDataProtectionProvider protection,
-    IDocumentMalwareScanner scanner, IWebHostEnvironment environment)
+public sealed class PrivateDocumentStore
 {
     public const int MaximumBytes = 5 * 1024 * 1024;
     public const int MaximumClinicalBytes = 10 * 1024 * 1024;
-    private readonly IDataProtector protector = protection.CreateProtector("ViverApp.PrivateDocuments.v1");
+    private readonly ViverAppDbContext database;
+    private readonly IDataProtector protector;
+    private readonly IDocumentMalwareScanner scanner;
+    private readonly IWebHostEnvironment environment;
+    private readonly IPrivateObjectStorage objectStorage;
+    private readonly PrivateStorageOptions storageOptions;
+
+    public PrivateDocumentStore(
+        ViverAppDbContext database,
+        IDataProtectionProvider protection,
+        IDocumentMalwareScanner scanner,
+        IWebHostEnvironment environment,
+        IPrivateObjectStorage objectStorage,
+        IOptions<PrivateStorageOptions> storageOptions)
+    {
+        this.database = database;
+        protector = protection.CreateProtector("ViverApp.PrivateDocuments.v1");
+        this.scanner = scanner;
+        this.environment = environment;
+        this.objectStorage = objectStorage;
+        this.storageOptions = storageOptions.Value;
+    }
+
+    public PrivateDocumentStore(
+        ViverAppDbContext database,
+        IDataProtectionProvider protection,
+        IDocumentMalwareScanner scanner,
+        IWebHostEnvironment environment)
+        : this(database, protection, scanner, environment, new UnavailablePrivateObjectStorage(),
+            Options.Create(new PrivateStorageOptions { Provider = "Database" }))
+    {
+    }
 
     public static string ValidateContent(string name, string mime, byte[] content, int maximumBytes = MaximumBytes)
     {
@@ -112,7 +143,7 @@ public sealed class PrivateDocumentStore(ViverAppDbContext database, IDataProtec
 
     private async Task<PrivateDocument> PrepareAsync(ulong owner, IFormFile file, int maximumBytes, CancellationToken ct)
     {
-        if (!environment.IsDevelopment()) throw new PatientExperienceException(503, "O armazenamento privado ainda não está habilitado neste ambiente.");
+        if (!environment.IsDevelopment() && !UsesR2()) throw StorageUnavailable();
         if (file.Length <= 0 || file.Length > maximumBytes) throw PatientExperienceService.Invalid($"Envie um arquivo de até {maximumBytes / 1024 / 1024} MB.");
         using var content = new MemoryStream();
         await using var stream = file.OpenReadStream();
@@ -126,6 +157,10 @@ public sealed class PrivateDocumentStore(ViverAppDbContext database, IDataProtec
         var bytes = content.ToArray();
         var mime = ValidateContent(file.FileName, file.ContentType, bytes, maximumBytes);
         if (!await scanner.IsCleanAsync(bytes, ct)) throw new PatientExperienceException(422, "O arquivo não pôde ser aprovado pela verificação de segurança. Tente outro documento ou entre em contato com a clínica.");
+        var sha256 = SHA256.HashData(bytes);
+        var stored = UsesR2()
+            ? await StoreInR2Async(bytes, mime, sha256, ct)
+            : null;
         return new()
         {
             Id = Guid.NewGuid(),
@@ -133,8 +168,13 @@ public sealed class PrivateDocumentStore(ViverAppDbContext database, IDataProtec
             OriginalFileName = file.FileName,
             ContentType = mime,
             SizeBytes = (uint)bytes.Length,
-            Sha256 = SHA256.HashData(bytes),
-            ProtectedContent = protector.Protect(bytes),
+            Sha256 = sha256,
+            StorageProviderCode = stored is null ? "database" : "r2",
+            ObjectKey = stored?.Key,
+            StorageEtag = stored?.ETag,
+            LastVerifiedAtUtc = stored is null ? null : DateTime.UtcNow,
+            ProtectedContent = stored is null ? protector.Protect(bytes) : null,
+            RowVersion = 1,
             StatusCode = "available",
             CreatedAtUtc = DateTime.UtcNow,
         };
@@ -148,7 +188,7 @@ public sealed class PrivateDocumentStore(ViverAppDbContext database, IDataProtec
         var clinical = await database.AppointmentDocuments.AnyAsync(x => x.ObjectKey == key && x.StatusCode == "available" && x.Appointment.PatientAccountId == actor
             && x.Appointment.MedicalReport != null && x.Appointment.MedicalReport.StatusCode == "published", ct);
         if (!premium && !clinical) throw PatientExperienceService.Missing();
-        var bytes = protector.Unprotect(document.ProtectedContent);
+        var bytes = await LoadContentAsync(document, ct);
         if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(bytes), document.Sha256)) throw PatientExperienceService.Missing();
         return (bytes, document.ContentType, document.OriginalFileName);
     }
@@ -160,7 +200,7 @@ public sealed class PrivateDocumentStore(ViverAppDbContext database, IDataProtec
         if (!Guid.TryParse(link.ObjectKey, out var privateId)) throw PatientExperienceService.Missing();
         var document = await database.PrivateDocuments.AsNoTracking().SingleOrDefaultAsync(x => x.Id == privateId && x.StatusCode == "available", ct)
             ?? throw PatientExperienceService.Missing();
-        var bytes = protector.Unprotect(document.ProtectedContent);
+        var bytes = await LoadContentAsync(document, ct);
         if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(bytes), document.Sha256)) throw PatientExperienceService.Missing();
         return (bytes, document.ContentType, document.OriginalFileName);
     }
@@ -176,7 +216,7 @@ public sealed class PrivateDocumentStore(ViverAppDbContext database, IDataProtec
             .Where(x => x.Id == membershipId && x.ProofDocumentId != null && x.ProofDocument!.StatusCode == "available")
             .Select(x => x.ProofDocument!)
             .SingleOrDefaultAsync(ct) ?? throw PatientExperienceService.Missing();
-        var bytes = protector.Unprotect(document.ProtectedContent);
+        var bytes = await LoadContentAsync(document, ct);
         if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(bytes), document.Sha256)) throw PatientExperienceService.Missing();
         return (bytes, document.ContentType, document.OriginalFileName, document.Id);
     }
@@ -191,4 +231,43 @@ public sealed class PrivateDocumentStore(ViverAppDbContext database, IDataProtec
             .Select(x => new PatientDocumentResponse(x.Id, x.OriginalFileName, x.ContentType, x.SizeBytes)).ToArrayAsync(ct);
         return new(items, page, pageSize, total);
     }
+
+    private bool UsesR2() => storageOptions.Provider.Equals("R2", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<StoredPrivateObject?> StoreInR2Async(byte[] bytes, string mime, byte[] sha256, CancellationToken ct)
+    {
+        try
+        {
+            return await objectStorage.PutAsync(bytes, mime, sha256, ct);
+        }
+        catch (PrivateObjectStorageUnavailableException)
+        {
+            throw StorageUnavailable();
+        }
+    }
+
+    private async Task<byte[]> LoadContentAsync(PrivateDocument document, CancellationToken ct)
+    {
+        if (document.StorageProviderCode.Equals("r2", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(document.ObjectKey))
+        {
+            try
+            {
+                return await objectStorage.GetAsync(document.ObjectKey, checked((int)document.SizeBytes), ct);
+            }
+            catch (PrivateObjectStorageUnavailableException) when (document.ProtectedContent is not null)
+            {
+                return protector.Unprotect(document.ProtectedContent);
+            }
+            catch (PrivateObjectStorageUnavailableException)
+            {
+                throw StorageUnavailable();
+            }
+        }
+        if (document.ProtectedContent is null) throw StorageUnavailable();
+        return protector.Unprotect(document.ProtectedContent);
+    }
+
+    private static PatientExperienceException StorageUnavailable() =>
+        new(503, "O armazenamento privado está temporariamente indisponível. Tente novamente em instantes.");
 }

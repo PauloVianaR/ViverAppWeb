@@ -23,6 +23,7 @@ public sealed class IdentityApiSecurityTests : IAsyncLifetime
                     ["GoogleOAuth:ProjectID"] = "test-project-id",
                     ["GoogleOAuth:ClientSecret"] = "test-client-secret",
                     ["GoogleOAuth:RedirectURI"] = "https://localhost:7176/signin-google",
+                    ["Storage:Private:Provider"] = "Database",
                 }));
         });
 
