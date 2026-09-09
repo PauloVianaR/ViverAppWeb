@@ -121,7 +121,7 @@ O servidor recalculará duração, intervalo, disponibilidade da clínica/médic
 - sair, reconectar e tratar encerramento;
 - orientar permissão negada, dispositivo ausente ou rede ruim;
 - nenhuma gravação por padrão;
-- infraestrutura distribuída/TURN de produção será endurecida na Fase 17.
+- infraestrutura distribuída/TURN de produção será endurecida na Fase 18.
 
 ## Banco e API
 
