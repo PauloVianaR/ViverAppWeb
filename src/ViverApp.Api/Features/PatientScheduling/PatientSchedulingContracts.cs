@@ -34,6 +34,7 @@ public sealed record AvailableSlotResponse(
 
 public sealed record AppointmentResponse(
     ulong Id,
+    ulong AppointmentNumber,
     ulong DoctorAccountId,
     string DoctorName,
     uint AppointmentTypeId,
@@ -52,6 +53,9 @@ public sealed record AppointmentResponse(
     string? CancellationReason,
     ulong? RescheduledFromAppointmentId,
     ulong? RescheduledToAppointmentId,
+    DateTime? ArrivedAtUtc,
+    DateOnly? ArrivalBusinessDate,
+    uint? ArrivalQueueNumber,
     ulong RowVersion);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

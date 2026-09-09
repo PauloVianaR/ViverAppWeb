@@ -104,14 +104,14 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
         if (from > until) throw Invalid("O período é inválido.");
         (from, until) = await UtcPeriodAsync(from, until, ct);
         var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == actor);
-        if (view == "future") query = query.Where(x => (x.StatusCode == "pending" || x.StatusCode == "confirmed") && x.EndsAtUtc >= Now);
-        if (view == "history") query = query.Where(x => (x.StatusCode != "pending" && x.StatusCode != "confirmed") || x.EndsAtUtc < Now);
+        if (view == "future") query = query.Where(x => (x.StatusCode == "pending" || x.StatusCode == "confirmed" || x.StatusCode == "arrived" || x.StatusCode == "in_progress") && x.EndsAtUtc >= Now);
+        if (view == "history") query = query.Where(x => (x.StatusCode != "pending" && x.StatusCode != "confirmed" && x.StatusCode != "arrived" && x.StatusCode != "in_progress") || x.EndsAtUtc < Now);
         if (from.HasValue) query = query.Where(x => x.StartsAtUtc >= from);
         if (until.HasValue) query = query.Where(x => x.StartsAtUtc < until);
         if (!string.IsNullOrEmpty(status)) query = query.Where(x => x.StatusCode == status);
         if (!string.IsNullOrEmpty(category)) query = query.Where(x => x.AppointmentType.CategoryCode == category);
         if (!string.IsNullOrEmpty(modality)) query = query.Where(x => x.ModalityCode == modality);
-        if (!string.IsNullOrWhiteSpace(search)) query = query.Where(x => x.DoctorAccount.Account.FullName.Contains(search.Trim()) || x.AppointmentType.Name.Contains(search.Trim()));
+        if (!string.IsNullOrWhiteSpace(search)) { var term = search.Trim(); var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.DoctorAccount.Account.FullName.Contains(term) || x.AppointmentType.Name.Contains(term) || isNumber && x.AppointmentNumber == number); }
         var total = await query.CountAsync(ct);
         query = view == "history" ? query.OrderByDescending(x => x.StartsAtUtc).ThenByDescending(x => x.Id) : query.OrderBy(x => x.StartsAtUtc).ThenBy(x => x.Id);
         var ids = await query.Skip((page - 1) * pageSize).Take(pageSize).Select(x => x.Id).ToArrayAsync(ct);

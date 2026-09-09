@@ -9,16 +9,19 @@ public sealed record ManagerService(uint Id, string Name, string CategoryCode, s
 public sealed record ManagerReportMetadata(bool Exists, string? StatusCode, uint VersionCount, DateTime? PublishedAtUtc);
 public sealed record ManagerPaymentMetadata(ulong? Id, string StatusCode, string? MethodCode, DateTime? PaidAtUtc,
     string? CardLastFour, string? AuthorizationReference, ulong RowVersion);
-public sealed record ManagerAppointment(ulong Id, ulong PatientAccountId, string PatientName, string? PatientPhone,
+public sealed record ManagerAppointment(ulong Id, ulong AppointmentNumber, ulong PatientAccountId, string PatientName, string? PatientPhone,
     ulong DoctorAccountId, string DoctorName, uint AppointmentTypeId, string Service, string CategoryCode, string StatusCode,
     string ModalityCode, DateTime StartsAtUtc, DateTime EndsAtUtc, decimal PriceAmount, decimal DiscountPercent,
     string PaymentLocation, string? PatientNotes, string? CancellationReason, ulong? RescheduledFromAppointmentId,
     ulong? RescheduledToAppointmentId, byte? Rating, string? ReviewComment, ManagerPaymentMetadata Payment,
-    ManagerReportMetadata Report, int AttachmentCount, bool CanCancel, bool CanReschedule, bool CanConfirmPayment, ulong RowVersion);
+    ManagerReportMetadata Report, int AttachmentCount, DateTime? ArrivedAtUtc, DateOnly? ArrivalBusinessDate,
+    uint? ArrivalQueueNumber, bool CanRegisterArrival, bool CanCancel, bool CanReschedule, bool CanConfirmPayment, ulong RowVersion);
 public sealed record ManagerAgendaCounters(int Total, int Online, int InPerson, int Rescheduled, int Paid, int PendingPayment);
 public sealed record ManagerAgendaData(ManagerAgendaCounters Counters, WebPage<ManagerAppointment> Page);
-public sealed record ManagerPatient(ulong AccountId, string FullName, string? PreferredName, string? Email,
-    string? Phone, DateOnly? BirthDate, string StatusCode, bool IsPremium, string PremiumStatus, ulong? PremiumRequestId,
+public sealed record ManagerPatientAddress(string PostalCode, string Street, string Number, string? Complement, string District, string City, string StateCode);
+public sealed record ManagerPatient(ulong AccountId, string FullName, string? PreferredName, string? TaxId, string? Email,
+    string? Phone, bool EmailVerified, bool PhoneVerified, DateOnly? BirthDate, ManagerPatientAddress? Address,
+    string StatusCode, bool IsPremium, string PremiumStatus, ulong? PremiumRequestId,
     int AppointmentCount, DateTime? LastAppointmentAtUtc, DateTime? NextAppointmentAtUtc, ulong RowVersion);
 public sealed record ManagerPatientCounters(int Total, int Premium, int Active, int Blocked, int PremiumPending);
 public sealed record ManagerPatientsData(ManagerPatientCounters Counters, WebPage<ManagerPatient> Page);

@@ -125,12 +125,12 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     }
 
     [Fact]
-    public void AdministratorNavigation_CoversSixOperationalAreas()
+    public void AdministratorNavigation_CoversPatientOperations()
     {
         var shell = ShellNavigationCatalog.ResolveRole("administrator");
         Assert.Equal(ShellProfile.Administrator, shell.Profile);
-        Assert.Equal(6, shell.Items.Count);
-        Assert.Equal(new[] { "/administracao", "/administracao/clinica", "/administracao/consultas", "/administracao/analytics", "/administracao/notificacoes", "/administracao/usuarios" }, shell.Items.Select(x => x.Href));
+        Assert.Equal(7, shell.Items.Count);
+        Assert.Equal(new[] { "/administracao", "/administracao/clinica", "/administracao/consultas", "/administracao/pacientes", "/administracao/analytics", "/administracao/notificacoes", "/administracao/usuarios" }, shell.Items.Select(x => x.Href));
     }
 
     [Fact]

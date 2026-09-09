@@ -1,8 +1,11 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.AspNetCore.SignalR;
 using MySql.Data.MySqlClient;
 using ViverApp.Api.Features.ClinicalOperations;
+using ViverApp.Api.Features.ArrivalExperience;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.ManagerExperience;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
@@ -15,7 +18,7 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
 {
     private const string Marker = "__phase13_test__";
     private IConfiguration configuration = null!;
-    private ulong managerId, appointmentId;
+    private ulong managerId, doctorId, appointmentId;
     private DateTime now;
     private DateOnly appointmentLocalDate;
 
@@ -28,6 +31,7 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         var doctor = Account($"doctor-{Guid.NewGuid():N}@phase13.example.test", ViverAppRoles.Doctor, "Dra. Operação");
         var patient = Account($"patient-{Guid.NewGuid():N}@phase13.example.test", ViverAppRoles.Patient, "Paciente Operacional");
         db.Accounts.AddRange(manager, doctor, patient); await db.SaveChangesAsync(); managerId = manager.Id;
+        doctorId = doctor.Id;
         db.ManagerPreferences.Add(new ManagerPreference { ManagerAccountId = manager.Id, EmailEnabled = true, SmsEnabled = true, UpdatedAtUtc = now, RowVersion = 1 });
         db.DoctorProfiles.Add(new DoctorProfile { AccountId = doctor.Id, ProfessionalTitle = "Dra.", LicenseStateCode = "SP", LicenseNumber = "130001", DefaultAppointmentDurationMinutes = 30, CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 });
         db.PatientProfiles.Add(new PatientProfile { AccountId = patient.Id, PreferredName = "Paciente", CreatedAtUtc = now, UpdatedAtUtc = now });
@@ -38,7 +42,7 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         var startsAtUtc = TimeZoneInfo.ConvertTimeToUtc(
             DateTime.SpecifyKind(appointmentLocalDate.ToDateTime(new TimeOnly(10, 0)), DateTimeKind.Unspecified),
             timezone);
-        var appointment = new Appointment { PatientAccountId = patient.Id, DoctorAccountId = doctor.Id, AppointmentTypeId = type.Id, CreatedByAccountId = manager.Id, StatusCode = "pending", ModalityCode = "in_person", StartsAtUtc = startsAtUtc, EndsAtUtc = startsAtUtc.AddMinutes(30), PriceAmount = 180, BasePriceAmount = 180, DiscountPercent = 0, PaymentLocationCode = "clinic", CurrencyCode = "BRL", PatientNotes = "Observação operacional sintética", CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 };
+        var appointment = new Appointment { AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63), PatientAccountId = patient.Id, DoctorAccountId = doctor.Id, AppointmentTypeId = type.Id, CreatedByAccountId = manager.Id, StatusCode = "pending", ModalityCode = "in_person", StartsAtUtc = startsAtUtc, EndsAtUtc = startsAtUtc.AddMinutes(30), PriceAmount = 180, BasePriceAmount = 180, DiscountPercent = 0, PaymentLocationCode = "clinic", CurrencyCode = "BRL", PatientNotes = "Observação operacional sintética", CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 };
         db.Appointments.Add(appointment); await db.SaveChangesAsync(); appointmentId = appointment.Id;
     }
 
@@ -93,6 +97,40 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         Assert.False(await db.Payments.AnyAsync(x => x.AppointmentId == appointmentId));
     }
 
+    [Fact]
+    public async Task ArrivalIsIdempotentAndCreatesOneDurableDoctorNotification()
+    {
+        await using (var setup = CreateContext())
+            await setup.Appointments.Where(x => x.Id == appointmentId).ExecuteUpdateAsync(x => x
+                .SetProperty(a => a.StatusCode, "confirmed").SetProperty(a => a.StartsAtUtc, now)
+                .SetProperty(a => a.EndsAtUtc, now.AddMinutes(30)));
+        async Task<ArrivalResponse> Register()
+        {
+            await using var context = CreateContext();
+            return await new ArrivalExperienceService(context, new FixedClock(now), new NoOpAuditWriter(), new NullHubContext(), NullLogger<ArrivalExperienceService>.Instance)
+                .RegisterAsync(managerId, appointmentId, new ArrivalRequest(1), CancellationToken.None);
+        }
+        var arrivals = await Task.WhenAll(Register(), Register());
+        var first = arrivals[0]; var replay = arrivals[1];
+
+        Assert.Equal("arrived", first.StatusCode);
+        Assert.Equal(first.QueueNumber, replay.QueueNumber);
+        Assert.True(first.QueueNumber >= 100);
+        await using var verification = CreateContext();
+        var notification = await verification.DoctorNotifications.SingleAsync(x => x.DoctorAccountId == doctorId && x.AppointmentId == appointmentId);
+        Assert.Equal(1, await verification.AppointmentStatusHistories.CountAsync(x => x.AppointmentId == appointmentId && x.ToStatusCode == "arrived"));
+
+        var service = new ArrivalExperienceService(verification, new FixedClock(now), new NoOpAuditWriter(), new NullHubContext(), NullLogger<ArrivalExperienceService>.Instance);
+        var unreadForAnotherDoctor = await service.NotificationsAsync(doctorId + 1, 1, 10, CancellationToken.None);
+        Assert.Empty(unreadForAnotherDoctor.Items);
+        var readDenied = await Assert.ThrowsAsync<ArrivalRuleException>(() =>
+            service.ReadAsync(doctorId + 1, notification.Id, notification.RowVersion, CancellationToken.None));
+        Assert.Equal(404, readDenied.StatusCode);
+        var startDenied = await Assert.ThrowsAsync<ArrivalRuleException>(() =>
+            service.StartAsync(doctorId + 1, appointmentId, new StartAppointmentRequest(first.RowVersion), CancellationToken.None));
+        Assert.Equal(404, startDenied.StatusCode);
+    }
+
     private ManagerExperienceService CreateService(ViverAppDbContext db) => new(db, null!, null!, new NoOpAuditWriter(), new FixedClock(now));
     private ViverAppDbContext CreateContext()
     {
@@ -110,6 +148,7 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         var idempotencyScopes = accountIds.Select(x => $"manager.payment:{x}").ToArray();
         await db.IdempotencyRecords.Where(x => idempotencyScopes.Contains(x.ScopeCode)).ExecuteDeleteAsync();
         await db.Payments.Where(x => paymentIds.Contains(x.Id)).ExecuteDeleteAsync();
+        await db.DoctorNotifications.Where(x => appointmentIds.Contains(x.AppointmentId)).ExecuteDeleteAsync();
         await db.AppointmentStatusHistories.Where(x => appointmentIds.Contains(x.AppointmentId)).ExecuteDeleteAsync();
         await db.Appointments.Where(x => appointmentIds.Contains(x.Id)).ExecuteDeleteAsync();
         await db.ManagerPreferences.Where(x => accountIds.Contains(x.ManagerAccountId)).ExecuteDeleteAsync();
@@ -121,4 +160,31 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
     private static Account Account(string email, string role, string name) => new() { RoleCode = role, StatusCode = "active", FullName = name, Email = email, NormalizedEmail = email.ToUpperInvariant(), EmailVerified = true, SecurityStamp = RandomNumberGenerator.GetBytes(32), CreatedAtUtc = DateTime.UtcNow, UpdatedAtUtc = DateTime.UtcNow, RowVersion = 1 };
     private sealed class NoOpAuditWriter : IClinicalOperationsAuditWriter { public Task WriteAsync(string eventCode, ulong actorAccountId, string entityType, string entityId, IReadOnlyDictionary<string, string>? safeData, CancellationToken cancellationToken) => Task.CompletedTask; }
     private sealed class FixedClock(DateTime value) : TimeProvider { public override DateTimeOffset GetUtcNow() => new(DateTime.SpecifyKind(value, DateTimeKind.Utc)); }
+    private sealed class NullHubContext : IHubContext<DoctorNotificationsHub>
+    {
+        public IHubClients Clients { get; } = new NullHubClients();
+        public IGroupManager Groups { get; } = new NullGroupManager();
+    }
+    private sealed class NullHubClients : IHubClients
+    {
+        private static readonly IClientProxy Proxy = new NullClientProxy();
+        public IClientProxy All => Proxy;
+        public IClientProxy AllExcept(IReadOnlyList<string> excludedConnectionIds) => Proxy;
+        public IClientProxy Client(string connectionId) => Proxy;
+        public IClientProxy Clients(IReadOnlyList<string> connectionIds) => Proxy;
+        public IClientProxy Group(string groupName) => Proxy;
+        public IClientProxy GroupExcept(string groupName, IReadOnlyList<string> excludedConnectionIds) => Proxy;
+        public IClientProxy Groups(IReadOnlyList<string> groupNames) => Proxy;
+        public IClientProxy User(string userId) => Proxy;
+        public IClientProxy Users(IReadOnlyList<string> userIds) => Proxy;
+    }
+    private sealed class NullClientProxy : IClientProxy
+    {
+        public Task SendCoreAsync(string method, object?[] args, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+    private sealed class NullGroupManager : IGroupManager
+    {
+        public Task AddToGroupAsync(string connectionId, string groupName, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task RemoveFromGroupAsync(string connectionId, string groupName, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
 }

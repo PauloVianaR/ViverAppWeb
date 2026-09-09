@@ -2,9 +2,9 @@
 
 ## Estado e objetivo
 
-**Estado:** planejada; nenhuma implementação desta fase foi iniciada.
+**Estado:** implementada na branch própria; validações automatizadas e MySQL aprovadas. A inspeção visual permanece pendente porque o host atual não permite confirmar/selecionar o monitor 3 com segurança.
 
-**Branch prevista:** `codex/fase-16-pacientes-atendimento-chegada`, criada a partir da `main` somente depois da integração formal da Fase 15.
+**Branch:** `codex/fase-16-pacientes-atendimento-chegada`, criada a partir da `main` depois da integração formal da Fase 15.
 
 Completar os dados operacionais do Paciente para Gestor e Administrador, atribuir identificadores humanos inequívocos aos atendimentos, registrar a chegada presencial com senha de ordem e avisar o Médico em tempo real por sininho, popup e som configuráveis.
 
@@ -270,3 +270,40 @@ Queries devem projetar somente o necessário, limitar página/período, aceitar 
 - build, suíte integral, segurança e validação visual estão aprovados;
 - Fases 17 e 18 não foram antecipadas;
 - nenhuma pendência real foi ocultada.
+
+## Implementação realizada
+
+- os cards de Paciente do Gestor e do Administrador passaram a exibir CPF mascarado, e-mail e confirmação, telefone formatado e endereço completo, com estados explícitos para dados ausentes;
+- a edição operacional usa DTO mínimo, valida CPF, unicidade, e-mail, telefone E.164, data de nascimento, endereço, CEP com busca automática e concorrência por `row_version`;
+- mudanças de e-mail ou telefone revogam a confirmação anterior e criam o desafio do canal correspondente sem registrar o contato em auditoria;
+- todo atendimento possui número humano global, imutável, único e iniciado em `100`; criação e reagendamento consomem uma sequência transacional sem reciclar números;
+- a chegada presencial é idempotente, limitada pela janela configurada, registra autor/data/fuso, atribui senha diária atômica iniciada em `100` e transiciona `confirmed → arrived`;
+- o Médico inicia somente o próprio atendimento, com `arrived → in_progress` no presencial e `confirmed → in_progress` no online; conclusão exige `in_progress`;
+- cards de Paciente, Médico, Gestor e Administrador exibem número, estado textual e expressão visual acessível para cada situação operacional;
+- a caixa durável do Médico possui contador, leitura individual/em massa, retenção, abertura autorizada e deduplicação pela origem da chegada;
+- o hub SignalR usa grupo derivado exclusivamente da identidade autenticada. Popup e áudio recebem apenas número, senha e horário, sem nome, CPF ou conteúdo clínico;
+- o aviso sonoro local respeita bloqueio de autoplay, volume global e silêncio da sessão. Falha no SignalR não desfaz nem apresenta como falha a chegada já confirmada: a caixa durável a recupera na reconexão;
+- o Administrador configura habilitação, popup, som, volume, chave de som, janela de chegada, retenção e política de leitura pelas configurações tipadas existentes;
+- caixa, reversões financeiras e prontuário não foram antecipados.
+
+## Banco DB-First executado
+
+As migrations `0022__patient_arrival_notifications.sql` e `0023__appointment_number_guard.sql` foram executadas integralmente em `viverappweb`, no MySQL local 8.0.41. Depois da aplicação, o scaffold reproduzível regenerou o contexto e as entidades, sem edição manual dos arquivos gerados.
+
+O schema agora possui `appointment_number_sequence`, `arrival_queue_sequences`, `doctor_notifications`, constraints de número/chegada, índices operacionais, estados `arrived` e `in_progress` e as nove configurações tipadas da experiência de chegada.
+
+## Evidências automatizadas
+
+- API e Web compiladas com zero erros e zero avisos;
+- 182 testes aprovados nas sete suítes: Segurança 7, Identidade 37, Administração 16, Agendamento 43, Operação Clínica 30, Persistência 6 e Web 43;
+- o teste concorrente de chegada usa duas conexões reais e comprova uma única senha, uma única transição e uma única notificação durável;
+- testes de agendamento comprovam número mínimo, unicidade após reagendamento e preservação em replay idempotente;
+- `ViverApp.Database verify` confirmou MySQL 8.0.41, banco `viverappweb`, schema e migrations;
+- `git diff --check` não encontrou erro de whitespace;
+- a compilação agregada da solução chegou a compilar todos os projetos de produto/teste, mas a ferramenta auxiliar de banco tentou consultar o NuGet indisponível no sandbox. A mesma ferramenta já compilada executou `apply` e `verify` com sucesso; isso não representa falha do produto.
+
+## Validação visual pendente
+
+A aplicação foi iniciada localmente sem alterar ou excluir certificados. O user-secret de Kestrel aponta para um arquivo que não está mais presente e a máquina não apresentou certificado de desenvolvimento válido; para não recriar ou substituir certificados, a inicialização temporária usou HTTP apenas no processo de validação.
+
+O navegador integrado disponível nesta execução não expõe a posição da janela nem uma operação segura para selecionar o monitor 3. A tentativa de obter essa confirmação foi recusada pela política do próprio navegador. Conforme `AGENTS.md`, nenhuma inspeção em outro monitor foi usada como substituta. A jornada visual completa — Gestor registra chegada, Médico recebe sininho/popup/som e Admin altera a configuração — permanece registrada em `.local/PENDENCIAS.md` até poder ser executada exclusivamente no monitor 3.

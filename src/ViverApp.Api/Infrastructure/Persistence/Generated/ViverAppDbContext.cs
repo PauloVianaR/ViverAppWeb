@@ -34,11 +34,15 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<AppointmentDocument> AppointmentDocuments { get; set; }
 
+    public virtual DbSet<AppointmentNumberSequence> AppointmentNumberSequences { get; set; }
+
     public virtual DbSet<AppointmentReview> AppointmentReviews { get; set; }
 
     public virtual DbSet<AppointmentStatusHistory> AppointmentStatusHistories { get; set; }
 
     public virtual DbSet<AppointmentType> AppointmentTypes { get; set; }
+
+    public virtual DbSet<ArrivalQueueSequence> ArrivalQueueSequences { get; set; }
 
     public virtual DbSet<AuditEvent> AuditEvents { get; set; }
 
@@ -51,6 +55,8 @@ public partial class ViverAppDbContext : DbContext
     public virtual DbSet<ContactChangeRequest> ContactChangeRequests { get; set; }
 
     public virtual DbSet<DoctorAvailabilityException> DoctorAvailabilityExceptions { get; set; }
+
+    public virtual DbSet<DoctorNotification> DoctorNotifications { get; set; }
 
     public virtual DbSet<DoctorPatientLink> DoctorPatientLinks { get; set; }
 
@@ -486,6 +492,8 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => e.AppointmentTypeId, "fk_appointments_type");
 
+            entity.HasIndex(e => e.ArrivalRecordedByAccountId, "ix_appointments_arrival_actor");
+
             entity.HasIndex(e => new { e.DoctorAccountId, e.StatusCode, e.StartsAtUtc, e.EndsAtUtc }, "ix_appointments_doctor_period");
 
             entity.HasIndex(e => new { e.DoctorAccountId, e.StatusCode, e.EndsAtUtc }, "ix_appointments_doctor_status_end");
@@ -498,14 +506,27 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => new { e.StatusCode, e.StartsAtUtc }, "ix_appointments_status_start");
 
+            entity.HasIndex(e => new { e.ArrivalBusinessDate, e.ArrivalQueueNumber }, "ux_appointments_arrival_queue").IsUnique();
+
             entity.HasIndex(e => new { e.DoctorAccountId, e.StartsAtUtc }, "ux_appointments_doctor_start").IsUnique();
+
+            entity.HasIndex(e => e.AppointmentNumber, "ux_appointments_number").IsUnique();
 
             entity.HasIndex(e => new { e.PatientAccountId, e.StartsAtUtc }, "ux_appointments_patient_start").IsUnique();
 
             entity.HasIndex(e => e.RescheduledFromAppointmentId, "ux_appointments_rescheduled_from").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AppointmentNumber).HasColumnName("appointment_number");
             entity.Property(e => e.AppointmentTypeId).HasColumnName("appointment_type_id");
+            entity.Property(e => e.ArrivalBusinessDate)
+                .HasColumnType("date")
+                .HasColumnName("arrival_business_date");
+            entity.Property(e => e.ArrivalQueueNumber).HasColumnName("arrival_queue_number");
+            entity.Property(e => e.ArrivalRecordedByAccountId).HasColumnName("arrival_recorded_by_account_id");
+            entity.Property(e => e.ArrivedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("arrived_at_utc");
             entity.Property(e => e.BasePriceAmount)
                 .HasPrecision(13)
                 .HasColumnName("base_price_amount");
@@ -573,6 +594,11 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey(d => d.AppointmentTypeId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_appointments_type");
+
+            entity.HasOne(d => d.ArrivalRecordedByAccount).WithMany(p => p.AppointmentArrivalRecordedByAccounts)
+                .HasForeignKey(d => d.ArrivalRecordedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointments_arrival_actor");
 
             entity.HasOne(d => d.CanceledByAccount).WithMany(p => p.AppointmentCanceledByAccounts)
                 .HasForeignKey(d => d.CanceledByAccountId)
@@ -678,6 +704,16 @@ public partial class ViverAppDbContext : DbContext
                 .HasConstraintName("fk_appointment_documents_uploader");
         });
 
+        modelBuilder.Entity<AppointmentNumberSequence>(entity =>
+        {
+            entity.HasKey(e => e.SequenceKey).HasName("PRIMARY");
+
+            entity.ToTable("appointment_number_sequence");
+
+            entity.Property(e => e.SequenceKey).HasColumnName("sequence_key");
+            entity.Property(e => e.NextValue).HasColumnName("next_value");
+        });
+
         modelBuilder.Entity<AppointmentReview>(entity =>
         {
             entity.HasKey(e => e.AppointmentId).HasName("PRIMARY");
@@ -774,6 +810,21 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.RowVersion)
                 .HasDefaultValueSql("'1'")
                 .HasColumnName("row_version");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+        });
+
+        modelBuilder.Entity<ArrivalQueueSequence>(entity =>
+        {
+            entity.HasKey(e => e.BusinessDate).HasName("PRIMARY");
+
+            entity.ToTable("arrival_queue_sequences");
+
+            entity.Property(e => e.BusinessDate)
+                .HasColumnType("date")
+                .HasColumnName("business_date");
+            entity.Property(e => e.NextValue).HasColumnName("next_value");
             entity.Property(e => e.UpdatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");
@@ -1035,6 +1086,46 @@ public partial class ViverAppDbContext : DbContext
             entity.HasOne(d => d.DoctorAccount).WithMany(p => p.DoctorAvailabilityExceptions)
                 .HasForeignKey(d => d.DoctorAccountId)
                 .HasConstraintName("fk_doctor_availability_exception_doctor");
+        });
+
+        modelBuilder.Entity<DoctorNotification>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("doctor_notifications");
+
+            entity.HasIndex(e => e.AppointmentId, "ix_doctor_notifications_appointment");
+
+            entity.HasIndex(e => new { e.DoctorAccountId, e.ReadAtUtc, e.CreatedAtUtc }, "ix_doctor_notifications_feed");
+
+            entity.HasIndex(e => new { e.DoctorAccountId, e.SourceKey }, "ux_doctor_notifications_source").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.DoctorAccountId).HasColumnName("doctor_account_id");
+            entity.Property(e => e.ReadAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("read_at_utc");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.SourceKey)
+                .HasMaxLength(100)
+                .HasColumnName("source_key");
+            entity.Property(e => e.TypeCode)
+                .HasMaxLength(30)
+                .HasColumnName("type_code");
+
+            entity.HasOne(d => d.Appointment).WithMany(p => p.DoctorNotifications)
+                .HasForeignKey(d => d.AppointmentId)
+                .HasConstraintName("fk_doctor_notifications_appointment");
+
+            entity.HasOne(d => d.DoctorAccount).WithMany(p => p.DoctorNotifications)
+                .HasForeignKey(d => d.DoctorAccountId)
+                .HasConstraintName("fk_doctor_notifications_doctor");
         });
 
         modelBuilder.Entity<DoctorPatientLink>(entity =>

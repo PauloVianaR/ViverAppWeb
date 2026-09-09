@@ -25,6 +25,7 @@ public sealed record ClinicalReportResponse(
 
 public sealed record ClinicalAppointmentResponse(
     ulong Id,
+    ulong AppointmentNumber,
     ulong PatientAccountId,
     string PatientName,
     string? PatientEmail,

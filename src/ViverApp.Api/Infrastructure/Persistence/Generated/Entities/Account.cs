@@ -61,6 +61,8 @@ public partial class Account
 
     public virtual ICollection<ApplicationSetting> ApplicationSettings { get; set; } = new List<ApplicationSetting>();
 
+    public virtual ICollection<Appointment> AppointmentArrivalRecordedByAccounts { get; set; } = new List<Appointment>();
+
     public virtual ICollection<Appointment> AppointmentCanceledByAccounts { get; set; } = new List<Appointment>();
 
     public virtual ICollection<Appointment> AppointmentCompletedByAccounts { get; set; } = new List<Appointment>();

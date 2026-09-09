@@ -15,11 +15,12 @@ public sealed record DoctorProfileResponse(ulong AccountId, string FullName, str
     double? AverageRating, int ReviewCount, ulong AccountRowVersion, ulong ProfileRowVersion, ulong PreferenceRowVersion);
 public sealed record DoctorServiceResponse(uint Id, string Name, string? Description, string CategoryCode,
     string ModalityCode, ushort DurationMinutes, decimal PriceAmount, bool IsActive, bool Offered, ulong RowVersion);
-public sealed record DoctorAppointmentResponse(ulong Id, ulong PatientAccountId, string PatientName, int? PatientAge,
+public sealed record DoctorAppointmentResponse(ulong Id, ulong AppointmentNumber, ulong PatientAccountId, string PatientName, int? PatientAge,
     uint AppointmentTypeId, string Service, string CategoryCode, string StatusCode, string ModalityCode, DateTime StartsAtUtc, DateTime EndsAtUtc,
     decimal PriceAmount, decimal DiscountPercent, string PaymentStatus, string PaymentLocation, string? PatientNotes,
     string? CancellationReason, ulong? RescheduledFromAppointmentId, ulong? RescheduledToAppointmentId,
-    byte? Rating, string? ReviewComment, bool CanJoinOnline, bool CanCancel, bool CanReschedule, bool CanComplete,
+    byte? Rating, string? ReviewComment, DateTime? ArrivedAtUtc, uint? ArrivalQueueNumber,
+    bool CanJoinOnline, bool CanCancel, bool CanReschedule, bool CanStart, bool CanComplete,
     ulong RowVersion);
 public sealed record DoctorAgendaResponse(DoctorAgendaCounters Counters, SchedulingPage<DoctorAppointmentResponse> Page);
 public sealed record DoctorAgendaCounters(int Total, int Online, int InPerson, int Rescheduled);

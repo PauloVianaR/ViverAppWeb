@@ -22,6 +22,7 @@ public sealed record WebClinicalReport(
 
 public sealed record WebClinicalAppointment(
     ulong Id,
+    ulong AppointmentNumber,
     ulong PatientAccountId,
     string PatientName,
     string? PatientEmail,

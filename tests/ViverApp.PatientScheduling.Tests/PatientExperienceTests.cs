@@ -93,6 +93,7 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         db.AppointmentTypes.Add(service); await db.SaveChangesAsync(); type = service.Id;
         var visit = new Appointment
         {
+            AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
             PatientAccountId = patient,
             DoctorAccountId = doctor,
             AppointmentTypeId = type,

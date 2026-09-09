@@ -15,7 +15,8 @@ public sealed class PatientSchedulingService(
     IPatientSchedulingAuditWriter auditWriter,
     TimeProvider timeProvider)
 {
-    private static readonly string[] ActiveStatuses = ["pending", "confirmed"];
+    private static readonly string[] ActiveStatuses = ["pending", "confirmed", "arrived", "in_progress"];
+    private static readonly string[] MutableStatuses = ["pending", "confirmed"];
     private const int MaximumAvailabilityDays = 31;
 
     public async Task<SchedulingPage<BookingProfessionalResponse>> SearchProfessionalsAsync(
@@ -230,6 +231,7 @@ public sealed class PatientSchedulingService(
             .Select(x => (decimal?)x.PremiumPlan.AppointmentDiscountPercent).MaxAsync(cancellationToken) ?? 0;
         var entity = new Appointment
         {
+            AppointmentNumber = await AllocateAppointmentNumberAsync(cancellationToken),
             PatientAccountId = patientId,
             DoctorAccountId = request.DoctorAccountId,
             AppointmentTypeId = request.AppointmentTypeId,
@@ -309,6 +311,7 @@ public sealed class PatientSchedulingService(
             .Select(x => (decimal?)x.PremiumPlan.AppointmentDiscountPercent).MaxAsync(cancellationToken) ?? 0;
         var entity = new Appointment
         {
+            AppointmentNumber = await AllocateAppointmentNumberAsync(cancellationToken),
             PatientAccountId = request.PatientAccountId,
             DoctorAccountId = doctorId,
             AppointmentTypeId = type.Id,
@@ -368,6 +371,7 @@ public sealed class PatientSchedulingService(
             .Select(x => (decimal?)x.PremiumPlan.AppointmentDiscountPercent).MaxAsync(cancellationToken) ?? 0;
         var entity = new Appointment
         {
+            AppointmentNumber = await AllocateAppointmentNumberAsync(cancellationToken),
             PatientAccountId = request.PatientAccountId,
             DoctorAccountId = request.DoctorAccountId,
             AppointmentTypeId = type.Id,
@@ -401,7 +405,7 @@ public sealed class PatientSchedulingService(
     {
         await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var entity = await database.Appointments.FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {appointmentId} FOR UPDATE").SingleOrDefaultAsync(cancellationToken) ?? throw NotFound("Agendamento não encontrado.");
-        if (!ActiveStatuses.Contains(entity.StatusCode)) throw Conflict("Somente agendamentos pendentes ou confirmados podem ser cancelados.");
+        if (!MutableStatuses.Contains(entity.StatusCode)) throw Conflict("Somente agendamentos pendentes ou confirmados podem ser cancelados.");
         if (entity.RowVersion != request.RowVersion) throw Conflict("O agendamento foi alterado por outra sessão.");
         var previous = entity.StatusCode; var now = timeProvider.GetUtcNow().UtcDateTime;
         entity.StatusCode = "canceled"; entity.CancellationReason = request.Reason.Trim(); entity.CanceledByAccountId = managerId;
@@ -419,7 +423,7 @@ public sealed class PatientSchedulingService(
         ValidateIdempotencyKey(idempotencyKey);
         await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var original = await database.Appointments.FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {appointmentId} FOR UPDATE").SingleOrDefaultAsync(cancellationToken) ?? throw NotFound("Agendamento não encontrado.");
-        if (!ActiveStatuses.Contains(original.StatusCode)) throw Conflict("Somente agendamentos pendentes ou confirmados podem ser reagendados.");
+        if (!MutableStatuses.Contains(original.StatusCode)) throw Conflict("Somente agendamentos pendentes ou confirmados podem ser reagendados.");
         if (original.RowVersion != request.RowVersion) throw Conflict("O agendamento foi alterado por outra sessão.");
         var requestHash = HashRequest(managerId, $"manager-reschedule:{appointmentId}", request); var scope = $"appointment.manager-move:{managerId}";
         var replay = await TryReplayAsync(scope, idempotencyKey, requestHash, cancellationToken);
@@ -433,6 +437,7 @@ public sealed class PatientSchedulingService(
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var replacement = new Appointment
         {
+            AppointmentNumber = await AllocateAppointmentNumberAsync(cancellationToken),
             PatientAccountId = original.PatientAccountId,
             DoctorAccountId = original.DoctorAccountId,
             AppointmentTypeId = original.AppointmentTypeId,
@@ -472,7 +477,7 @@ public sealed class PatientSchedulingService(
         var entity = await database.Appointments.FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {appointmentId} FOR UPDATE")
             .SingleOrDefaultAsync(cancellationToken);
         if (entity is null || entity.DoctorAccountId != doctorId) throw NotFound("Agendamento não encontrado.");
-        if (!ActiveStatuses.Contains(entity.StatusCode)) throw Conflict("Somente agendamentos pendentes ou confirmados podem ser cancelados.");
+        if (!MutableStatuses.Contains(entity.StatusCode)) throw Conflict("Somente agendamentos pendentes ou confirmados podem ser cancelados.");
         if (entity.RowVersion != request.RowVersion) throw Conflict("O agendamento foi alterado por outra sessão. Recarregue e tente novamente.");
         var previous = entity.StatusCode; var now = timeProvider.GetUtcNow().UtcDateTime;
         entity.StatusCode = "canceled"; entity.CancellationReason = request.Reason.Trim(); entity.CanceledByAccountId = doctorId;
@@ -494,7 +499,7 @@ public sealed class PatientSchedulingService(
         var original = await database.Appointments.FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {appointmentId} FOR UPDATE")
             .SingleOrDefaultAsync(cancellationToken);
         if (original is null || original.DoctorAccountId != doctorId) throw NotFound("Agendamento não encontrado.");
-        if (!ActiveStatuses.Contains(original.StatusCode)) throw Conflict("Somente agendamentos pendentes ou confirmados podem ser reagendados.");
+        if (!MutableStatuses.Contains(original.StatusCode)) throw Conflict("Somente agendamentos pendentes ou confirmados podem ser reagendados.");
         if (original.RowVersion != request.RowVersion) throw Conflict("O agendamento foi alterado por outra sessão. Recarregue e tente novamente.");
         var requestHash = HashRequest(doctorId, $"doctor-reschedule:{appointmentId}", request);
         var scope = $"appointment.doctor-move:{doctorId}";
@@ -509,6 +514,7 @@ public sealed class PatientSchedulingService(
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var replacement = new Appointment
         {
+            AppointmentNumber = await AllocateAppointmentNumberAsync(cancellationToken),
             PatientAccountId = original.PatientAccountId,
             DoctorAccountId = doctorId,
             AppointmentTypeId = original.AppointmentTypeId,
@@ -559,7 +565,7 @@ public sealed class PatientSchedulingService(
             throw NotFound("Agendamento não encontrado.");
         }
 
-        if (!ActiveStatuses.Contains(entity.StatusCode))
+        if (!MutableStatuses.Contains(entity.StatusCode))
         {
             throw Conflict("Somente agendamentos pendentes ou confirmados podem ser cancelados.");
         }
@@ -622,7 +628,7 @@ public sealed class PatientSchedulingService(
             throw NotFound("Agendamento não encontrado.");
         }
 
-        if (!ActiveStatuses.Contains(original.StatusCode))
+        if (!MutableStatuses.Contains(original.StatusCode))
         {
             throw Conflict("Somente agendamentos pendentes ou confirmados podem ser reagendados.");
         }
@@ -656,6 +662,7 @@ public sealed class PatientSchedulingService(
             cancellationToken);
         var replacement = new Appointment
         {
+            AppointmentNumber = await AllocateAppointmentNumberAsync(cancellationToken),
             PatientAccountId = patientId,
             DoctorAccountId = original.DoctorAccountId,
             AppointmentTypeId = original.AppointmentTypeId,
@@ -1023,6 +1030,16 @@ public sealed class PatientSchedulingService(
             successorId);
     }
 
+    private async Task<ulong> AllocateAppointmentNumberAsync(CancellationToken cancellationToken)
+    {
+        var sequence = await database.AppointmentNumberSequences
+            .FromSqlRaw("SELECT * FROM appointment_number_sequence WHERE sequence_key = 1 FOR UPDATE")
+            .SingleAsync(cancellationToken);
+        var number = sequence.NextValue;
+        sequence.NextValue++;
+        return number;
+    }
+
     private static AppointmentResponse BuildResponse(
         Appointment entity,
         string doctorName,
@@ -1035,6 +1052,7 @@ public sealed class PatientSchedulingService(
         var localEnd = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(entity.EndsAtUtc, DateTimeKind.Utc), timezone);
         return new AppointmentResponse(
             entity.Id,
+            entity.AppointmentNumber,
             entity.DoctorAccountId,
             doctorName,
             entity.AppointmentTypeId,
@@ -1053,6 +1071,9 @@ public sealed class PatientSchedulingService(
             entity.CancellationReason,
             entity.RescheduledFromAppointmentId,
             successorId,
+            entity.ArrivedAtUtc,
+            entity.ArrivalBusinessDate is { } arrivalDate ? DateOnly.FromDateTime(arrivalDate) : null,
+            entity.ArrivalQueueNumber,
             entity.RowVersion);
     }
 

@@ -40,6 +40,7 @@ public sealed record WebAvailableSlot(
 
 public sealed record WebAppointment(
     ulong Id,
+    ulong AppointmentNumber,
     ulong DoctorAccountId,
     string DoctorName,
     uint AppointmentTypeId,
@@ -58,6 +59,9 @@ public sealed record WebAppointment(
     string? CancellationReason,
     ulong? RescheduledFromAppointmentId,
     ulong? RescheduledToAppointmentId,
+    DateTime? ArrivedAtUtc,
+    DateOnly? ArrivalBusinessDate,
+    uint? ArrivalQueueNumber,
     ulong RowVersion);
 
 public sealed record WebAppointmentCreateRequest(

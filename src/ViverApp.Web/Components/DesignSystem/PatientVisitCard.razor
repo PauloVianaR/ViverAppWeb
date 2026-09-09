@@ -1,12 +1,13 @@
 @using static ViverApp.Web.PatientLabels
 <article class="surface patient-visit" aria-label="@($"{Model.Appointment.AppointmentTypeName}, {Model.Appointment.LocalDate:dd/MM/yyyy}")">
-    <div class="patient-visit__top"><div><span class="eyebrow">@Category(Model.CategoryCode)</span><h2>@Model.Appointment.AppointmentTypeName</h2><p>@Model.Appointment.DoctorName</p><p class="muted">@Model.Specialties</p></div><span class="badge">@Status(Model.Appointment.StatusCode)</span></div>
+    <div class="patient-visit__top"><div><span class="eyebrow">Atendimento @Model.Appointment.AppointmentNumber · @Category(Model.CategoryCode)</span><h2>@Model.Appointment.AppointmentTypeName</h2><p>@Model.Appointment.DoctorName</p><p class="muted">@Model.Specialties</p></div><span class="badge appointment-status" aria-label="Estado: @Status(Model.Appointment.StatusCode)"><span aria-hidden="true">@StatusFace(Model.Appointment.StatusCode)</span> @Status(Model.Appointment.StatusCode)</span></div>
     <dl class="patient-facts">
         <div><dt>Quando</dt><dd>@Model.Appointment.LocalDate.ToString("dd/MM/yyyy") às @Model.Appointment.LocalStartsAt.ToString("HH:mm")</dd></div>
         <div><dt>Duração</dt><dd>@((int)(Model.Appointment.EndsAtUtc - Model.Appointment.StartsAtUtc).TotalMinutes) minutos</dd></div>
         <div><dt>Modalidade</dt><dd>@(Model.Appointment.ModalityCode == "online" ? "Online" : "Presencial")</dd></div>
         <div><dt>Pagamento</dt><dd>@Status(Model.PaymentStatus) · @Money(Model.Appointment.PriceAmount) @(Model.PaymentLocation == "clinic" ? "(na clínica)" : null)</dd></div>
         @if (Model.DiscountPercent > 0) { <div><dt>Premium</dt><dd>@Model.DiscountPercent% de desconto · original @Money(Model.BasePrice)</dd></div> }
+        @if (Model.Appointment.ArrivalQueueNumber.HasValue) { <div><dt>Senha de chegada</dt><dd class="arrival-number">@Model.Appointment.ArrivalQueueNumber</dd></div> }
         @if (Clinic is not null && Model.Appointment.ModalityCode == "in_person") { <div class="patient-facts__wide"><dt>Local</dt><dd>@Clinic.Name · @Clinic.Address</dd></div> }
     </dl>
     @if (!string.IsNullOrEmpty(Model.Appointment.PatientNotes)) { <p class="patient-notes"><strong>Observações:</strong> @Model.Appointment.PatientNotes</p> }

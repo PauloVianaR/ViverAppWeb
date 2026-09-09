@@ -12,7 +12,7 @@ namespace ViverApp.Api.Features.DoctorExperience;
 public sealed class DoctorExperienceService(ViverAppDbContext database, UserManager<ViverAppUser> users,
     IdentityChallengeService challenges, IClinicalOperationsAuditWriter audit, TimeProvider clock)
 {
-    private static readonly string[] AppointmentStatuses = ["pending", "confirmed", "completed", "canceled", "rescheduled", "no_show"];
+    private static readonly string[] AppointmentStatuses = ["pending", "confirmed", "arrived", "in_progress", "completed", "canceled", "rescheduled", "no_show"];
     private static readonly string[] Modalities = ["in_person", "online"];
     private static readonly string[] Categories = ["consultation", "examination", "surgery"];
 
@@ -119,7 +119,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         if (modality is not null) query = query.Where(x => x.ModalityCode == modality);
         if (category is not null) query = query.Where(x => x.AppointmentType.CategoryCode == category);
         var term = Text(search); if (term is { Length: > 120 }) throw Invalid("A busca deve ter no máximo 120 caracteres.");
-        if (term is not null) query = query.Where(x => x.PatientAccount.FullName.Contains(term) || x.AppointmentType.Name.Contains(term));
+        if (term is not null) { var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.PatientAccount.FullName.Contains(term) || x.AppointmentType.Name.Contains(term) || isNumber && x.AppointmentNumber == number); }
         var countersSource = database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && x.StartsAtUtc >= start && x.StartsAtUtc < end);
         var counters = new DoctorAgendaCounters(await countersSource.CountAsync(ct), await countersSource.CountAsync(x => x.ModalityCode == "online", ct),
             await countersSource.CountAsync(x => x.ModalityCode == "in_person", ct), await countersSource.CountAsync(x => x.StatusCode == "rescheduled", ct));
@@ -342,13 +342,15 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
     {
         var birth = x.PatientAccount.BirthDate ?? x.PatientAccount.PatientProfile?.BirthDate;
         int? age = birth.HasValue ? now.Year - birth.Value.Year - (birth.Value.Date > now.AddYears(-(now.Year - birth.Value.Year)).Date ? 1 : 0) : null;
-        return new(x.Id, x.PatientAccountId, x.PatientAccount.FullName, age, x.AppointmentTypeId, x.AppointmentType.Name, x.AppointmentType.CategoryCode,
+        return new(x.Id, x.AppointmentNumber, x.PatientAccountId, x.PatientAccount.FullName, age, x.AppointmentTypeId, x.AppointmentType.Name, x.AppointmentType.CategoryCode,
             x.StatusCode, x.ModalityCode, x.StartsAtUtc, x.EndsAtUtc, x.PriceAmount, x.DiscountPercent,
             x.PaymentAppointment?.StatusCode ?? "unpaid", x.PaymentLocationCode, x.PatientNotes, x.CancellationReason,
             x.RescheduledFromAppointmentId, x.InverseRescheduledFromAppointment?.Id, x.AppointmentReview?.Rating, x.AppointmentReview?.Comment,
+            x.ArrivedAtUtc, x.ArrivalQueueNumber,
             x.ModalityCode == "online" && x.StatusCode == "confirmed" && x.PaymentAppointment?.StatusCode == "paid" && x.StartsAtUtc <= now.AddMinutes(15) && x.EndsAtUtc >= now,
             x.StatusCode is "pending" or "confirmed", x.StatusCode is "pending" or "confirmed",
-            x.StatusCode == "confirmed" && x.StartsAtUtc <= now, x.RowVersion);
+            (x.ModalityCode == "in_person" && x.StatusCode == "arrived" || x.ModalityCode == "online" && x.StatusCode == "confirmed") && x.StartsAtUtc <= now.AddMinutes(15),
+            x.StatusCode == "in_progress" && x.StartsAtUtc <= now, x.RowVersion);
     }
     private async Task EnsureLinkAsync(ulong doctor, ulong patient, ulong creator, CancellationToken ct)
     {

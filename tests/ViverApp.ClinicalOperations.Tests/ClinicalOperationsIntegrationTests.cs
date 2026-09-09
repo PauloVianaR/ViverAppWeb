@@ -78,12 +78,15 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
             CancellationToken.None);
         Assert.Equal("draft", draft.StatusCode);
         Assert.True(draft.ContentVisible);
+        await context.Appointments.Where(x => x.Id == fixture.AppointmentId)
+            .ExecuteUpdateAsync(x => x.SetProperty(a => a.StatusCode, "in_progress").SetProperty(a => a.RowVersion, a => a.RowVersion + 1));
+        context.ChangeTracker.Clear();
 
         var completed = await service.CompleteAsync(
             fixture.DoctorId,
             fixture.AppointmentId,
             new CompleteAppointmentRequest(
-                1,
+                2,
                 draft.RowVersion,
                 "Paciente avaliado sem sinais de alarme no momento.",
                 "Manter acompanhamento clínico."),
@@ -168,8 +171,11 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
     {
         await using var context = CreateContext(configuration);
         var clinical = CreateService(context, fixture.NowUtc);
+        await context.Appointments.Where(x => x.Id == fixture.AppointmentId)
+            .ExecuteUpdateAsync(x => x.SetProperty(a => a.StatusCode, "in_progress").SetProperty(a => a.RowVersion, a => a.RowVersion + 1));
+        context.ChangeTracker.Clear();
         var completed = await clinical.CompleteAsync(fixture.DoctorId, fixture.AppointmentId,
-            new CompleteAppointmentRequest(1, 0, "Primeira versão clínica completa e validada.", "Recomendação inicial."), CancellationToken.None);
+            new CompleteAppointmentRequest(2, 0, "Primeira versão clínica completa e validada.", "Recomendação inicial."), CancellationToken.None);
         var service = new DoctorExperienceService(context, null!, null!, new NoOpAuditWriter(), new FixedTimeProvider(fixture.NowUtc.AddMinutes(5)));
         var versions = await service.RectifyAsync(fixture.DoctorId, fixture.AppointmentId,
             new DoctorReportRectificationRequest(completed.MedicalReport!.RowVersion,
@@ -262,6 +268,7 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
 
     private static Appointment Appointment(ulong patientId, ulong doctorId, uint typeId, DateTime startsAt) => new()
     {
+        AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
         PatientAccountId = patientId,
         DoctorAccountId = doctorId,
         AppointmentTypeId = typeId,

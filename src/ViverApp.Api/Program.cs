@@ -69,6 +69,7 @@ builder.Services.AddScoped<IPatientSchedulingAuditWriter, PatientSchedulingAudit
 builder.Services.AddScoped<PatientSchedulingService>();
 builder.Services.AddScoped<IClinicalOperationsAuditWriter, ClinicalOperationsAuditWriter>();
 builder.Services.AddScoped<ClinicalOperationsService>();
+builder.Services.AddScoped<ViverApp.Api.Features.ArrivalExperience.ArrivalExperienceService>();
 builder.Services.AddScoped<DoctorExperienceService>();
 builder.Services.AddScoped<DoctorExperienceExceptionFilter>();
 builder.Services.AddScoped<ManagerExperienceService>();
@@ -131,6 +132,7 @@ app.MapHealthChecks(
     .DisableRequestTimeout();
 app.MapControllers().RequireCors(SecurityPolicyNames.WebClientCors);
 app.MapHub<TeleconsultationHub>("/hubs/teleconsultation").RequireCors(SecurityPolicyNames.WebClientCors).RequireRateLimiting(SecurityPolicyNames.VideoRateLimit).DisableRequestTimeout();
+app.MapHub<ViverApp.Api.Features.ArrivalExperience.DoctorNotificationsHub>("/hubs/doctor-notifications").RequireCors(SecurityPolicyNames.WebClientCors).RequireRateLimiting(SecurityPolicyNames.VideoRateLimit).DisableRequestTimeout();
 
 app.Run();
 

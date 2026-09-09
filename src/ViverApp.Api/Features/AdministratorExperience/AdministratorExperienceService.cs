@@ -19,7 +19,10 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         "appointments.booking_horizon_days", "appointments.minimum_lead_minutes", "appointments.cancellation_cutoff_hours",
         "appointments.reschedule_cutoff_hours", "appointments.slot_interval_minutes", "appointments.patient_daily_limit",
         "appointments.default_consultation_minutes", "appointments.default_examination_minutes", "appointments.default_surgery_minutes",
-        "appointments.interval_minutes", "communications.email_enabled", "communications.sms_enabled", "premium.manager_can_decide"
+        "appointments.interval_minutes", "communications.email_enabled", "communications.sms_enabled", "premium.manager_can_decide",
+        "appointments.arrival_notifications_enabled", "appointments.arrival_popup_enabled", "appointments.arrival_sound_enabled",
+        "appointments.arrival_sound_volume", "appointments.arrival_sound_key", "appointments.arrival_early_minutes",
+        "appointments.arrival_late_minutes", "appointments.arrival_notification_retention_days", "appointments.arrival_mark_read_on_open"
     };
     private DateTime Now => timeProvider.GetUtcNow().UtcDateTime;
 
@@ -52,6 +55,9 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         ulong? doctor, string? payment, string? search, string sort, int page, int size, CancellationToken ct) =>
         manager.AgendaAsync(from, to, status, modality, category, doctor, payment, null, null, search, sort, page, size, ct);
     public Task<ManagerAppointmentResponse> AppointmentAsync(ulong id, CancellationToken ct) => manager.AppointmentAsync(id, ct);
+    public Task<ManagerPatientsResponse> PatientsAsync(string? search, string? status, bool? premium, int page, int size, CancellationToken ct) => manager.PatientsAsync(search, status, premium, page, size, ct);
+    public Task<ManagerPatientResponse> PatientAsync(ulong id, CancellationToken ct) => manager.PatientAsync(id, ct);
+    public Task<ManagerPatientResponse> UpdatePatientAsync(ulong actor, ulong id, ManagerPatientUpdateRequest request, CancellationToken ct) => manager.UpdatePatientAsync(actor, id, request, ct);
     public Task<ManagerPaymentResponse> ConfirmPaymentAsync(ulong actor, ulong id, string key, ManagerPaymentConfirmRequest request, CancellationToken ct) => manager.ConfirmPaymentAsync(actor, id, key, request, ct);
     public Task<IReadOnlyList<ManagerDoctorOption>> DoctorsAsync(CancellationToken ct) => manager.DoctorsAsync(ct);
     public async Task<IReadOnlyList<AdministratorDoctorAccessResponse>> DoctorAccessAsync(CancellationToken ct) => await database.DoctorPreferences.AsNoTracking()
@@ -286,8 +292,11 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
     private static DateTime ToUtc(DateOnly date, TimeZoneInfo timezone) => TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(date.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified), timezone);
     private static void ValidateSetting(string key, JsonElement value)
     {
-        if (key is "web.maintenance_mode" or "appointments.allow_clinic_payment" or "appointments.online_calls_enabled" or "communications.email_enabled" or "communications.sms_enabled" or "premium.manager_can_decide")
+        if (key is "web.maintenance_mode" or "appointments.allow_clinic_payment" or "appointments.online_calls_enabled" or "communications.email_enabled" or "communications.sms_enabled" or "premium.manager_can_decide"
+            or "appointments.arrival_notifications_enabled" or "appointments.arrival_popup_enabled" or "appointments.arrival_sound_enabled" or "appointments.arrival_mark_read_on_open")
         { if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw new JsonException(); return; }
+        if (key == "appointments.arrival_sound_key")
+        { if (value.ValueKind != JsonValueKind.String || value.GetString() is not "soft_chime") throw new JsonException(); return; }
         if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out var number)) throw new JsonException();
         var valid = key switch
         {
@@ -297,6 +306,10 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
             "appointments.slot_interval_minutes" or "appointments.interval_minutes" => number is >= 0 and <= 240,
             "appointments.patient_daily_limit" => number is >= 1 and <= 20,
             "appointments.default_consultation_minutes" or "appointments.default_examination_minutes" or "appointments.default_surgery_minutes" => number is >= 5 and <= 480,
+            "appointments.arrival_sound_volume" => number is >= 0 and <= 100,
+            "appointments.arrival_early_minutes" => number is >= 0 and <= 720,
+            "appointments.arrival_late_minutes" => number is >= 0 and <= 240,
+            "appointments.arrival_notification_retention_days" => number is >= 1 and <= 365,
             _ => false
         }; if (!valid) throw new JsonException();
     }

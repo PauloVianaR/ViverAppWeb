@@ -50,6 +50,9 @@ public partial class ViverAppDbContext
         modelBuilder.Entity<AdministratorNotification>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
+        modelBuilder.Entity<DoctorNotification>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
         modelBuilder.Entity<ApplicationSetting>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();

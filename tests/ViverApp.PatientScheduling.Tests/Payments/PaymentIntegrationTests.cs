@@ -151,6 +151,7 @@ public sealed class PaymentIntegrationTests
         await database.SaveChangesAsync();
         var appointment = new Appointment
         {
+            AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
             PatientAccountId = patient.Id,
             DoctorAccountId = doctor.Id,
             AppointmentTypeId = type.Id,

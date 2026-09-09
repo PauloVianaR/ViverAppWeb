@@ -7,6 +7,8 @@ public partial class Appointment
 {
     public ulong Id { get; set; }
 
+    public ulong AppointmentNumber { get; set; }
+
     public ulong PatientAccountId { get; set; }
 
     public ulong DoctorAccountId { get; set; }
@@ -45,6 +47,14 @@ public partial class Appointment
 
     public DateTime? NoShowRecordedAtUtc { get; set; }
 
+    public DateTime? ArrivedAtUtc { get; set; }
+
+    public DateTime? ArrivalBusinessDate { get; set; }
+
+    public uint? ArrivalQueueNumber { get; set; }
+
+    public ulong? ArrivalRecordedByAccountId { get; set; }
+
     public DateTime CreatedAtUtc { get; set; }
 
     public DateTime UpdatedAtUtc { get; set; }
@@ -65,6 +75,8 @@ public partial class Appointment
 
     public virtual AppointmentType AppointmentType { get; set; } = null!;
 
+    public virtual Account? ArrivalRecordedByAccount { get; set; }
+
     public virtual Account? CanceledByAccount { get; set; }
 
     public virtual Account? CompletedByAccount { get; set; }
@@ -72,6 +84,8 @@ public partial class Appointment
     public virtual Account CreatedByAccount { get; set; } = null!;
 
     public virtual DoctorProfile DoctorAccount { get; set; } = null!;
+
+    public virtual ICollection<DoctorNotification> DoctorNotifications { get; set; } = new List<DoctorNotification>();
 
     public virtual Appointment? InverseRescheduledFromAppointment { get; set; }
 

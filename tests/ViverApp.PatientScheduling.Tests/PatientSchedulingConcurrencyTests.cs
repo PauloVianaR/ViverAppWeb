@@ -53,6 +53,9 @@ public sealed class PatientSchedulingConcurrencyTests
                 created,
                 new TimeOnly(11, 0));
             Assert.Equal(created.Id, rescheduled.RescheduledFromAppointmentId);
+            Assert.True(created.AppointmentNumber >= 100);
+            Assert.True(rescheduled.AppointmentNumber >= 100);
+            Assert.NotEqual(created.AppointmentNumber, rescheduled.AppointmentNumber);
             Assert.Equal(paid ? "confirmed" : "pending", rescheduled.StatusCode);
             if (paid)
             {
@@ -119,6 +122,8 @@ public sealed class PatientSchedulingConcurrencyTests
             Assert.Null(replay.Error);
             Assert.True(replay.Replayed);
             Assert.Equal(success.Response!.Id, replay.Response!.Id);
+            Assert.Equal(success.Response.AppointmentNumber, replay.Response.AppointmentNumber);
+            Assert.True(success.Response.AppointmentNumber >= 100);
 
             await using var verification = CreateContext(configuration);
             Assert.Equal(1, await verification.Appointments.CountAsync(

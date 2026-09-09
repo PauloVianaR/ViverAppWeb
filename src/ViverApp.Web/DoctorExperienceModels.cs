@@ -10,11 +10,19 @@ public sealed record DoctorProfileData(ulong AccountId, string FullName, string?
     ulong AccountRowVersion, ulong ProfileRowVersion, ulong PreferenceRowVersion);
 public sealed record DoctorService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode,
     ushort DurationMinutes, decimal PriceAmount, bool IsActive, bool Offered, ulong RowVersion);
-public sealed record DoctorAppointment(ulong Id, ulong PatientAccountId, string PatientName, int? PatientAge, uint AppointmentTypeId, string Service,
+public sealed record DoctorAppointment(ulong Id, ulong AppointmentNumber, ulong PatientAccountId, string PatientName, int? PatientAge, uint AppointmentTypeId, string Service,
     string CategoryCode, string StatusCode, string ModalityCode, DateTime StartsAtUtc, DateTime EndsAtUtc, decimal PriceAmount,
     decimal DiscountPercent, string PaymentStatus, string PaymentLocation, string? PatientNotes, string? CancellationReason,
     ulong? RescheduledFromAppointmentId, ulong? RescheduledToAppointmentId, byte? Rating, string? ReviewComment,
-    bool CanJoinOnline, bool CanCancel, bool CanReschedule, bool CanComplete, ulong RowVersion);
+    DateTime? ArrivedAtUtc, uint? ArrivalQueueNumber, bool CanJoinOnline, bool CanCancel, bool CanReschedule,
+    bool CanStart, bool CanComplete, ulong RowVersion);
+public sealed record DoctorNotification(ulong Id, ulong AppointmentId, ulong AppointmentNumber, uint? QueueNumber,
+    DateTime? StartsAtUtc, bool IsRead, DateTime CreatedAtUtc, ulong RowVersion);
+public sealed record DoctorRealtimeNotification(ulong Id, ulong AppointmentId, ulong AppointmentNumber, uint? QueueNumber,
+    DateTime? StartsAtUtc, bool IsRead, DateTime CreatedAtUtc, ulong RowVersion, bool PopupEnabled,
+    bool SoundEnabled, int SoundVolume, string SoundKey);
+public sealed record DoctorNotificationsData(int UnreadCount, bool PopupEnabled, bool SoundEnabled, int SoundVolume,
+    string SoundKey, bool MarkReadOnOpen, IReadOnlyList<DoctorNotification> Items);
 public sealed record DoctorAgendaData(DoctorAgendaCounters Counters, WebPage<DoctorAppointment> Page);
 public sealed record DoctorAgendaCounters(int Total, int Online, int InPerson, int Rescheduled);
 public sealed record DoctorPatient(ulong AccountId, string FullName, string? PreferredName, string? Email, string? Phone,

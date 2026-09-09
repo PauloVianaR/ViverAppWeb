@@ -159,6 +159,7 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
         await database.SaveChangesAsync();
         var appointment = new Appointment
         {
+            AppointmentNumber = (ulong)Random.Shared.Next(900_000_000, 999_999_999),
             PatientAccountId = patient.Id,
             DoctorAccountId = doctor.Id,
             AppointmentTypeId = appointmentType.Id,
