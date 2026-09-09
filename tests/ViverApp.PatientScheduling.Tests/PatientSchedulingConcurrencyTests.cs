@@ -18,7 +18,7 @@ public sealed class PatientSchedulingConcurrencyTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ReschedulePreservesOriginal_AndCancellationAddsHistory(bool paid)
+    public async Task RescheduleUpdatesSameAppointment_PreservesStatusAndAddsHistory(bool paid)
     {
         var configuration = LoadConfiguration();
         await DeleteStaleFixturesAsync(configuration);
@@ -44,19 +44,34 @@ public sealed class PatientSchedulingConcurrencyTests
             {
                 await using var db = CreateContext(configuration);
                 db.Payments.Add(new() { AppointmentId = created.Id, ProviderReferenceAppointmentId = created.Id, ProviderCode = "pagbank", StatusCode = "paid", Amount = created.PriceAmount, CurrencyCode = "BRL", CreatedAtUtc = fixture.UtcNow.UtcDateTime, UpdatedAtUtc = fixture.UtcNow.UtcDateTime, RowVersion = 1 });
+                var appointment = await db.Appointments.SingleAsync(x => x.Id == created.Id);
+                appointment.StatusCode = "confirmed";
+                appointment.RowVersion++;
                 await db.SaveChangesAsync();
+                db.ChangeTracker.Clear();
+                created = await new PatientSchedulingService(db, new NullAuditWriter(), new FixedTimeProvider(fixture.UtcNow))
+                    .GetAppointmentAsync(fixture.PatientId, created.Id, CancellationToken.None);
             }
 
-            var rescheduled = await RescheduleAsync(
+            var firstRescheduled = await RescheduleAsync(
                 configuration,
                 fixture,
                 created,
                 new TimeOnly(11, 0));
-            Assert.Equal(created.Id, rescheduled.RescheduledFromAppointmentId);
+            var rescheduled = await RescheduleAsync(
+                configuration,
+                fixture,
+                firstRescheduled,
+                new TimeOnly(11, 30));
+            Assert.Equal(created.Id, rescheduled.Id);
+            Assert.Null(rescheduled.RescheduledFromAppointmentId);
             Assert.True(created.AppointmentNumber >= 100);
-            Assert.True(rescheduled.AppointmentNumber >= 100);
-            Assert.NotEqual(created.AppointmentNumber, rescheduled.AppointmentNumber);
+            Assert.Equal(created.AppointmentNumber, rescheduled.AppointmentNumber);
             Assert.Equal(paid ? "confirmed" : "pending", rescheduled.StatusCode);
+            Assert.Equal(2, rescheduled.RescheduleHistory.Count);
+            Assert.Equal(created.StartsAtUtc, rescheduled.RescheduleHistory[0].PreviousStartsAtUtc);
+            Assert.Equal(firstRescheduled.StartsAtUtc, rescheduled.RescheduleHistory[1].PreviousStartsAtUtc);
+            Assert.Equal(rescheduled.StartsAtUtc, rescheduled.RescheduleHistory[1].NewStartsAtUtc);
             if (paid)
             {
                 await using var db = CreateContext(configuration);
@@ -72,13 +87,10 @@ public sealed class PatientSchedulingConcurrencyTests
 
             await using var verification = CreateContext(configuration);
             var original = await verification.Appointments.AsNoTracking().SingleAsync(item => item.Id == created.Id);
-            Assert.Equal("rescheduled", original.StatusCode);
-            Assert.Equal(rescheduled.Id, await verification.Appointments
-                .Where(item => item.RescheduledFromAppointmentId == created.Id)
-                .Select(item => item.Id)
-                .SingleAsync());
-            Assert.Equal(4, await verification.AppointmentStatusHistories.CountAsync(
-                item => item.AppointmentId == created.Id || item.AppointmentId == rescheduled.Id));
+            Assert.Equal("canceled", original.StatusCode);
+            Assert.False(await verification.Appointments.AnyAsync(item => item.RescheduledFromAppointmentId == created.Id));
+            Assert.Equal(2, await verification.AppointmentRescheduleHistories.CountAsync(item => item.AppointmentId == created.Id));
+            Assert.Equal(2, await verification.AppointmentStatusHistories.CountAsync(item => item.AppointmentId == created.Id));
         }
         finally
         {

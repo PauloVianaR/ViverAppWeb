@@ -58,8 +58,8 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
 
     [HttpGet("agenda")]
     public Task<DoctorAgendaResponse> Agenda(DateOnly from, DateOnly to, string? status = null, string? modality = null,
-        string? category = null, string? search = null, int page = 1, int pageSize = 20, CancellationToken ct = default) =>
-        service.AgendaAsync(Actor, from, to, status, modality, category, search, page, pageSize, ct);
+        string? category = null, ulong? appointmentNumber = null, string? search = null, int page = 1, int pageSize = 20, CancellationToken ct = default) =>
+        service.AgendaAsync(Actor, from, to, status, modality, category, appointmentNumber, search, page, pageSize, ct);
     [HttpGet("appointments/{id:long}")]
     public Task<DoctorAppointmentDetailResponse> Appointment(ulong id, CancellationToken ct) => service.AppointmentAsync(Actor, id, ct);
     [HttpGet("booking/slots"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]

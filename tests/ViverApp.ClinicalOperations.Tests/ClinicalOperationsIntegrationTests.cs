@@ -154,9 +154,14 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
 
         var agenda = await service.AgendaAsync(fixture.DoctorId,
             DateOnly.FromDateTime(fixture.NowUtc.AddDays(-2)), DateOnly.FromDateTime(fixture.NowUtc.AddDays(2)),
-            null, null, null, null, 1, 100, CancellationToken.None);
+            null, null, null, null, null, 1, 100, CancellationToken.None);
         Assert.Single(agenda.Page.Items);
         Assert.Equal(fixture.AppointmentId, agenda.Page.Items[0].Id);
+        var byNumber = await service.AgendaAsync(fixture.DoctorId,
+            DateOnly.FromDateTime(fixture.NowUtc.AddDays(-2)), DateOnly.FromDateTime(fixture.NowUtc.AddDays(2)),
+            null, null, null, agenda.Page.Items[0].AppointmentNumber, null, 1, 100, CancellationToken.None);
+        Assert.Single(byNumber.Page.Items);
+        Assert.Contains(agenda.Page.Items[0].AppointmentNumber, byNumber.Sources.Total);
 
         var appointment = await Assert.ThrowsAsync<DoctorRuleException>(() =>
             service.AppointmentAsync(fixture.DoctorId, fixture.OtherAppointmentId, CancellationToken.None));

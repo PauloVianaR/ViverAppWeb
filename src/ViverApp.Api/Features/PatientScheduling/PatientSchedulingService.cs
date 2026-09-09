@@ -153,7 +153,7 @@ public sealed class PatientSchedulingService(
 
         var (_, timezoneName, timezone) = await LoadConfigurationAsync(cancellationToken);
         var now = timeProvider.GetUtcNow().UtcDateTime;
-        var query = database.Appointments.AsNoTracking().Where(item => item.PatientAccountId == patientId);
+        var query = database.Appointments.AsNoTracking().Where(item => item.PatientAccountId == patientId && item.InverseRescheduledFromAppointment == null);
         query = view switch
         {
             "future" => query.Where(item => ActiveStatuses.Contains(item.StatusCode) && item.StartsAtUtc >= now),
@@ -435,38 +435,14 @@ public sealed class PatientSchedulingService(
         var slot = await RequireSlotAsync(original.PatientAccountId, original.DoctorAccountId, type, original.ModalityCode,
             request.LocalDate, request.LocalStartsAt, timezoneName, timezone, policy, original.Id, cancellationToken);
         var now = timeProvider.GetUtcNow().UtcDateTime;
-        var replacement = new Appointment
-        {
-            AppointmentNumber = await AllocateAppointmentNumberAsync(cancellationToken),
-            PatientAccountId = original.PatientAccountId,
-            DoctorAccountId = original.DoctorAccountId,
-            AppointmentTypeId = original.AppointmentTypeId,
-            CreatedByAccountId = managerId,
-            StatusCode = "pending",
-            ModalityCode = original.ModalityCode,
-            StartsAtUtc = slot.StartsAtUtc,
-            EndsAtUtc = slot.EndsAtUtc,
-            PriceAmount = original.PriceAmount,
-            BasePriceAmount = original.BasePriceAmount,
-            DiscountPercent = original.DiscountPercent,
-            PaymentLocationCode = original.PaymentLocationCode,
-            CurrencyCode = original.CurrencyCode,
-            PatientNotes = original.PatientNotes,
-            RescheduledFromAppointmentId = original.Id,
-            CreatedAtUtc = now,
-            UpdatedAtUtc = now,
-            RowVersion = 1
-        };
-        var previous = original.StatusCode; original.StatusCode = "rescheduled"; original.UpdatedAtUtc = now; original.RowVersion++;
-        database.Appointments.Add(replacement); AddHistory(original, managerId, previous, "rescheduled", OptionalText(request.Reason), now);
+        await ApplyRescheduleAsync(original, managerId, slot, request.Reason, now, cancellationToken);
         await database.SaveChangesAsync(cancellationToken);
-        var payment = await database.Payments.FromSqlInterpolated($"SELECT * FROM payments WHERE appointment_id = {original.Id} FOR UPDATE").SingleOrDefaultAsync(cancellationToken);
-        if (payment is not null) { payment.ProviderReferenceAppointmentId ??= original.Id; payment.AppointmentId = replacement.Id; payment.UpdatedAtUtc = now; payment.RowVersion++; if (payment.StatusCode == "paid") replacement.StatusCode = "confirmed"; }
-        AddHistory(replacement, managerId, null, replacement.StatusCode, OptionalText(request.Reason), now);
-        var response = BuildResponse(replacement, doctor.FullName, type.Name, timezoneName, timezone, null);
+        var hydrated = await IncludeAppointmentGraph(database.Appointments.AsNoTracking())
+            .SingleAsync(x => x.Id == original.Id, cancellationToken);
+        var response = BuildResponse(hydrated, doctor.FullName, type.Name, timezoneName, timezone, null);
         StoreIdempotency(scope, idempotencyKey, requestHash, response, 200, now); await database.SaveChangesAsync(cancellationToken);
-        await auditWriter.WriteAsync("appointment.rescheduled_by_manager", managerId, replacement.Id,
-            new Dictionary<string, string> { ["previousAppointmentId"] = original.Id.ToString(CultureInfo.InvariantCulture) }, cancellationToken);
+        await auditWriter.WriteAsync("appointment.rescheduled_by_manager", managerId, original.Id,
+            new Dictionary<string, string> { ["rescheduleCount"] = response.RescheduleHistory.Count.ToString(CultureInfo.InvariantCulture) }, cancellationToken);
         await transaction.CommitAsync(cancellationToken); return (response, false);
     }
 
@@ -512,39 +488,15 @@ public sealed class PatientSchedulingService(
         var slot = await RequireSlotAsync(original.PatientAccountId, doctorId, type, original.ModalityCode,
             request.LocalDate, request.LocalStartsAt, timezoneName, timezone, policy, original.Id, cancellationToken);
         var now = timeProvider.GetUtcNow().UtcDateTime;
-        var replacement = new Appointment
-        {
-            AppointmentNumber = await AllocateAppointmentNumberAsync(cancellationToken),
-            PatientAccountId = original.PatientAccountId,
-            DoctorAccountId = doctorId,
-            AppointmentTypeId = original.AppointmentTypeId,
-            CreatedByAccountId = doctorId,
-            StatusCode = "pending",
-            ModalityCode = original.ModalityCode,
-            StartsAtUtc = slot.StartsAtUtc,
-            EndsAtUtc = slot.EndsAtUtc,
-            PriceAmount = original.PriceAmount,
-            BasePriceAmount = original.BasePriceAmount,
-            DiscountPercent = original.DiscountPercent,
-            PaymentLocationCode = original.PaymentLocationCode,
-            CurrencyCode = original.CurrencyCode,
-            PatientNotes = original.PatientNotes,
-            RescheduledFromAppointmentId = original.Id,
-            CreatedAtUtc = now,
-            UpdatedAtUtc = now,
-            RowVersion = 1,
-        };
-        var previous = original.StatusCode; original.StatusCode = "rescheduled"; original.UpdatedAtUtc = now; original.RowVersion++;
-        database.Appointments.Add(replacement); AddHistory(original, doctorId, previous, "rescheduled", OptionalText(request.Reason), now);
+        await ApplyRescheduleAsync(original, doctorId, slot, request.Reason, now, cancellationToken);
         await database.SaveChangesAsync(cancellationToken);
-        var payment = await database.Payments.FromSqlInterpolated($"SELECT * FROM payments WHERE appointment_id = {original.Id} FOR UPDATE").SingleOrDefaultAsync(cancellationToken);
-        if (payment is not null) { payment.ProviderReferenceAppointmentId ??= original.Id; payment.AppointmentId = replacement.Id; payment.UpdatedAtUtc = now; payment.RowVersion++; if (payment.StatusCode == "paid") replacement.StatusCode = "confirmed"; }
-        AddHistory(replacement, doctorId, null, replacement.StatusCode, OptionalText(request.Reason), now);
-        var response = BuildResponse(replacement, doctor.FullName, type.Name, timezoneName, timezone, null);
+        var hydrated = await IncludeAppointmentGraph(database.Appointments.AsNoTracking())
+            .SingleAsync(x => x.Id == original.Id, cancellationToken);
+        var response = BuildResponse(hydrated, doctor.FullName, type.Name, timezoneName, timezone, null);
         StoreIdempotency(scope, idempotencyKey, requestHash, response, StatusCodes.Status200OK, now);
         await database.SaveChangesAsync(cancellationToken);
-        await auditWriter.WriteAsync("appointment.rescheduled_by_doctor", doctorId, replacement.Id,
-            new Dictionary<string, string> { ["previousAppointmentId"] = original.Id.ToString(CultureInfo.InvariantCulture) }, cancellationToken);
+        await auditWriter.WriteAsync("appointment.rescheduled_by_doctor", doctorId, original.Id,
+            new Dictionary<string, string> { ["rescheduleCount"] = response.RescheduleHistory.Count.ToString(CultureInfo.InvariantCulture) }, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return (response, false);
     }
@@ -660,46 +612,11 @@ public sealed class PatientSchedulingService(
             policy,
             original.Id,
             cancellationToken);
-        var replacement = new Appointment
-        {
-            AppointmentNumber = await AllocateAppointmentNumberAsync(cancellationToken),
-            PatientAccountId = patientId,
-            DoctorAccountId = original.DoctorAccountId,
-            AppointmentTypeId = original.AppointmentTypeId,
-            CreatedByAccountId = patientId,
-            StatusCode = "pending",
-            ModalityCode = original.ModalityCode,
-            StartsAtUtc = slot.StartsAtUtc,
-            EndsAtUtc = slot.EndsAtUtc,
-            PriceAmount = original.PriceAmount,
-            BasePriceAmount = original.BasePriceAmount,
-            DiscountPercent = original.DiscountPercent,
-            PaymentLocationCode = original.PaymentLocationCode,
-            CurrencyCode = original.CurrencyCode,
-            PatientNotes = original.PatientNotes,
-            RescheduledFromAppointmentId = original.Id,
-            CreatedAtUtc = now,
-            UpdatedAtUtc = now,
-            RowVersion = 1,
-        };
-        var previous = original.StatusCode;
-        original.StatusCode = "rescheduled";
-        original.UpdatedAtUtc = now;
-        original.RowVersion++;
-        database.Appointments.Add(replacement);
-        AddHistory(original, patientId, previous, "rescheduled", OptionalText(request.Reason), now);
+        await ApplyRescheduleAsync(original, patientId, slot, request.Reason, now, cancellationToken);
         await database.SaveChangesAsync(cancellationToken);
-        var payment = await database.Payments.FromSqlInterpolated($"SELECT * FROM payments WHERE appointment_id = {original.Id} FOR UPDATE").SingleOrDefaultAsync(cancellationToken);
-        if (payment is not null)
-        {
-            payment.ProviderReferenceAppointmentId ??= original.Id;
-            payment.AppointmentId = replacement.Id;
-            payment.UpdatedAtUtc = now;
-            payment.RowVersion++;
-            if (payment.StatusCode == "paid") replacement.StatusCode = "confirmed";
-        }
-        AddHistory(replacement, patientId, null, replacement.StatusCode, OptionalText(request.Reason), now);
-        var response = BuildResponse(replacement, doctor.FullName, type.Name, timezoneName, timezone, null);
+        var hydrated = await IncludeAppointmentGraph(database.Appointments.AsNoTracking())
+            .SingleAsync(x => x.Id == original.Id, cancellationToken);
+        var response = BuildResponse(hydrated, doctor.FullName, type.Name, timezoneName, timezone, null);
         StoreIdempotency(
             scope,
             idempotencyKey,
@@ -711,11 +628,40 @@ public sealed class PatientSchedulingService(
         await auditWriter.WriteAsync(
             "appointment.rescheduled_by_patient",
             patientId,
-            replacement.Id,
-            new Dictionary<string, string> { ["previousAppointmentId"] = original.Id.ToString(CultureInfo.InvariantCulture) },
+            original.Id,
+            new Dictionary<string, string> { ["rescheduleCount"] = response.RescheduleHistory.Count.ToString(CultureInfo.InvariantCulture) },
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return (response, false);
+    }
+
+    private async Task ApplyRescheduleAsync(
+        Appointment appointment,
+        ulong actorAccountId,
+        AvailableSlotResponse slot,
+        string? reason,
+        DateTime occurredAtUtc,
+        CancellationToken cancellationToken)
+    {
+        var sequence = (await database.AppointmentRescheduleHistories
+            .Where(item => item.AppointmentId == appointment.Id)
+            .MaxAsync(item => (uint?)item.SequenceNumber, cancellationToken) ?? 0) + 1;
+        database.AppointmentRescheduleHistories.Add(new AppointmentRescheduleHistory
+        {
+            AppointmentId = appointment.Id,
+            SequenceNumber = sequence,
+            ActorAccountId = actorAccountId,
+            PreviousStartsAtUtc = appointment.StartsAtUtc,
+            PreviousEndsAtUtc = appointment.EndsAtUtc,
+            NewStartsAtUtc = slot.StartsAtUtc,
+            NewEndsAtUtc = slot.EndsAtUtc,
+            Reason = OptionalText(reason),
+            OccurredAtUtc = occurredAtUtc
+        });
+        appointment.StartsAtUtc = slot.StartsAtUtc;
+        appointment.EndsAtUtc = slot.EndsAtUtc;
+        appointment.UpdatedAtUtc = occurredAtUtc;
+        appointment.RowVersion++;
     }
 
     private async Task<AvailableSlotResponse> RequireSlotAsync(
@@ -1074,6 +1020,17 @@ public sealed class PatientSchedulingService(
             entity.ArrivedAtUtc,
             entity.ArrivalBusinessDate is { } arrivalDate ? DateOnly.FromDateTime(arrivalDate) : null,
             entity.ArrivalQueueNumber,
+            entity.AppointmentRescheduleHistories
+                .OrderBy(item => item.SequenceNumber)
+                .Select(item => new AppointmentRescheduleHistoryResponse(
+                    item.SequenceNumber,
+                    DateTime.SpecifyKind(item.PreviousStartsAtUtc, DateTimeKind.Utc),
+                    DateTime.SpecifyKind(item.PreviousEndsAtUtc, DateTimeKind.Utc),
+                    DateTime.SpecifyKind(item.NewStartsAtUtc, DateTimeKind.Utc),
+                    DateTime.SpecifyKind(item.NewEndsAtUtc, DateTimeKind.Utc),
+                    item.Reason,
+                    DateTime.SpecifyKind(item.OccurredAtUtc, DateTimeKind.Utc)))
+                .ToArray(),
             entity.RowVersion);
     }
 
@@ -1081,7 +1038,8 @@ public sealed class PatientSchedulingService(
         .Include(item => item.AppointmentType)
         .Include(item => item.DoctorAccount)
             .ThenInclude(profile => profile.Account)
-        .Include(item => item.InverseRescheduledFromAppointment);
+        .Include(item => item.InverseRescheduledFromAppointment)
+        .Include(item => item.AppointmentRescheduleHistories);
 
     private static int ReadInt(IReadOnlyDictionary<string, string> values, string key, int fallback, int minimum, int maximum)
     {

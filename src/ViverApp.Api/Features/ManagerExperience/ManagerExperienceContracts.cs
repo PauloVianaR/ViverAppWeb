@@ -5,8 +5,11 @@ using ViverApp.Api.Features.PatientScheduling;
 namespace ViverApp.Api.Features.ManagerExperience;
 
 public sealed record ManagerHomeResponse(ManagerProfileResponse Profile, ManagerHomeCounters Counters,
-    IReadOnlyList<ManagerAppointmentResponse> Today);
+    ManagerHomeSources Sources, IReadOnlyList<ManagerAppointmentResponse> Today);
 public sealed record ManagerHomeCounters(int Today, int Doctors, int Paid, int PendingPayment, int Online, int InPerson);
+public sealed record ManagerHomeSources(IReadOnlyList<ulong> Today, IReadOnlyList<string> Doctors,
+    IReadOnlyList<ulong> Paid, IReadOnlyList<ulong> PendingPayment, IReadOnlyList<ulong> Online,
+    IReadOnlyList<ulong> InPerson);
 public sealed record ManagerProfileResponse(ulong AccountId, string FullName, string? Email, string? Phone, string? TaxId,
     bool EmailVerified, bool PhoneVerified, bool EmailEnabled, bool SmsEnabled, ulong AccountRowVersion, ulong PreferenceRowVersion);
 public sealed record ManagerDoctorOption(ulong AccountId, string FullName, string LicenseLabel);
@@ -21,9 +24,14 @@ public sealed record ManagerAppointmentResponse(ulong Id, ulong AppointmentNumbe
     string PaymentLocation, string? PatientNotes, string? CancellationReason, ulong? RescheduledFromAppointmentId,
     ulong? RescheduledToAppointmentId, byte? Rating, string? ReviewComment, ManagerPaymentMetadata Payment,
     ManagerReportMetadata Report, int AttachmentCount, DateTime? ArrivedAtUtc, DateOnly? ArrivalBusinessDate,
-    uint? ArrivalQueueNumber, bool CanRegisterArrival, bool CanCancel, bool CanReschedule, bool CanConfirmPayment, ulong RowVersion);
+    uint? ArrivalQueueNumber, IReadOnlyList<AppointmentRescheduleHistoryResponse> RescheduleHistory,
+    bool CanRegisterArrival, bool CanCancel, bool CanReschedule, bool CanConfirmPayment, ulong RowVersion);
 public sealed record ManagerAgendaCounters(int Total, int Online, int InPerson, int Rescheduled, int Paid, int PendingPayment);
-public sealed record ManagerAgendaResponse(ManagerAgendaCounters Counters, SchedulingPage<ManagerAppointmentResponse> Page);
+public sealed record ManagerAgendaSources(IReadOnlyList<ulong> Total, IReadOnlyList<ulong> Online,
+    IReadOnlyList<ulong> InPerson, IReadOnlyList<ulong> Rescheduled, IReadOnlyList<ulong> Paid,
+    IReadOnlyList<ulong> PendingPayment);
+public sealed record ManagerAgendaResponse(ManagerAgendaCounters Counters, ManagerAgendaSources Sources,
+    SchedulingPage<ManagerAppointmentResponse> Page);
 public sealed record ManagerPatientAddressResponse(string PostalCode, string Street, string Number, string? Complement,
     string District, string City, string StateCode);
 public sealed record ManagerPatientResponse(ulong AccountId, string FullName, string? PreferredName, string? TaxId, string? Email,
@@ -31,7 +39,10 @@ public sealed record ManagerPatientResponse(ulong AccountId, string FullName, st
     string StatusCode, bool IsPremium, string PremiumStatus, ulong? PremiumRequestId,
     int AppointmentCount, DateTime? LastAppointmentAtUtc, DateTime? NextAppointmentAtUtc, ulong RowVersion);
 public sealed record ManagerPatientCounters(int Total, int Premium, int Active, int Blocked, int PremiumPending);
-public sealed record ManagerPatientsResponse(ManagerPatientCounters Counters, SchedulingPage<ManagerPatientResponse> Page);
+public sealed record ManagerPatientSources(IReadOnlyList<string> Total, IReadOnlyList<string> Premium,
+    IReadOnlyList<string> Active, IReadOnlyList<string> Blocked, IReadOnlyList<string> PremiumPending);
+public sealed record ManagerPatientsResponse(ManagerPatientCounters Counters, ManagerPatientSources Sources,
+    SchedulingPage<ManagerPatientResponse> Page);
 public sealed record ManagerPremiumRequestResponse(ulong Id, ulong PatientAccountId, string PatientName, string PlanName,
     decimal DiscountPercent, string StatusCode, Guid? ProofDocumentId, string? ProofName, uint? ProofSizeBytes,
     string? ReviewNotes, string? RejectionReason, DateTime CreatedAtUtc, DateTime? ReviewedAtUtc, ulong RowVersion);

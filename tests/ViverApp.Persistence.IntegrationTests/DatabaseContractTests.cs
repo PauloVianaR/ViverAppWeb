@@ -32,7 +32,7 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(48, applicationEntities.Length);
+        Assert.Equal(49, applicationEntities.Length);
         Assert.DoesNotContain(
             applicationEntities,
             entity => string.Equals(entity.GetTableName(), "__schema_migrations", StringComparison.Ordinal));
@@ -58,6 +58,7 @@ public sealed class DatabaseContractTests
         Assert.True(doctorNotification.FindProperty(nameof(DoctorNotification.RowVersion))!.IsConcurrencyToken);
         Assert.NotNull(context.Model.FindEntityType(typeof(AppointmentNumberSequence)));
         Assert.NotNull(context.Model.FindEntityType(typeof(ArrivalQueueSequence)));
+        Assert.NotNull(context.Model.FindEntityType(typeof(AppointmentRescheduleHistory)));
         Assert.True(context.Model.FindEntityType(typeof(ApplicationSetting))!.FindProperty(nameof(ApplicationSetting.RowVersion))!.IsConcurrencyToken);
         Assert.True(context.Model.FindEntityType(typeof(PremiumPlan))!.FindProperty(nameof(PremiumPlan.RowVersion))!.IsConcurrencyToken);
         Assert.NotNull(context.Model.FindEntityType(typeof(Holiday))!.FindProperty(nameof(Holiday.IsAnnual)));
@@ -83,7 +84,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024", migrations);
 
         var arrivalColumns = await ExecuteScalarAsync(connection,
             """

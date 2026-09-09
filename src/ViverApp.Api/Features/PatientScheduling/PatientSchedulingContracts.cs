@@ -32,6 +32,15 @@ public sealed record AvailableSlotResponse(
     DateTime EndsAtUtc,
     string TimezoneName);
 
+public sealed record AppointmentRescheduleHistoryResponse(
+    uint SequenceNumber,
+    DateTime PreviousStartsAtUtc,
+    DateTime PreviousEndsAtUtc,
+    DateTime NewStartsAtUtc,
+    DateTime NewEndsAtUtc,
+    string? Reason,
+    DateTime OccurredAtUtc);
+
 public sealed record AppointmentResponse(
     ulong Id,
     ulong AppointmentNumber,
@@ -56,6 +65,7 @@ public sealed record AppointmentResponse(
     DateTime? ArrivedAtUtc,
     DateOnly? ArrivalBusinessDate,
     uint? ArrivalQueueNumber,
+    IReadOnlyList<AppointmentRescheduleHistoryResponse> RescheduleHistory,
     ulong RowVersion);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

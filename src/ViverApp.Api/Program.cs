@@ -56,7 +56,7 @@ builder.Services.AddViverAppObservability(
     "ViverApp.Api");
 builder.Services.AddViverAppDatabase(builder.Configuration);
 builder.Services.AddViverAppPrivateStorage(builder.Configuration, builder.Environment);
-builder.Services.AddViverAppIdentity(builder.Configuration);
+builder.Services.AddViverAppIdentity(builder.Configuration, builder.Environment);
 builder.Services.AddViverAppPayments(builder.Configuration, builder.Environment);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpClient("PostalCodeLookup", client =>

@@ -1,5 +1,5 @@
 @using static ViverApp.Web.PatientLabels
-<article class="surface patient-visit" aria-label="@($"{Model.Appointment.AppointmentTypeName}, {Model.Appointment.LocalDate:dd/MM/yyyy}")">
+<article class="surface patient-visit appointment-card--@StatusCss(Model.Appointment.StatusCode)" aria-label="@($"{Model.Appointment.AppointmentTypeName}, {Model.Appointment.LocalDate:dd/MM/yyyy}")">
     <div class="patient-visit__top"><div><span class="eyebrow">Atendimento @Model.Appointment.AppointmentNumber · @Category(Model.CategoryCode)</span><h2>@Model.Appointment.AppointmentTypeName</h2><p>@Model.Appointment.DoctorName</p><p class="muted">@Model.Specialties</p></div><span class="badge appointment-status" aria-label="Estado: @Status(Model.Appointment.StatusCode)"><span aria-hidden="true">@StatusFace(Model.Appointment.StatusCode)</span> @Status(Model.Appointment.StatusCode)</span></div>
     <dl class="patient-facts">
         <div><dt>Quando</dt><dd>@Model.Appointment.LocalDate.ToString("dd/MM/yyyy") às @Model.Appointment.LocalStartsAt.ToString("HH:mm")</dd></div>
@@ -12,7 +12,8 @@
     </dl>
     @if (!string.IsNullOrEmpty(Model.Appointment.PatientNotes)) { <p class="patient-notes"><strong>Observações:</strong> @Model.Appointment.PatientNotes</p> }
     @if (Model.Appointment.CancellationReason is not null) { <p><strong>Motivo do cancelamento:</strong> @Model.Appointment.CancellationReason</p> }
-    @if (Model.Appointment.RescheduledFromAppointmentId.HasValue || Model.Appointment.RescheduledToAppointmentId.HasValue) { <p class="badge">Atendimento reagendado</p> }
+    @if (Model.Appointment.RescheduleHistory.Count > 0) { <p class="badge badge--rescheduled">Reagendado @Model.Appointment.RescheduleHistory.Count vez(es)</p> }
+    <AppointmentRescheduleTimeline Items="Model.Appointment.RescheduleHistory" />
     <div class="patient-actions">
         @if (Model.Appointment.RescheduledToAppointmentId is ulong next) { <a class="button button--secondary button--small" href="/paciente/atendimentos/@next">Ver novo atendimento</a> }
         @if (Model.CanPay) { <a class="button button--small" href="/paciente/pagamentos?appointmentId=@Model.Appointment.Id">Pagar</a> }

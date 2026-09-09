@@ -53,8 +53,8 @@ public sealed class AdministratorExperienceController(AdministratorExperienceSer
     [HttpGet("doctor-access")] public Task<IReadOnlyList<AdministratorDoctorAccessResponse>> DoctorAccess(CancellationToken ct) => service.DoctorAccessAsync(ct);
     [HttpGet("agenda")]
     public Task<ManagerAgendaResponse> Agenda(DateOnly from, DateOnly to, string? status = null, string? modality = null, string? category = null,
-        ulong? doctorAccountId = null, string? payment = null, string? search = null, string sort = "date_asc", int page = 1, int pageSize = 20, CancellationToken ct = default) =>
-        service.AgendaAsync(from, to, status, modality, category, doctorAccountId, payment, search, sort, page, pageSize, ct);
+        ulong? doctorAccountId = null, ulong? appointmentNumber = null, string? payment = null, string? search = null, string sort = "date_asc", int page = 1, int pageSize = 20, CancellationToken ct = default) =>
+        service.AgendaAsync(from, to, status, modality, category, doctorAccountId, appointmentNumber, payment, search, sort, page, pageSize, ct);
     [HttpGet("appointments/{id:long}")] public Task<ManagerAppointmentResponse> Appointment(ulong id, CancellationToken ct) => service.AppointmentAsync(id, ct);
     [HttpGet("booking/slots"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)] public Task<IReadOnlyList<AvailableSlotResponse>> Slots(ulong patientAccountId, ulong doctorAccountId, uint appointmentTypeId, string modality, DateOnly from, int days = 14, CancellationToken ct = default) => scheduling.GetAvailableSlotsAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct);
     [HttpPost("appointments/{id:long}/cancel"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)] public Task<AppointmentResponse> Cancel(ulong id, AppointmentCancelRequest request, CancellationToken ct) => scheduling.CancelForManagerAsync(Actor, id, request, ct);

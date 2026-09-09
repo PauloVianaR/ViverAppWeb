@@ -1,7 +1,10 @@
 namespace ViverApp.Web;
 
-public sealed record AdministratorHomeData(AdministratorCounters Counters, IReadOnlyList<AdministratorPendingProfessional> Pending, IReadOnlyList<ManagerAppointment> Today);
+public sealed record AdministratorHomeData(AdministratorCounters Counters, IReadOnlyList<AdministratorPendingProfessional> Pending, AdministratorHomeSources Sources, IReadOnlyList<ManagerAppointment> Today);
 public sealed record AdministratorCounters(int ActiveUsers, int TodayAppointments, int ActivePremium, int PendingApprovals, int PendingPayments, int UnreadNotifications);
+public sealed record AdministratorHomeSources(IReadOnlyList<string> ActiveUsers, IReadOnlyList<ulong> TodayAppointments,
+    IReadOnlyList<string> ActivePremium, IReadOnlyList<string> PendingApprovals, IReadOnlyList<ulong> PendingPayments,
+    IReadOnlyList<string> UnreadNotifications);
 public sealed record AdministratorPendingProfessional(ulong AccountId, string FullName, string RoleCode, string? Contact, string? License, string? Specialty, ushort? YearsExperience, ulong RowVersion);
 public sealed record AdministratorAnalyticsData(DateOnly From, DateOnly To, decimal Revenue, int Appointments, decimal AverageTicket, decimal? Satisfaction,
     decimal PreviousRevenue, int PreviousAppointments, IReadOnlyList<AdministratorMetric> RevenueByMonth, IReadOnlyList<AdministratorMetric> AppointmentsByStatus,
@@ -32,7 +35,10 @@ public sealed record AdministratorWeeklyHour(ulong Id, byte DayOfWeek, TimeSpan 
 public sealed record AdministratorHoliday(uint Id, DateOnly HolidayDate, string Name, TimeSpan? StartTime, TimeSpan? EndTime, ulong RowVersion, bool IsAnnual);
 public sealed record AdministratorNotification(ulong Id, string TypeCode, string SeverityCode, string Title, string Message, string? EntityType, string? EntityId, bool IsRead, DateTime CreatedAtUtc, ulong RowVersion);
 public sealed record AdministratorNotificationCounters(int PendingPayments, int Unread, int HighSeverity, int PendingApprovals);
-public sealed record AdministratorNotifications(AdministratorNotificationCounters Counters, IReadOnlyList<AdministratorNotification> Items);
+public sealed record AdministratorNotificationSources(IReadOnlyList<ulong> PendingPayments, IReadOnlyList<string> Unread,
+    IReadOnlyList<string> HighSeverity, IReadOnlyList<string> PendingApprovals);
+public sealed record AdministratorNotifications(AdministratorNotificationCounters Counters, AdministratorNotificationSources Sources,
+    IReadOnlyList<AdministratorNotification> Items);
 public sealed record AdministratorDoctorAccess(ulong AccountId, string FullName, bool OnlineEnabled, ulong RowVersion);
 
 public static class AdministratorLabels

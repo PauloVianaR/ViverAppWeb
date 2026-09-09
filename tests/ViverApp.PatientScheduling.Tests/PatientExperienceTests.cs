@@ -144,8 +144,10 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         Assert.True(item.CanChooseClinic);
         Assert.Equal(404, (await Assert.ThrowsAsync<PatientExperienceException>(() => service.AppointmentAsync(other, appointment, default))).StatusCode);
         var date = item.Appointment.LocalDate.ToDateTime(TimeOnly.MinValue);
-        Assert.Single((await service.AgendaAsync(patient, 1, 12, "future", null, date, date, null, null, null, default)).Items);
-        Assert.Empty((await service.AgendaAsync(other, 1, 12, "all", null, null, null, null, null, null, default)).Items);
+        Assert.Single((await service.AgendaAsync(patient, 1, 12, "future", null, null, date, date, null, null, null, default)).Items);
+        Assert.Single((await service.AgendaAsync(patient, 1, 12, "future", null, item.Appointment.AppointmentNumber, date, date, null, null, null, default)).Items);
+        Assert.Empty((await service.AgendaAsync(patient, 1, 12, "future", null, item.Appointment.AppointmentNumber + 1, date, date, null, null, null, default)).Items);
+        Assert.Empty((await service.AgendaAsync(other, 1, 12, "all", null, null, null, null, null, null, null, default)).Items);
         await service.ChooseClinicPaymentAsync(patient, appointment, default);
         Assert.Equal("clinic", (await service.AppointmentAsync(patient, appointment, default)).PaymentLocation);
         Assert.Empty(await db.Payments.Where(x => x.AppointmentId == appointment).ToArrayAsync());

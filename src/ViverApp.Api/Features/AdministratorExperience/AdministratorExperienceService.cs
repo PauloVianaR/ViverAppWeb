@@ -21,8 +21,8 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         "appointments.default_consultation_minutes", "appointments.default_examination_minutes", "appointments.default_surgery_minutes",
         "appointments.interval_minutes", "communications.email_enabled", "communications.sms_enabled", "premium.manager_can_decide",
         "appointments.arrival_notifications_enabled", "appointments.arrival_popup_enabled", "appointments.arrival_sound_enabled",
-        "appointments.arrival_sound_volume", "appointments.arrival_sound_key", "appointments.arrival_early_minutes",
-        "appointments.arrival_late_minutes", "appointments.arrival_notification_retention_days", "appointments.arrival_mark_read_on_open"
+        "appointments.arrival_sound_volume", "appointments.arrival_sound_key",
+        "appointments.arrival_notification_retention_days", "appointments.arrival_mark_read_on_open"
     };
     private DateTime Now => timeProvider.GetUtcNow().UtcDateTime;
 
@@ -34,26 +34,29 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         var local = TimeZoneInfo.ConvertTimeFromUtc(now, timezone);
         var from = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(local.Date, DateTimeKind.Unspecified), timezone);
         var to = from.AddDays(1);
-        var counters = new AdministratorCounters(
-            await database.Accounts.CountAsync(x => x.StatusCode == "active", ct),
-            await database.Appointments.CountAsync(x => x.StartsAtUtc >= from && x.StartsAtUtc < to && x.StatusCode != "canceled", ct),
-            await database.PremiumMemberships.CountAsync(x => x.StatusCode == "active" && x.StartsAtUtc <= now && (x.EndsAtUtc == null || x.EndsAtUtc > now), ct),
-            await database.Accounts.CountAsync(x => x.StatusCode == "pending_approval" && (x.RoleCode == "doctor" || x.RoleCode == "manager"), ct),
-            await database.Payments.CountAsync(x => x.StatusCode == "pending", ct),
-            await database.AdministratorNotifications.CountAsync(x => x.AdministratorAccountId == actor && x.ReadAtUtc == null && x.DismissedAtUtc == null, ct));
+        var activeUsers = await database.Accounts.AsNoTracking().Where(x => x.StatusCode == "active").OrderBy(x => x.FullName).Select(x => x.FullName).ToArrayAsync(ct);
+        var todayNumbers = await database.Appointments.AsNoTracking().Where(x => x.StartsAtUtc >= from && x.StartsAtUtc < to && x.StatusCode != "canceled" && x.InverseRescheduledFromAppointment == null).OrderBy(x => x.StartsAtUtc).Select(x => x.AppointmentNumber).ToArrayAsync(ct);
+        var activePremium = await database.PremiumMemberships.AsNoTracking().Where(x => x.StatusCode == "active" && x.StartsAtUtc <= now && (x.EndsAtUtc == null || x.EndsAtUtc > now)).OrderBy(x => x.Account.FullName).Select(x => x.Account.FullName).ToArrayAsync(ct);
+        var pendingApprovalNames = await database.Accounts.AsNoTracking().Where(x => x.StatusCode == "pending_approval" && (x.RoleCode == "doctor" || x.RoleCode == "manager")).OrderBy(x => x.FullName).Select(x => x.FullName).ToArrayAsync(ct);
+        var pendingPaymentNumbers = await database.Payments.AsNoTracking().Where(x => x.StatusCode == "pending").OrderBy(x => x.Appointment.AppointmentNumber).Select(x => x.Appointment.AppointmentNumber).ToArrayAsync(ct);
+        var unreadNotifications = await database.AdministratorNotifications.AsNoTracking().Where(x => x.AdministratorAccountId == actor && x.ReadAtUtc == null && x.DismissedAtUtc == null).OrderByDescending(x => x.CreatedAtUtc).Select(x => x.Title).ToArrayAsync(ct);
+        var counters = new AdministratorCounters(activeUsers.Length, todayNumbers.Length, activePremium.Length,
+            pendingApprovalNames.Length, pendingPaymentNumbers.Length, unreadNotifications.Length);
+        var sources = new AdministratorHomeSources(activeUsers, todayNumbers, activePremium, pendingApprovalNames, pendingPaymentNumbers, unreadNotifications);
         var pending = await database.Accounts.AsNoTracking().Include(x => x.DoctorProfile).ThenInclude(x => x!.DoctorSpecialties).ThenInclude(x => x.Specialty)
             .Where(x => x.StatusCode == "pending_approval" && (x.RoleCode == "doctor" || x.RoleCode == "manager"))
             .OrderBy(x => x.CreatedAtUtc).Take(8).Select(x => new AdministratorPendingProfessional(x.Id, x.FullName, x.RoleCode,
                 x.Email ?? x.PhoneE164, x.DoctorProfile == null ? null : $"CRM {x.DoctorProfile.LicenseStateCode} {x.DoctorProfile.LicenseNumber}",
                 x.DoctorProfile == null ? null : x.DoctorProfile.DoctorSpecialties.Where(s => s.IsPrimary).Select(s => s.Specialty.Name).FirstOrDefault(),
                 x.DoctorProfile == null ? null : x.DoctorProfile.YearsExperience, x.RowVersion)).ToListAsync(ct);
-        var today = (await manager.AgendaAsync(DateOnly.FromDateTime(local), DateOnly.FromDateTime(local), null, null, null, null, null, null, null, null, "date_asc", 1, 8, ct)).Page.Items;
-        return new(counters, pending, today);
+        var today = (await manager.AgendaAsync(DateOnly.FromDateTime(local), DateOnly.FromDateTime(local),
+            null, null, null, null, null, null, null, null, null, "date_asc", 1, 8, ct)).Page.Items;
+        return new(counters, pending, sources, today);
     }
 
     public Task<ManagerAgendaResponse> AgendaAsync(DateOnly from, DateOnly to, string? status, string? modality, string? category,
-        ulong? doctor, string? payment, string? search, string sort, int page, int size, CancellationToken ct) =>
-        manager.AgendaAsync(from, to, status, modality, category, doctor, payment, null, null, search, sort, page, size, ct);
+        ulong? doctor, ulong? appointmentNumber, string? payment, string? search, string sort, int page, int size, CancellationToken ct) =>
+        manager.AgendaAsync(from, to, status, modality, category, doctor, appointmentNumber, payment, null, null, search, sort, page, size, ct);
     public Task<ManagerAppointmentResponse> AppointmentAsync(ulong id, CancellationToken ct) => manager.AppointmentAsync(id, ct);
     public Task<ManagerPatientsResponse> PatientsAsync(string? search, string? status, bool? premium, int page, int size, CancellationToken ct) => manager.PatientsAsync(search, status, premium, page, size, ct);
     public Task<ManagerPatientResponse> PatientAsync(ulong id, CancellationToken ct) => manager.PatientAsync(id, ct);
@@ -89,12 +92,12 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         if (to < from || to.DayNumber - from.DayNumber > 366) throw new AdministratorRuleException(400, "O período deve ter no máximo 366 dias.");
         var timezone = await TimezoneAsync(ct); var start = ToUtc(from, timezone); var end = ToUtc(to.AddDays(1), timezone);
         var days = to.DayNumber - from.DayNumber + 1; var previousStart = start.AddDays(-days); var previousEnd = start;
-        var query = database.Appointments.AsNoTracking().Where(x => x.StartsAtUtc >= start && x.StartsAtUtc < end);
+        var query = database.Appointments.AsNoTracking().Where(x => x.StartsAtUtc >= start && x.StartsAtUtc < end && x.InverseRescheduledFromAppointment == null);
         var count = await query.CountAsync(ct);
         var paid = database.Payments.AsNoTracking().Where(x => x.StatusCode == "paid" && x.PaidAtUtc >= start && x.PaidAtUtc < end);
         var revenue = await paid.SumAsync(x => (decimal?)x.Amount, ct) ?? 0;
         var previousRevenue = await database.Payments.Where(x => x.StatusCode == "paid" && x.PaidAtUtc >= previousStart && x.PaidAtUtc < previousEnd).SumAsync(x => (decimal?)x.Amount, ct) ?? 0;
-        var previousAppointments = await database.Appointments.CountAsync(x => x.StartsAtUtc >= previousStart && x.StartsAtUtc < previousEnd, ct);
+        var previousAppointments = await database.Appointments.CountAsync(x => x.StartsAtUtc >= previousStart && x.StartsAtUtc < previousEnd && x.InverseRescheduledFromAppointment == null, ct);
         var satisfaction = await query.Where(x => x.AppointmentReview != null).AverageAsync(x => (double?)x.AppointmentReview!.Rating, ct);
         var monthlyRows = await paid.GroupBy(x => new { x.PaidAtUtc!.Value.Year, x.PaidAtUtc.Value.Month })
             .Select(g => new { g.Key.Year, g.Key.Month, Value = g.Sum(x => x.Amount), Count = g.Count() }).OrderBy(x => x.Year).ThenBy(x => x.Month).ToListAsync(ct);
@@ -196,11 +199,13 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         if (read == "read") query = query.Where(x => x.ReadAtUtc != null); else if (read == "unread") query = query.Where(x => x.ReadAtUtc == null);
         var items = await query.OrderByDescending(x => x.CreatedAtUtc).Take(100).Select(x => new AdministratorNotificationResponse(x.Id, x.TypeCode,
             x.SeverityCode, x.Title, x.Message, x.EntityType, x.EntityId, x.ReadAtUtc != null, x.CreatedAtUtc, x.RowVersion)).ToListAsync(ct);
-        var counters = new AdministratorNotificationCounters(await database.Payments.CountAsync(x => x.StatusCode == "pending", ct),
-            await database.AdministratorNotifications.CountAsync(x => x.AdministratorAccountId == actor && x.DismissedAtUtc == null && x.ReadAtUtc == null, ct),
-            await database.AdministratorNotifications.CountAsync(x => x.AdministratorAccountId == actor && x.DismissedAtUtc == null && x.SeverityCode == "high", ct),
-            await database.Accounts.CountAsync(x => x.StatusCode == "pending_approval" && (x.RoleCode == "doctor" || x.RoleCode == "manager"), ct));
-        return new(counters, items);
+        var pendingPayments = await database.Payments.AsNoTracking().Where(x => x.StatusCode == "pending").OrderBy(x => x.Appointment.AppointmentNumber).Select(x => x.Appointment.AppointmentNumber).ToArrayAsync(ct);
+        var unread = await database.AdministratorNotifications.AsNoTracking().Where(x => x.AdministratorAccountId == actor && x.DismissedAtUtc == null && x.ReadAtUtc == null).OrderByDescending(x => x.CreatedAtUtc).Select(x => x.Title).ToArrayAsync(ct);
+        var high = await database.AdministratorNotifications.AsNoTracking().Where(x => x.AdministratorAccountId == actor && x.DismissedAtUtc == null && x.SeverityCode == "high").OrderByDescending(x => x.CreatedAtUtc).Select(x => x.Title).ToArrayAsync(ct);
+        var approvals = await database.Accounts.AsNoTracking().Where(x => x.StatusCode == "pending_approval" && (x.RoleCode == "doctor" || x.RoleCode == "manager")).OrderBy(x => x.FullName).Select(x => x.FullName).ToArrayAsync(ct);
+        var sources = new AdministratorNotificationSources(pendingPayments, unread, high, approvals);
+        var counters = new AdministratorNotificationCounters(pendingPayments.Length, unread.Length, high.Length, approvals.Length);
+        return new(counters, sources, items);
     }
 
     public async Task ReadNotificationAsync(ulong actor, ulong id, ulong version, CancellationToken ct)
@@ -307,8 +312,6 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
             "appointments.patient_daily_limit" => number is >= 1 and <= 20,
             "appointments.default_consultation_minutes" or "appointments.default_examination_minutes" or "appointments.default_surgery_minutes" => number is >= 5 and <= 480,
             "appointments.arrival_sound_volume" => number is >= 0 and <= 100,
-            "appointments.arrival_early_minutes" => number is >= 0 and <= 720,
-            "appointments.arrival_late_minutes" => number is >= 0 and <= 240,
             "appointments.arrival_notification_retention_days" => number is >= 1 and <= 365,
             _ => false
         }; if (!valid) throw new JsonException();

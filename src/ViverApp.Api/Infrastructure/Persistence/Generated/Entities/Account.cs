@@ -77,6 +77,8 @@ public partial class Account
 
     public virtual ICollection<Appointment> AppointmentPatientAccounts { get; set; } = new List<Appointment>();
 
+    public virtual ICollection<AppointmentRescheduleHistory> AppointmentRescheduleHistories { get; set; } = new List<AppointmentRescheduleHistory>();
+
     public virtual ICollection<AppointmentStatusHistory> AppointmentStatusHistories { get; set; } = new List<AppointmentStatusHistory>();
 
     public virtual ICollection<AuditEvent> AuditEvents { get; set; } = new List<AuditEvent>();

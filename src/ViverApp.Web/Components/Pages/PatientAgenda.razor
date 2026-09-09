@@ -9,6 +9,7 @@
     <form @onsubmit="Apply" @onsubmit:preventDefault>
         <div class="patient-filter-grid">
             <div class="field"><label for="agenda-search">Serviço ou médico</label><input id="agenda-search" @bind="Search" maxlength="100" /></div>
+            <div class="field"><label for="agenda-number">Número do atendimento</label><input id="agenda-number" type="number" min="100" @bind="AppointmentNumber" @bind:event="oninput" /></div>
             <div class="field"><label for="agenda-from">De</label><input id="agenda-from" type="date" @bind="From" /></div>
             <div class="field"><label for="agenda-until">Até</label><input id="agenda-until" type="date" @bind="Until" /></div>
             <div class="field"><label for="agenda-status">Estado</label><select id="agenda-status" @bind="StatusFilter"><option value="">Todos</option>@foreach(var code in new[]{"pending","confirmed","completed","canceled","rescheduled","no_show"}){<option value="@(code)">@Status(code)</option>}</select></div>
@@ -26,11 +27,12 @@ else { <InterfaceState Title="Nenhum atendimento encontrado" Description="Altere
     private PatientClinic? Clinic;
     private string View = "future", Search = "", StatusFilter = "", CategoryFilter = "", Modality = "";
     private DateTime? From, Until;
+    private ulong? AppointmentNumber;
     private int Page = 1;
-    protected override async Task Load() { Clinic ??= await Get<PatientClinic>("api/v1/patient/experience/clinic"); PageData = await Get<WebPage<PatientAppointment>>($"api/v1/patient/experience/agenda?page={Page}&view={View}&search={Escape(Search)}&status={StatusFilter}&category={CategoryFilter}&modality={Modality}&from={From:yyyy-MM-dd}&until={Until:yyyy-MM-dd}"); }
+    protected override async Task Load() { Clinic ??= await Get<PatientClinic>("api/v1/patient/experience/clinic"); PageData = await Get<WebPage<PatientAppointment>>($"api/v1/patient/experience/agenda?page={Page}&view={View}&search={Escape(Search)}&appointmentNumber={AppointmentNumber}&status={StatusFilter}&category={CategoryFilter}&modality={Modality}&from={From:yyyy-MM-dd}&until={Until:yyyy-MM-dd}"); }
     private Task Apply() => Run(async () => { Page = 1; await Load(); });
     private Task ChangeView(string view) => Run(async () => { View = view; Page = 1; await Load(); });
-    private Task Clear() => Run(async () => { Search = StatusFilter = CategoryFilter = Modality = ""; From = Until = null; Page = 1; await Load(); });
+    private Task Clear() => Run(async () => { Search = StatusFilter = CategoryFilter = Modality = ""; AppointmentNumber = null; From = Until = null; Page = 1; await Load(); });
     private Task Previous() => Run(async () => { Page--; await Load(); });
     private Task Next() => Run(async () => { Page++; await Load(); });
 }

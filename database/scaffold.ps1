@@ -53,6 +53,7 @@ $tables = @(
     'professional_reviews',
     'appointments',
     'appointment_number_sequence',
+    'appointment_reschedule_history',
     'arrival_queue_sequences',
     'appointment_status_history',
     'doctor_notifications',

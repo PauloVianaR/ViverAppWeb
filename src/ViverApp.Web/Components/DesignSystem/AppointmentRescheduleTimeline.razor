@@ -1,0 +1,21 @@
+@if (Items.Count > 0)
+{
+    <details class="reschedule-timeline">
+        <summary>Ver histórico de reagendamentos (@Items.Count)</summary>
+        <ol>
+            @foreach (var item in Items.OrderByDescending(x => x.SequenceNumber))
+            {
+                <li>
+                    <strong>@(item.SequenceNumber)º reagendamento</strong>
+                    <span>@Local(item.PreviousStartsAtUtc) → @Local(item.NewStartsAtUtc)</span>
+                    @if (!string.IsNullOrWhiteSpace(item.Reason)) { <small>Motivo: @item.Reason</small> }
+                </li>
+            }
+        </ol>
+    </details>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<WebAppointmentRescheduleHistory> Items { get; set; } = [];
+    private static string Local(DateTime value) => value.ToLocalTime().ToString("dd/MM/yyyy 'às' HH:mm");
+}

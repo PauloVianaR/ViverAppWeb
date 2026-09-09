@@ -285,7 +285,7 @@ Cada fase deve:
 
 ## Fase 16 — Pacientes, atendimento e chegada
 
-**Estado:** implementada na branch `codex/fase-16-pacientes-atendimento-chegada`; automação e MySQL aprovados, aguardando validação visual obrigatória no monitor 3 e integração formal à `main`.
+**Estado:** implementação e validações automatizadas concluídas na branch `codex/fase-16-pacientes-atendimento-chegada`; chegada, reagendamento no mesmo atendimento, navegação Agenda/Histórico, cores, filtro por número e rastreabilidade dos indicadores também foram aprovados no navegador integrado. A confirmação física no monitor 3 está registrada localmente; falta a integração formal à `main`.
 
 **Plano detalhado:** [Pacientes, atendimento e chegada](FASE-16-PACIENTES-ATENDIMENTO-E-CHEGADA.md).
 

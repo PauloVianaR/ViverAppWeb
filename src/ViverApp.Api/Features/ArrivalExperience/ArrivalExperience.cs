@@ -64,12 +64,14 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
         if (appointment.ModalityCode != "in_person" || appointment.StatusCode != "confirmed")
             throw new ArrivalRuleException(409, "Somente um atendimento presencial confirmado pode registrar chegada.");
 
-        var settings = await LoadSettingsAsync(ct);
         var now = clock.GetUtcNow().UtcDateTime;
-        if (now < appointment.StartsAtUtc.AddMinutes(-settings.EarlyMinutes) || now > appointment.StartsAtUtc.AddMinutes(settings.LateMinutes))
-            throw new ArrivalRuleException(409, "A chegada está fora da janela operacional configurada.");
         var timezone = await TimezoneAsync(ct);
         var localDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(now, DateTimeKind.Utc), timezone).Date;
+        var appointmentLocalDate = TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.SpecifyKind(appointment.StartsAtUtc, DateTimeKind.Utc), timezone).Date;
+        if (localDate != appointmentLocalDate)
+            throw new ArrivalRuleException(409, "A chegada só pode ser registrada na data agendada.");
+        var settings = await LoadSettingsAsync(ct);
 
         await database.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO arrival_queue_sequences (business_date, next_value, updated_at_utc)
@@ -210,8 +212,7 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
             .ToDictionaryAsync(x => x.SettingKey, x => x.ValueJson, ct);
         return new(ReadBool(values, "appointments.arrival_notifications_enabled", true), ReadBool(values, "appointments.arrival_popup_enabled", true),
             ReadBool(values, "appointments.arrival_sound_enabled", true), ReadInt(values, "appointments.arrival_sound_volume", 60),
-            ReadString(values, "appointments.arrival_sound_key", "soft_chime"), ReadInt(values, "appointments.arrival_early_minutes", 120),
-            ReadInt(values, "appointments.arrival_late_minutes", 30), ReadInt(values, "appointments.arrival_notification_retention_days", 30),
+            ReadString(values, "appointments.arrival_sound_key", "soft_chime"), ReadInt(values, "appointments.arrival_notification_retention_days", 30),
             ReadBool(values, "appointments.arrival_mark_read_on_open", true));
     }
 
@@ -225,7 +226,7 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
     private static int ReadInt(IReadOnlyDictionary<string, string> values, string key, int fallback) => values.TryGetValue(key, out var json) && int.TryParse(json, CultureInfo.InvariantCulture, out var value) ? value : fallback;
     private static string ReadString(IReadOnlyDictionary<string, string> values, string key, string fallback) { if (!values.TryGetValue(key, out var json)) return fallback; try { return JsonSerializer.Deserialize<string>(json) ?? fallback; } catch (JsonException) { return fallback; } }
     private sealed record ArrivalSettings(bool NotificationsEnabled, bool PopupEnabled, bool SoundEnabled, int SoundVolume,
-        string SoundKey, int EarlyMinutes, int LateMinutes, int RetentionDays, bool MarkReadOnOpen);
+        string SoundKey, int RetentionDays, bool MarkReadOnOpen);
 }
 
 public sealed class ArrivalRuleException(int statusCode, string message) : Exception(message)

@@ -77,12 +77,17 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
     {
         await using var db = CreateContext(); var service = CreateService(db);
         var included = await service.AgendaAsync(appointmentLocalDate, appointmentLocalDate, null, null, null, null,
-            null, new TimeOnly(9, 30), new TimeOnly(10, 30), null, "date_asc", 1, 20, CancellationToken.None);
+            null, null, new TimeOnly(9, 30), new TimeOnly(10, 30), null, "date_asc", 1, 20, CancellationToken.None);
         var excluded = await service.AgendaAsync(appointmentLocalDate, appointmentLocalDate, null, null, null, null,
-            null, new TimeOnly(11, 0), new TimeOnly(12, 0), null, "date_asc", 1, 20, CancellationToken.None);
+            null, null, new TimeOnly(11, 0), new TimeOnly(12, 0), null, "date_asc", 1, 20, CancellationToken.None);
 
         Assert.Contains(included.Page.Items, x => x.Id == appointmentId);
         Assert.DoesNotContain(excluded.Page.Items, x => x.Id == appointmentId);
+        var byNumber = await service.AgendaAsync(appointmentLocalDate, appointmentLocalDate, null, null, null, null,
+            included.Page.Items.Single(x => x.Id == appointmentId).AppointmentNumber, null, null, null, null, "date_asc", 1, 20, CancellationToken.None);
+        Assert.Single(byNumber.Page.Items);
+        Assert.Equal(appointmentId, byNumber.Page.Items[0].Id);
+        Assert.Contains(byNumber.Page.Items[0].AppointmentNumber, byNumber.Sources.Total);
     }
 
     [Fact]
@@ -100,10 +105,15 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task ArrivalIsIdempotentAndCreatesOneDurableDoctorNotification()
     {
+        var timezone = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
+        var localNow = TimeZoneInfo.ConvertTimeFromUtc(now, timezone);
+        var farTime = localNow.Hour < 12 ? new TimeOnly(23, 30) : new TimeOnly(0, 30);
+        var sameDayFarFromScheduledTime = TimeZoneInfo.ConvertTimeToUtc(
+            DateTime.SpecifyKind(DateOnly.FromDateTime(localNow).ToDateTime(farTime), DateTimeKind.Unspecified), timezone);
         await using (var setup = CreateContext())
             await setup.Appointments.Where(x => x.Id == appointmentId).ExecuteUpdateAsync(x => x
-                .SetProperty(a => a.StatusCode, "confirmed").SetProperty(a => a.StartsAtUtc, now)
-                .SetProperty(a => a.EndsAtUtc, now.AddMinutes(30)));
+                .SetProperty(a => a.StatusCode, "confirmed").SetProperty(a => a.StartsAtUtc, sameDayFarFromScheduledTime)
+                .SetProperty(a => a.EndsAtUtc, sameDayFarFromScheduledTime.AddMinutes(30)));
         async Task<ArrivalResponse> Register()
         {
             await using var context = CreateContext();
@@ -129,6 +139,20 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         var startDenied = await Assert.ThrowsAsync<ArrivalRuleException>(() =>
             service.StartAsync(doctorId + 1, appointmentId, new StartAppointmentRequest(first.RowVersion), CancellationToken.None));
         Assert.Equal(404, startDenied.StatusCode);
+    }
+
+    [Fact]
+    public async Task ArrivalRejectsOnlyAnotherClinicDay()
+    {
+        await using var setup = CreateContext();
+        await setup.Appointments.Where(x => x.Id == appointmentId).ExecuteUpdateAsync(x => x
+            .SetProperty(a => a.StatusCode, "confirmed").SetProperty(a => a.StartsAtUtc, now.AddDays(1))
+            .SetProperty(a => a.EndsAtUtc, now.AddDays(1).AddMinutes(30)));
+        var service = new ArrivalExperienceService(setup, new FixedClock(now), new NoOpAuditWriter(), new NullHubContext(), NullLogger<ArrivalExperienceService>.Instance);
+        var error = await Assert.ThrowsAsync<ArrivalRuleException>(() =>
+            service.RegisterAsync(managerId, appointmentId, new ArrivalRequest(1), CancellationToken.None));
+        Assert.Equal(409, error.StatusCode);
+        Assert.Contains("data agendada", error.Message, StringComparison.Ordinal);
     }
 
     private ManagerExperienceService CreateService(ViverAppDbContext db) => new(db, null!, null!, new NoOpAuditWriter(), new FixedClock(now));

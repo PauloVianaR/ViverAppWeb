@@ -5,9 +5,12 @@ using ViverApp.Api.Features.ManagerExperience;
 namespace ViverApp.Api.Features.AdministratorExperience;
 
 public sealed record AdministratorHomeResponse(AdministratorCounters Counters, IReadOnlyList<AdministratorPendingProfessional> Pending,
-    IReadOnlyList<ManagerAppointmentResponse> Today);
+    AdministratorHomeSources Sources, IReadOnlyList<ManagerAppointmentResponse> Today);
 public sealed record AdministratorCounters(int ActiveUsers, int TodayAppointments, int ActivePremium, int PendingApprovals,
     int PendingPayments, int UnreadNotifications);
+public sealed record AdministratorHomeSources(IReadOnlyList<string> ActiveUsers, IReadOnlyList<ulong> TodayAppointments,
+    IReadOnlyList<string> ActivePremium, IReadOnlyList<string> PendingApprovals,
+    IReadOnlyList<ulong> PendingPayments, IReadOnlyList<string> UnreadNotifications);
 public sealed record AdministratorPendingProfessional(ulong AccountId, string FullName, string RoleCode, string? Contact,
     string? License, string? Specialty, ushort? YearsExperience, ulong RowVersion);
 public sealed record AdministratorAnalyticsResponse(DateOnly From, DateOnly To, decimal Revenue, int Appointments,
@@ -29,7 +32,10 @@ public sealed record AdministratorPremiumPlanResponse(uint Id, string Name, deci
 public sealed record AdministratorNotificationResponse(ulong Id, string TypeCode, string SeverityCode, string Title, string Message,
     string? EntityType, string? EntityId, bool IsRead, DateTime CreatedAtUtc, ulong RowVersion);
 public sealed record AdministratorNotificationCounters(int PendingPayments, int Unread, int HighSeverity, int PendingApprovals);
-public sealed record AdministratorNotificationsResponse(AdministratorNotificationCounters Counters, IReadOnlyList<AdministratorNotificationResponse> Items);
+public sealed record AdministratorNotificationSources(IReadOnlyList<ulong> PendingPayments, IReadOnlyList<string> Unread,
+    IReadOnlyList<string> HighSeverity, IReadOnlyList<string> PendingApprovals);
+public sealed record AdministratorNotificationsResponse(AdministratorNotificationCounters Counters,
+    AdministratorNotificationSources Sources, IReadOnlyList<AdministratorNotificationResponse> Items);
 public sealed record AdministratorDoctorAccessResponse(ulong AccountId, string FullName, bool OnlineEnabled, ulong RowVersion);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
