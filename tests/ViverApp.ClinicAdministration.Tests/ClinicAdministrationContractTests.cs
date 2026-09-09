@@ -32,6 +32,7 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
                 configuration.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["Authentication:Delivery:Enabled"] = "false",
+                    ["Storage:Private:Provider"] = "Database",
                 }));
         });
 

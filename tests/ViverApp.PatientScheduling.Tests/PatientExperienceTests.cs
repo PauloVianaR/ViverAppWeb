@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.PatientExperience;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
@@ -31,6 +32,7 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         {
             ["Authentication:Delivery:Enabled"] = "false",
             ["PagBank:Enabled"] = "false",
+            ["Storage:Private:Provider"] = "Database",
             ["Logging:LogLevel:Default"] = "None",
         }));
     });
@@ -184,6 +186,43 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         Assert.Equal("canceled", (await service.PremiumAsync(patient, default)).StatusCode);
         var blocked = new PrivateDocumentStore(db, services.GetRequiredService<IDataProtectionProvider>(), new TestScanner(false), services.GetRequiredService<IWebHostEnvironment>());
         Assert.Equal(422, (await Assert.ThrowsAsync<PatientExperienceException>(() => blocked.PrepareAsync(patient, File(content), default))).StatusCode);
+    }
+
+    [Fact]
+    public async Task R2_document_uses_an_opaque_key_and_no_public_download_url()
+    {
+        using var scope = factory.Services.CreateScope();
+        var services = scope.ServiceProvider;
+        var storage = new TestPrivateObjectStorage();
+        var store = new PrivateDocumentStore(
+            services.GetRequiredService<ViverAppDbContext>(),
+            services.GetRequiredService<IDataProtectionProvider>(),
+            new TestScanner(true),
+            services.GetRequiredService<IWebHostEnvironment>(),
+            storage,
+            Options.Create(new PrivateStorageOptions { Provider = "R2" }));
+        var content = Encoding.ASCII.GetBytes("%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n%%EOF");
+        var document = await store.PrepareAsync(patient, File(content), default);
+
+        Assert.Equal("r2", document.StorageProviderCode);
+        Assert.Null(document.ProtectedContent);
+        Assert.NotNull(document.ObjectKey);
+        Assert.DoesNotContain(document.OriginalFileName, document.ObjectKey, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(patient.ToString(), document.ObjectKey, StringComparison.Ordinal);
+        Assert.StartsWith("private/development/", document.ObjectKey, StringComparison.Ordinal);
+        Assert.Equal(content, storage.Content);
+        Assert.Throws<NotSupportedException>(() => storage.CreateShortLivedDownloadUri(document.ObjectKey));
+    }
+
+    [Fact]
+    public void R2_keys_are_unique_and_do_not_embed_identity_or_file_names()
+    {
+        var first = R2PrivateObjectStorage.CreateOpaqueKey("Production", new DateTime(2026, 9, 8));
+        var second = R2PrivateObjectStorage.CreateOpaqueKey("Production", new DateTime(2026, 9, 8));
+        Assert.StartsWith("private/production/2026/09/", first, StringComparison.Ordinal);
+        Assert.NotEqual(first, second);
+        Assert.DoesNotContain("patient", first, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("pdf", first, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -349,6 +388,27 @@ public sealed class PatientExperienceTests : IAsyncLifetime
 
     private static FormFile File(byte[] bytes) => new(new MemoryStream(bytes), 0, bytes.Length, "file", "comprovante.pdf") { Headers = new HeaderDictionary(), ContentType = "application/pdf" };
     private sealed class TestScanner(bool clean) : IDocumentMalwareScanner { public Task<bool> IsCleanAsync(byte[] content, CancellationToken ct) => Task.FromResult(clean); }
+    private sealed class TestPrivateObjectStorage : IPrivateObjectStorage
+    {
+        public byte[]? Content { get; private set; }
+
+        public Task<StoredPrivateObject> PutAsync(byte[] content, string contentType, byte[] sha256, CancellationToken ct)
+        {
+            Content = content.ToArray();
+            return Task.FromResult(new StoredPrivateObject(
+                R2PrivateObjectStorage.CreateOpaqueKey("Development", DateTime.UtcNow),
+                "test-etag"));
+        }
+
+        public Task<byte[]> GetAsync(string key, int expectedBytes, CancellationToken ct) =>
+            Task.FromResult(Content?.ToArray() ?? []);
+
+        public Task<bool> ExistsAsync(string key, byte[] expectedSha256, CancellationToken ct) =>
+            Task.FromResult(Content is not null && CryptographicOperations.FixedTimeEquals(SHA256.HashData(Content), expectedSha256));
+
+        public Uri CreateShortLivedDownloadUri(string key) =>
+            throw new NotSupportedException("A API mediada é obrigatória nestes testes.");
+    }
     private static async Task Csrf(HttpClient client)
     {
         var token = await client.GetFromJsonAsync<JsonElement>("/api/v1/auth/antiforgery");

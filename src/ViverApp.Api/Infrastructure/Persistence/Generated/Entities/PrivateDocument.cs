@@ -17,7 +17,21 @@ public partial class PrivateDocument
 
     public byte[] Sha256 { get; set; } = null!;
 
-    public byte[] ProtectedContent { get; set; } = null!;
+    public string StorageProviderCode { get; set; } = null!;
+
+    public string? ObjectKey { get; set; }
+
+    public string? StorageEtag { get; set; }
+
+    public DateTime? MigratedAtUtc { get; set; }
+
+    public DateTime? LastVerifiedAtUtc { get; set; }
+
+    public DateTime? LegacyContentRetainedUntilUtc { get; set; }
+
+    public ulong RowVersion { get; set; }
+
+    public byte[]? ProtectedContent { get; set; }
 
     public string StatusCode { get; set; } = null!;
 
