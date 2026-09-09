@@ -128,7 +128,7 @@ Fontes permitidas principais:
 - tratar permissão negada, dispositivo ausente e falha de rede;
 - impedir entrada de médico não atribuído;
 - nenhuma gravação por padrão;
-- endurecimento distribuído/TURN permanece na Fase 18.
+- endurecimento distribuído/TURN permanece na Fase 20.
 
 ## Banco e API
 
