@@ -8,7 +8,7 @@ public sealed record PatientAppointment(WebAppointment Appointment, string Categ
     string PaymentLocation, decimal BasePrice, decimal DiscountPercent, bool CanPay, bool CanCancel, bool CanReschedule, bool CanJoinOnline, bool HasReport, byte? Rating, bool CanChooseClinic);
 public sealed record PatientPayment(ulong AppointmentId, ulong? PaymentId, string Service, string DoctorName, DateTime StartsAtUtc,
     string StatusCode, decimal Amount, string? Method, string Location, DateTime? PaidAtUtc, bool CanChooseClinic, bool CanPay, string ModalityCode);
-public sealed record PatientAddress(string PostalCode, string Street, string Number, string? Complement, string District, string City, string StateCode);
+public sealed record PatientAddress(string? PostalCode, string? Street, string? Number, string? Complement, string? District, string? City, string? StateCode);
 public sealed record PatientProfileData(string FullName, string? Email, string? Phone, bool EmailConfirmed, bool PhoneConfirmed,
     string? TaxId, DateOnly? BirthDate, PatientAddress? Address, bool EmailEnabled, bool SmsEnabled, ulong RowVersion);
 public sealed record PatientPremium(bool IsPremium, ulong? MembershipId, string StatusCode, string? RejectionReason,
@@ -48,9 +48,15 @@ public static class PatientLabels
     public static string StatusFace(string code) => code switch { "pending" => "😞", "confirmed" => "😊", "arrived" => "🙋", "in_progress" => "🩺", "completed" => "😌", "canceled" => "✖", "no_show" => "😶", "rescheduled" => "🔄", _ => "•" };
     public static string StatusCss(string code) => code switch
     {
-        "pending" => "pending", "confirmed" => "confirmed", "arrived" => "arrived",
-        "in_progress" => "in-progress", "completed" => "completed", "canceled" => "canceled",
-        "no_show" => "no-show", "rescheduled" => "rescheduled", _ => "neutral"
+        "pending" => "pending",
+        "confirmed" => "confirmed",
+        "arrived" => "arrived",
+        "in_progress" => "in-progress",
+        "completed" => "completed",
+        "canceled" => "canceled",
+        "no_show" => "no-show",
+        "rescheduled" => "rescheduled",
+        _ => "neutral"
     };
     public static string Money(decimal value) => value.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
     public static string Method(string? value) => value switch { "PIX" => "Pix", "CREDIT_CARD" => "Cartão de crédito", "DEBIT_CARD" => "Cartão de débito", "BOLETO" => "Boleto", _ => "Não informado" };

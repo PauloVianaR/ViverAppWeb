@@ -3,6 +3,7 @@
 @inject IJSRuntime JavaScript
 @inject WebBackendOptions Backend
 @inject NavigationManager Navigation
+@inject UiErrorNotifier Errors
 
 <PageTitle>Segurança da conta | ViverApp</PageTitle>
 
@@ -53,15 +54,15 @@
             Sessions.AddRange(await client.InvokeAsync<IReadOnlyList<WebSession>>("get", Backend.BaseUrl.ToString(), "api/v1/auth/sessions"));
             Passkeys.AddRange(await client.InvokeAsync<IReadOnlyList<WebPasskey>>("get", Backend.BaseUrl.ToString(), "api/v1/auth/passkeys"));
         }
-        catch (JSException exception) { Error(exception.Message); }
+        catch (Exception exception) { Error(exception is JSException ? exception.Message : UiErrorNotifier.UnexpectedMessage); }
         finally { IsLoading = false; }
     }
     private async Task CreatePasskeyAsync() => await RunAsync(async () => { await module!.InvokeVoidAsync("createPasskey", Backend.BaseUrl.ToString(), $"Dispositivo {Passkeys.Count + 1}"); Notice = "Chave de acesso adicionada."; await LoadAsync(); });
     private async Task RemovePasskeyAsync(WebPasskey item) => await RunAsync(async () => { if (!await JavaScript.InvokeAsync<bool>("confirm", "Remover esta chave de acesso? Confira se possui outra forma de entrar.")) return; await module!.InvokeAsync<object?>("sendMethod", Backend.BaseUrl.ToString(), $"api/v1/auth/passkeys/{Uri.EscapeDataString(item.CredentialId)}", "DELETE", null); Passkeys.Remove(item); Notice = "Chave removida."; });
     private async Task RevokeSessionAsync(WebSession item) => await RunAsync(async () => { if (!await JavaScript.InvokeAsync<bool>("confirm", "Encerrar o acesso neste dispositivo?")) return; await module!.InvokeAsync<object?>("sendMethod", Backend.BaseUrl.ToString(), $"api/v1/auth/sessions/{item.Id}", "DELETE", null); Sessions.Remove(item); Notice = "Sessão revogada."; });
     private async Task RevokeAllAsync() => await RunAsync(async () => { if (!await JavaScript.InvokeAsync<bool>("confirm", "Sair de todos os dispositivos, incluindo este?")) return; await module!.InvokeAsync<object?>("send", Backend.BaseUrl.ToString(), "api/v1/auth/sessions/revoke-all", new { }); Navigation.NavigateTo("/acesso", true); });
-    private async Task RunAsync(Func<Task> action) { if (IsBusy) return; IsBusy = true; Notice = null; NoticeIsError = false; try { await action(); } catch (JSException exception) { Error(exception.Message); } finally { IsBusy = false; } }
-    private void Error(string value) { Notice = value; NoticeIsError = true; }
+    private async Task RunAsync(Func<Task> action) { if (IsBusy) return; IsBusy = true; Notice = null; NoticeIsError = false; try { await action(); } catch (JSException exception) { Error(exception.Message); } catch (Exception) { Error(UiErrorNotifier.UnexpectedMessage); } finally { IsBusy = false; } }
+    private void Error(string value) { Notice = UiErrorNotifier.Normalize(value); NoticeIsError = true; Errors.Show(Notice); }
     private static string MethodLabel(string value) => value switch { "google" => "Google", "passkey" => "Passkey", "sms_code" => "Código SMS", "email_code" => "Código por e-mail", _ => "Senha" };
     public async ValueTask DisposeAsync() { if (module is not null) try { await module.DisposeAsync(); } catch (JSDisconnectedException) { } }
 }

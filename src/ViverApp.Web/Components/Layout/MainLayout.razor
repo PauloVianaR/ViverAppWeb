@@ -97,6 +97,7 @@
 </div>
 @if(ArrivalToast is not null){<aside class="arrival-toast" role="status" aria-live="polite"><strong>Paciente chegou</strong><span>Atendimento @ArrivalToast.AppointmentNumber · senha @ArrivalToast.QueueNumber</span><button type="button" @onclick="()=>OpenRealtimeAsync(ArrivalToast)">Abrir atendimento</button></aside>}
 <div id="blazor-error-ui" data-nosnippet>Ocorreu um erro inesperado. <a href="." class="reload">Recarregar</a><span class="dismiss">🗙</span></div>
+<GlobalErrorDialog />
 
 @code {
     private ShellDefinition Shell { get; set; } = ShellNavigationCatalog.Resolve("/");

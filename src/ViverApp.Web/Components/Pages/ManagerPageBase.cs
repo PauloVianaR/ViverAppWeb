@@ -9,10 +9,13 @@ public abstract class ManagerPageBase : ComponentBase, IAsyncDisposable
     [Inject] protected IJSRuntime JavaScript { get; set; } = null!;
     [Inject] protected WebBackendOptions Backend { get; set; } = null!;
     [Inject] protected NavigationManager Navigation { get; set; } = null!;
+    [Inject] protected UiErrorNotifier ErrorNotifier { get; set; } = null!;
     protected IJSObjectReference? Module;
     protected bool Loading = true, Busy;
-    protected string? Notice;
-    protected bool NoticeError;
+    private string? notice;
+    private bool noticeError;
+    protected string? Notice { get => notice; set { notice = value; if (noticeError && value is not null) ErrorNotifier.Show(value); } }
+    protected bool NoticeError { get => noticeError; set { noticeError = value; if (value && notice is not null) ErrorNotifier.Show(notice); } }
     private string? loadedUri;
     protected override Task OnParametersSetAsync() => ReloadForLocationAsync(Navigation.Uri);
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -39,7 +42,7 @@ public abstract class ManagerPageBase : ComponentBase, IAsyncDisposable
         if (!result.Ok) { if (result.Status == 401) Navigation.NavigateTo("/acesso?estado=sessao-expirada", true); throw new ManagerUiException(result.Error ?? "Não foi possível concluir."); }
         return result.Data;
     }
-    protected async Task Run(Func<Task> action) { if (Busy) return; Busy = true; Notice = null; NoticeError = false; try { await action(); } catch (ManagerUiException e) { Notice = e.Message; NoticeError = true; } catch (JSException) { Notice = "Não foi possível conectar. Confira sua conexão e tente novamente."; NoticeError = true; } finally { Busy = false; } }
+    protected async Task Run(Func<Task> action) { if (Busy) return; Busy = true; Notice = null; NoticeError = false; try { await action(); } catch (ManagerUiException e) { Notice = e.Message; NoticeError = true; } catch (JSException) { Notice = "Não foi possível conectar. Confira sua conexão e tente novamente."; NoticeError = true; } catch (Exception) { Notice = UiErrorNotifier.UnexpectedMessage; NoticeError = true; } finally { Busy = false; } }
     protected static string Escape(string value) => Uri.EscapeDataString(value);
     protected async Task Open(string id) => await Module!.InvokeVoidAsync("showDialog", id);
     protected async Task Close(string id) => await Module!.InvokeVoidAsync("closeDialog", id);

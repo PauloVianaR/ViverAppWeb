@@ -1,0 +1,46 @@
+@implements IAsyncDisposable
+@inject UiErrorNotifier Errors
+@inject IJSRuntime JavaScript
+
+<dialog id="global-error-dialog" class="global-error-dialog" aria-labelledby="global-error-title" aria-describedby="global-error-message">
+    <div class="global-error-heading">
+        <span aria-hidden="true">!</span>
+        <div><p>Não foi possível concluir</p><h2 id="global-error-title">Revise esta operação</h2></div>
+    </div>
+    <p id="global-error-message">@Message</p>
+    <button class="button" type="button" @onclick="DismissAsync">Entendi</button>
+</dialog>
+
+@code {
+    private IJSObjectReference? module;
+    private string Message = UiErrorNotifier.UnexpectedMessage;
+    private bool openRequested;
+
+    protected override void OnInitialized() => Errors.ErrorRaised += Show;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/patient-experience.js");
+        if (!openRequested || module is null) return;
+        openRequested = false;
+        await module.InvokeVoidAsync("showDialog", "global-error-dialog");
+    }
+
+    private void Show(string message) => _ = InvokeAsync(() =>
+    {
+        Message = message;
+        openRequested = true;
+        StateHasChanged();
+    });
+
+    private async Task DismissAsync()
+    {
+        if (module is not null) await module.InvokeVoidAsync("closeDialog", "global-error-dialog");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Errors.ErrorRaised -= Show;
+        if (module is not null) try { await module.DisposeAsync(); } catch (JSDisconnectedException) { }
+    }
+}

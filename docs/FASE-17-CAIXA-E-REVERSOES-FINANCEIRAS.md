@@ -264,7 +264,7 @@ DTOs não expõem entidades EF. Totais e relatórios são calculados no servidor
 - entradas, reversões, suprimentos, sangrias, ajustes e líquido fecham matematicamente;
 - paginação não altera totais;
 - mudança de data/fuso classifica o movimento corretamente;
-- Imprimir contém movimentos e totais;
+- Imprimir contém somente cabeçalho, metadados e movimentos;
 - Imprimir Totais não contém movimentos individuais;
 - A4 não corta valores/linhas essenciais em celular ou desktop.
 
@@ -302,7 +302,7 @@ DTOs não expõem entidades EF. Totais e relatórios são calculados no servidor
 
 ## Implementação e evidências
 
-- as migrations `0025` a `0029` foram executadas integralmente no banco local `viverappweb`, em MySQL 8.0.41, e o scaffold EF foi regenerado por DB-First;
+- as migrations `0025` a `0030` foram executadas integralmente no banco local `viverappweb`, em MySQL 8.0.41, e o scaffold EF foi regenerado por DB-First;
 - o schema agora preserva várias tentativas de pagamento por atendimento, aponta o pagamento atual, registra reversões e eventos, mantém livro-caixa e fechamento imutáveis e protege os registros append-only por triggers;
 - a API entrega consulta diária/histórica paginada, filtros, totais calculados no servidor, movimentos manuais compensatórios, fechamento, duas visões de impressão e reversão idempotente;
 - a interface de Gestor e Administrador possui a nova área **Caixa**, filtros, totais por método, movimentos, fechamento e as ações exatas **Imprimir** e **Imprimir Totais**; os detalhes de atendimento permitem cancelar o pagamento elegível e registrar outro depois da reversão confirmada;
@@ -312,6 +312,7 @@ DTOs não expõem entidades EF. Totais e relatórios são calculados no servidor
 - os ajustes complementares mantêm todo cancelamento financeiro como fato compensatório e também devolvem o atendimento a **Pendente**, permitindo novo pagamento; a chegada pode ser cancelada por Gestor/Admin somente com motivo e sua notificação médica pendente é encerrada;
 - pacientes cadastrados por Gestor/Admin agora podem existir somente no cadastro clínico, com nome, CPF único e nascimento obrigatórios, contatos/endereço opcionais e onboarding explicitamente opcional; `portal_access_enabled` distingue essas pessoas de contas capazes de entrar no portal;
 - o rate limiting continua protegendo acessos anônimos, autenticação, uploads e integrações externas, enquanto operações autenticadas usuais usam partição por conta e limites operacionais altos, eliminando o bloqueio de uma sequência humana normal de agenda/pagamento/reversão;
-- os dois relatórios A4 foram redesenhados com identidade ViverApp, cabeçalho institucional, rastreabilidade, tabela financeira no modo completo e quadro compacto de entradas, saídas e líquido por forma no modo de totais;
-- build da solution concluído sem avisos ou erros; 189 testes aprovados em 7 projetos e verificação final confirmou MySQL 8.0.41, banco `viverappweb` e migrations aplicadas;
+- os dois relatórios A4 foram isolados do restante da página: **Imprimir** contém somente cabeçalho, metadados e movimentações, enquanto **Imprimir Totais** contém somente cabeçalho, metadados e os totais por forma; navegação, link de salto, rodapé e blocos indevidos não entram na impressão;
+- o endereço de pacientes internos aceita preenchimento parcial no banco e nos contratos DB-First, mantendo nome, CPF e nascimento obrigatórios; erros operacionais continuam no aviso da página e também abrem um diálogo responsivo com fundo desfocado, mensagens explicativas em português e fallback seguro para falhas inesperadas;
+- build da solution concluído sem avisos ou erros; 194 testes aprovados em 7 projetos e verificação final confirmou MySQL 8.0.41, banco `viverappweb` e migrations aplicadas;
 - a abertura pública em HTTP e o redirecionamento de sessão expirada foram conferidos no navegador integrado. A sessão autenticada não estava disponível nesse navegador e a regra do monitor 3 impede substituir essa homologação por uma superfície sem monitor identificável; a pendência foi registrada sem criar bypass de autenticação.

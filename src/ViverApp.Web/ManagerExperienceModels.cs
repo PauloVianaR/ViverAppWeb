@@ -24,7 +24,7 @@ public sealed record ManagerAgendaSources(IReadOnlyList<ulong> Total, IReadOnlyL
     IReadOnlyList<ulong> InPerson, IReadOnlyList<ulong> Rescheduled, IReadOnlyList<ulong> Paid,
     IReadOnlyList<ulong> PendingPayment);
 public sealed record ManagerAgendaData(ManagerAgendaCounters Counters, ManagerAgendaSources Sources, WebPage<ManagerAppointment> Page);
-public sealed record ManagerPatientAddress(string PostalCode, string Street, string Number, string? Complement, string District, string City, string StateCode);
+public sealed record ManagerPatientAddress(string? PostalCode, string? Street, string? Number, string? Complement, string? District, string? City, string? StateCode);
 public sealed record ManagerPatient(ulong AccountId, string FullName, string? PreferredName, string? TaxId, string? Email,
     string? Phone, bool EmailVerified, bool PhoneVerified, DateOnly? BirthDate, ManagerPatientAddress? Address,
     string StatusCode, bool PortalAccessEnabled, bool IsPremium, string PremiumStatus, ulong? PremiumRequestId,

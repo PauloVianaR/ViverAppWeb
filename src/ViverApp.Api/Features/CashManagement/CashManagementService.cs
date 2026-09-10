@@ -118,18 +118,28 @@ public sealed class CashManagementService(
             throw Missing("O movimento a compensar não existe neste caixa.");
         var movement = new CashMovement
         {
-            OperationalDate = date.ToDateTime(TimeOnly.MinValue), DirectionCode = expectedDirection,
-            TypeCode = request.TypeCode, MethodCode = request.MethodCode, Amount = request.Amount,
-            CurrencyCode = "BRL", ResponsibleAccountId = actor, Description = description,
-            Reason = reason, RelatedMovementId = request.RelatedMovementId, IdempotencyKey = idempotencyKey, OccurredAtUtc = now, AfterClosure = afterClosure,
+            OperationalDate = date.ToDateTime(TimeOnly.MinValue),
+            DirectionCode = expectedDirection,
+            TypeCode = request.TypeCode,
+            MethodCode = request.MethodCode,
+            Amount = request.Amount,
+            CurrencyCode = "BRL",
+            ResponsibleAccountId = actor,
+            Description = description,
+            Reason = reason,
+            RelatedMovementId = request.RelatedMovementId,
+            IdempotencyKey = idempotencyKey,
+            OccurredAtUtc = now,
+            AfterClosure = afterClosure,
         };
         database.CashMovements.Add(movement);
         await database.SaveChangesAsync(cancellationToken);
-        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         await audit.WriteAsync("cash.manual_movement.created", actor, "cash_movement", movement.Id.ToString(CultureInfo.InvariantCulture),
             new Dictionary<string, string> { ["type"] = movement.TypeCode, ["direction"] = movement.DirectionCode }, cancellationToken);
-        movement.ResponsibleAccount = await database.Accounts.AsNoTracking().SingleAsync(item => item.Id == actor, cancellationToken);
-        return Map(movement);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+        var recorded = await database.CashMovements.AsNoTracking().Include(item => item.ResponsibleAccount)
+            .SingleAsync(item => item.Id == movement.Id, cancellationToken);
+        return Map(recorded);
     }
 
     public async Task<CashClosureResponse> CloseAsync(
@@ -155,10 +165,17 @@ public sealed class CashManagementService(
         var now = clock.GetUtcNow().UtcDateTime;
         var closure = new CashClosure
         {
-            OperationalDate = date.ToDateTime(TimeOnly.MinValue), ClosedByAccountId = actor, LastMovementId = lastMovementId,
-            GrossEntries = summary.GrossEntries, PaymentReversals = summary.PaymentReversals, Supplies = summary.Supplies,
-            Withdrawals = summary.Withdrawals, AdjustmentsNet = summary.AdjustmentsNet, NetTotal = summary.NetTotal,
-            MovementCount = checked((uint)summary.MovementCount), TotalsByMethodJson = JsonSerializer.Serialize(summary.ByMethod),
+            OperationalDate = date.ToDateTime(TimeOnly.MinValue),
+            ClosedByAccountId = actor,
+            LastMovementId = lastMovementId,
+            GrossEntries = summary.GrossEntries,
+            PaymentReversals = summary.PaymentReversals,
+            Supplies = summary.Supplies,
+            Withdrawals = summary.Withdrawals,
+            AdjustmentsNet = summary.AdjustmentsNet,
+            NetTotal = summary.NetTotal,
+            MovementCount = checked((uint)summary.MovementCount),
+            TotalsByMethodJson = JsonSerializer.Serialize(summary.ByMethod),
             ClosedAtUtc = now,
         };
         database.CashClosures.Add(closure);
@@ -199,9 +216,14 @@ public sealed class CashManagementService(
         var now = clock.GetUtcNow().UtcDateTime;
         var reversal = new PaymentReversal
         {
-            PaymentId = payment.Id, RequestedByAccountId = actor, StatusCode = payment.ProviderCode == "internal" ? "confirmed" : "pending",
-            Reason = reason, IdempotencyKey = idempotencyKey, RequestedAtUtc = now,
-            CompletedAtUtc = payment.ProviderCode == "internal" ? now : null, RowVersion = 1,
+            PaymentId = payment.Id,
+            RequestedByAccountId = actor,
+            StatusCode = payment.ProviderCode == "internal" ? "confirmed" : "pending",
+            Reason = reason,
+            IdempotencyKey = idempotencyKey,
+            RequestedAtUtc = now,
+            CompletedAtUtc = payment.ProviderCode == "internal" ? now : null,
+            RowVersion = 1,
         };
         database.PaymentReversals.Add(reversal);
         payment.ReversalReason = reason; payment.ReversalRequestedAtUtc = now; payment.ReversedByAccountId = actor;
@@ -210,8 +232,11 @@ public sealed class CashManagementService(
         await database.SaveChangesAsync(cancellationToken);
         database.PaymentReversalEvents.Add(new PaymentReversalEvent
         {
-            PaymentReversalId = reversal.Id, FromStatusCode = null, ToStatusCode = reversal.StatusCode,
-            SourceCode = payment.ProviderCode == "internal" ? "manual" : "pagbank", OccurredAtUtc = now,
+            PaymentReversalId = reversal.Id,
+            FromStatusCode = null,
+            ToStatusCode = reversal.StatusCode,
+            SourceCode = payment.ProviderCode == "internal" ? "manual" : "pagbank",
+            OccurredAtUtc = now,
         });
 
         if (payment.ProviderCode == "pagbank")
@@ -262,17 +287,32 @@ public sealed class CashManagementService(
         var afterClosure = await database.CashClosures.AnyAsync(item => item.OperationalDate == date.ToDateTime(TimeOnly.MinValue), cancellationToken);
         database.CashMovements.Add(new CashMovement
         {
-            OperationalDate = date.ToDateTime(TimeOnly.MinValue), DirectionCode = "outflow", TypeCode = "payment_reversal",
-            MethodCode = LedgerMethod(payment), Amount = payment.Amount, CurrencyCode = "BRL", AppointmentId = payment.AppointmentId,
-            PaymentId = payment.Id, RelatedMovementId = original.Id, ResponsibleAccountId = actor,
-            Description = $"Cancelamento do pagamento do atendimento {appointment.AppointmentNumber}", Reason = reason,
-            IdempotencyKey = $"payment-reversal-{reversal.Id}", OccurredAtUtc = now, AfterClosure = afterClosure,
+            OperationalDate = date.ToDateTime(TimeOnly.MinValue),
+            DirectionCode = "outflow",
+            TypeCode = "payment_reversal",
+            MethodCode = LedgerMethod(payment),
+            Amount = payment.Amount,
+            CurrencyCode = "BRL",
+            AppointmentId = payment.AppointmentId,
+            PaymentId = payment.Id,
+            RelatedMovementId = original.Id,
+            ResponsibleAccountId = actor,
+            Description = $"Cancelamento do pagamento do atendimento {appointment.AppointmentNumber}",
+            Reason = reason,
+            IdempotencyKey = $"payment-reversal-{reversal.Id}",
+            OccurredAtUtc = now,
+            AfterClosure = afterClosure,
         });
         database.PaymentEvents.Add(new PaymentEvent
         {
-            PaymentId = payment.Id, SourceCode = "reversal", ProviderStatusCode = payment.ProviderStatusCode,
-            NormalizedStatusCode = payment.StatusCode, EventFingerprint = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"reversal:{reversal.Id}")),
-            ProviderOccurredAtUtc = payment.ProviderEventAtUtc, OccurredAtUtc = now, WasApplied = true,
+            PaymentId = payment.Id,
+            SourceCode = "reversal",
+            ProviderStatusCode = payment.ProviderStatusCode,
+            NormalizedStatusCode = payment.StatusCode,
+            EventFingerprint = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"reversal:{reversal.Id}")),
+            ProviderOccurredAtUtc = payment.ProviderEventAtUtc,
+            OccurredAtUtc = now,
+            WasApplied = true,
         });
         await database.SaveChangesAsync(cancellationToken);
         if (transaction is not null) await transaction.CommitAsync(cancellationToken);
@@ -296,10 +336,19 @@ public sealed class CashManagementService(
         var afterClosure = await database.CashClosures.AnyAsync(item => item.OperationalDate == date.ToDateTime(TimeOnly.MinValue), cancellationToken);
         database.CashMovements.Add(new CashMovement
         {
-            OperationalDate = date.ToDateTime(TimeOnly.MinValue), DirectionCode = "entry", TypeCode = "payment_received",
-            MethodCode = LedgerMethod(payment), Amount = payment.Amount, CurrencyCode = "BRL", AppointmentId = payment.AppointmentId,
-            PaymentId = payment.Id, ResponsibleAccountId = actor, Description = $"Pagamento do atendimento {appointmentNumber}",
-            IdempotencyKey = $"payment-received-{payment.Id}", OccurredAtUtc = occurredAtUtc, AfterClosure = afterClosure,
+            OperationalDate = date.ToDateTime(TimeOnly.MinValue),
+            DirectionCode = "entry",
+            TypeCode = "payment_received",
+            MethodCode = LedgerMethod(payment),
+            Amount = payment.Amount,
+            CurrencyCode = "BRL",
+            AppointmentId = payment.AppointmentId,
+            PaymentId = payment.Id,
+            ResponsibleAccountId = actor,
+            Description = $"Pagamento do atendimento {appointmentNumber}",
+            IdempotencyKey = $"payment-received-{payment.Id}",
+            OccurredAtUtc = occurredAtUtc,
+            AfterClosure = afterClosure,
         });
     }
 

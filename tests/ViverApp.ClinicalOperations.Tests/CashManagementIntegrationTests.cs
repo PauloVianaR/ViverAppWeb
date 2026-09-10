@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using MySql.Data.MySqlClient;
@@ -21,7 +22,7 @@ public sealed class CashManagementIntegrationTests
         var configuration = new ConfigurationBuilder().AddUserSecrets<CashManagementIntegrationTests>().Build();
         await using var database = CreateContext(configuration);
         await using var transaction = await database.Database.BeginTransactionAsync();
-        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
+        var now = new DateTime(2099, 6, 17, 15, 30, 0, DateTimeKind.Utc);
         var manager = Account($"manager-{Guid.NewGuid():N}@phase17.example.test", ViverAppRoles.Manager, "Gestora Caixa");
         var administrator = Account($"admin-{Guid.NewGuid():N}@phase17.example.test", ViverAppRoles.Administrator, "Administradora Caixa");
         var doctor = Account($"doctor-{Guid.NewGuid():N}@phase17.example.test", ViverAppRoles.Doctor, "Dra. Caixa");
@@ -30,33 +31,66 @@ public sealed class CashManagementIntegrationTests
         await database.SaveChangesAsync();
         database.DoctorProfiles.Add(new DoctorProfile
         {
-            AccountId = doctor.Id, ProfessionalTitle = "Dra.", LicenseStateCode = "MG", LicenseNumber = "170017",
-            DefaultAppointmentDurationMinutes = 30, CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1,
+            AccountId = doctor.Id,
+            ProfessionalTitle = "Dra.",
+            LicenseStateCode = "MG",
+            LicenseNumber = "170017",
+            DefaultAppointmentDurationMinutes = 30,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
         });
         var appointmentType = new AppointmentType
         {
-            Name = $"__phase17_{Guid.NewGuid():N}", CategoryCode = "consultation", ModalityCode = "in_person",
-            DurationMinutes = 30, PriceAmount = 180m, IsActive = true, DisplayOrder = 999,
-            CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1,
+            Name = $"__phase17_{Guid.NewGuid():N}",
+            CategoryCode = "consultation",
+            ModalityCode = "in_person",
+            DurationMinutes = 30,
+            PriceAmount = 180m,
+            IsActive = true,
+            DisplayOrder = 999,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
         };
         database.AppointmentTypes.Add(appointmentType);
         await database.SaveChangesAsync();
         var appointment = new Appointment
         {
             AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
-            PatientAccountId = patient.Id, DoctorAccountId = doctor.Id, AppointmentTypeId = appointmentType.Id,
-            CreatedByAccountId = manager.Id, StatusCode = "confirmed", ModalityCode = "in_person",
-            StartsAtUtc = now.AddDays(1), EndsAtUtc = now.AddDays(1).AddMinutes(30), PriceAmount = 180m,
-            BasePriceAmount = 180m, CurrencyCode = "BRL", PaymentLocationCode = "clinic",
-            CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1,
+            PatientAccountId = patient.Id,
+            DoctorAccountId = doctor.Id,
+            AppointmentTypeId = appointmentType.Id,
+            CreatedByAccountId = manager.Id,
+            StatusCode = "confirmed",
+            ModalityCode = "in_person",
+            StartsAtUtc = now.AddDays(1),
+            EndsAtUtc = now.AddDays(1).AddMinutes(30),
+            PriceAmount = 180m,
+            BasePriceAmount = 180m,
+            CurrencyCode = "BRL",
+            PaymentLocationCode = "clinic",
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
         };
         database.Appointments.Add(appointment);
         await database.SaveChangesAsync();
         var original = new Payment
         {
-            AppointmentId = appointment.Id, ProviderReferenceAppointmentId = appointment.Id, ProviderCode = "internal",
-            StatusCode = "paid", Amount = 180m, CurrencyCode = "BRL", IdempotencyKey = Guid.NewGuid(), MethodCode = "cash",
-            ConfirmedByAccountId = manager.Id, PaidAtUtc = now, CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1,
+            AppointmentId = appointment.Id,
+            ProviderReferenceAppointmentId = appointment.Id,
+            ProviderCode = "internal",
+            StatusCode = "paid",
+            Amount = 180m,
+            CurrencyCode = "BRL",
+            IdempotencyKey = Guid.NewGuid(),
+            MethodCode = "cash",
+            ConfirmedByAccountId = manager.Id,
+            PaidAtUtc = now,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
         };
         database.Payments.Add(original);
         await database.SaveChangesAsync();
@@ -64,12 +98,18 @@ public sealed class CashManagementIntegrationTests
 
         var options = new PagBankOptions
         {
-            Enabled = false, Environment = "Sandbox", ProductionEnabled = false, RefundsEnabled = false,
-            ApiBaseUrl = new Uri("https://sandbox.api.pagseguro.com/"), WebPublicBaseUrl = new Uri("https://example.test/"),
-            ApiPublicBaseUrl = new Uri("https://api.example.test/"), Token = string.Empty,
+            Enabled = false,
+            Environment = "Sandbox",
+            ProductionEnabled = false,
+            RefundsEnabled = false,
+            ApiBaseUrl = new Uri("https://sandbox.api.pagseguro.com/"),
+            WebPublicBaseUrl = new Uri("https://example.test/"),
+            ApiPublicBaseUrl = new Uri("https://api.example.test/"),
+            Token = string.Empty,
         };
         var clock = new FixedClock(now);
-        var audit = new NoOpAuditWriter();
+        var audit = new DelegatingAuditWriter(new IdentityAuditWriter(database, new HttpContextAccessor(),
+            IdentitySecurityOptions.Load(configuration, allowInsecureLoopbackHttp: true)));
         var cash = new CashManagementService(database, new NoOpPagBank(), options, audit, clock);
         await cash.RecordPaymentReceivedAsync(original, manager.Id, now, CancellationToken.None);
         await database.SaveChangesAsync();
@@ -99,6 +139,13 @@ public sealed class CashManagementIntegrationTests
         Assert.Equal(2, await database.Payments.CountAsync(item => item.AppointmentId == appointment.Id));
         Assert.Equal(1, await database.Payments.CountAsync(item => item.AppointmentId == appointment.Id && item.ActiveAppointmentId != null));
 
+        var withdrawal = await cash.AddManualAsync(manager.Id, ViverAppRoles.Manager, Guid.NewGuid().ToString("N"),
+            new CashManualMovementRequest("withdrawal", "outflow", "cash", 200m, null,
+                "Sangria", "Sangria operacional"), CancellationToken.None);
+        Assert.Equal("withdrawal", withdrawal.TypeCode);
+        Assert.Equal("outflow", withdrawal.DirectionCode);
+        Assert.Equal(200m, withdrawal.Amount);
+
         var day = await cash.DayAsync(date, null, null, appointment.AppointmentNumber, null, null, 1, 25, CancellationToken.None);
         Assert.Equal(360m, day.Summary.GrossEntries);
         Assert.Equal(180m, day.Summary.PaymentReversals);
@@ -106,15 +153,22 @@ public sealed class CashManagementIntegrationTests
         Assert.Equal(3, day.Summary.MovementCount);
         Assert.Contains(day.Page.Items, item => item.TypeCode == "payment_reversal" && item.RelatedMovementId.HasValue);
 
+        var unfilteredDay = await cash.DayAsync(date, null, null, null, null, null, 1, 25, CancellationToken.None);
+        Assert.Equal(200m, unfilteredDay.Summary.Withdrawals);
+        Assert.Equal(-20m, unfilteredDay.Summary.NetTotal);
+        Assert.Equal(4, unfilteredDay.Summary.MovementCount);
+        Assert.Contains(unfilteredDay.Page.Items, item => item.Id == withdrawal.Id && item.TypeCode == "withdrawal");
+
         var fullPrint = await cash.PrintAsync(manager.Id, date, null, null, appointment.AppointmentNumber, null, null, false, CancellationToken.None);
         var totalsPrint = await cash.PrintAsync(manager.Id, date, null, null, appointment.AppointmentNumber, null, null, true, CancellationToken.None);
         Assert.Equal(3, fullPrint.Movements.Count);
         Assert.Empty(totalsPrint.Movements);
         Assert.Equal(fullPrint.Summary.NetTotal, totalsPrint.Summary.NetTotal);
 
-        var lastMovement = day.Page.Items.Max(item => item.Id);
+        var lastMovement = unfilteredDay.Page.Items.Max(item => item.Id);
         var closure = await cash.CloseAsync(manager.Id, date, new CashCloseRequest(lastMovement), CancellationToken.None);
-        Assert.Equal(180m, closure.Snapshot.NetTotal);
+        Assert.Equal(-20m, closure.Snapshot.NetTotal);
+        Assert.Equal(200m, closure.Snapshot.Withdrawals);
         var denied = await Assert.ThrowsAsync<CashRuleException>(() => cash.AddManualAsync(manager.Id, ViverAppRoles.Manager,
             Guid.NewGuid().ToString("N"), new CashManualMovementRequest("supply", "entry", "cash", 25m, null,
                 "Troco adicional", "Abertura complementar após fechamento"), CancellationToken.None));
@@ -139,15 +193,23 @@ public sealed class CashManagementIntegrationTests
 
     private static Account Account(string email, string role, string name) => new()
     {
-        RoleCode = role, StatusCode = "active", FullName = name, Email = email, NormalizedEmail = email.ToUpperInvariant(),
-        EmailVerified = true, SecurityStamp = RandomNumberGenerator.GetBytes(32), CreatedAtUtc = DateTime.UtcNow,
-        UpdatedAtUtc = DateTime.UtcNow, RowVersion = 1,
+        RoleCode = role,
+        StatusCode = "active",
+        FullName = name,
+        Email = email,
+        NormalizedEmail = email.ToUpperInvariant(),
+        EmailVerified = true,
+        SecurityStamp = RandomNumberGenerator.GetBytes(32),
+        CreatedAtUtc = DateTime.UtcNow,
+        UpdatedAtUtc = DateTime.UtcNow,
+        RowVersion = 1,
     };
 
-    private sealed class NoOpAuditWriter : IClinicalOperationsAuditWriter
+    private sealed class DelegatingAuditWriter(IdentityAuditWriter writer) : IClinicalOperationsAuditWriter
     {
         public Task WriteAsync(string eventCode, ulong actorAccountId, string entityType, string entityId,
-            IReadOnlyDictionary<string, string>? safeData, CancellationToken cancellationToken) => Task.CompletedTask;
+            IReadOnlyDictionary<string, string>? safeData, CancellationToken cancellationToken) =>
+            writer.WriteAsync(eventCode, actorAccountId, entityType, entityId, safeData, cancellationToken);
     }
 
     private sealed class FixedClock(DateTime value) : TimeProvider

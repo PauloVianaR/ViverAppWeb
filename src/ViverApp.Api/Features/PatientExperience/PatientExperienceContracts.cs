@@ -17,8 +17,10 @@ public sealed record PatientAppointmentResponse(AppointmentResponse Appointment,
 public sealed record PatientPaymentItem(ulong AppointmentId, ulong? PaymentId, string Service, string DoctorName,
     DateTime StartsAtUtc, string StatusCode, decimal Amount, string? Method, string Location, DateTime? PaidAtUtc,
     bool CanChooseClinic, bool CanPay, string ModalityCode);
+public sealed record PatientProfileAddressResponse(string? PostalCode, string? Street, string? Number, string? Complement,
+    string? District, string? City, string? StateCode);
 public sealed record PatientProfileResponse(string FullName, string? Email, string? Phone, bool EmailConfirmed,
-    bool PhoneConfirmed, string? TaxId, DateOnly? BirthDate, RegistrationAddressRequest? Address,
+    bool PhoneConfirmed, string? TaxId, DateOnly? BirthDate, PatientProfileAddressResponse? Address,
     bool EmailEnabled, bool SmsEnabled, ulong RowVersion);
 public sealed record PatientPremiumResponse(bool IsPremium, ulong? MembershipId, string StatusCode,
     string? RejectionReason, DateTime? ReviewedAtUtc, DateTime? NextRequestAtUtc, bool CanRequest,

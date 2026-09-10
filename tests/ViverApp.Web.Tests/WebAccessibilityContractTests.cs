@@ -223,6 +223,23 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.True(ContrastRatio(foreground, background) >= 4.5);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("One or more validation errors occurred.")]
+    [InlineData("Internal Server Error")]
+    public void ErrorDialog_DoesNotExposeGenericOrEnglishInternalFailures(string? message)
+    {
+        Assert.Equal(UiErrorNotifier.UnexpectedMessage, UiErrorNotifier.Normalize(message));
+    }
+
+    [Fact]
+    public void ErrorDialog_PreservesAnExplanatoryPortugueseMessage()
+    {
+        const string message = "O CPF informado é inválido.";
+        Assert.Equal(message, UiErrorNotifier.Normalize(message));
+    }
+
     private HttpClient CreateClient() => factory.CreateClient(new WebApplicationFactoryClientOptions
     {
         AllowAutoRedirect = false,

@@ -32,8 +32,8 @@ public sealed record ManagerAgendaSources(IReadOnlyList<ulong> Total, IReadOnlyL
     IReadOnlyList<ulong> PendingPayment);
 public sealed record ManagerAgendaResponse(ManagerAgendaCounters Counters, ManagerAgendaSources Sources,
     SchedulingPage<ManagerAppointmentResponse> Page);
-public sealed record ManagerPatientAddressResponse(string PostalCode, string Street, string Number, string? Complement,
-    string District, string City, string StateCode);
+public sealed record ManagerPatientAddressResponse(string? PostalCode, string? Street, string? Number, string? Complement,
+    string? District, string? City, string? StateCode);
 public sealed record ManagerPatientResponse(ulong AccountId, string FullName, string? PreferredName, string? TaxId, string? Email,
     string? Phone, bool EmailVerified, bool PhoneVerified, DateOnly? BirthDate, ManagerPatientAddressResponse? Address,
     string StatusCode, bool PortalAccessEnabled, bool IsPremium, string PremiumStatus, ulong? PremiumRequestId,
@@ -87,13 +87,13 @@ public sealed record ManagerPatientUpdateRequest([param: Required, StringLength(
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ManagerPatientAddressRequest(
-    [param: Required, RegularExpression("^[0-9]{8}$")] string PostalCode,
-    [param: Required, StringLength(200, MinimumLength = 2)] string Street,
-    [param: Required, StringLength(20, MinimumLength = 1)] string Number,
+    [param: RegularExpression("^[0-9]{8}$")] string? PostalCode,
+    [param: StringLength(200, MinimumLength = 2)] string? Street,
+    [param: StringLength(20, MinimumLength = 1)] string? Number,
     [param: StringLength(100)] string? Complement,
-    [param: Required, StringLength(100, MinimumLength = 2)] string District,
-    [param: Required, StringLength(100, MinimumLength = 2)] string City,
-    [param: Required, RegularExpression("^[A-Za-z]{2}$")] string StateCode);
+    [param: StringLength(100, MinimumLength = 2)] string? District,
+    [param: StringLength(100, MinimumLength = 2)] string? City,
+    [param: RegularExpression("^[A-Za-z]{2}$")] string? StateCode);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ManagerAppointmentCreateRequest([param: Range(1, long.MaxValue)] ulong PatientAccountId,

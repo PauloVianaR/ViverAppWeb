@@ -160,7 +160,7 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
         var address = account.AccountAddress;
         return new(account.FullName, account.Email, account.PhoneE164, account.EmailVerified, account.PhoneVerified,
             account.TaxId ?? account.PatientProfile?.TaxId, (account.BirthDate ?? account.PatientProfile?.BirthDate) is DateTime birth ? DateOnly.FromDateTime(birth) : null,
-            address is null ? null : new(address.PostalCode, address.Street, address.Number, address.Complement, address.District, address.City, address.StateCode),
+            address is null ? null : new PatientProfileAddressResponse(address.PostalCode, address.Street, address.Number, address.Complement, address.District, address.City, address.StateCode),
             account.PatientPreference?.EmailEnabled ?? true, account.PatientPreference?.SmsEnabled ?? true, account.RowVersion);
     }
 

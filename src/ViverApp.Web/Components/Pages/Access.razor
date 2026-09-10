@@ -4,6 +4,7 @@
 @inject IJSRuntime JavaScript
 @inject NavigationManager Navigation
 @inject WebBackendOptions Backend
+@inject UiErrorNotifier Errors
 
 <PageTitle>Acesso | ViverApp</PageTitle>
 
@@ -309,7 +310,7 @@
             else if (!string.IsNullOrWhiteSpace(Result)) ShowError("O acesso pelo Google não foi concluído. Tente novamente.");
             else if (InitialMode == "cadastro") Mode = "register";
         }
-        catch (JSException exception) { ShowError(ToUserMessage(exception)); }
+        catch (Exception exception) { ShowError(exception is JSException ? ToUserMessage(exception) : UiErrorNotifier.UnexpectedMessage); }
         finally { IsLoading = false; StateHasChanged(); }
     }
 
@@ -422,7 +423,7 @@
     }
 
     private async Task<T> SendAsync<T>(string path, object body) => await module!.InvokeAsync<T>("send", Backend.BaseUrl.ToString(), path, body);
-    private async Task RunAsync(Func<Task> action) { if (IsBusy) return; IsBusy = true; ClearNotice(); try { await action(); } catch (Exception exception) when (exception is JSException or InvalidOperationException) { ShowError(ToUserMessage(exception)); } finally { IsBusy = false; } }
+    private async Task RunAsync(Func<Task> action) { if (IsBusy) return; IsBusy = true; ClearNotice(); try { await action(); } catch (Exception exception) when (exception is JSException or InvalidOperationException) { ShowError(ToUserMessage(exception)); } catch (Exception) { ShowError(UiErrorNotifier.UnexpectedMessage); } finally { IsBusy = false; } }
     private void SetMode(string value) { Mode = value; ClearNotice(); }
     private void ShowLogin() => SetMode("login");
     private void ShowRegister() { UseClassicRegistration = false; SetMode("register"); }
@@ -432,7 +433,7 @@
     private void ShowCodeRequest() => SetMode("code-request");
     private void ShowRecoveryRequest() => SetMode("recovery-request");
     private void UpdateBirthDate(ChangeEventArgs args) => BirthDateText = args.Value?.ToString() ?? string.Empty;
-    private void ShowError(string message) { Notice = message; NoticeIsError = true; }
+    private void ShowError(string message) { Notice = UiErrorNotifier.Normalize(message); NoticeIsError = true; Errors.Show(Notice); }
     private void ShowNotice(string message) { Notice = message; NoticeIsError = false; }
     private void ClearNotice() { Notice = null; NoticeIsError = false; }
     private static string ToUserMessage(Exception exception)
@@ -450,9 +451,7 @@
             message = message[..lineBreak];
         }
 
-        return string.IsNullOrWhiteSpace(message)
-            ? "Não foi possível concluir a solicitação. Tente novamente."
-            : message.Trim();
+        return UiErrorNotifier.Normalize(message);
     }
     private static string Digits(string value) => new(value.Where(char.IsAsciiDigit).ToArray());
     private static string FormatPostalCode(string digits) =>

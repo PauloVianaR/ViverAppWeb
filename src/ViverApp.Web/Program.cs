@@ -40,6 +40,7 @@ builder.Services.AddViverAppObservability(
     builder.Environment,
     "ViverApp.Web");
 builder.Services.AddSingleton(WebBackendOptions.Load(builder.Configuration, builder.Environment));
+builder.Services.AddScoped<UiErrorNotifier>();
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), ["live", "ready"]);
 builder.Services.AddRazorComponents()
