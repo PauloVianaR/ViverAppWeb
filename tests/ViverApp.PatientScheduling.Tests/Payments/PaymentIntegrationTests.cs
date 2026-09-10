@@ -195,6 +195,7 @@ public sealed class PaymentIntegrationTests
             .Select(item => item.WebhookReceiptId!.Value).ToArrayAsync();
         await database.PaymentEvents.Where(item => paymentIds.Contains(item.PaymentId)).ExecuteDeleteAsync();
         await database.PaymentWebhookReceipts.Where(item => receiptIds.Contains(item.Id)).ExecuteDeleteAsync();
+        await database.Appointments.Where(item => item.Id == fixture.AppointmentId).ExecuteUpdateAsync(update => update.SetProperty(item => item.CurrentPaymentId, (ulong?)null));
         await database.Payments.Where(item => paymentIds.Contains(item.Id)).ExecuteDeleteAsync();
         await database.IdempotencyRecords.Where(item => item.ScopeCode == $"payment.checkout:{fixture.PatientId}").ExecuteDeleteAsync();
         await database.AppointmentStatusHistories.Where(item => item.AppointmentId == fixture.AppointmentId).ExecuteDeleteAsync();
@@ -224,6 +225,7 @@ public sealed class PaymentIntegrationTests
             .Select(item => item.WebhookReceiptId!.Value).ToArrayAsync();
         await database.PaymentEvents.Where(item => paymentIds.Contains(item.PaymentId)).ExecuteDeleteAsync();
         await database.PaymentWebhookReceipts.Where(item => receiptIds.Contains(item.Id)).ExecuteDeleteAsync();
+        await database.Appointments.Where(item => appointmentIds.Contains(item.Id)).ExecuteUpdateAsync(update => update.SetProperty(item => item.CurrentPaymentId, (ulong?)null));
         await database.Payments.Where(item => paymentIds.Contains(item.Id)).ExecuteDeleteAsync();
         var scopes = appointments.Select(item => $"payment.checkout:{item.PatientAccountId}").ToArray();
         await database.IdempotencyRecords.Where(item => scopes.Contains(item.ScopeCode)).ExecuteDeleteAsync();

@@ -36,6 +36,8 @@ public static class PatientLabels
         "authorized" => "Em análise",
         "failed" => "Não aprovado",
         "refunded" => "Reembolsado",
+        "reversed" => "Pagamento cancelado",
+        "reversal_pending" => "Cancelamento em processamento",
         "active" => "Premium aprovado",
         "rejected" => "Solicitação rejeitada",
         "expired" => "Expirado",

@@ -50,6 +50,10 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<AuthSession> AuthSessions { get; set; }
 
+    public virtual DbSet<CashClosure> CashClosures { get; set; }
+
+    public virtual DbSet<CashMovement> CashMovements { get; set; }
+
     public virtual DbSet<Clinic> Clinics { get; set; }
 
     public virtual DbSet<ClinicWeeklyHour> ClinicWeeklyHours { get; set; }
@@ -93,6 +97,10 @@ public partial class ViverAppDbContext : DbContext
     public virtual DbSet<Payment> Payments { get; set; }
 
     public virtual DbSet<PaymentEvent> PaymentEvents { get; set; }
+
+    public virtual DbSet<PaymentReversal> PaymentReversals { get; set; }
+
+    public virtual DbSet<PaymentReversalEvent> PaymentReversalEvents { get; set; }
 
     public virtual DbSet<PaymentWebhookReceipt> PaymentWebhookReceipts { get; set; }
 
@@ -510,6 +518,8 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => new { e.ArrivalBusinessDate, e.ArrivalQueueNumber }, "ux_appointments_arrival_queue").IsUnique();
 
+            entity.HasIndex(e => e.CurrentPaymentId, "ux_appointments_current_payment").IsUnique();
+
             entity.HasIndex(e => new { e.DoctorAccountId, e.StartsAtUtc }, "ux_appointments_doctor_start").IsUnique();
 
             entity.HasIndex(e => e.AppointmentNumber, "ux_appointments_number").IsUnique();
@@ -552,6 +562,7 @@ public partial class ViverAppDbContext : DbContext
                 .HasDefaultValueSql("'BRL'")
                 .IsFixedLength()
                 .HasColumnName("currency_code");
+            entity.Property(e => e.CurrentPaymentId).HasColumnName("current_payment_id");
             entity.Property(e => e.DiscountPercent)
                 .HasPrecision(5)
                 .HasColumnName("discount_percent");
@@ -616,6 +627,11 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey(d => d.CreatedByAccountId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_appointments_creator");
+
+            entity.HasOne(d => d.CurrentPayment).WithOne(p => p.Appointment)
+                .HasForeignKey<Appointment>(d => d.CurrentPaymentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointments_current_payment");
 
             entity.HasOne(d => d.DoctorAccount).WithMany(p => p.Appointments)
                 .HasForeignKey(d => d.DoctorAccountId)
@@ -967,6 +983,141 @@ public partial class ViverAppDbContext : DbContext
             entity.HasOne(d => d.Account).WithMany(p => p.AuthSessions)
                 .HasForeignKey(d => d.AccountId)
                 .HasConstraintName("fk_auth_sessions_account");
+        });
+
+        modelBuilder.Entity<CashClosure>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("cash_closures");
+
+            entity.HasIndex(e => e.LastMovementId, "fk_cash_closures_last_movement");
+
+            entity.HasIndex(e => new { e.ClosedByAccountId, e.ClosedAtUtc }, "ix_cash_closures_actor_time");
+
+            entity.HasIndex(e => e.OperationalDate, "ux_cash_closures_date").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AdjustmentsNet)
+                .HasPrecision(13)
+                .HasColumnName("adjustments_net");
+            entity.Property(e => e.ClosedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("closed_at_utc");
+            entity.Property(e => e.ClosedByAccountId).HasColumnName("closed_by_account_id");
+            entity.Property(e => e.GrossEntries)
+                .HasPrecision(13)
+                .HasColumnName("gross_entries");
+            entity.Property(e => e.LastMovementId).HasColumnName("last_movement_id");
+            entity.Property(e => e.MovementCount).HasColumnName("movement_count");
+            entity.Property(e => e.NetTotal)
+                .HasPrecision(13)
+                .HasColumnName("net_total");
+            entity.Property(e => e.OperationalDate)
+                .HasColumnType("date")
+                .HasColumnName("operational_date");
+            entity.Property(e => e.PaymentReversals)
+                .HasPrecision(13)
+                .HasColumnName("payment_reversals");
+            entity.Property(e => e.Supplies)
+                .HasPrecision(13)
+                .HasColumnName("supplies");
+            entity.Property(e => e.TotalsByMethodJson)
+                .HasColumnType("json")
+                .HasColumnName("totals_by_method_json");
+            entity.Property(e => e.Withdrawals)
+                .HasPrecision(13)
+                .HasColumnName("withdrawals");
+
+            entity.HasOne(d => d.ClosedByAccount).WithMany(p => p.CashClosures)
+                .HasForeignKey(d => d.ClosedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_cash_closures_actor");
+
+            entity.HasOne(d => d.LastMovement).WithMany(p => p.CashClosures)
+                .HasForeignKey(d => d.LastMovementId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_cash_closures_last_movement");
+        });
+
+        modelBuilder.Entity<CashMovement>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("cash_movements");
+
+            entity.HasIndex(e => e.RelatedMovementId, "fk_cash_movements_related");
+
+            entity.HasIndex(e => new { e.AppointmentId, e.OccurredAtUtc }, "ix_cash_movements_appointment");
+
+            entity.HasIndex(e => new { e.MethodCode, e.OperationalDate }, "ix_cash_movements_method_date");
+
+            entity.HasIndex(e => new { e.OperationalDate, e.OccurredAtUtc }, "ix_cash_movements_operational_date");
+
+            entity.HasIndex(e => new { e.ResponsibleAccountId, e.OperationalDate }, "ix_cash_movements_responsible");
+
+            entity.HasIndex(e => e.IdempotencyKey, "ux_cash_movements_idempotency").IsUnique();
+
+            entity.HasIndex(e => new { e.PaymentId, e.TypeCode }, "ux_cash_movements_payment_type").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AfterClosure).HasColumnName("after_closure");
+            entity.Property(e => e.Amount)
+                .HasPrecision(13)
+                .HasColumnName("amount");
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.CurrencyCode)
+                .HasMaxLength(3)
+                .HasDefaultValueSql("'BRL'")
+                .IsFixedLength()
+                .HasColumnName("currency_code");
+            entity.Property(e => e.Description)
+                .HasMaxLength(240)
+                .HasColumnName("description");
+            entity.Property(e => e.DirectionCode)
+                .HasMaxLength(12)
+                .HasColumnName("direction_code");
+            entity.Property(e => e.IdempotencyKey)
+                .HasMaxLength(100)
+                .HasColumnName("idempotency_key");
+            entity.Property(e => e.MethodCode)
+                .HasMaxLength(24)
+                .HasColumnName("method_code");
+            entity.Property(e => e.OccurredAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("occurred_at_utc");
+            entity.Property(e => e.OperationalDate)
+                .HasColumnType("date")
+                .HasColumnName("operational_date");
+            entity.Property(e => e.PaymentId).HasColumnName("payment_id");
+            entity.Property(e => e.Reason)
+                .HasMaxLength(500)
+                .HasColumnName("reason");
+            entity.Property(e => e.RelatedMovementId).HasColumnName("related_movement_id");
+            entity.Property(e => e.ResponsibleAccountId).HasColumnName("responsible_account_id");
+            entity.Property(e => e.TypeCode)
+                .HasMaxLength(32)
+                .HasColumnName("type_code");
+
+            entity.HasOne(d => d.Appointment).WithMany(p => p.CashMovements)
+                .HasForeignKey(d => d.AppointmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_cash_movements_appointment");
+
+            entity.HasOne(d => d.Payment).WithMany(p => p.CashMovements)
+                .HasForeignKey(d => d.PaymentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_cash_movements_payment");
+
+            entity.HasOne(d => d.RelatedMovement).WithMany(p => p.InverseRelatedMovement)
+                .HasForeignKey(d => d.RelatedMovementId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_cash_movements_related");
+
+            entity.HasOne(d => d.ResponsibleAccount).WithMany(p => p.CashMovements)
+                .HasForeignKey(d => d.ResponsibleAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_cash_movements_responsible");
         });
 
         modelBuilder.Entity<Clinic>(entity =>
@@ -1688,15 +1839,19 @@ public partial class ViverAppDbContext : DbContext
 
             entity.ToTable("payments");
 
+            entity.HasIndex(e => new { e.AppointmentId, e.CreatedAtUtc }, "ix_payments_appointment_created");
+
             entity.HasIndex(e => new { e.ConfirmedByAccountId, e.PaidAtUtc }, "ix_payments_confirmer");
 
             entity.HasIndex(e => e.ProviderReferenceAppointmentId, "ix_payments_provider_reference");
 
             entity.HasIndex(e => new { e.StatusCode, e.NextReconciliationAtUtc }, "ix_payments_reconciliation");
 
+            entity.HasIndex(e => new { e.ReversedByAccountId, e.ReversalRequestedAtUtc }, "ix_payments_reversed_by");
+
             entity.HasIndex(e => new { e.StatusCode, e.CreatedAtUtc }, "ix_payments_status_created");
 
-            entity.HasIndex(e => e.AppointmentId, "ux_payments_appointment").IsUnique();
+            entity.HasIndex(e => e.ActiveAppointmentId, "ux_payments_active_appointment").IsUnique();
 
             entity.HasIndex(e => e.IdempotencyKey, "ux_payments_idempotency_key").IsUnique();
 
@@ -1704,7 +1859,10 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => new { e.ProviderCode, e.ProviderTransactionId }, "ux_payments_provider_transaction").IsUnique();
 
+            entity.HasIndex(e => e.SupersedesPaymentId, "ux_payments_superseded_once").IsUnique();
+
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ActiveAppointmentId).HasColumnName("active_appointment_id");
             entity.Property(e => e.Amount)
                 .HasPrecision(13)
                 .HasColumnName("amount");
@@ -1770,6 +1928,13 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.RefundedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("refunded_at_utc");
+            entity.Property(e => e.ReversalReason)
+                .HasMaxLength(500)
+                .HasColumnName("reversal_reason");
+            entity.Property(e => e.ReversalRequestedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("reversal_requested_at_utc");
+            entity.Property(e => e.ReversedByAccountId).HasColumnName("reversed_by_account_id");
             entity.Property(e => e.RowVersion)
                 .HasDefaultValueSql("'1'")
                 .HasColumnName("row_version");
@@ -1777,16 +1942,17 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'pending'")
                 .HasColumnName("status_code");
+            entity.Property(e => e.SupersedesPaymentId).HasColumnName("supersedes_payment_id");
             entity.Property(e => e.UpdatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");
 
-            entity.HasOne(d => d.Appointment).WithOne(p => p.PaymentAppointment)
-                .HasForeignKey<Payment>(d => d.AppointmentId)
+            entity.HasOne(d => d.AppointmentNavigation).WithMany(p => p.PaymentAppointmentNavigations)
+                .HasForeignKey(d => d.AppointmentId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_payments_appointment");
 
-            entity.HasOne(d => d.ConfirmedByAccount).WithMany(p => p.Payments)
+            entity.HasOne(d => d.ConfirmedByAccount).WithMany(p => p.PaymentConfirmedByAccounts)
                 .HasForeignKey(d => d.ConfirmedByAccountId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_payments_confirmer");
@@ -1795,6 +1961,16 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey(d => d.ProviderReferenceAppointmentId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_payments_provider_reference");
+
+            entity.HasOne(d => d.ReversedByAccount).WithMany(p => p.PaymentReversedByAccounts)
+                .HasForeignKey(d => d.ReversedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_payments_reversed_by");
+
+            entity.HasOne(d => d.SupersedesPayment).WithOne(p => p.InverseSupersedesPayment)
+                .HasForeignKey<Payment>(d => d.SupersedesPaymentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_payments_supersedes");
         });
 
         modelBuilder.Entity<PaymentEvent>(entity =>
@@ -1848,6 +2024,86 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey<PaymentEvent>(d => d.WebhookReceiptId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_payment_events_webhook_receipt");
+        });
+
+        modelBuilder.Entity<PaymentReversal>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("payment_reversals");
+
+            entity.HasIndex(e => new { e.StatusCode, e.RequestedAtUtc }, "ix_payment_reversals_status_time");
+
+            entity.HasIndex(e => new { e.RequestedByAccountId, e.IdempotencyKey }, "ux_payment_reversals_idempotency").IsUnique();
+
+            entity.HasIndex(e => e.PaymentId, "ux_payment_reversals_payment").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CompletedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("completed_at_utc");
+            entity.Property(e => e.FailureCode)
+                .HasMaxLength(100)
+                .HasColumnName("failure_code");
+            entity.Property(e => e.IdempotencyKey)
+                .HasMaxLength(100)
+                .HasColumnName("idempotency_key");
+            entity.Property(e => e.PaymentId).HasColumnName("payment_id");
+            entity.Property(e => e.ProviderReference)
+                .HasMaxLength(100)
+                .HasColumnName("provider_reference");
+            entity.Property(e => e.Reason)
+                .HasMaxLength(500)
+                .HasColumnName("reason");
+            entity.Property(e => e.RequestedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("requested_at_utc");
+            entity.Property(e => e.RequestedByAccountId).HasColumnName("requested_by_account_id");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.StatusCode)
+                .HasMaxLength(24)
+                .HasColumnName("status_code");
+
+            entity.HasOne(d => d.Payment).WithOne(p => p.PaymentReversal)
+                .HasForeignKey<PaymentReversal>(d => d.PaymentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_payment_reversals_payment");
+
+            entity.HasOne(d => d.RequestedByAccount).WithMany(p => p.PaymentReversals)
+                .HasForeignKey(d => d.RequestedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_payment_reversals_actor");
+        });
+
+        modelBuilder.Entity<PaymentReversalEvent>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("payment_reversal_events");
+
+            entity.HasIndex(e => new { e.PaymentReversalId, e.OccurredAtUtc }, "ix_payment_reversal_events_reversal_time");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.FromStatusCode)
+                .HasMaxLength(24)
+                .HasColumnName("from_status_code");
+            entity.Property(e => e.OccurredAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("occurred_at_utc");
+            entity.Property(e => e.PaymentReversalId).HasColumnName("payment_reversal_id");
+            entity.Property(e => e.SourceCode)
+                .HasMaxLength(24)
+                .HasColumnName("source_code");
+            entity.Property(e => e.ToStatusCode)
+                .HasMaxLength(24)
+                .HasColumnName("to_status_code");
+
+            entity.HasOne(d => d.PaymentReversal).WithMany(p => p.PaymentReversalEvents)
+                .HasForeignKey(d => d.PaymentReversalId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_payment_reversal_events_reversal");
         });
 
         modelBuilder.Entity<PaymentWebhookReceipt>(entity =>

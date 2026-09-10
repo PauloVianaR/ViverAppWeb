@@ -1,0 +1,368 @@
+using System.Data;
+using System.Globalization;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using ViverApp.Api.Features.ClinicalOperations;
+using ViverApp.Api.Features.Identity;
+using ViverApp.Api.Features.PatientScheduling;
+using ViverApp.Api.Features.Payments;
+using ViverApp.Api.Infrastructure.Persistence.Generated;
+using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
+
+namespace ViverApp.Api.Features.CashManagement;
+
+public sealed class CashManagementService(
+    ViverAppDbContext database,
+    IPagBankClient pagBank,
+    PagBankOptions pagBankOptions,
+    IClinicalOperationsAuditWriter audit,
+    TimeProvider clock)
+{
+    private static readonly string[] Methods = ["cash", "pix", "debit_card", "credit_card", "pagbank_online", "other"];
+    private static readonly string[] Types = ["payment_received", "payment_reversal", "supply", "withdrawal", "adjustment", "provider_fee"];
+
+    public async Task<CashDayResponse> DayAsync(
+        DateOnly date,
+        string? method,
+        string? type,
+        ulong? appointmentNumber,
+        string? patient,
+        string? responsible,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        ValidateQuery(date, method, type, page, pageSize);
+        var query = Filtered(date, method, type, appointmentNumber, patient, responsible);
+        var total = await query.CountAsync(cancellationToken);
+        var rows = await query.OrderByDescending(item => item.OccurredAtUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToArrayAsync(cancellationToken);
+        var summary = await SummaryAsync(query, cancellationToken);
+        var closure = await ClosureAsync(date, cancellationToken);
+        return new(date, (await ClinicAsync(cancellationToken)).TimezoneName, closure, summary,
+            new(rows.Select(Map).ToArray(), page, pageSize, total));
+    }
+
+    public async Task<CashPrintResponse> PrintAsync(
+        ulong actor,
+        DateOnly date,
+        string? method,
+        string? type,
+        ulong? appointmentNumber,
+        string? patient,
+        string? responsible,
+        bool totalsOnly,
+        CancellationToken cancellationToken)
+    {
+        ValidateQuery(date, method, type, 1, 100);
+        var query = Filtered(date, method, type, appointmentNumber, patient, responsible);
+        var clinic = await ClinicAsync(cancellationToken);
+        var actorName = await database.Accounts.AsNoTracking().Where(item => item.Id == actor)
+            .Select(item => item.FullName).SingleAsync(cancellationToken);
+        var movements = totalsOnly
+            ? []
+            : (await query.OrderBy(item => item.OccurredAtUtc).ToArrayAsync(cancellationToken)).Select(Map).ToArray();
+        var filters = string.Join(" · ", new[]
+        {
+            method is null ? null : $"Forma: {method}",
+            type is null ? null : $"Tipo: {type}",
+            appointmentNumber is null ? null : $"Atendimento: {appointmentNumber}",
+            string.IsNullOrWhiteSpace(patient) ? null : $"Paciente: {patient.Trim()}",
+            string.IsNullOrWhiteSpace(responsible) ? null : $"Responsável: {responsible.Trim()}",
+        }.Where(item => item is not null));
+        await audit.WriteAsync(totalsOnly ? "cash.totals_printed" : "cash.movements_printed", actor, "cash_day",
+            date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), null, cancellationToken);
+        return new(clinic.LegalName, date, clinic.TimezoneName, actorName, clock.GetUtcNow().UtcDateTime,
+            string.IsNullOrWhiteSpace(filters) ? "Sem filtros adicionais" : filters,
+            await ClosureAsync(date, cancellationToken), await SummaryAsync(query, cancellationToken), movements, totalsOnly);
+    }
+
+    public async Task<CashMovementResponse> AddManualAsync(
+        ulong actor,
+        string actorRole,
+        string idempotencyKey,
+        CashManualMovementRequest request,
+        CancellationToken cancellationToken)
+    {
+        ValidateIdempotency(idempotencyKey);
+        if (request.TypeCode is not ("supply" or "withdrawal" or "adjustment")) throw Invalid("Tipo de movimentação manual inválido.");
+        if (!Methods.Contains(request.MethodCode, StringComparer.Ordinal)) throw Invalid("Forma de pagamento inválida.");
+        var expectedDirection = request.TypeCode switch { "supply" => "entry", "withdrawal" => "outflow", _ => request.DirectionCode };
+        if (expectedDirection is not ("entry" or "outflow") || request.DirectionCode != expectedDirection)
+            throw Invalid("A direção da movimentação não corresponde ao tipo informado.");
+        var reason = Useful(request.Reason, 5, "Informe um motivo com pelo menos 5 caracteres.");
+        var description = Useful(request.Description, 3, "Informe uma descrição válida.");
+        if (request.TypeCode == "adjustment" && request.RelatedMovementId is null)
+            throw Invalid("Um ajuste corretivo deve indicar o movimento compensado.");
+        if (request.TypeCode != "adjustment" && request.RelatedMovementId is not null)
+            throw Invalid("Somente ajustes corretivos podem indicar um movimento relacionado.");
+        var now = clock.GetUtcNow().UtcDateTime;
+        var date = await OperationalDateAsync(now, cancellationToken);
+        await using var transaction = await BeginTransactionAsync(cancellationToken);
+        var replay = await database.CashMovements.AsNoTracking().Include(item => item.ResponsibleAccount)
+            .SingleOrDefaultAsync(item => item.IdempotencyKey == idempotencyKey, cancellationToken);
+        if (replay is not null)
+        {
+            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+            return Map(replay);
+        }
+
+        var afterClosure = await database.CashClosures.AnyAsync(item => item.OperationalDate == date.ToDateTime(TimeOnly.MinValue), cancellationToken);
+        if (afterClosure && actorRole != ViverAppRoles.Administrator)
+            throw Forbidden("Movimentações após o fechamento exigem sessão administrativa com MFA.");
+        if (request.RelatedMovementId is not null && !await database.CashMovements.AnyAsync(
+                item => item.Id == request.RelatedMovementId && item.OperationalDate == date.ToDateTime(TimeOnly.MinValue), cancellationToken))
+            throw Missing("O movimento a compensar não existe neste caixa.");
+        var movement = new CashMovement
+        {
+            OperationalDate = date.ToDateTime(TimeOnly.MinValue), DirectionCode = expectedDirection,
+            TypeCode = request.TypeCode, MethodCode = request.MethodCode, Amount = request.Amount,
+            CurrencyCode = "BRL", ResponsibleAccountId = actor, Description = description,
+            Reason = reason, RelatedMovementId = request.RelatedMovementId, IdempotencyKey = idempotencyKey, OccurredAtUtc = now, AfterClosure = afterClosure,
+        };
+        database.CashMovements.Add(movement);
+        await database.SaveChangesAsync(cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+        await audit.WriteAsync("cash.manual_movement.created", actor, "cash_movement", movement.Id.ToString(CultureInfo.InvariantCulture),
+            new Dictionary<string, string> { ["type"] = movement.TypeCode, ["direction"] = movement.DirectionCode }, cancellationToken);
+        movement.ResponsibleAccount = await database.Accounts.AsNoTracking().SingleAsync(item => item.Id == actor, cancellationToken);
+        return Map(movement);
+    }
+
+    public async Task<CashClosureResponse> CloseAsync(
+        ulong actor,
+        DateOnly date,
+        CashCloseRequest request,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await BeginTransactionAsync(cancellationToken);
+        var existing = await database.CashClosures.AsNoTracking().Include(item => item.ClosedByAccount)
+            .SingleOrDefaultAsync(item => item.OperationalDate == date.ToDateTime(TimeOnly.MinValue), cancellationToken);
+        if (existing is not null)
+        {
+            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+            return await MapClosureAsync(existing, cancellationToken);
+        }
+
+        var query = Filtered(date, null, null, null, null, null);
+        var lastMovementId = await query.MaxAsync(item => (ulong?)item.Id, cancellationToken);
+        if (lastMovementId != request.ExpectedLastMovementId)
+            throw Conflict("O caixa recebeu novas movimentações. Revise os totais antes de fechar.");
+        var summary = await SummaryAsync(query, cancellationToken);
+        var now = clock.GetUtcNow().UtcDateTime;
+        var closure = new CashClosure
+        {
+            OperationalDate = date.ToDateTime(TimeOnly.MinValue), ClosedByAccountId = actor, LastMovementId = lastMovementId,
+            GrossEntries = summary.GrossEntries, PaymentReversals = summary.PaymentReversals, Supplies = summary.Supplies,
+            Withdrawals = summary.Withdrawals, AdjustmentsNet = summary.AdjustmentsNet, NetTotal = summary.NetTotal,
+            MovementCount = checked((uint)summary.MovementCount), TotalsByMethodJson = JsonSerializer.Serialize(summary.ByMethod),
+            ClosedAtUtc = now,
+        };
+        database.CashClosures.Add(closure);
+        await database.SaveChangesAsync(cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+        await audit.WriteAsync("cash.day.closed", actor, "cash_closure", closure.Id.ToString(CultureInfo.InvariantCulture),
+            new Dictionary<string, string> { ["operationalDate"] = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) }, cancellationToken);
+        return await ClosureAsync(date, cancellationToken) ?? throw Conflict("O fechamento não pôde ser consultado.");
+    }
+
+    public async Task<PaymentReversalResponse> ReverseAsync(
+        ulong actor,
+        string idempotencyKey,
+        ulong paymentId,
+        PaymentReversalRequest request,
+        CancellationToken cancellationToken)
+    {
+        ValidateIdempotency(idempotencyKey);
+        var reason = Useful(request.Reason, 5, "Informe um motivo com pelo menos 5 caracteres.");
+        await using var transaction = await BeginTransactionAsync(cancellationToken);
+        var replay = await database.PaymentReversals.AsNoTracking().Include(item => item.Payment)
+            .SingleOrDefaultAsync(item => item.RequestedByAccountId == actor && item.IdempotencyKey == idempotencyKey, cancellationToken);
+        if (replay is not null)
+        {
+            if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+            return MapReversal(replay);
+        }
+
+        var payment = await database.Payments.FromSqlInterpolated($"SELECT * FROM payments WHERE id={paymentId} FOR UPDATE")
+            .SingleOrDefaultAsync(cancellationToken) ?? throw Missing("Pagamento não encontrado.");
+        var appointment = await database.Appointments.FromSqlInterpolated($"SELECT * FROM appointments WHERE id={payment.AppointmentId} FOR UPDATE")
+            .SingleAsync(cancellationToken);
+        if (payment.RowVersion != request.RowVersion) throw Conflict("O pagamento foi alterado por outra sessão.");
+        if (appointment.CurrentPaymentId != payment.Id || payment.StatusCode != "paid")
+            throw Conflict("Somente o pagamento quitado atual pode ser cancelado.");
+        var original = await database.CashMovements.SingleOrDefaultAsync(item => item.PaymentId == payment.Id && item.TypeCode == "payment_received", cancellationToken)
+            ?? throw Conflict("O recebimento original não foi localizado no caixa.");
+        var now = clock.GetUtcNow().UtcDateTime;
+        var reversal = new PaymentReversal
+        {
+            PaymentId = payment.Id, RequestedByAccountId = actor, StatusCode = payment.ProviderCode == "internal" ? "confirmed" : "pending",
+            Reason = reason, IdempotencyKey = idempotencyKey, RequestedAtUtc = now,
+            CompletedAtUtc = payment.ProviderCode == "internal" ? now : null, RowVersion = 1,
+        };
+        database.PaymentReversals.Add(reversal);
+        payment.ReversalReason = reason; payment.ReversalRequestedAtUtc = now; payment.ReversedByAccountId = actor;
+        payment.StatusCode = payment.ProviderCode == "internal" ? "reversed" : "reversal_pending";
+        payment.UpdatedAtUtc = now; payment.RowVersion++;
+        await database.SaveChangesAsync(cancellationToken);
+        database.PaymentReversalEvents.Add(new PaymentReversalEvent
+        {
+            PaymentReversalId = reversal.Id, FromStatusCode = null, ToStatusCode = reversal.StatusCode,
+            SourceCode = payment.ProviderCode == "internal" ? "manual" : "pagbank", OccurredAtUtc = now,
+        });
+
+        if (payment.ProviderCode == "pagbank")
+        {
+            if (!pagBankOptions.Enabled || !pagBankOptions.RefundsEnabled)
+                throw new CashRuleException(503, "O estorno PagBank não está habilitado neste ambiente.");
+            if (pagBankOptions.IsProduction)
+                throw new CashRuleException(503, "Estornos PagBank de produção exigem autorização operacional explícita.");
+            if (string.IsNullOrWhiteSpace(payment.ProviderTransactionId)) throw Conflict("A referência da cobrança PagBank não está disponível.");
+            var provider = await pagBank.RefundChargeAsync(payment.ProviderTransactionId, ToCents(payment.Amount), NormalizeProviderKey(idempotencyKey), cancellationToken);
+            if (PaymentStateMachine.Normalize(provider.Status, provider.TotalCents, provider.RefundedCents) != "refunded")
+                throw new CashRuleException(502, "O PagBank não confirmou o estorno. Nenhuma reversão foi registrada no caixa.");
+            payment.StatusCode = "refunded"; payment.RefundAmount = payment.Amount; payment.RefundedAtUtc = provider.OccurredAtUtc ?? now;
+            payment.ProviderStatusCode = provider.Status; payment.ProviderEventAtUtc = provider.OccurredAtUtc ?? now; payment.RowVersion++;
+            reversal.StatusCode = "confirmed"; reversal.ProviderReference = provider.Id; reversal.CompletedAtUtc = now; reversal.RowVersion++;
+            database.PaymentReversalEvents.Add(new PaymentReversalEvent { PaymentReversalId = reversal.Id, FromStatusCode = "pending", ToStatusCode = "confirmed", SourceCode = "pagbank", OccurredAtUtc = now });
+        }
+
+        var date = await OperationalDateAsync(now, cancellationToken);
+        var afterClosure = await database.CashClosures.AnyAsync(item => item.OperationalDate == date.ToDateTime(TimeOnly.MinValue), cancellationToken);
+        database.CashMovements.Add(new CashMovement
+        {
+            OperationalDate = date.ToDateTime(TimeOnly.MinValue), DirectionCode = "outflow", TypeCode = "payment_reversal",
+            MethodCode = LedgerMethod(payment), Amount = payment.Amount, CurrencyCode = "BRL", AppointmentId = payment.AppointmentId,
+            PaymentId = payment.Id, RelatedMovementId = original.Id, ResponsibleAccountId = actor,
+            Description = $"Cancelamento do pagamento do atendimento {appointment.AppointmentNumber}", Reason = reason,
+            IdempotencyKey = $"payment-reversal-{reversal.Id}", OccurredAtUtc = now, AfterClosure = afterClosure,
+        });
+        database.PaymentEvents.Add(new PaymentEvent
+        {
+            PaymentId = payment.Id, SourceCode = "reversal", ProviderStatusCode = payment.ProviderStatusCode,
+            NormalizedStatusCode = payment.StatusCode, EventFingerprint = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"reversal:{reversal.Id}")),
+            ProviderOccurredAtUtc = payment.ProviderEventAtUtc, OccurredAtUtc = now, WasApplied = true,
+        });
+        await database.SaveChangesAsync(cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+        await audit.WriteAsync("payment.reversed", actor, "payment", payment.Id.ToString(CultureInfo.InvariantCulture),
+            new Dictionary<string, string> { ["appointmentId"] = appointment.Id.ToString(CultureInfo.InvariantCulture), ["provider"] = payment.ProviderCode }, cancellationToken);
+        return MapReversal(reversal);
+    }
+
+    public async Task RecordPaymentReceivedAsync(Payment payment, ulong? actor, DateTime occurredAtUtc, CancellationToken cancellationToken)
+    {
+        if (await database.CashMovements.AnyAsync(item => item.PaymentId == payment.Id && item.TypeCode == "payment_received", cancellationToken)) return;
+        var appointmentNumber = await database.Appointments.Where(item => item.Id == payment.AppointmentId)
+            .Select(item => item.AppointmentNumber).SingleAsync(cancellationToken);
+        var date = await OperationalDateAsync(occurredAtUtc, cancellationToken);
+        var afterClosure = await database.CashClosures.AnyAsync(item => item.OperationalDate == date.ToDateTime(TimeOnly.MinValue), cancellationToken);
+        database.CashMovements.Add(new CashMovement
+        {
+            OperationalDate = date.ToDateTime(TimeOnly.MinValue), DirectionCode = "entry", TypeCode = "payment_received",
+            MethodCode = LedgerMethod(payment), Amount = payment.Amount, CurrencyCode = "BRL", AppointmentId = payment.AppointmentId,
+            PaymentId = payment.Id, ResponsibleAccountId = actor, Description = $"Pagamento do atendimento {appointmentNumber}",
+            IdempotencyKey = $"payment-received-{payment.Id}", OccurredAtUtc = occurredAtUtc, AfterClosure = afterClosure,
+        });
+    }
+
+    private IQueryable<CashMovement> Filtered(DateOnly date, string? method, string? type, ulong? appointmentNumber, string? patient, string? responsible)
+    {
+        var day = date.ToDateTime(TimeOnly.MinValue);
+        IQueryable<CashMovement> query = database.CashMovements.AsNoTracking().Where(item => item.OperationalDate == day)
+            .Include(item => item.Appointment!).ThenInclude(item => item.PatientAccount)
+            .Include(item => item.ResponsibleAccount);
+        if (method is not null) query = query.Where(item => item.MethodCode == method);
+        if (type is not null) query = query.Where(item => item.TypeCode == type);
+        if (appointmentNumber.HasValue) query = query.Where(item => item.Appointment != null && item.Appointment.AppointmentNumber == appointmentNumber);
+        var patientTerm = Text(patient); if (patientTerm is not null) query = query.Where(item => item.Appointment != null && item.Appointment.PatientAccount.FullName.Contains(patientTerm));
+        var responsibleTerm = Text(responsible); if (responsibleTerm is not null) query = query.Where(item => item.ResponsibleAccount != null && item.ResponsibleAccount.FullName.Contains(responsibleTerm));
+        return query;
+    }
+
+    private static async Task<CashSummaryResponse> SummaryAsync(IQueryable<CashMovement> query, CancellationToken cancellationToken)
+    {
+        var rows = await query.Select(item => new { item.DirectionCode, item.TypeCode, item.MethodCode, item.Amount }).ToArrayAsync(cancellationToken);
+        var gross = rows.Where(item => item.TypeCode == "payment_received").Sum(item => item.Amount);
+        var reversals = rows.Where(item => item.TypeCode == "payment_reversal").Sum(item => item.Amount);
+        var supplies = rows.Where(item => item.TypeCode == "supply").Sum(item => item.Amount);
+        var withdrawals = rows.Where(item => item.TypeCode == "withdrawal").Sum(item => item.Amount);
+        var adjustments = rows.Where(item => item.TypeCode is "adjustment" or "provider_fee")
+            .Sum(item => item.DirectionCode == "entry" ? item.Amount : -item.Amount);
+        var methods = rows.GroupBy(item => item.MethodCode).OrderBy(item => item.Key).Select(group =>
+        {
+            var entries = group.Where(item => item.DirectionCode == "entry").Sum(item => item.Amount);
+            var outflows = group.Where(item => item.DirectionCode == "outflow").Sum(item => item.Amount);
+            return new CashMethodTotalResponse(group.Key, entries, outflows, entries - outflows, group.Count());
+        }).ToArray();
+        var net = rows.Sum(item => item.DirectionCode == "entry" ? item.Amount : -item.Amount);
+        return new(gross, reversals, supplies, withdrawals, adjustments, net, rows.Length, methods);
+    }
+
+    private async Task<CashClosureResponse?> ClosureAsync(DateOnly date, CancellationToken cancellationToken)
+    {
+        var closure = await database.CashClosures.AsNoTracking().Include(item => item.ClosedByAccount)
+            .SingleOrDefaultAsync(item => item.OperationalDate == date.ToDateTime(TimeOnly.MinValue), cancellationToken);
+        return closure is null ? null : await MapClosureAsync(closure, cancellationToken);
+    }
+
+    private static Task<CashClosureResponse> MapClosureAsync(CashClosure item, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var methods = JsonSerializer.Deserialize<CashMethodTotalResponse[]>(item.TotalsByMethodJson) ?? [];
+        CashSummaryResponse summary = new(item.GrossEntries, item.PaymentReversals, item.Supplies, item.Withdrawals,
+            item.AdjustmentsNet, item.NetTotal, checked((int)item.MovementCount), methods);
+        return Task.FromResult(new CashClosureResponse(item.Id, DateOnly.FromDateTime(item.OperationalDate), item.ClosedByAccount.FullName,
+            DateTime.SpecifyKind(item.ClosedAtUtc, DateTimeKind.Utc), item.LastMovementId, summary));
+    }
+
+    private static CashMovementResponse Map(CashMovement item) => new(item.Id, DateOnly.FromDateTime(item.OperationalDate), item.DirectionCode,
+        item.TypeCode, item.MethodCode, item.Amount, item.AppointmentId, item.Appointment?.AppointmentNumber, item.PaymentId,
+        item.RelatedMovementId, item.Appointment?.PatientAccount.FullName, item.ResponsibleAccount?.FullName, item.Description,
+        item.Reason, DateTime.SpecifyKind(item.OccurredAtUtc, DateTimeKind.Utc), item.AfterClosure);
+
+    private static PaymentReversalResponse MapReversal(PaymentReversal item) => new(item.Id, item.PaymentId, item.Payment.AppointmentId,
+        item.StatusCode, item.Payment.StatusCode, item.RequestedAtUtc, item.CompletedAtUtc, item.StatusCode == "confirmed", item.Payment.RowVersion);
+
+    private async Task<(string LegalName, string TimezoneName)> ClinicAsync(CancellationToken cancellationToken) =>
+        await database.Clinics.AsNoTracking().Select(item => new ValueTuple<string, string>(item.LegalName, item.TimezoneName)).SingleAsync(cancellationToken);
+
+    private async Task<DateOnly> OperationalDateAsync(DateTime utc, CancellationToken cancellationToken)
+    {
+        var timezoneName = (await ClinicAsync(cancellationToken)).TimezoneName;
+        try
+        {
+            var timezone = TimeZoneInfo.FindSystemTimeZoneById(timezoneName);
+            return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), timezone));
+        }
+        catch (TimeZoneNotFoundException) { throw new CashRuleException(503, "O fuso da clínica está indisponível."); }
+    }
+
+    private static string LedgerMethod(Payment payment) => payment.ProviderCode == "pagbank" ? "pagbank_online" :
+        Methods.Contains(payment.MethodCode, StringComparer.Ordinal) ? payment.MethodCode! : "other";
+    private static string? Text(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string Useful(string value, int minimum, string message) => string.IsNullOrWhiteSpace(value) || value.Trim().Length < minimum ? throw Invalid(message) : value.Trim();
+    private static void ValidateQuery(DateOnly date, string? method, string? type, int page, int pageSize)
+    {
+        if (date.Year is < 2000 or > 2200) throw Invalid("Data operacional inválida.");
+        if (method is not null && !Methods.Contains(method, StringComparer.Ordinal)) throw Invalid("Forma de pagamento inválida.");
+        if (type is not null && !Types.Contains(type, StringComparer.Ordinal)) throw Invalid("Tipo de movimento inválido.");
+        if (page < 1 || pageSize is < 1 or > 100) throw Invalid("Paginação inválida.");
+    }
+    private static void ValidateIdempotency(string key) { if (string.IsNullOrWhiteSpace(key) || key.Length is < 16 or > 100 || key.Any(character => character > 127 || char.IsWhiteSpace(character) || char.IsControl(character))) throw Invalid("Idempotency-Key inválida."); }
+    private static long ToCents(decimal amount) => decimal.ToInt64(decimal.Round(amount * 100m, 0, MidpointRounding.AwayFromZero));
+    private static string NormalizeProviderKey(string key) { var value = new string(key.Where(char.IsAsciiLetterOrDigit).ToArray()); return value.Length >= 16 ? value : Guid.NewGuid().ToString("N"); }
+    private Task<IDbContextTransaction?> BeginTransactionAsync(CancellationToken cancellationToken) =>
+        database.Database.CurrentTransaction is not null
+            ? Task.FromResult<IDbContextTransaction?>(null)
+            : BeginOwnedTransactionAsync(cancellationToken);
+    private async Task<IDbContextTransaction?> BeginOwnedTransactionAsync(CancellationToken cancellationToken) =>
+        await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+    private static CashRuleException Invalid(string message) => new(400, message);
+    private static CashRuleException Forbidden(string message) => new(403, message);
+    private static CashRuleException Missing(string message) => new(404, message);
+    private static CashRuleException Conflict(string message) => new(409, message);
+}

@@ -85,6 +85,10 @@ public partial class Account
 
     public virtual ICollection<AuthSession> AuthSessions { get; set; } = new List<AuthSession>();
 
+    public virtual ICollection<CashClosure> CashClosures { get; set; } = new List<CashClosure>();
+
+    public virtual ICollection<CashMovement> CashMovements { get; set; } = new List<CashMovement>();
+
     public virtual ICollection<ContactChangeRequest> ContactChangeRequests { get; set; } = new List<ContactChangeRequest>();
 
     public virtual ICollection<DoctorPatientLink> DoctorPatientLinkCreatedByAccounts { get; set; } = new List<DoctorPatientLink>();
@@ -101,7 +105,11 @@ public partial class Account
 
     public virtual PatientProfile? PatientProfile { get; set; }
 
-    public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
+    public virtual ICollection<Payment> PaymentConfirmedByAccounts { get; set; } = new List<Payment>();
+
+    public virtual ICollection<PaymentReversal> PaymentReversals { get; set; } = new List<PaymentReversal>();
+
+    public virtual ICollection<Payment> PaymentReversedByAccounts { get; set; } = new List<Payment>();
 
     public virtual ICollection<PremiumMembership> PremiumMembershipAccounts { get; set; } = new List<PremiumMembership>();
 

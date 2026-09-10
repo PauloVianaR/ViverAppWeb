@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using ViverApp.Api.Features.ClinicalOperations;
+using ViverApp.Api.Features.CashManagement;
 using ViverApp.Api.Features.AdministratorExperience;
 using ViverApp.Api.Features.DoctorExperience;
 using ViverApp.Api.Features.Identity;
@@ -12,6 +13,13 @@ using ViverApp.Api.Infrastructure.Persistence;
 using ViverApp.Security;
 
 var builder = WebApplication.CreateBuilder(args);
+var allowInsecureLocalHttp = builder.Environment.IsDevelopment()
+    && builder.Configuration.GetValue("Security:AllowInsecureLocalHttp", false);
+if (allowInsecureLocalHttp)
+{
+    builder.Configuration["Kestrel:Certificates:Default:Path"] = null;
+    builder.Configuration["Kestrel:Certificates:Default:Password"] = null;
+}
 
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -69,6 +77,8 @@ builder.Services.AddScoped<IPatientSchedulingAuditWriter, PatientSchedulingAudit
 builder.Services.AddScoped<PatientSchedulingService>();
 builder.Services.AddScoped<IClinicalOperationsAuditWriter, ClinicalOperationsAuditWriter>();
 builder.Services.AddScoped<ClinicalOperationsService>();
+builder.Services.AddScoped<CashManagementService>();
+builder.Services.AddScoped<CashRuleExceptionFilter>();
 builder.Services.AddScoped<ViverApp.Api.Features.ArrivalExperience.ArrivalExperienceService>();
 builder.Services.AddScoped<DoctorExperienceService>();
 builder.Services.AddScoped<DoctorExperienceExceptionFilter>();
@@ -100,7 +110,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+if (!allowInsecureLocalHttp) app.UseHttpsRedirection();
 app.UseRouting();
 app.UseCors();
 app.UseRequestTimeouts();

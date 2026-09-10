@@ -38,7 +38,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         var todayNumbers = await database.Appointments.AsNoTracking().Where(x => x.StartsAtUtc >= from && x.StartsAtUtc < to && x.StatusCode != "canceled" && x.InverseRescheduledFromAppointment == null).OrderBy(x => x.StartsAtUtc).Select(x => x.AppointmentNumber).ToArrayAsync(ct);
         var activePremium = await database.PremiumMemberships.AsNoTracking().Where(x => x.StatusCode == "active" && x.StartsAtUtc <= now && (x.EndsAtUtc == null || x.EndsAtUtc > now)).OrderBy(x => x.Account.FullName).Select(x => x.Account.FullName).ToArrayAsync(ct);
         var pendingApprovalNames = await database.Accounts.AsNoTracking().Where(x => x.StatusCode == "pending_approval" && (x.RoleCode == "doctor" || x.RoleCode == "manager")).OrderBy(x => x.FullName).Select(x => x.FullName).ToArrayAsync(ct);
-        var pendingPaymentNumbers = await database.Payments.AsNoTracking().Where(x => x.StatusCode == "pending").OrderBy(x => x.Appointment.AppointmentNumber).Select(x => x.Appointment.AppointmentNumber).ToArrayAsync(ct);
+        var pendingPaymentNumbers = await database.Payments.AsNoTracking().Where(x => x.StatusCode == "pending").OrderBy(x => x.AppointmentNavigation.AppointmentNumber).Select(x => x.AppointmentNavigation.AppointmentNumber).ToArrayAsync(ct);
         var unreadNotifications = await database.AdministratorNotifications.AsNoTracking().Where(x => x.AdministratorAccountId == actor && x.ReadAtUtc == null && x.DismissedAtUtc == null).OrderByDescending(x => x.CreatedAtUtc).Select(x => x.Title).ToArrayAsync(ct);
         var counters = new AdministratorCounters(activeUsers.Length, todayNumbers.Length, activePremium.Length,
             pendingApprovalNames.Length, pendingPaymentNumbers.Length, unreadNotifications.Length);
@@ -105,16 +105,16 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         {
             x.PaidAtUtc!.Value.Year,
             x.PaidAtUtc.Value.Month,
-            IsPremium = x.Appointment.DiscountPercent > 0,
+            IsPremium = x.AppointmentNavigation.DiscountPercent > 0,
         }).Select(g => new { g.Key.Year, g.Key.Month, g.Key.IsPremium, Value = g.Sum(x => x.Amount) })
             .OrderBy(x => x.Year).ThenBy(x => x.Month).ToListAsync(ct);
         var paymentEvolutionRows = await paid.GroupBy(x => new { x.PaidAtUtc!.Value.Year, x.PaidAtUtc.Value.Month, Method = x.MethodCode ?? "not_informed" })
             .Select(g => new { g.Key.Year, g.Key.Month, g.Key.Method, Value = g.Sum(x => x.Amount) })
             .OrderBy(x => x.Year).ThenBy(x => x.Month).ToListAsync(ct);
-        var paymentLocationTrendRows = await paid.GroupBy(x => new { x.PaidAtUtc!.Value.Year, x.PaidAtUtc.Value.Month, x.Appointment.PaymentLocationCode })
+        var paymentLocationTrendRows = await paid.GroupBy(x => new { x.PaidAtUtc!.Value.Year, x.PaidAtUtc.Value.Month, x.AppointmentNavigation.PaymentLocationCode })
             .Select(g => new { g.Key.Year, g.Key.Month, Location = g.Key.PaymentLocationCode, Count = g.Count() })
             .OrderBy(x => x.Year).ThenBy(x => x.Month).ToListAsync(ct);
-        var paymentLocationRows = await paid.GroupBy(x => x.Appointment.PaymentLocationCode)
+        var paymentLocationRows = await paid.GroupBy(x => x.AppointmentNavigation.PaymentLocationCode)
             .Select(g => new { Label = g.Key, Value = g.Sum(x => x.Amount), Count = g.Count() }).OrderByDescending(x => x.Count).ToListAsync(ct);
         var statusRows = await query.GroupBy(x => x.StatusCode).Select(g => new { Label = g.Key, Count = g.Count() }).OrderByDescending(x => x.Count).ToListAsync(ct);
         var methodRows = await paid.GroupBy(x => x.MethodCode ?? "not_informed").Select(g => new { Label = g.Key, Value = g.Sum(x => x.Amount), Count = g.Count() }).OrderByDescending(x => x.Value).ToListAsync(ct);
@@ -199,7 +199,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         if (read == "read") query = query.Where(x => x.ReadAtUtc != null); else if (read == "unread") query = query.Where(x => x.ReadAtUtc == null);
         var items = await query.OrderByDescending(x => x.CreatedAtUtc).Take(100).Select(x => new AdministratorNotificationResponse(x.Id, x.TypeCode,
             x.SeverityCode, x.Title, x.Message, x.EntityType, x.EntityId, x.ReadAtUtc != null, x.CreatedAtUtc, x.RowVersion)).ToListAsync(ct);
-        var pendingPayments = await database.Payments.AsNoTracking().Where(x => x.StatusCode == "pending").OrderBy(x => x.Appointment.AppointmentNumber).Select(x => x.Appointment.AppointmentNumber).ToArrayAsync(ct);
+        var pendingPayments = await database.Payments.AsNoTracking().Where(x => x.StatusCode == "pending").OrderBy(x => x.AppointmentNavigation.AppointmentNumber).Select(x => x.AppointmentNavigation.AppointmentNumber).ToArrayAsync(ct);
         var unread = await database.AdministratorNotifications.AsNoTracking().Where(x => x.AdministratorAccountId == actor && x.DismissedAtUtc == null && x.ReadAtUtc == null).OrderByDescending(x => x.CreatedAtUtc).Select(x => x.Title).ToArrayAsync(ct);
         var high = await database.AdministratorNotifications.AsNoTracking().Where(x => x.AdministratorAccountId == actor && x.DismissedAtUtc == null && x.SeverityCode == "high").OrderByDescending(x => x.CreatedAtUtc).Select(x => x.Title).ToArrayAsync(ct);
         var approvals = await database.Accounts.AsNoTracking().Where(x => x.StatusCode == "pending_approval" && (x.RoleCode == "doctor" || x.RoleCode == "manager")).OrderBy(x => x.FullName).Select(x => x.FullName).ToArrayAsync(ct);
@@ -236,8 +236,8 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
             $"{item.FullName} solicitou acesso como {(item.RoleCode == "doctor" ? "Médico" : "Gestor")}.", "account", item.Id.ToString(CultureInfo.InvariantCulture), item.CreatedAtUtc);
         var premium = await database.PremiumMemberships.AsNoTracking().Include(x => x.Account).Where(x => x.StatusCode == "pending").Select(x => new { x.Id, x.Account.FullName, x.CreatedAtUtc }).ToListAsync(ct);
         foreach (var item in premium) Add($"premium:{item.Id}", "premium_pending", "warning", "Solicitação Premium pendente", $"{item.FullName} enviou uma solicitação Premium.", "premium_membership", item.Id.ToString(CultureInfo.InvariantCulture), item.CreatedAtUtc);
-        var payments = await database.Payments.AsNoTracking().Include(x => x.Appointment).ThenInclude(x => x.PatientAccount).Where(x => x.StatusCode == "pending")
-            .Select(x => new { x.Id, x.AppointmentId, x.Appointment.PatientAccount.FullName, x.CreatedAtUtc }).Take(100).ToListAsync(ct);
+        var payments = await database.Payments.AsNoTracking().Include(x => x.AppointmentNavigation).ThenInclude(x => x.PatientAccount).Where(x => x.StatusCode == "pending")
+            .Select(x => new { x.Id, x.AppointmentId, x.AppointmentNavigation.PatientAccount.FullName, x.CreatedAtUtc }).Take(100).ToListAsync(ct);
         foreach (var item in payments) Add($"payment:{item.Id}", "payment_pending", "warning", "Pagamento pendente", $"Há um pagamento pendente para o atendimento de {item.FullName}.", "appointment", item.AppointmentId.ToString(CultureInfo.InvariantCulture), item.CreatedAtUtc);
         var operationalEvents = await database.AuditEvents.AsNoTracking()
             .Where(x => x.OccurredAtUtc >= Now.AddDays(-90) &&

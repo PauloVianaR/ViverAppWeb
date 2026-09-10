@@ -124,7 +124,7 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
 
     public async Task<PatientAppointmentResponse> AppointmentAsync(ulong actor, ulong id, CancellationToken ct)
     {
-        var entity = await database.Appointments.AsNoTracking().Include(x => x.AppointmentType).Include(x => x.PaymentAppointment)
+        var entity = await database.Appointments.AsNoTracking().Include(x => x.AppointmentType).Include(x => x.CurrentPayment)
             .Include(x => x.MedicalReport).Include(x => x.AppointmentReview)
             .SingleOrDefaultAsync(x => x.Id == id && x.PatientAccountId == actor, ct) ?? throw Missing();
         var response = await scheduling.GetAppointmentAsync(actor, id, ct);
@@ -133,14 +133,14 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
             .ToDictionaryAsync(x => x.SettingKey, x => x.ValueJson, ct);
         int Cutoff(string key) => cutoffs.TryGetValue(key, out var value) && int.TryParse(value, out var hours) && hours is >= 0 and <= 720 ? hours : 24;
         var specialties = await database.DoctorSpecialties.Where(x => x.DoctorAccountId == entity.DoctorAccountId && x.Specialty.IsActive).Select(x => x.Specialty.Name).ToArrayAsync(ct);
-        return new(response, entity.AppointmentType.CategoryCode, string.Join(" • ", specialties), entity.PaymentAppointment?.StatusCode ?? "unpaid", entity.PaymentLocationCode,
+        return new(response, entity.AppointmentType.CategoryCode, string.Join(" • ", specialties), entity.CurrentPayment?.StatusCode ?? "unpaid", entity.PaymentLocationCode,
             entity.BasePriceAmount ?? entity.PriceAmount, entity.DiscountPercent,
-            active && entity.StartsAtUtc > Now && (entity.PaymentAppointment == null || entity.PaymentAppointment.StatusCode is "pending" or "failed" or "canceled"),
+            active && entity.StartsAtUtc > Now && (entity.CurrentPayment == null || entity.CurrentPayment.StatusCode is "pending" or "failed" or "canceled" or "reversed" or "refunded"),
             active && entity.StartsAtUtc > Now.AddHours(Cutoff("appointments.cancellation_cutoff_hours")),
             active && entity.StartsAtUtc > Now.AddHours(Cutoff("appointments.reschedule_cutoff_hours")),
-            entity.ModalityCode == "online" && entity.StatusCode == "confirmed" && entity.PaymentAppointment?.StatusCode == "paid" && entity.StartsAtUtc <= Now.AddMinutes(15) && entity.EndsAtUtc >= Now,
+            entity.ModalityCode == "online" && entity.StatusCode == "confirmed" && entity.CurrentPayment?.StatusCode == "paid" && entity.StartsAtUtc <= Now.AddMinutes(15) && entity.EndsAtUtc >= Now,
             entity.MedicalReport?.StatusCode == "published", entity.AppointmentReview?.Rating,
-            active && entity.StartsAtUtc > Now && entity.ModalityCode == "in_person" && entity.PaymentAppointment == null && await ClinicPaymentAllowedAsync(ct));
+            active && entity.StartsAtUtc > Now && entity.ModalityCode == "in_person" && (entity.CurrentPayment == null || entity.CurrentPayment.StatusCode is "reversed" or "refunded" or "canceled" or "failed") && await ClinicPaymentAllowedAsync(ct));
     }
 
     public async Task ReviewAsync(ulong actor, ulong id, PatientReviewRequest request, CancellationToken ct)
@@ -233,22 +233,22 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
         if (view is not ("pending" or "history") || from > until || min < 0 || max < min) throw Invalid("Filtros inválidos.");
         (from, until) = await UtcPeriodAsync(from, until, ct);
         var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == actor && x.InverseRescheduledFromAppointment == null);
-        query = view == "pending" ? query.Where(x => (x.StatusCode == "pending" || x.StatusCode == "confirmed") && x.StartsAtUtc > Now && (x.PaymentAppointment == null || x.PaymentAppointment.StatusCode == "pending" || x.PaymentAppointment.StatusCode == "failed" || x.PaymentAppointment.StatusCode == "canceled")) : query.Where(x => x.PaymentAppointment != null);
-        if (from.HasValue) query = query.Where(x => (x.PaymentAppointment != null ? x.PaymentAppointment.CreatedAtUtc : x.CreatedAtUtc) >= from);
-        if (until.HasValue) query = query.Where(x => (x.PaymentAppointment != null ? x.PaymentAppointment.CreatedAtUtc : x.CreatedAtUtc) < until);
+        query = view == "pending" ? query.Where(x => (x.StatusCode == "pending" || x.StatusCode == "confirmed") && x.StartsAtUtc > Now && (x.CurrentPayment == null || x.CurrentPayment.StatusCode == "pending" || x.CurrentPayment.StatusCode == "failed" || x.CurrentPayment.StatusCode == "canceled" || x.CurrentPayment.StatusCode == "reversed" || x.CurrentPayment.StatusCode == "refunded")) : query.Where(x => x.CurrentPayment != null);
+        if (from.HasValue) query = query.Where(x => (x.CurrentPayment != null ? x.CurrentPayment.CreatedAtUtc : x.CreatedAtUtc) >= from);
+        if (until.HasValue) query = query.Where(x => (x.CurrentPayment != null ? x.CurrentPayment.CreatedAtUtc : x.CreatedAtUtc) < until);
         if (min.HasValue) query = query.Where(x => x.PriceAmount >= min);
         if (max.HasValue) query = query.Where(x => x.PriceAmount <= max);
-        if (!string.IsNullOrEmpty(method)) query = query.Where(x => x.PaymentAppointment != null && x.PaymentAppointment.MethodCode == method);
+        if (!string.IsNullOrEmpty(method)) query = query.Where(x => x.CurrentPayment != null && x.CurrentPayment.MethodCode == method);
         if (!string.IsNullOrEmpty(location)) query = query.Where(x => x.PaymentLocationCode == location);
-        if (!string.IsNullOrEmpty(status)) query = status == "unpaid" ? query.Where(x => x.PaymentAppointment == null) : query.Where(x => x.PaymentAppointment != null && x.PaymentAppointment.StatusCode == status);
+        if (!string.IsNullOrEmpty(status)) query = status == "unpaid" ? query.Where(x => x.CurrentPayment == null) : query.Where(x => x.CurrentPayment != null && x.CurrentPayment.StatusCode == status);
         var total = await query.CountAsync(ct);
         var clinicAllowed = await ClinicPaymentAllowedAsync(ct);
-        var entities = await query.Include(x => x.PaymentAppointment).Include(x => x.AppointmentType).Include(x => x.DoctorAccount.Account)
+        var entities = await query.Include(x => x.CurrentPayment).Include(x => x.AppointmentType).Include(x => x.DoctorAccount.Account)
             .OrderByDescending(x => x.StartsAtUtc).ThenByDescending(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
-        return new(entities.Select(x => new PatientPaymentItem(x.Id, x.PaymentAppointment?.Id, x.AppointmentType.Name, x.DoctorAccount.Account.FullName,
-            DateTime.SpecifyKind(x.StartsAtUtc, DateTimeKind.Utc), x.PaymentAppointment?.StatusCode ?? "unpaid", x.PaymentAppointment?.Amount ?? x.PriceAmount, x.PaymentAppointment?.MethodCode,
-            x.PaymentLocationCode, x.PaymentAppointment?.PaidAtUtc, clinicAllowed && x.ModalityCode == "in_person" && x.PaymentAppointment == null,
-            (x.StatusCode is "pending" or "confirmed") && x.StartsAtUtc > Now && (x.PaymentAppointment == null || x.PaymentAppointment.StatusCode is "pending" or "failed" or "canceled"), x.ModalityCode)).ToArray(), page, pageSize, total);
+        return new(entities.Select(x => new PatientPaymentItem(x.Id, x.CurrentPayment?.Id, x.AppointmentType.Name, x.DoctorAccount.Account.FullName,
+            DateTime.SpecifyKind(x.StartsAtUtc, DateTimeKind.Utc), x.CurrentPayment?.StatusCode ?? "unpaid", x.CurrentPayment?.Amount ?? x.PriceAmount, x.CurrentPayment?.MethodCode,
+            x.PaymentLocationCode, x.CurrentPayment?.PaidAtUtc, clinicAllowed && x.ModalityCode == "in_person" && (x.CurrentPayment == null || x.CurrentPayment.StatusCode is "reversed" or "refunded" or "canceled" or "failed"),
+            (x.StatusCode is "pending" or "confirmed") && x.StartsAtUtc > Now && (x.CurrentPayment == null || x.CurrentPayment.StatusCode is "pending" or "failed" or "canceled" or "reversed" or "refunded"), x.ModalityCode)).ToArray(), page, pageSize, total);
     }
 
     private async Task<bool> ClinicPaymentAllowedAsync(CancellationToken ct)
@@ -262,7 +262,7 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
         await using var tx = await database.Database.BeginTransactionAsync(ct);
         var item = await database.Appointments.FromSqlInterpolated($"SELECT * FROM appointments WHERE id={id} AND patient_account_id={actor} FOR UPDATE").SingleOrDefaultAsync(ct) ?? throw Missing();
         if (item.ModalityCode != "in_person" || item.StatusCode is not ("pending" or "confirmed") || item.StartsAtUtc <= Now
-            || !await ClinicPaymentAllowedAsync(ct) || await database.Payments.AnyAsync(x => x.AppointmentId == id, ct)) throw Conflict("Pagamento na clínica não está disponível para este atendimento.");
+            || !await ClinicPaymentAllowedAsync(ct) || await database.Payments.AnyAsync(x => x.AppointmentId == id && x.ActiveAppointmentId != null, ct)) throw Conflict("Pagamento na clínica não está disponível para este atendimento.");
         if (item.PaymentLocationCode != "clinic") { item.PaymentLocationCode = "clinic"; item.RowVersion++; item.UpdatedAtUtc = Now; }
         await audit.WriteAsync("patient.clinic_payment_selected", actor, "appointment", id.ToString(CultureInfo.InvariantCulture), null, ct);
         await tx.CommitAsync(ct);

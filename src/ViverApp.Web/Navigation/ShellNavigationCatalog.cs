@@ -61,6 +61,7 @@ public static class ShellNavigationCatalog
             new("Agenda", "/gestao/agenda", "calendar"),
             new("Pacientes", "/gestao/pacientes", "users"),
             new("Histórico", "/gestao/historico", "history"),
+            new("Caixa", "/gestao/caixa", "card"),
             new("Perfil", "/gestao/perfil", "user"),
         ]);
 
@@ -74,6 +75,7 @@ public static class ShellNavigationCatalog
             new("Consultas", "/administracao/consultas", "calendar"),
             new("Pacientes", "/administracao/pacientes", "users"),
             new("Analytics", "/administracao/analytics", "chart"),
+            new("Caixa", "/administracao/caixa", "card"),
             new("Alertas", "/administracao/notificacoes", "sparkles"),
             new("Usuários", "/administracao/usuarios", "users"),
         ]);

@@ -24,7 +24,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         var todayStart = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(local.Date, DateTimeKind.Unspecified), timezone);
         var tomorrow = todayStart.AddDays(1); var week = todayStart.AddDays(7);
         var query = database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && x.StartsAtUtc >= todayStart && x.StartsAtUtc < week && x.InverseRescheduledFromAppointment == null);
-        var rows = await query.Include(x => x.PatientAccount).ThenInclude(x => x.PatientProfile).Include(x => x.AppointmentType).Include(x => x.PaymentAppointment)
+        var rows = await query.Include(x => x.PatientAccount).ThenInclude(x => x.PatientProfile).Include(x => x.AppointmentType).Include(x => x.CurrentPayment)
             .Include(x => x.AppointmentReview).Include(x => x.AppointmentRescheduleHistories).OrderBy(x => x.StartsAtUtc).ToArrayAsync(ct);
         var sources = new DoctorHomeSources(rows.Where(x => x.StartsAtUtc < tomorrow).Select(x => x.AppointmentNumber).ToArray(),
             rows.Select(x => x.AppointmentNumber).ToArray(), rows.Where(x => x.ModalityCode == "online").Select(x => x.AppointmentNumber).ToArray(),
@@ -134,7 +134,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
             sourceRows.Where(x => x.Rescheduled).Select(x => x.AppointmentNumber).ToArray());
         var counters = new DoctorAgendaCounters(sources.Total.Count, sources.Online.Count, sources.InPerson.Count, sources.Rescheduled.Count);
         var total = totalNumbers.Length; var now = clock.GetUtcNow().UtcDateTime;
-        var rows = await query.Include(x => x.PatientAccount).ThenInclude(x => x.PatientProfile).Include(x => x.AppointmentType).Include(x => x.PaymentAppointment)
+        var rows = await query.Include(x => x.PatientAccount).ThenInclude(x => x.PatientProfile).Include(x => x.AppointmentType).Include(x => x.CurrentPayment)
             .Include(x => x.AppointmentReview).Include(x => x.AppointmentRescheduleHistories).OrderBy(x => x.StartsAtUtc).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(ct);
         return new(counters, sources, new(rows.Select(x => MapAppointment(x, now)).ToArray(), page, pageSize, total));
     }
@@ -350,7 +350,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
 
     private IQueryable<Appointment> AppointmentQuery(ulong doctor) => database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && x.InverseRescheduledFromAppointment == null)
         .Include(x => x.PatientAccount).ThenInclude(x => x.PatientProfile).Include(x => x.AppointmentType)
-        .Include(x => x.PaymentAppointment).Include(x => x.AppointmentReview).Include(x => x.MedicalReport)
+        .Include(x => x.CurrentPayment).Include(x => x.AppointmentReview).Include(x => x.MedicalReport)
         .Include(x => x.InverseRescheduledFromAppointment).Include(x => x.AppointmentRescheduleHistories);
     private static DoctorAppointmentResponse MapAppointment(Appointment x, DateTime now)
     {
@@ -358,12 +358,12 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         int? age = birth.HasValue ? now.Year - birth.Value.Year - (birth.Value.Date > now.AddYears(-(now.Year - birth.Value.Year)).Date ? 1 : 0) : null;
         return new(x.Id, x.AppointmentNumber, x.PatientAccountId, x.PatientAccount.FullName, age, x.AppointmentTypeId, x.AppointmentType.Name, x.AppointmentType.CategoryCode,
             x.StatusCode, x.ModalityCode, x.StartsAtUtc, x.EndsAtUtc, x.PriceAmount, x.DiscountPercent,
-            x.PaymentAppointment?.StatusCode ?? "unpaid", x.PaymentLocationCode, x.PatientNotes, x.CancellationReason,
+            x.CurrentPayment?.StatusCode ?? "unpaid", x.PaymentLocationCode, x.PatientNotes, x.CancellationReason,
             x.RescheduledFromAppointmentId, x.InverseRescheduledFromAppointment?.Id, x.AppointmentReview?.Rating, x.AppointmentReview?.Comment,
             x.ArrivedAtUtc, x.ArrivalQueueNumber,
             x.AppointmentRescheduleHistories.OrderBy(h => h.SequenceNumber).Select(h => new AppointmentRescheduleHistoryResponse(h.SequenceNumber,
                 h.PreviousStartsAtUtc, h.PreviousEndsAtUtc, h.NewStartsAtUtc, h.NewEndsAtUtc, h.Reason, h.OccurredAtUtc)).ToArray(),
-            x.ModalityCode == "online" && x.StatusCode == "confirmed" && x.PaymentAppointment?.StatusCode == "paid" && x.StartsAtUtc <= now.AddMinutes(15) && x.EndsAtUtc >= now,
+            x.ModalityCode == "online" && x.StatusCode == "confirmed" && x.CurrentPayment?.StatusCode == "paid" && x.StartsAtUtc <= now.AddMinutes(15) && x.EndsAtUtc >= now,
             x.StatusCode is "pending" or "confirmed", x.StatusCode is "pending" or "confirmed",
             (x.ModalityCode == "in_person" && x.StatusCode == "arrived" || x.ModalityCode == "online" && x.StatusCode == "confirmed") && x.StartsAtUtc <= now.AddMinutes(15),
             x.StatusCode == "in_progress" && x.StartsAtUtc <= now, x.RowVersion);

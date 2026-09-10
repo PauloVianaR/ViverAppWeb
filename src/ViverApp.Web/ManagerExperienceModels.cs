@@ -45,5 +45,5 @@ public static class ManagerLabels
     public static string Category(string code) => PatientLabels.Category(code);
     public static string Modality(string code) => code == "online" ? "Online" : "Presencial";
     public static string Money(decimal value) => PatientLabels.Money(value);
-    public static string Method(string? code) => code switch { "credit_card" => "Cartão de crédito", "debit_card" => "Cartão de débito", "pix" => "Pix", "cash" => "Dinheiro", _ => "Não informado" };
+    public static string Method(string? code) => code switch { "credit_card" => "Cartão de crédito", "debit_card" => "Cartão de débito", "pix" => "Pix", "cash" => "Dinheiro", "pagbank_online" => "PagBank online", _ => "Não informado" };
 }

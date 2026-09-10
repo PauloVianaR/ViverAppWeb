@@ -2,9 +2,9 @@
 
 ## Estado e objetivo
 
-**Estado:** planejada; depende da Fase 16 integrada à `main`.
+**Estado:** implementada em 10 de setembro de 2026 na branch `codex/fase-17-caixa-reversoes`; validações automatizadas concluídas. A homologação visual autenticada no monitor 3 e as integrações externas deliberadamente não acionadas permanecem registradas no arquivo local de pendências.
 
-**Branch prevista:** `codex/fase-17-caixa-reversoes`, criada a partir da `main` atualizada após autorização de merge da Fase 16.
+**Branch executada:** `codex/fase-17-caixa-reversoes`, criada a partir da `main` após a integração da Fase 16 pelo merge `f59755c`.
 
 Implementar um livro-caixa diário, histórico e auditável para Gestor e Administrador, incluindo totais por forma de pagamento, impressão, cancelamento/estorno de pagamentos e novo pagamento para o mesmo atendimento sem apagar o histórico.
 
@@ -299,3 +299,15 @@ DTOs não expõem entidades EF. Totais e relatórios são calculados no servidor
 - build, suíte integral, testes financeiros/segurança e validação visual estão aprovados;
 - prontuário e Fase 19 não foram antecipados;
 - nenhuma pendência real foi ocultada.
+
+## Implementação e evidências
+
+- as migrations `0025`, `0026` e `0027` foram executadas integralmente no banco local `viverappweb`, em MySQL 8.0.41, e o scaffold EF foi regenerado por DB-First;
+- o schema agora preserva várias tentativas de pagamento por atendimento, aponta o pagamento atual, registra reversões e eventos, mantém livro-caixa e fechamento imutáveis e protege os registros append-only por triggers;
+- a API entrega consulta diária/histórica paginada, filtros, totais calculados no servidor, movimentos manuais compensatórios, fechamento, duas visões de impressão e reversão idempotente;
+- a interface de Gestor e Administrador possui a nova área **Caixa**, filtros, totais por método, movimentos, fechamento e as ações exatas **Imprimir** e **Imprimir Totais**; os detalhes de atendimento permitem cancelar o pagamento elegível e registrar outro depois da reversão confirmada;
+- o fluxo PagBank permanece restrito a ambiente não produtivo e só confirma a reversão local quando o estado retornado pelo provedor corresponde efetivamente a reembolso; produção continua bloqueada sem autorização operacional explícita;
+- o cenário de integração em MySQL comprova recebimento, reversão, novo pagamento, cadeia de duas tentativas com uma única ativa, três movimentos preservados, totais, ambos os modos de impressão, fechamento, restrição pós-fechamento do Gestor, operação elevada do Administrador e proteção append-only;
+- o fallback de desenvolvimento por HTTP foi validado sem excluir ou reparar certificados: somente loopback em `Development` com `Security:AllowInsecureLocalHttp=true` pode dispensar redirecionamento HTTPS; produção continua exigindo HTTPS;
+- build da solution concluído sem avisos ou erros; 187 testes aprovados em 7 projetos e verificação final confirmou MySQL 8.0.41, banco `viverappweb` e migrations aplicadas;
+- a abertura pública em HTTP e o redirecionamento de sessão expirada foram conferidos no navegador integrado. A sessão autenticada não estava disponível nesse navegador e a regra do monitor 3 impede substituir essa homologação por uma superfície sem monitor identificável; a pendência foi registrada sem criar bypass de autenticação.

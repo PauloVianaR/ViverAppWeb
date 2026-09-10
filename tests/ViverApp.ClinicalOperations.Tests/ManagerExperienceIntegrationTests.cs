@@ -171,6 +171,7 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         await db.PaymentEvents.Where(x => paymentIds.Contains(x.PaymentId)).ExecuteDeleteAsync();
         var idempotencyScopes = accountIds.Select(x => $"manager.payment:{x}").ToArray();
         await db.IdempotencyRecords.Where(x => idempotencyScopes.Contains(x.ScopeCode)).ExecuteDeleteAsync();
+        await db.Appointments.Where(x => appointmentIds.Contains(x.Id)).ExecuteUpdateAsync(update => update.SetProperty(x => x.CurrentPaymentId, (ulong?)null));
         await db.Payments.Where(x => paymentIds.Contains(x.Id)).ExecuteDeleteAsync();
         await db.DoctorNotifications.Where(x => appointmentIds.Contains(x.AppointmentId)).ExecuteDeleteAsync();
         await db.AppointmentStatusHistories.Where(x => appointmentIds.Contains(x.AppointmentId)).ExecuteDeleteAsync();

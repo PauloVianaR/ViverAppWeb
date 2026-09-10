@@ -4,6 +4,13 @@ using ViverApp.Web;
 using ViverApp.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
+var allowInsecureLocalHttp = builder.Environment.IsDevelopment()
+    && builder.Configuration.GetValue("Security:AllowInsecureLocalHttp", false);
+if (allowInsecureLocalHttp)
+{
+    builder.Configuration["Kestrel:Certificates:Default:Path"] = null;
+    builder.Configuration["Kestrel:Certificates:Default:Password"] = null;
+}
 
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -49,7 +56,7 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+if (!allowInsecureLocalHttp) app.UseHttpsRedirection();
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAntiforgery();
