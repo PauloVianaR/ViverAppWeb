@@ -167,28 +167,55 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
 
     public async Task<ManagerPatientResponse> CreatePatientAsync(ulong actor, ManagerPatientCreateRequest request, CancellationToken ct)
     {
-        var email = IdentifierNormalizer.NormalizeEmail(request.Email); var phone = IdentifierNormalizer.NormalizePhone(request.PhoneE164);
-        if (email is null && phone is null) throw Invalid("Informe um e-mail ou telefone brasileiro válido.");
-        if (await database.Accounts.AnyAsync(x => email != null && x.NormalizedEmail == email || phone != null && x.PhoneE164 == phone, ct)) throw Conflict("Esse contato já pertence a uma conta. Nenhuma alteração foi feita.");
+        var taxId = Text(request.TaxId);
+        if (taxId is null || !BrazilianDocumentValidator.IsValidCpf(taxId)) throw Invalid("O CPF informado é inválido.");
+        var now = clock.GetUtcNow().UtcDateTime;
+        var today = DateOnly.FromDateTime(now);
+        if (request.BirthDate > today || request.BirthDate < today.AddYears(-125)) throw Invalid("A data de nascimento é inválida.");
+        var rawEmail = Text(request.Email); var email = rawEmail is null ? null : IdentifierNormalizer.NormalizeEmail(rawEmail);
+        if (rawEmail is not null && email is null) throw Invalid("O e-mail informado é inválido.");
+        var rawPhone = Text(request.PhoneE164); var phone = rawPhone is null ? null : IdentifierNormalizer.NormalizePhone(rawPhone);
+        if (rawPhone is not null && phone is null) throw Invalid("O telefone deve estar no formato brasileiro com país e DDD.");
+        if (request.SendOnboarding && email is null && phone is null) throw Invalid("Informe um e-mail ou telefone para enviar o onboarding.");
+        if (await database.Accounts.AnyAsync(x => x.TaxId == taxId || email != null && x.NormalizedEmail == email || phone != null && x.PhoneE164 == phone, ct)
+            || await database.PatientProfiles.AnyAsync(x => x.TaxId == taxId, ct))
+            throw Conflict("CPF, e-mail ou telefone já pertence a outro paciente. Nenhuma alteração foi feita.");
         await using var transaction = await database.Database.BeginTransactionAsync(ct);
-        var user = new ViverAppUser
+        var channel = email is not null ? "email" : "sms";
+        var account = new Account
         {
-            UserName = email ?? phone,
-            NormalizedUserName = email ?? phone,
             RoleCode = ViverAppRoles.Patient,
-            StatusCode = "pending_confirmation",
+            StatusCode = request.SendOnboarding ? "pending_confirmation" : "active",
             FullName = request.FullName.Trim(),
-            Email = request.Email?.Trim(),
+            Email = rawEmail,
             NormalizedEmail = email,
-            PhoneNumber = phone,
-            BirthDate = request.BirthDate?.ToDateTime(TimeOnly.MinValue)
+            PhoneE164 = phone,
+            TaxId = taxId,
+            BirthDate = request.BirthDate.ToDateTime(TimeOnly.MinValue),
+            PortalAccessEnabled = request.SendOnboarding,
+            PreferredRecoveryChannel = request.SendOnboarding ? channel : null,
+            SecurityStamp = RandomNumberGenerator.GetBytes(32),
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1
         };
-        var created = await users.CreateAsync(user); if (!created.Succeeded) throw Conflict("Não foi possível criar o paciente.");
-        var now = clock.GetUtcNow().UtcDateTime; database.PatientProfiles.Add(new PatientProfile { AccountId = user.Id, BirthDate = user.BirthDate, CreatedAtUtc = now, UpdatedAtUtc = now });
-        await database.SaveChangesAsync(ct); var channel = email is not null ? "email" : "sms";
-        await challenges.CreateAsync(user, "contact_verification", channel, email ?? phone!, ct);
-        await audit.WriteAsync("manager.patient.invited", actor, "account", user.Id.ToString(CultureInfo.InvariantCulture), new Dictionary<string, string> { ["channel"] = channel }, ct);
-        await transaction.CommitAsync(ct); return await PatientAsync(user.Id, ct);
+        database.Accounts.Add(account);
+        database.PatientProfiles.Add(new PatientProfile { Account = account, TaxId = taxId, BirthDate = account.BirthDate, PreferredName = Text(request.PreferredName), CreatedAtUtc = now, UpdatedAtUtc = now });
+        if (request.Address is not null)
+            database.AccountAddresses.Add(new AccountAddress { Account = account, PostalCode = request.Address.PostalCode, Street = request.Address.Street.Trim(), Number = request.Address.Number.Trim(), Complement = Text(request.Address.Complement), District = request.Address.District.Trim(), City = request.Address.City.Trim(), StateCode = request.Address.StateCode.ToUpperInvariant(), UpdatedAtUtc = now });
+        await database.SaveChangesAsync(ct);
+        if (request.SendOnboarding)
+        {
+            var user = await users.FindByIdAsync(account.Id.ToString(CultureInfo.InvariantCulture)) ?? throw Conflict("Não foi possível iniciar o onboarding.");
+            await challenges.CreateAsync(user, "contact_verification", channel, email ?? phone!, ct);
+        }
+        var actorRole = await database.Accounts.AsNoTracking().Where(x => x.Id == actor).Select(x => x.RoleCode).SingleAsync(ct);
+        var eventCode = actorRole == ViverAppRoles.Administrator
+            ? request.SendOnboarding ? "administrator.patient.invited" : "administrator.patient.registered"
+            : request.SendOnboarding ? "manager.patient.invited" : "manager.patient.registered";
+        await audit.WriteAsync(eventCode, actor, "account", account.Id.ToString(CultureInfo.InvariantCulture),
+            new Dictionary<string, string> { ["portalAccessEnabled"] = request.SendOnboarding.ToString(), ["channel"] = request.SendOnboarding ? channel : "none" }, ct);
+        await transaction.CommitAsync(ct); return await PatientAsync(account.Id, ct);
     }
 
     public async Task<ManagerPatientResponse> UpdatePatientAsync(ulong actor, ulong id, ManagerPatientUpdateRequest request, CancellationToken ct)
@@ -201,9 +228,11 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         if (email is not null && normalizedEmail is null) throw Invalid("O e-mail informado é inválido.");
         var phone = Text(request.PhoneE164); var normalizedPhone = phone is null ? null : IdentifierNormalizer.NormalizePhone(phone);
         if (phone is not null && normalizedPhone is null) throw Invalid("O telefone deve estar no formato brasileiro com país e DDD.");
-        if (normalizedEmail is null && normalizedPhone is null) throw Invalid("Mantenha ao menos um e-mail ou telefone para recuperação da conta.");
+        if (account.PortalAccessEnabled && normalizedEmail is null && normalizedPhone is null)
+            throw Invalid("Desative o onboarding antes de remover todos os contatos de uma conta com acesso ao portal.");
         if (request.BirthDate > DateOnly.FromDateTime(now) || request.BirthDate < DateOnly.FromDateTime(now).AddYears(-125)) throw Invalid("A data de nascimento é inválida.");
-        if (await database.Accounts.AnyAsync(x => x.Id != id && ((taxId != null && x.TaxId == taxId) || (normalizedEmail != null && x.NormalizedEmail == normalizedEmail) || (normalizedPhone != null && x.PhoneE164 == normalizedPhone)), ct))
+        if (await database.Accounts.AnyAsync(x => x.Id != id && ((taxId != null && x.TaxId == taxId) || (normalizedEmail != null && x.NormalizedEmail == normalizedEmail) || (normalizedPhone != null && x.PhoneE164 == normalizedPhone)), ct)
+            || taxId is not null && await database.PatientProfiles.AnyAsync(x => x.AccountId != id && x.TaxId == taxId, ct))
             throw Conflict("Não foi possível salvar os dados informados.");
         var changed = new List<string>();
         if (account.FullName != request.FullName.Trim()) changed.Add("fullName");
@@ -223,8 +252,8 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         else { account.AccountAddress.PostalCode = request.Address.PostalCode; account.AccountAddress.Street = request.Address.Street.Trim(); account.AccountAddress.Number = request.Address.Number.Trim(); account.AccountAddress.Complement = Text(request.Address.Complement); account.AccountAddress.District = request.Address.District.Trim(); account.AccountAddress.City = request.Address.City.Trim(); account.AccountAddress.StateCode = request.Address.StateCode.ToUpperInvariant(); account.AccountAddress.UpdatedAtUtc = now; }
         await SaveAsync(ct);
         var user = await users.FindByIdAsync(id.ToString(CultureInfo.InvariantCulture));
-        if (user is not null && emailChanged && normalizedEmail is not null) await challenges.CreateAsync(user, "contact_verification", "email", normalizedEmail, ct);
-        if (user is not null && phoneChanged && normalizedPhone is not null) await challenges.CreateAsync(user, "contact_verification", "sms", normalizedPhone, ct);
+        if (account.PortalAccessEnabled && user is not null && emailChanged && normalizedEmail is not null) await challenges.CreateAsync(user, "contact_verification", "email", normalizedEmail, ct);
+        if (account.PortalAccessEnabled && user is not null && phoneChanged && normalizedPhone is not null) await challenges.CreateAsync(user, "contact_verification", "sms", normalizedPhone, ct);
         var actorRole = await database.Accounts.AsNoTracking().Where(x => x.Id == actor).Select(x => x.RoleCode).SingleAsync(ct);
         await audit.WriteAsync(actorRole == ViverAppRoles.Administrator ? "administrator.patient.operational_data.updated" : "manager.patient.operational_data.updated", actor, "account", id.ToString(CultureInfo.InvariantCulture), new Dictionary<string, string> { ["changedFields"] = string.Join(',', changed) }, ct);
         await transaction.CommitAsync(ct);
@@ -312,7 +341,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         x.ArrivalBusinessDate is { } arrivalDate ? DateOnly.FromDateTime(arrivalDate) : null, x.ArrivalQueueNumber,
         x.AppointmentRescheduleHistories.OrderBy(h => h.SequenceNumber).Select(h => new AppointmentRescheduleHistoryResponse(h.SequenceNumber,
             h.PreviousStartsAtUtc, h.PreviousEndsAtUtc, h.NewStartsAtUtc, h.NewEndsAtUtc, h.Reason, h.OccurredAtUtc)).ToArray(),
-        x.ModalityCode == "in_person" && x.StatusCode == "confirmed", x.StatusCode is "pending" or "confirmed", x.StatusCode is "pending" or "confirmed",
+        x.ModalityCode == "in_person" && x.StatusCode == "confirmed", x.StatusCode == "arrived", x.StatusCode is "pending" or "confirmed", x.StatusCode is "pending" or "confirmed",
         x.ModalityCode == "in_person" && x.PaymentLocationCode == "clinic" && x.StatusCode is "pending" or "confirmed" && x.CurrentPayment?.StatusCode is not ("paid" or "reversal_pending"), x.RowVersion);
     private static ManagerProfileResponse MapProfile(Account x) => new(x.Id, x.FullName, x.Email, x.PhoneE164, x.TaxId, x.EmailVerified, x.PhoneVerified,
         x.ManagerPreference?.EmailEnabled ?? true, x.ManagerPreference?.SmsEnabled ?? true, x.RowVersion, x.ManagerPreference?.RowVersion ?? 1);
@@ -323,7 +352,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         var address = x.AccountAddress is null ? null : new ManagerPatientAddressResponse(x.AccountAddress.PostalCode, x.AccountAddress.Street, x.AccountAddress.Number, x.AccountAddress.Complement, x.AccountAddress.District, x.AccountAddress.City, x.AccountAddress.StateCode);
         return new(x.Id, x.FullName, x.PatientProfile?.PreferredName, x.TaxId ?? x.PatientProfile?.TaxId, x.Email, x.PhoneE164, x.EmailVerified, x.PhoneVerified,
             x.PatientProfile?.BirthDate is { } birth ? DateOnly.FromDateTime(birth) : null, address,
-            x.StatusCode, active, premium?.StatusCode ?? "none", premium?.StatusCode == "pending" ? premium.Id : null, appointments.Length,
+            x.StatusCode, x.PortalAccessEnabled, active, premium?.StatusCode ?? "none", premium?.StatusCode == "pending" ? premium.Id : null, appointments.Length,
             appointments.Where(a => a.StartsAtUtc < now).Select(a => (DateTime?)a.StartsAtUtc).DefaultIfEmpty().Max(),
             appointments.Where(a => a.StartsAtUtc >= now && a.StatusCode is "pending" or "confirmed" or "arrived" or "in_progress").Select(a => (DateTime?)a.StartsAtUtc).DefaultIfEmpty().Min(), x.RowVersion);
     }

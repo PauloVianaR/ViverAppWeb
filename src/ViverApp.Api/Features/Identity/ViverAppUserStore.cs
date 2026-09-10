@@ -57,6 +57,7 @@ public sealed class ViverAppUserStore(
             Email = user.Email,
             NormalizedEmail = user.NormalizedEmail,
             PhoneE164 = user.PhoneNumber,
+            PortalAccessEnabled = user.PortalAccessEnabled,
             TaxId = user.TaxId,
             BirthDate = user.BirthDate,
             PasswordHash = user.PasswordHash,
@@ -116,6 +117,7 @@ public sealed class ViverAppUserStore(
         account.Email = user.Email;
         account.NormalizedEmail = user.NormalizedEmail;
         account.PhoneE164 = user.PhoneNumber;
+        account.PortalAccessEnabled = user.PortalAccessEnabled;
         account.TaxId = user.TaxId;
         account.BirthDate = user.BirthDate;
         account.PasswordHash = user.PasswordHash;
@@ -821,6 +823,7 @@ public sealed class ViverAppUserStore(
             EmailConfirmed = account.EmailVerified,
             PhoneNumber = account.PhoneE164,
             PhoneNumberConfirmed = account.PhoneVerified,
+            PortalAccessEnabled = account.PortalAccessEnabled,
             TaxId = account.TaxId,
             BirthDate = account.BirthDate,
             PreferredRecoveryChannel = account.PreferredRecoveryChannel,

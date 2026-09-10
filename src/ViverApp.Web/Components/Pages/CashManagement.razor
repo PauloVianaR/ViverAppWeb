@@ -20,7 +20,45 @@
 <nav class="patient-pagination" aria-label="Paginação"><button class="button button--secondary" @onclick="PreviousPage" disabled="@(Page==1)">Anterior</button><span>Página @Page · @Data.Page.TotalCount movimento(s)</span><button class="button button--secondary" @onclick="NextPage" disabled="@(Page*25>=Data.Page.TotalCount)">Próxima</button></nav></section>
 <section class="surface patient-panel cash-print-area"><div class="section-heading"><div><p class="eyebrow">Totais por forma</p><h2>@Date.ToString("dd/MM/yyyy")</h2></div><span>@Data.Summary.MovementCount movimento(s)</span></div><div class="cash-method-grid">@foreach(var item in Data.Summary.ByMethod){<article><strong>@CashMethod(item.MethodCode)</strong><span>Entradas @Money(item.Entries)</span><span>Saídas @Money(item.Outflows)</span><b>Líquido @Money(item.Net)</b></article>}</div>@if(Data.Summary.ByMethod.Count==0){<p class="muted">Sem totais para exibir.</p>}</section>
 <div class="patient-actions cash-no-print"><button class="button" @onclick="()=>Print(false)">Imprimir</button><button class="button button--secondary" @onclick="()=>Print(true)">Imprimir Totais</button></div>
-@if(PrintData is not null){<section class="cash-print-document"><header><h1>@PrintData.ClinicName</h1><p>Caixa de @PrintData.OperationalDate.ToString("dd/MM/yyyy") · emitido por @PrintData.IssuedBy em @PrintData.IssuedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p><p>@PrintData.FilterDescription</p></header><h2>Totais</h2><dl><div><dt>Entradas</dt><dd>@Money(PrintData.Summary.GrossEntries+PrintData.Summary.Supplies)</dd></div><div><dt>Estornos/saídas</dt><dd>@Money(PrintData.Summary.PaymentReversals+PrintData.Summary.Withdrawals)</dd></div><div><dt>Líquido</dt><dd>@Money(PrintData.Summary.NetTotal)</dd></div></dl><h3>Por forma de pagamento</h3>@foreach(var item in PrintData.Summary.ByMethod){<p>@CashMethod(item.MethodCode): @Money(item.Entries) − @Money(item.Outflows) = <strong>@Money(item.Net)</strong> (@item.MovementCount)</p>}@if(!PrintData.TotalsOnly){<h2>Movimentações</h2><table class="cash-table"><thead><tr><th>Horário</th><th>Atendimento</th><th>Descrição</th><th>Forma</th><th>Valor</th></tr></thead><tbody>@foreach(var item in PrintData.Movements){<tr><td>@item.OccurredAtUtc.ToLocalTime().ToString("HH:mm")</td><td>@(item.AppointmentNumber is null?"—":$"#{item.AppointmentNumber}")</td><td>@item.Description</td><td>@CashMethod(item.MethodCode)</td><td>@(item.DirectionCode=="entry"?"+":"−") @Money(item.Amount)</td></tr>}</tbody></table>}</section>}
+@if(PrintData is not null){
+<section class="cash-print-document">
+    <header class="cash-print-header">
+        <div class="cash-print-brand"><img src="/images/logo.png" alt="ViverApp"/><div><strong>ViverApp</strong><span>@PrintData.ClinicName</span></div></div>
+        <div class="cash-print-title"><p>@(PrintData.TotalsOnly?"Resumo financeiro":"Relatório financeiro")</p><h1>Fechamento diário do caixa</h1></div>
+    </header>
+    <div class="cash-print-metadata">
+        <div><span>Data do caixa</span><strong>@PrintData.OperationalDate.ToString("dd/MM/yyyy")</strong></div>
+        <div><span>Emitido em</span><strong>@PrintData.IssuedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</strong></div>
+        <div><span>Responsável</span><strong>@PrintData.IssuedBy</strong></div>
+        <div><span>Situação</span><strong>@(PrintData.Closure is null?"Caixa aberto":$"Fechado por {PrintData.Closure.ResponsibleName}")</strong></div>
+    </div>
+    @if(!string.IsNullOrWhiteSpace(PrintData.FilterDescription)){<p class="cash-print-filter"><strong>Recorte:</strong> @PrintData.FilterDescription</p>}
+    @if(!PrintData.TotalsOnly){
+        <section class="cash-print-section">
+            <div class="cash-print-section-title"><h2>Movimentações do dia</h2><span>@PrintData.Movements.Count registro(s)</span></div>
+            @if(PrintData.Movements.Count==0){<p class="cash-print-empty">Nenhuma movimentação compõe este relatório.</p>}else{
+            <table class="cash-print-table">
+                <thead><tr><th>Hora</th><th>Referência</th><th>Movimentação</th><th>Forma</th><th>Responsável</th><th class="cash-print-number">Entrada</th><th class="cash-print-number">Saída</th></tr></thead>
+                <tbody>@foreach(var item in PrintData.Movements){<tr><td>@item.OccurredAtUtc.ToLocalTime().ToString("HH:mm")</td><td>@(item.AppointmentNumber is null?"—":$"Atend. #{item.AppointmentNumber}")@if(!string.IsNullOrWhiteSpace(item.PatientName)){<small>@item.PatientName</small>}</td><td><strong>@CashType(item.TypeCode)</strong><small>@item.Description</small>@if(item.RelatedMovementId.HasValue){<small>Relacionado ao movimento #@item.RelatedMovementId</small>}</td><td>@CashMethod(item.MethodCode)</td><td>@(item.ResponsibleName??"Automático")</td><td class="cash-print-number cash-print-positive">@(item.DirectionCode=="entry"?Money(item.Amount):"—")</td><td class="cash-print-number cash-print-negative">@(item.DirectionCode=="outflow"?Money(item.Amount):"—")</td></tr>}</tbody>
+            </table>}
+        </section>
+    }
+    <section class="cash-print-section cash-print-summary-section">
+        <div class="cash-print-section-title"><h2>Totais por forma de pagamento</h2><span>@PrintData.Summary.MovementCount movimento(s)</span></div>
+        <div class="cash-print-summary-layout">
+            <div class="cash-print-methods">
+                @foreach(var item in PrintData.Summary.ByMethod){<article><strong>@CashMethod(item.MethodCode)</strong><span>Entradas <b>@Money(item.Entries)</b></span><span>Saídas <b>@Money(item.Outflows)</b></span><span class="cash-print-method-net">Líquido <b>@Money(item.Net)</b></span></article>}
+                @if(PrintData.Summary.ByMethod.Count==0){<p class="cash-print-empty">Sem totais por forma de pagamento.</p>}
+            </div>
+            <aside class="cash-print-grand-total">
+                <div><span>Entradas</span><strong>@Money(PrintData.Summary.ByMethod.Sum(item=>item.Entries))</strong></div>
+                <div><span>Saídas e estornos</span><strong>@Money(PrintData.Summary.ByMethod.Sum(item=>item.Outflows))</strong></div>
+                <div class="cash-print-balance"><span>Saldo líquido</span><strong>@Money(PrintData.Summary.NetTotal)</strong></div>
+            </aside>
+        </div>
+    </section>
+    <footer class="cash-print-footer"><span>Documento interno · valores calculados pelo servidor</span><span>Fuso: @PrintData.TimezoneName</span><span class="cash-print-page-number"></span></footer>
+</section>}
 <dialog id="cash-movement"><h2>Nova movimentação manual</h2><div class="field"><label for="movement-type">Tipo</label><select id="movement-type" @bind="ManualType"><option value="supply">Suprimento</option><option value="withdrawal">Sangria</option><option value="adjustment">Ajuste corretivo</option></select></div><div class="field"><label for="movement-direction">Direção</label><select id="movement-direction" @bind="ManualDirection" disabled="@(ManualType!="adjustment")"><option value="entry">Entrada</option><option value="outflow">Saída</option></select></div><div class="field"><label for="movement-method">Forma</label><select id="movement-method" @bind="ManualMethod">@foreach(var value in Methods){<option value="@value">@CashMethod(value)</option>}</select></div><div class="field"><label for="movement-amount">Valor</label><input id="movement-amount" type="number" min="0.01" step="0.01" @bind="ManualAmount"/></div>@if(ManualType=="adjustment"){<div class="field"><label for="movement-related">Número do movimento compensado</label><input id="movement-related" type="number" min="1" @bind="ManualRelatedMovementId"/></div>}<div class="field"><label for="movement-description">Descrição</label><input id="movement-description" maxlength="240" @bind="ManualDescription"/></div><div class="field"><label for="movement-reason">Motivo</label><textarea id="movement-reason" minlength="5" maxlength="500" @bind="ManualReason"></textarea></div><div class="patient-actions"><button class="button" @onclick="AddMovement">Registrar</button><button class="button button--secondary" @onclick='()=>Close("cash-movement")'>Voltar</button></div></dialog>
 <dialog id="cash-close"><h2>Fechar caixa de @Date.ToString("dd/MM/yyyy")</h2><p>O resumo será imutável. Movimentações administrativas posteriores continuarão visíveis como pós-fechamento.</p><div class="patient-actions"><button class="button" @onclick="CloseDay">Confirmar fechamento</button><button class="button button--secondary" @onclick='()=>Close("cash-close")'>Voltar</button></div></dialog>}
 @code{

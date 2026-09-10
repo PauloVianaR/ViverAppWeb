@@ -67,7 +67,7 @@ public sealed class PatientPaymentsController(PaymentService payments) : Control
 public sealed class ManagementPaymentsController(PaymentService payments) : ControllerBase
 {
     [HttpPost("{paymentId:long}/refund")]
-    [EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
+    [EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public async Task<ActionResult<PaymentResponse>> Refund(
         ulong paymentId,
         [FromHeader(Name = "Idempotency-Key")] string idempotencyKey,

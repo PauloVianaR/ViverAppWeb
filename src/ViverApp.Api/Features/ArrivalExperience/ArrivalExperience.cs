@@ -1,4 +1,5 @@
 using System.Data;
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
@@ -14,6 +15,9 @@ using ViverApp.Security;
 namespace ViverApp.Api.Features.ArrivalExperience;
 
 public sealed record ArrivalRequest(ulong RowVersion);
+public sealed record ArrivalCancellationRequest(
+    [param: Range(1, long.MaxValue)] ulong RowVersion,
+    [param: Required, StringLength(500, MinimumLength = 5)] string Reason);
 public sealed record ArrivalResponse(ulong AppointmentId, ulong AppointmentNumber, string StatusCode,
     DateTime? ArrivedAtUtc, DateOnly? BusinessDate, uint? QueueNumber, ulong RowVersion);
 public sealed record StartAppointmentRequest(ulong RowVersion);
@@ -136,6 +140,57 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
                 logger.LogWarning(exception, "A chegada foi persistida, mas a entrega SignalR será recuperada pela caixa durável.");
             }
         }
+        return MapArrival(appointment);
+    }
+
+    public async Task<ArrivalResponse> CancelAsync(ulong actor, ulong appointmentId, ArrivalCancellationRequest request, CancellationToken ct)
+    {
+        var reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
+        if (reason is null || reason.Length is < 5 or > 500)
+            throw new ArrivalRuleException(400, "Informe um motivo com pelo menos 5 caracteres.");
+
+        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var appointment = await database.Appointments
+            .FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {appointmentId} FOR UPDATE")
+            .SingleOrDefaultAsync(ct) ?? throw new ArrivalRuleException(404, "Atendimento não encontrado.");
+        if (appointment.RowVersion != request.RowVersion)
+            throw new ArrivalRuleException(409, "O atendimento foi alterado por outra sessão.");
+        if (appointment.StatusCode != "arrived" || !appointment.ArrivedAtUtc.HasValue || !appointment.ArrivalQueueNumber.HasValue)
+            throw new ArrivalRuleException(409, "Somente uma chegada registrada pode ser cancelada.");
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        var queueNumber = appointment.ArrivalQueueNumber.Value;
+        appointment.StatusCode = "confirmed";
+        appointment.ArrivedAtUtc = null;
+        appointment.ArrivalBusinessDate = null;
+        appointment.ArrivalQueueNumber = null;
+        appointment.ArrivalRecordedByAccountId = null;
+        appointment.UpdatedAtUtc = now;
+        appointment.RowVersion++;
+        database.AppointmentStatusHistories.Add(new AppointmentStatusHistory
+        {
+            AppointmentId = appointment.Id,
+            ActorAccountId = actor,
+            FromStatusCode = "arrived",
+            ToStatusCode = "confirmed",
+            Reason = $"Chegada cancelada: {reason}",
+            StartsAtUtc = appointment.StartsAtUtc,
+            EndsAtUtc = appointment.EndsAtUtc,
+            OccurredAtUtc = now
+        });
+        await database.DoctorNotifications
+            .Where(item => item.AppointmentId == appointmentId && item.ReadAtUtc == null)
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(item => item.ReadAtUtc, now)
+                .SetProperty(item => item.RowVersion, item => item.RowVersion + 1), ct);
+        await database.SaveChangesAsync(ct);
+        await audit.WriteAsync("appointment.arrival_canceled", actor, "appointment", appointment.Id.ToString(CultureInfo.InvariantCulture),
+            new Dictionary<string, string>
+            {
+                ["appointmentNumber"] = appointment.AppointmentNumber.ToString(CultureInfo.InvariantCulture),
+                ["queueNumber"] = queueNumber.ToString(CultureInfo.InvariantCulture)
+            }, ct);
+        await transaction.CommitAsync(ct);
         return MapArrival(appointment);
     }
 

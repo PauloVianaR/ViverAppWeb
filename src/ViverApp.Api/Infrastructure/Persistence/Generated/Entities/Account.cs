@@ -29,6 +29,8 @@ public partial class Account
 
     public bool PhoneVerified { get; set; }
 
+    public bool PortalAccessEnabled { get; set; }
+
     public string? PreferredRecoveryChannel { get; set; }
 
     public byte[] SecurityStamp { get; set; } = null!;

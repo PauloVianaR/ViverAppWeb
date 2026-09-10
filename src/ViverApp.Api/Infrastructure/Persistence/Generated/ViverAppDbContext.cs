@@ -165,6 +165,7 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(16)
                 .HasColumnName("phone_e164");
             entity.Property(e => e.PhoneVerified).HasColumnName("phone_verified");
+            entity.Property(e => e.PortalAccessEnabled).HasColumnName("portal_access_enabled");
             entity.Property(e => e.PreferredRecoveryChannel)
                 .HasMaxLength(10)
                 .HasColumnName("preferred_recovery_channel");

@@ -230,6 +230,34 @@ public sealed class CashManagementService(
             database.PaymentReversalEvents.Add(new PaymentReversalEvent { PaymentReversalId = reversal.Id, FromStatusCode = "pending", ToStatusCode = "confirmed", SourceCode = "pagbank", OccurredAtUtc = now });
         }
 
+        var previousAppointmentStatus = appointment.StatusCode;
+        if (previousAppointmentStatus != "pending")
+        {
+            appointment.StatusCode = "pending";
+            appointment.ArrivedAtUtc = null;
+            appointment.ArrivalBusinessDate = null;
+            appointment.ArrivalQueueNumber = null;
+            appointment.ArrivalRecordedByAccountId = null;
+            appointment.UpdatedAtUtc = now;
+            appointment.RowVersion++;
+            database.AppointmentStatusHistories.Add(new AppointmentStatusHistory
+            {
+                AppointmentId = appointment.Id,
+                ActorAccountId = actor,
+                FromStatusCode = previousAppointmentStatus,
+                ToStatusCode = "pending",
+                Reason = $"Pagamento cancelado: {reason}",
+                StartsAtUtc = appointment.StartsAtUtc,
+                EndsAtUtc = appointment.EndsAtUtc,
+                OccurredAtUtc = now
+            });
+            await database.DoctorNotifications
+                .Where(item => item.AppointmentId == appointment.Id && item.ReadAtUtc == null)
+                .ExecuteUpdateAsync(update => update
+                    .SetProperty(item => item.ReadAtUtc, now)
+                    .SetProperty(item => item.RowVersion, item => item.RowVersion + 1), cancellationToken);
+        }
+
         var date = await OperationalDateAsync(now, cancellationToken);
         var afterClosure = await database.CashClosures.AnyAsync(item => item.OperationalDate == date.ToDateTime(TimeOnly.MinValue), cancellationToken);
         database.CashMovements.Add(new CashMovement
@@ -249,7 +277,13 @@ public sealed class CashManagementService(
         await database.SaveChangesAsync(cancellationToken);
         if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         await audit.WriteAsync("payment.reversed", actor, "payment", payment.Id.ToString(CultureInfo.InvariantCulture),
-            new Dictionary<string, string> { ["appointmentId"] = appointment.Id.ToString(CultureInfo.InvariantCulture), ["provider"] = payment.ProviderCode }, cancellationToken);
+            new Dictionary<string, string>
+            {
+                ["appointmentId"] = appointment.Id.ToString(CultureInfo.InvariantCulture),
+                ["provider"] = payment.ProviderCode,
+                ["previousAppointmentStatus"] = previousAppointmentStatus,
+                ["newAppointmentStatus"] = appointment.StatusCode
+            }, cancellationToken);
         return MapReversal(reversal);
     }
 

@@ -84,6 +84,11 @@ public sealed class CashManagementIntegrationTests
             new PaymentReversalRequest(original.RowVersion, "Pagamento lançado na forma incorreta"), CancellationToken.None);
         Assert.Equal("reversed", reversed.PaymentStatusCode);
         Assert.True(reversed.CanCreateReplacementPayment);
+        Assert.Equal("pending", appointment.StatusCode);
+        Assert.Null(appointment.ArrivedAtUtc);
+        Assert.Contains(await database.AppointmentStatusHistories.Where(item => item.AppointmentId == appointment.Id).ToArrayAsync(),
+            item => item.FromStatusCode == "confirmed" && item.ToStatusCode == "pending"
+                && item.Reason!.Contains("Pagamento cancelado", StringComparison.Ordinal));
 
         var managerService = new ManagerExperienceService(database, null!, null!, audit, clock, cash);
         var replacement = await managerService.ConfirmPaymentAsync(manager.Id, appointment.Id, Guid.NewGuid().ToString("N"),

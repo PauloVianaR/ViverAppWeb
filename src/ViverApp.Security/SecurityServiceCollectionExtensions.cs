@@ -201,7 +201,9 @@ public static class SecurityServiceCollectionExtensions
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
                 RateLimitPartition.GetFixedWindowLimiter(
                     GetPartitionKey(context),
-                    _ => CreateFixedWindowOptions(globalPermitLimit, TimeSpan.FromMinutes(1))));
+                    _ => CreateFixedWindowOptions(
+                        context.User.Identity?.IsAuthenticated == true ? 1_200 : globalPermitLimit,
+                        TimeSpan.FromMinutes(1))));
             options.AddPolicy(
                 SecurityPolicyNames.PublicFormRateLimit,
                 context => RateLimitPartition.GetFixedWindowLimiter(
@@ -213,10 +215,17 @@ public static class SecurityServiceCollectionExtensions
                     GetPartitionKey(context),
                     _ => CreateFixedWindowOptions(5, TimeSpan.FromMinutes(5))));
             options.AddPolicy(
+                SecurityPolicyNames.AuthenticatedOperationRateLimit,
+                context => RateLimitPartition.GetFixedWindowLimiter(
+                    GetPartitionKey(context),
+                    _ => CreateFixedWindowOptions(600, TimeSpan.FromMinutes(1))));
+            options.AddPolicy(
                 SecurityPolicyNames.WriteRateLimit,
                 context => RateLimitPartition.GetFixedWindowLimiter(
                     GetPartitionKey(context),
-                    _ => CreateFixedWindowOptions(30, TimeSpan.FromMinutes(1))));
+                    _ => CreateFixedWindowOptions(
+                        context.User.Identity?.IsAuthenticated == true ? 300 : 30,
+                        TimeSpan.FromMinutes(1))));
             options.OnRejected = OnRateLimitRejectedAsync;
             foreach (var (name, limit) in new[] { (SecurityPolicyNames.UploadRateLimit, 3), (SecurityPolicyNames.SlotRateLimit, 30), (SecurityPolicyNames.CheckoutRateLimit, 5), (SecurityPolicyNames.VideoRateLimit, 10) })
                 options.AddPolicy(name, context => RateLimitPartition.GetFixedWindowLimiter(GetPartitionKey(context), _ => CreateFixedWindowOptions(limit, TimeSpan.FromMinutes(1))));

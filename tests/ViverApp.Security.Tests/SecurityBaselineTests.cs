@@ -1,7 +1,10 @@
+using System.Security.Claims;
 using System.Text.RegularExpressions;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -170,6 +173,41 @@ public sealed class SecurityBaselineTests
 
         Assert.Equal("ViverApp.Api.Antiforgery.Local", options.Cookie.Name);
         Assert.Equal(CookieSecurePolicy.SameAsRequest, options.Cookie.SecurePolicy);
+    }
+
+    [Fact]
+    public void AuthenticatedAccountsHaveAnOperationalGlobalQuotaWithoutRemovingAnonymousProtection()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddViverAppSecurityBaseline(
+            new ConfigurationBuilder().Build(),
+            CreateEnvironment(Environments.Development),
+            SecuritySurface.Api);
+
+        using var provider = services.BuildServiceProvider();
+        var limiter = provider.GetRequiredService<IOptions<RateLimiterOptions>>().Value.GlobalLimiter!;
+        var anonymous = new DefaultHttpContext();
+        anonymous.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("192.0.2.10");
+        for (var index = 0; index < 120; index++)
+        {
+            using var lease = limiter.AttemptAcquire(anonymous);
+            Assert.True(lease.IsAcquired);
+        }
+        using (var rejected = limiter.AttemptAcquire(anonymous))
+            Assert.False(rejected.IsAcquired);
+
+        var authenticated = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(ClaimTypes.NameIdentifier, "rate-limit-test-account")],
+                "test"))
+        };
+        for (var index = 0; index < 200; index++)
+        {
+            using var lease = limiter.AttemptAcquire(authenticated);
+            Assert.True(lease.IsAcquired);
+        }
     }
 
     private static IWebHostEnvironment CreateEnvironment(string name)

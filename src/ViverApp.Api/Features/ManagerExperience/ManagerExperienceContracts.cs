@@ -25,7 +25,7 @@ public sealed record ManagerAppointmentResponse(ulong Id, ulong AppointmentNumbe
     ulong? RescheduledToAppointmentId, byte? Rating, string? ReviewComment, ManagerPaymentMetadata Payment,
     ManagerReportMetadata Report, int AttachmentCount, DateTime? ArrivedAtUtc, DateOnly? ArrivalBusinessDate,
     uint? ArrivalQueueNumber, IReadOnlyList<AppointmentRescheduleHistoryResponse> RescheduleHistory,
-    bool CanRegisterArrival, bool CanCancel, bool CanReschedule, bool CanConfirmPayment, ulong RowVersion);
+    bool CanRegisterArrival, bool CanCancelArrival, bool CanCancel, bool CanReschedule, bool CanConfirmPayment, ulong RowVersion);
 public sealed record ManagerAgendaCounters(int Total, int Online, int InPerson, int Rescheduled, int Paid, int PendingPayment);
 public sealed record ManagerAgendaSources(IReadOnlyList<ulong> Total, IReadOnlyList<ulong> Online,
     IReadOnlyList<ulong> InPerson, IReadOnlyList<ulong> Rescheduled, IReadOnlyList<ulong> Paid,
@@ -36,7 +36,7 @@ public sealed record ManagerPatientAddressResponse(string PostalCode, string Str
     string District, string City, string StateCode);
 public sealed record ManagerPatientResponse(ulong AccountId, string FullName, string? PreferredName, string? TaxId, string? Email,
     string? Phone, bool EmailVerified, bool PhoneVerified, DateOnly? BirthDate, ManagerPatientAddressResponse? Address,
-    string StatusCode, bool IsPremium, string PremiumStatus, ulong? PremiumRequestId,
+    string StatusCode, bool PortalAccessEnabled, bool IsPremium, string PremiumStatus, ulong? PremiumRequestId,
     int AppointmentCount, DateTime? LastAppointmentAtUtc, DateTime? NextAppointmentAtUtc, ulong RowVersion);
 public sealed record ManagerPatientCounters(int Total, int Premium, int Active, int Blocked, int PremiumPending);
 public sealed record ManagerPatientSources(IReadOnlyList<string> Total, IReadOnlyList<string> Premium,
@@ -55,8 +55,15 @@ public sealed record ManagerProfileUpdateRequest([param: Required, StringLength(
     [param: Range(1, long.MaxValue)] ulong PreferenceRowVersion);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record ManagerPatientCreateRequest([param: Required, StringLength(200, MinimumLength = 3)] string FullName,
-    [param: EmailAddress, StringLength(254)] string? Email, [param: StringLength(20)] string? PhoneE164, DateOnly? BirthDate) : IValidatableObject
+public sealed record ManagerPatientCreateRequest(
+    [param: Required, StringLength(200, MinimumLength = 3)] string FullName,
+    [param: StringLength(120)] string? PreferredName,
+    [param: Required, RegularExpression("^[0-9]{11}$")] string TaxId,
+    DateOnly BirthDate,
+    [param: EmailAddress, StringLength(254)] string? Email,
+    [param: StringLength(20)] string? PhoneE164,
+    ManagerPatientAddressRequest? Address,
+    bool SendOnboarding) : IValidatableObject
 {
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -64,6 +71,8 @@ public sealed record ManagerPatientCreateRequest([param: Required, StringLength(
             yield return new ValidationResult("O nome deve ter entre 3 e 200 caracteres.", [nameof(FullName)]);
         if (!string.IsNullOrWhiteSpace(Email) && !new EmailAddressAttribute().IsValid(Email))
             yield return new ValidationResult("O e-mail é inválido.", [nameof(Email)]);
+        if (SendOnboarding && string.IsNullOrWhiteSpace(Email) && string.IsNullOrWhiteSpace(PhoneE164))
+            yield return new ValidationResult("Informe e-mail ou telefone para enviar o onboarding.", [nameof(Email), nameof(PhoneE164)]);
     }
 }
 

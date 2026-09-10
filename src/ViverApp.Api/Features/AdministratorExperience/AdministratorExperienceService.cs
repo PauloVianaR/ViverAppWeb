@@ -61,6 +61,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
     public Task<ManagerPatientsResponse> PatientsAsync(string? search, string? status, bool? premium, int page, int size, CancellationToken ct) => manager.PatientsAsync(search, status, premium, page, size, ct);
     public Task<ManagerPatientResponse> PatientAsync(ulong id, CancellationToken ct) => manager.PatientAsync(id, ct);
     public Task<ManagerPatientResponse> UpdatePatientAsync(ulong actor, ulong id, ManagerPatientUpdateRequest request, CancellationToken ct) => manager.UpdatePatientAsync(actor, id, request, ct);
+    public Task<ManagerPatientResponse> CreatePatientAsync(ulong actor, ManagerPatientCreateRequest request, CancellationToken ct) => manager.CreatePatientAsync(actor, request, ct);
     public Task<ManagerPaymentResponse> ConfirmPaymentAsync(ulong actor, ulong id, string key, ManagerPaymentConfirmRequest request, CancellationToken ct) => manager.ConfirmPaymentAsync(actor, id, key, request, ct);
     public Task<IReadOnlyList<ManagerDoctorOption>> DoctorsAsync(CancellationToken ct) => manager.DoctorsAsync(ct);
     public async Task<IReadOnlyList<AdministratorDoctorAccessResponse>> DoctorAccessAsync(CancellationToken ct) => await database.DoctorPreferences.AsNoTracking()

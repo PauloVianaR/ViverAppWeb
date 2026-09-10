@@ -39,22 +39,22 @@ public sealed class CashManagementController(CashManagementService service) : Co
         int page = 1, int pageSize = 25, CancellationToken cancellationToken = default) =>
         service.DayAsync(date, method, type, appointmentNumber, patient, responsible, page, pageSize, cancellationToken);
 
-    [HttpGet("print"), Authorize(Policy = ViverAppPolicies.CashPrint), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
+    [HttpGet("print"), Authorize(Policy = ViverAppPolicies.CashPrint), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<CashPrintResponse> Print(DateOnly date, bool totalsOnly, string? method = null, string? type = null,
         ulong? appointmentNumber = null, string? patient = null, string? responsible = null,
         CancellationToken cancellationToken = default) =>
         service.PrintAsync(Actor, date, method, type, appointmentNumber, patient, responsible, totalsOnly, cancellationToken);
 
-    [HttpPost("movements"), Authorize(Policy = ViverAppPolicies.CashWrite), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
+    [HttpPost("movements"), Authorize(Policy = ViverAppPolicies.CashWrite), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<CashMovementResponse> AddMovement([FromHeader(Name = "Idempotency-Key")] string key,
         CashManualMovementRequest request, CancellationToken cancellationToken) =>
         service.AddManualAsync(Actor, User.FindFirstValue(ClaimTypes.Role) ?? string.Empty, key, request, cancellationToken);
 
-    [HttpPost("{date}/closure"), Authorize(Policy = ViverAppPolicies.CashClose), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
+    [HttpPost("{date}/closure"), Authorize(Policy = ViverAppPolicies.CashClose), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<CashClosureResponse> Close(DateOnly date, CashCloseRequest request, CancellationToken cancellationToken) =>
         service.CloseAsync(Actor, date, request, cancellationToken);
 
-    [HttpPost("payments/{paymentId:long}/reversal"), Authorize(Policy = ViverAppPolicies.PaymentReverse), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
+    [HttpPost("payments/{paymentId:long}/reversal"), Authorize(Policy = ViverAppPolicies.PaymentReverse), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<PaymentReversalResponse> Reverse(ulong paymentId, [FromHeader(Name = "Idempotency-Key")] string key,
         PaymentReversalRequest request, CancellationToken cancellationToken) =>
         service.ReverseAsync(Actor, key, paymentId, request, cancellationToken);
