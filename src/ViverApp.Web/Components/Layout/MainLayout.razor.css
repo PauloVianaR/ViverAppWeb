@@ -226,7 +226,7 @@
     .mobile-navigation a.active { background: var(--color-brand-soft); color: var(--color-brand-strong); }
 
     .app-shell--administrator .mobile-navigation {
-        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-columns: repeat(7, minmax(0, 1fr));
     }
 
     .app-shell--administrator .mobile-navigation a {

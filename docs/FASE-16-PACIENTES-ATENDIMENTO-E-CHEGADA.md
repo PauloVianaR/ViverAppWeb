@@ -2,9 +2,9 @@
 
 ## Estado e objetivo
 
-**Estado:** planejada; nenhuma implementação desta fase foi iniciada.
+**Estado:** implementada na branch própria; MySQL, build, testes e jornadas funcionais no navegador integrado aprovados. A confirmação física exclusiva no monitor 3 permanece registrada localmente.
 
-**Branch prevista:** `codex/fase-16-pacientes-atendimento-chegada`, criada a partir da `main` somente depois da integração formal da Fase 15.
+**Branch:** `codex/fase-16-pacientes-atendimento-chegada`, criada a partir da `main` depois da integração formal da Fase 15.
 
 Completar os dados operacionais do Paciente para Gestor e Administrador, atribuir identificadores humanos inequívocos aos atendimentos, registrar a chegada presencial com senha de ordem e avisar o Médico em tempo real por sininho, popup e som configuráveis.
 
@@ -94,7 +94,7 @@ Estados terminais/alternativos continuam sujeitos às regras existentes: `cancel
 Regras mínimas:
 
 - somente Gestor ou Administrador autorizado registra chegada;
-- chegada exige atendimento presencial, confirmado, não terminal e dentro da janela configurada;
+- chegada exige atendimento presencial, confirmado, não terminal e na mesma data local agendada; o horário do agendamento é apenas referência operacional;
 - repetir a mesma operação é idempotente;
 - transição, autor, instante, motivo quando aplicável e versão anterior/posterior ficam auditados;
 - Médico só inicia/conclui atendimento atribuído ao próprio escopo;
@@ -155,7 +155,7 @@ O Administrador configura para a clínica:
 - popup habilitado;
 - som habilitado;
 - volume padrão e som dentre assets locais aprovados;
-- janela antecipada/tardia para registrar chegada;
+- data local do atendimento como único limite temporal para registrar chegada, sem restrição de horário no próprio dia;
 - retenção e política de leitura das notificações.
 
 O Médico pode silenciar o som somente na sessão/navegador atual, sem alterar a política global. O sininho durável permanece ativo.
@@ -270,3 +270,42 @@ Queries devem projetar somente o necessário, limitar página/período, aceitar 
 - build, suíte integral, segurança e validação visual estão aprovados;
 - Fases 17 e 18 não foram antecipadas;
 - nenhuma pendência real foi ocultada.
+
+## Implementação realizada
+
+- os cards de Paciente do Gestor e do Administrador passaram a exibir CPF mascarado, e-mail e confirmação, telefone formatado e endereço completo, com estados explícitos para dados ausentes;
+- a edição operacional usa DTO mínimo, valida CPF, unicidade, e-mail, telefone E.164, data de nascimento, endereço, CEP com busca automática e concorrência por `row_version`;
+- mudanças de e-mail ou telefone revogam a confirmação anterior e criam o desafio do canal correspondente sem registrar o contato em auditoria;
+- todo atendimento possui número humano global, imutável, único e iniciado em `100`; apenas a criação consome a sequência, pois reagendar mantém o mesmo atendimento e número;
+- reagendamento altera data/hora no mesmo registro, preserva `pending` ou `confirmed`, pagamento e identificador, e grava uma sequência completa e auditável de horários anteriores;
+- a chegada presencial é idempotente, permitida em qualquer horário da mesma data local agendada, registra autor/data/fuso, atribui senha diária atômica iniciada em `100` e transiciona `confirmed → arrived`;
+- o Médico inicia somente o próprio atendimento, com `arrived → in_progress` no presencial e `confirmed → in_progress` no online; conclusão exige `in_progress`;
+- cards de Paciente, Médico, Gestor e Administrador exibem número, estado textual, fundo distinto acessível e histórico de reagendamentos para cada situação operacional;
+- Agenda e Histórico de todos os papéis possuem filtro explícito por número; os indicadores clicáveis revelam os registros que compõem cada total;
+- a caixa durável do Médico possui contador, leitura individual/em massa, retenção, abertura autorizada e deduplicação pela origem da chegada;
+- o hub SignalR usa grupo derivado exclusivamente da identidade autenticada. Popup e áudio recebem apenas número, senha e horário, sem nome, CPF ou conteúdo clínico;
+- o aviso sonoro local respeita bloqueio de autoplay, volume global e silêncio da sessão. Falha no SignalR não desfaz nem apresenta como falha a chegada já confirmada: a caixa durável a recupera na reconexão;
+- o Administrador configura habilitação, popup, som, volume, chave de som, retenção e política de leitura pelas configurações tipadas existentes;
+- caixa, reversões financeiras e prontuário não foram antecipados.
+
+## Banco DB-First executado
+
+As migrations `0022__patient_arrival_notifications.sql`, `0023__appointment_number_guard.sql` e `0024__appointment_reschedule_history.sql` foram executadas integralmente em `viverappweb`, no MySQL local 8.0.41. Depois de cada mudança estrutural, o scaffold reproduzível regenerou o contexto e as entidades, sem edição manual dos arquivos gerados.
+
+O schema agora possui `appointment_number_sequence`, `arrival_queue_sequences`, `doctor_notifications`, `appointment_reschedule_history`, constraints de número/chegada, índices operacionais e os estados `arrived` e `in_progress`.
+
+## Evidências automatizadas
+
+- API e Web compiladas com zero erros e zero avisos;
+- 184 testes aprovados em execução serial nas sete suítes: Segurança 8, Identidade 37, Administração 16, Agendamento 43, Operação Clínica 31, Persistência 6 e Web 43;
+- o teste concorrente de chegada usa duas conexões reais e comprova uma única senha, uma única transição e uma única notificação durável;
+- testes de agendamento comprovam número mínimo, preservação de ID/número/status/pagamento e histórico ordenado após reagendamentos sucessivos;
+- `ViverApp.Database verify` confirmou MySQL 8.0.41, banco `viverappweb`, schema e migrations;
+- `git diff --check` não encontrou erro de whitespace;
+- a suíte serial evitou contenção entre testes que compartilham o MySQL local e terminou sem falhas; `apply` confirmou que não havia migration pendente.
+
+## Validação visual no navegador integrado
+
+O armazenamento de certificados do perfil do Windows retornou `ERROR_FILE_NOT_FOUND` ao carregar/importar certificados de desenvolvimento. Nenhum certificado foi excluído. Para concluir a inspeção sem enfraquecer produção, foi adicionada a opção explícita `Security:AllowInsecureLocalHttp`, aceita somente em `Development`; ela troca apenas os nomes/políticas dos cookies no processo local quando habilitada. O padrão e qualquer ambiente não Development continuam exigindo cookies `__Host-` e `SecurePolicy.Always`.
+
+No navegador integrado foram aprovados: login sintético; Agenda e Histórico do Gestor; troca direta entre as duas rotas; filtro por número com indicadores coerentes; detalhamento das origens dos totais; chegada em horário diferente no mesmo dia; senha de chegada; fundos distintos por estado; histórico expandido do reagendamento no mesmo atendimento; sininho não lido do Médico; troca Agenda/Histórico e filtro do Médico; e filtro do Paciente em Histórico. A validação exclusiva no monitor 3, o popup/som em uma chegada recebida com o Médico já conectado e o smoke administrativo autenticado por MFA permanecem em `.local/PENDENCIAS.md`.

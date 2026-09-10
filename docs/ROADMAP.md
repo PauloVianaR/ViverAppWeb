@@ -285,7 +285,7 @@ Cada fase deve:
 
 ## Fase 16 — Pacientes, atendimento e chegada
 
-**Estado:** planejada; será a próxima fase após a integração formal da Fase 15.
+**Estado:** implementação e validações automatizadas concluídas na branch `codex/fase-16-pacientes-atendimento-chegada`; chegada, reagendamento no mesmo atendimento, navegação Agenda/Histórico, cores, filtro por número e rastreabilidade dos indicadores também foram aprovados no navegador integrado. A confirmação física no monitor 3 está registrada localmente; falta a integração formal à `main`.
 
 **Plano detalhado:** [Pacientes, atendimento e chegada](FASE-16-PACIENTES-ATENDIMENTO-E-CHEGADA.md).
 

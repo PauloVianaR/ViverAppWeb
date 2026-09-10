@@ -61,6 +61,8 @@ public partial class Account
 
     public virtual ICollection<ApplicationSetting> ApplicationSettings { get; set; } = new List<ApplicationSetting>();
 
+    public virtual ICollection<Appointment> AppointmentArrivalRecordedByAccounts { get; set; } = new List<Appointment>();
+
     public virtual ICollection<Appointment> AppointmentCanceledByAccounts { get; set; } = new List<Appointment>();
 
     public virtual ICollection<Appointment> AppointmentCompletedByAccounts { get; set; } = new List<Appointment>();
@@ -74,6 +76,8 @@ public partial class Account
     public virtual ICollection<Appointment> AppointmentNoShowRecordedByAccounts { get; set; } = new List<Appointment>();
 
     public virtual ICollection<Appointment> AppointmentPatientAccounts { get; set; } = new List<Appointment>();
+
+    public virtual ICollection<AppointmentRescheduleHistory> AppointmentRescheduleHistories { get; set; } = new List<AppointmentRescheduleHistory>();
 
     public virtual ICollection<AppointmentStatusHistory> AppointmentStatusHistories { get; set; } = new List<AppointmentStatusHistory>();
 

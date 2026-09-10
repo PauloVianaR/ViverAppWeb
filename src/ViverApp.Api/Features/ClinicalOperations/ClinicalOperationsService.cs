@@ -290,9 +290,9 @@ public sealed class ClinicalOperationsService(
         }
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
-        if (appointment.StatusCode != "confirmed")
+        if (appointment.StatusCode != "in_progress")
         {
-            throw Conflict("Somente uma consulta confirmada pode ser concluída.");
+            throw Conflict("Somente um atendimento iniciado pode ser concluído.");
         }
 
         if (appointment.StartsAtUtc > now)
@@ -349,7 +349,7 @@ public sealed class ClinicalOperationsService(
         database.AppointmentStatusHistories.Add(new AppointmentStatusHistory
         {
             AppointmentId = appointment.Id,
-            FromStatusCode = "confirmed",
+            FromStatusCode = "in_progress",
             ToStatusCode = "completed",
             ActorAccountId = actorId,
             StartsAtUtc = appointment.StartsAtUtc,
@@ -388,7 +388,7 @@ public sealed class ClinicalOperationsService(
         }
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
-        if (appointment.StatusCode != "confirmed")
+        if (appointment.StatusCode is not ("confirmed" or "arrived"))
         {
             throw Conflict("Somente uma consulta confirmada pode ser marcada como falta.");
         }
@@ -399,6 +399,7 @@ public sealed class ClinicalOperationsService(
         }
 
         SetAppointmentConcurrency(appointment, request.AppointmentRowVersion);
+        var previousStatus = appointment.StatusCode;
         appointment.StatusCode = "no_show";
         appointment.NoShowRecordedByAccountId = actorId;
         appointment.NoShowRecordedAtUtc = now;
@@ -406,7 +407,7 @@ public sealed class ClinicalOperationsService(
         database.AppointmentStatusHistories.Add(new AppointmentStatusHistory
         {
             AppointmentId = appointment.Id,
-            FromStatusCode = "confirmed",
+            FromStatusCode = previousStatus,
             ToStatusCode = "no_show",
             ActorAccountId = actorId,
             StartsAtUtc = appointment.StartsAtUtc,
@@ -487,6 +488,7 @@ public sealed class ClinicalOperationsService(
         var now = timeProvider.GetUtcNow().UtcDateTime;
         return new ClinicalAppointmentResponse(
             appointment.Id,
+            appointment.AppointmentNumber,
             appointment.PatientAccountId,
             appointment.PatientAccount.FullName,
             appointment.PatientAccount.Email,
@@ -501,8 +503,8 @@ public sealed class ClinicalOperationsService(
             isAssignedDoctor ? appointment.PatientNotes : null,
             appointment.RowVersion,
             appointment.MedicalReport is null ? null : MapReport(appointment.MedicalReport, includeReportContent),
-            isAssignedDoctor && appointment.StatusCode == "confirmed" && appointment.StartsAtUtc <= now,
-            appointment.StatusCode == "confirmed" && appointment.StartsAtUtc <= now
+            isAssignedDoctor && appointment.StatusCode == "in_progress" && appointment.StartsAtUtc <= now,
+            appointment.StatusCode is "confirmed" or "arrived" && appointment.StartsAtUtc <= now
                 && (isAssignedDoctor || roleCode is ViverAppRoles.Manager or ViverAppRoles.Administrator));
     }
 

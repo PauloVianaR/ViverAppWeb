@@ -40,7 +40,7 @@ public sealed class PatientExperienceController(PatientExperienceService service
     [HttpGet("services")]
     public Task<SchedulingPage<PatientServiceResponse>> Services(int page = 1, int pageSize = 20, string? category = null, string? search = null, CancellationToken ct = default) => service.ServicesAsync(Actor, page, pageSize, category, search, ct);
     [HttpGet("agenda")]
-    public Task<SchedulingPage<PatientAppointmentResponse>> Agenda(int page = 1, int pageSize = 12, string view = "future", string? search = null, DateTime? from = null, DateTime? until = null, string? status = null, string? category = null, string? modality = null, CancellationToken ct = default) => service.AgendaAsync(Actor, page, pageSize, view, search, from, until, status, category, modality, ct);
+    public Task<SchedulingPage<PatientAppointmentResponse>> Agenda(int page = 1, int pageSize = 12, string view = "future", string? search = null, ulong? appointmentNumber = null, DateTime? from = null, DateTime? until = null, string? status = null, string? category = null, string? modality = null, CancellationToken ct = default) => service.AgendaAsync(Actor, page, pageSize, view, search, appointmentNumber, from, until, status, category, modality, ct);
     [HttpGet("services/{id:int}")]
     public Task<PatientServiceResponse> Service(uint id, CancellationToken ct) => service.ServiceAsync(Actor, id, ct);
     [HttpGet("appointments/{id:long}")]

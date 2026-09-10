@@ -38,8 +38,18 @@ public sealed record WebAvailableSlot(
     DateTime EndsAtUtc,
     string TimezoneName);
 
+public sealed record WebAppointmentRescheduleHistory(
+    uint SequenceNumber,
+    DateTime PreviousStartsAtUtc,
+    DateTime PreviousEndsAtUtc,
+    DateTime NewStartsAtUtc,
+    DateTime NewEndsAtUtc,
+    string? Reason,
+    DateTime OccurredAtUtc);
+
 public sealed record WebAppointment(
     ulong Id,
+    ulong AppointmentNumber,
     ulong DoctorAccountId,
     string DoctorName,
     uint AppointmentTypeId,
@@ -58,6 +68,10 @@ public sealed record WebAppointment(
     string? CancellationReason,
     ulong? RescheduledFromAppointmentId,
     ulong? RescheduledToAppointmentId,
+    DateTime? ArrivedAtUtc,
+    DateOnly? ArrivalBusinessDate,
+    uint? ArrivalQueueNumber,
+    IReadOnlyList<WebAppointmentRescheduleHistory> RescheduleHistory,
     ulong RowVersion);
 
 public sealed record WebAppointmentCreateRequest(

@@ -31,6 +31,8 @@ public partial class DoctorProfile
 
     public virtual ICollection<DoctorAvailabilityException> DoctorAvailabilityExceptions { get; set; } = new List<DoctorAvailabilityException>();
 
+    public virtual ICollection<DoctorNotification> DoctorNotifications { get; set; } = new List<DoctorNotification>();
+
     public virtual ICollection<DoctorPatientLink> DoctorPatientLinks { get; set; } = new List<DoctorPatientLink>();
 
     public virtual DoctorPreference? DoctorPreference { get; set; }

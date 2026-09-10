@@ -246,3 +246,20 @@ input:disabled, select:disabled, textarea:disabled { background: var(--color-sur
 @media (forced-colors: active) {
     .button, .badge, .surface, .data-region { border: 1px solid CanvasText; }
 }
+
+.appointment-status { display:inline-flex; align-items:center; gap:.35rem; white-space:nowrap; }
+.arrival-number { font-size:1.45rem; font-weight:800; color:var(--color-primary, #0b6b62); }
+.patient-directory-card dd { overflow-wrap:anywhere; }
+.patient-dialog--wide { width:min(900px, calc(100vw - 2rem)); }
+.doctor-notification-center { position:relative; }
+.doctor-notification-center > summary { list-style:none; cursor:pointer; }
+.doctor-notification-center > summary::-webkit-details-marker { display:none; }
+.notification-dot { min-width:1.25rem; height:1.25rem; padding:0 .3rem; border-radius:999px; display:grid; place-items:center; background:#c73737; color:#fff; font-size:.72rem; }
+.notification-panel { position:absolute; z-index:40; right:0; top:calc(100% + .6rem); width:min(390px, calc(100vw - 2rem)); max-height:70vh; overflow:auto; padding:1rem; border:1px solid #d6dee8; border-radius:1rem; background:#fff; box-shadow:0 18px 50px #10233b2b; }
+.notification-entry { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.35rem; align-items:stretch; margin-top:.5rem; }
+.notification-item { width:100%; display:flex; flex-direction:column; gap:.15rem; text-align:left; padding:.75rem; border:0; border-radius:.7rem; background:#f4f7fa; color:inherit; cursor:pointer; }
+.notification-item--unread { background:#e7f6f2; box-shadow:inset 4px 0 #138571; }
+.notification-read { border:1px solid #b8cec8; border-radius:.7rem; padding:.45rem; background:#fff; color:#0d6759; font-size:.72rem; font-weight:700; cursor:pointer; }
+.arrival-toast { position:fixed; z-index:60; right:1.25rem; bottom:1.25rem; display:flex; flex-direction:column; gap:.35rem; width:min(360px, calc(100vw - 2rem)); padding:1rem; border-radius:1rem; background:#102f3e; color:#fff; box-shadow:0 18px 55px #071c28aa; }
+.arrival-toast button { align-self:flex-start; border:0; border-radius:.55rem; padding:.5rem .75rem; background:#fff; color:#102f3e; font-weight:700; cursor:pointer; }
+@media (max-width: 720px) { .notification-panel { position:fixed; left:1rem; right:1rem; top:4.75rem; width:auto; } .arrival-toast { left:1rem; right:1rem; bottom:5.5rem; width:auto; } }

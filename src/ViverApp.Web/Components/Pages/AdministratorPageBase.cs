@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.JSInterop;
 
 namespace ViverApp.Web.Components.Pages;
@@ -12,7 +13,18 @@ public abstract class AdministratorPageBase : ComponentBase, IAsyncDisposable
     protected bool Loading = true, Busy;
     protected string? Notice;
     protected bool NoticeError;
-    protected override async Task OnAfterRenderAsync(bool firstRender) { if (!firstRender) return; await Run(async () => { Module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/administrator-experience.js"); await Load(); }); Loading = false; StateHasChanged(); }
+    private string? loadedUri;
+    protected override Task OnParametersSetAsync() => ReloadForLocationAsync(Navigation.Uri);
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (!firstRender) return; loadedUri = Navigation.Uri; Navigation.LocationChanged += OnLocationChanged; await Run(async () => { Module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/administrator-experience.js"); await Load(); }); Loading = false; StateHasChanged(); }
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args) =>
+        _ = InvokeAsync(() => ReloadForLocationAsync(args.Location));
+    private async Task ReloadForLocationAsync(string uri)
+    {
+        if (Module is null || loadedUri == uri || Busy) return;
+        loadedUri = uri;
+        await Run(Load);
+        StateHasChanged();
+    }
     protected abstract Task Load();
     protected Task<T?> Get<T>(string path) => Request<T>(path, "GET", null);
     protected async Task<T?> Request<T>(string path, string method, object? data, string? key = null)
@@ -25,6 +37,6 @@ public abstract class AdministratorPageBase : ComponentBase, IAsyncDisposable
     protected static string Escape(string value) => Uri.EscapeDataString(value);
     protected async Task Open(string id) => await Module!.InvokeVoidAsync("showDialog", id);
     protected async Task Close(string id) => await Module!.InvokeVoidAsync("closeDialog", id);
-    public async ValueTask DisposeAsync() { if (Module is not null) try { await Module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+    public async ValueTask DisposeAsync() { Navigation.LocationChanged -= OnLocationChanged; if (Module is not null) try { await Module.DisposeAsync(); } catch (JSDisconnectedException) { } }
     private sealed class AdministratorUiException(string message) : Exception(message);
 }

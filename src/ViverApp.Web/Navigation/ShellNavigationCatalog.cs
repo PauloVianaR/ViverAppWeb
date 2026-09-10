@@ -72,6 +72,7 @@ public static class ShellNavigationCatalog
             new("Início", "/administracao", "home"),
             new("Clínica", "/administracao/clinica", "clinic"),
             new("Consultas", "/administracao/consultas", "calendar"),
+            new("Pacientes", "/administracao/pacientes", "users"),
             new("Analytics", "/administracao/analytics", "chart"),
             new("Alertas", "/administracao/notificacoes", "sparkles"),
             new("Usuários", "/administracao/usuarios", "users"),

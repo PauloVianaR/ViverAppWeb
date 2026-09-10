@@ -30,7 +30,9 @@ public static class SecurityServiceCollectionExtensions
         services.AddScoped<HoneypotActionFilter>();
 
         ConfigureDataProtection(services, settings, environment, surface);
-        ConfigureAntiforgery(services, surface);
+        var allowInsecureLocalHttp = environment.IsDevelopment()
+            && configuration.GetValue("Security:AllowInsecureLocalHttp", false);
+        ConfigureAntiforgery(services, surface, allowInsecureLocalHttp);
         ConfigureRateLimiting(services, surface);
 
         if (surface == SecuritySurface.Api)
@@ -89,18 +91,27 @@ public static class SecurityServiceCollectionExtensions
 
     }
 
-    private static void ConfigureAntiforgery(IServiceCollection services, SecuritySurface surface)
+    private static void ConfigureAntiforgery(
+        IServiceCollection services,
+        SecuritySurface surface,
+        bool allowInsecureLocalHttp)
     {
         services.AddAntiforgery(options =>
         {
-            options.Cookie.Name = surface == SecuritySurface.Api
-                ? "__Host-ViverApp.Api.Antiforgery"
-                : "__Host-ViverApp.Web.Antiforgery";
+            options.Cookie.Name = allowInsecureLocalHttp
+                ? surface == SecuritySurface.Api
+                    ? "ViverApp.Api.Antiforgery.Local"
+                    : "ViverApp.Web.Antiforgery.Local"
+                : surface == SecuritySurface.Api
+                    ? "__Host-ViverApp.Api.Antiforgery"
+                    : "__Host-ViverApp.Web.Antiforgery";
             options.Cookie.HttpOnly = true;
             options.Cookie.IsEssential = true;
             options.Cookie.Path = "/";
             options.Cookie.SameSite = SameSiteMode.Strict;
-            options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+            options.Cookie.SecurePolicy = allowInsecureLocalHttp
+                ? CookieSecurePolicy.SameAsRequest
+                : CookieSecurePolicy.Always;
             options.FormFieldName = "__RequestVerificationToken";
             options.HeaderName = "X-CSRF-TOKEN";
             options.SuppressXFrameOptionsHeader = true;

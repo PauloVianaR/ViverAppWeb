@@ -12,7 +12,7 @@ namespace ViverApp.Api.Features.DoctorExperience;
 public sealed class DoctorExperienceService(ViverAppDbContext database, UserManager<ViverAppUser> users,
     IdentityChallengeService challenges, IClinicalOperationsAuditWriter audit, TimeProvider clock)
 {
-    private static readonly string[] AppointmentStatuses = ["pending", "confirmed", "completed", "canceled", "rescheduled", "no_show"];
+    private static readonly string[] AppointmentStatuses = ["pending", "confirmed", "arrived", "in_progress", "completed", "canceled", "rescheduled", "no_show"];
     private static readonly string[] Modalities = ["in_person", "online"];
     private static readonly string[] Categories = ["consultation", "examination", "surgery"];
 
@@ -23,12 +23,15 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(now, DateTimeKind.Utc), timezone);
         var todayStart = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(local.Date, DateTimeKind.Unspecified), timezone);
         var tomorrow = todayStart.AddDays(1); var week = todayStart.AddDays(7);
-        var query = database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && x.StartsAtUtc >= todayStart && x.StartsAtUtc < week);
+        var query = database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && x.StartsAtUtc >= todayStart && x.StartsAtUtc < week && x.InverseRescheduledFromAppointment == null);
         var rows = await query.Include(x => x.PatientAccount).ThenInclude(x => x.PatientProfile).Include(x => x.AppointmentType).Include(x => x.PaymentAppointment)
-            .Include(x => x.AppointmentReview).OrderBy(x => x.StartsAtUtc).ToArrayAsync(ct);
+            .Include(x => x.AppointmentReview).Include(x => x.AppointmentRescheduleHistories).OrderBy(x => x.StartsAtUtc).ToArrayAsync(ct);
+        var sources = new DoctorHomeSources(rows.Where(x => x.StartsAtUtc < tomorrow).Select(x => x.AppointmentNumber).ToArray(),
+            rows.Select(x => x.AppointmentNumber).ToArray(), rows.Where(x => x.ModalityCode == "online").Select(x => x.AppointmentNumber).ToArray(),
+            rows.Where(x => x.ModalityCode == "in_person").Select(x => x.AppointmentNumber).ToArray());
         return new(profile, new(rows.Count(x => x.StartsAtUtc < tomorrow), rows.Length,
             rows.Count(x => x.ModalityCode == "online"), rows.Count(x => x.ModalityCode == "in_person")),
-            rows.Where(x => x.StartsAtUtc < tomorrow).Select(x => MapAppointment(x, now)).ToArray());
+            sources, rows.Where(x => x.StartsAtUtc < tomorrow).Select(x => MapAppointment(x, now)).ToArray());
     }
 
     public async Task<DoctorProfileResponse> ProfileAsync(ulong doctor, CancellationToken ct)
@@ -107,26 +110,33 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
     }
 
     public async Task<DoctorAgendaResponse> AgendaAsync(ulong doctor, DateOnly from, DateOnly to, string? status,
-        string? modality, string? category, string? search, int page, int pageSize, CancellationToken ct)
+        string? modality, string? category, ulong? appointmentNumber, string? search, int page, int pageSize, CancellationToken ct)
     {
         Page(page, pageSize); if (to < from || to.DayNumber - from.DayNumber > 366) throw Invalid("Período inválido.");
         if (status is not null && !AppointmentStatuses.Contains(status)) throw Invalid("Estado inválido.");
         if (modality is not null && !Modalities.Contains(modality)) throw Invalid("Modalidade inválida.");
         if (category is not null && !Categories.Contains(category)) throw Invalid("Tipo inválido.");
         var timezone = await TimezoneAsync(ct); var start = StartUtc(from, timezone); var end = StartUtc(to.AddDays(1), timezone);
-        var query = database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && x.StartsAtUtc >= start && x.StartsAtUtc < end);
-        if (status is not null) query = query.Where(x => x.StatusCode == status);
+        var query = database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && x.StartsAtUtc >= start && x.StartsAtUtc < end && x.InverseRescheduledFromAppointment == null);
+        if (status == "rescheduled") query = query.Where(x => x.AppointmentRescheduleHistories.Any() || x.RescheduledFromAppointmentId != null);
+        else if (status is not null) query = query.Where(x => x.StatusCode == status);
         if (modality is not null) query = query.Where(x => x.ModalityCode == modality);
         if (category is not null) query = query.Where(x => x.AppointmentType.CategoryCode == category);
+        if (appointmentNumber.HasValue) query = query.Where(x => x.AppointmentNumber == appointmentNumber);
         var term = Text(search); if (term is { Length: > 120 }) throw Invalid("A busca deve ter no máximo 120 caracteres.");
-        if (term is not null) query = query.Where(x => x.PatientAccount.FullName.Contains(term) || x.AppointmentType.Name.Contains(term));
-        var countersSource = database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && x.StartsAtUtc >= start && x.StartsAtUtc < end);
-        var counters = new DoctorAgendaCounters(await countersSource.CountAsync(ct), await countersSource.CountAsync(x => x.ModalityCode == "online", ct),
-            await countersSource.CountAsync(x => x.ModalityCode == "in_person", ct), await countersSource.CountAsync(x => x.StatusCode == "rescheduled", ct));
-        var total = await query.CountAsync(ct); var now = clock.GetUtcNow().UtcDateTime;
+        if (term is not null) { var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.PatientAccount.FullName.Contains(term) || x.AppointmentType.Name.Contains(term) || isNumber && x.AppointmentNumber == number); }
+        var totalNumbers = await query.Select(x => x.AppointmentNumber).ToArrayAsync(ct);
+        var countersSource = database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && x.StartsAtUtc >= start && x.StartsAtUtc < end && x.InverseRescheduledFromAppointment == null);
+        var sourceRows = await countersSource.Select(x => new { x.AppointmentNumber, x.ModalityCode, Rescheduled = x.AppointmentRescheduleHistories.Any() || x.RescheduledFromAppointmentId != null }).ToArrayAsync(ct);
+        var sources = new DoctorAgendaSources(totalNumbers,
+            sourceRows.Where(x => x.ModalityCode == "online").Select(x => x.AppointmentNumber).ToArray(),
+            sourceRows.Where(x => x.ModalityCode == "in_person").Select(x => x.AppointmentNumber).ToArray(),
+            sourceRows.Where(x => x.Rescheduled).Select(x => x.AppointmentNumber).ToArray());
+        var counters = new DoctorAgendaCounters(sources.Total.Count, sources.Online.Count, sources.InPerson.Count, sources.Rescheduled.Count);
+        var total = totalNumbers.Length; var now = clock.GetUtcNow().UtcDateTime;
         var rows = await query.Include(x => x.PatientAccount).ThenInclude(x => x.PatientProfile).Include(x => x.AppointmentType).Include(x => x.PaymentAppointment)
-            .Include(x => x.AppointmentReview).OrderBy(x => x.StartsAtUtc).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(ct);
-        return new(counters, new(rows.Select(x => MapAppointment(x, now)).ToArray(), page, pageSize, total));
+            .Include(x => x.AppointmentReview).Include(x => x.AppointmentRescheduleHistories).OrderBy(x => x.StartsAtUtc).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(ct);
+        return new(counters, sources, new(rows.Select(x => MapAppointment(x, now)).ToArray(), page, pageSize, total));
     }
 
     public async Task<DoctorAppointmentDetailResponse> AppointmentAsync(ulong doctor, ulong id, CancellationToken ct)
@@ -161,7 +171,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
             await all.CountAsync(x => x.StatusCode == "active", ct), await all.CountAsync(x => x.StatusCode == "blocked", ct));
         var total = await visible.CountAsync(ct); var rows = await visible.Include(x => x.PatientProfile).Include(x => x.PremiumMembershipAccounts)
             .OrderBy(x => x.FullName).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(ct);
-        var ids = rows.Select(x => x.Id).ToArray(); var appts = await database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && ids.Contains(x.PatientAccountId)).ToArrayAsync(ct);
+        var ids = rows.Select(x => x.Id).ToArray(); var appts = await database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && ids.Contains(x.PatientAccountId) && x.InverseRescheduledFromAppointment == null).ToArrayAsync(ct);
         var result = rows.Select(x =>
         {
             var history = appts.Where(a => a.PatientAccountId == x.Id).ToArray(); return new DoctorPatientResponse(x.Id, x.FullName,
@@ -170,7 +180,11 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
             history.Length, history.Where(a => a.StartsAtUtc < now).Select(a => (DateTime?)a.StartsAtUtc).Max(),
             history.Where(a => a.StartsAtUtc >= now && a.StatusCode is "pending" or "confirmed").Select(a => (DateTime?)a.StartsAtUtc).Min(), x.RowVersion);
         }).ToArray();
-        return new(counters, new(result, page, pageSize, total));
+        var sources = new DoctorPatientSources(await all.OrderBy(x => x.FullName).Select(x => x.FullName).ToArrayAsync(ct),
+            await all.Where(x => x.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now))).OrderBy(x => x.FullName).Select(x => x.FullName).ToArrayAsync(ct),
+            await all.Where(x => x.StatusCode == "active").OrderBy(x => x.FullName).Select(x => x.FullName).ToArrayAsync(ct),
+            await all.Where(x => x.StatusCode == "blocked").OrderBy(x => x.FullName).Select(x => x.FullName).ToArrayAsync(ct));
+        return new(counters, sources, new(result, page, pageSize, total));
     }
 
     public async Task<DoctorPatientResponse> LinkPatientAsync(ulong doctor, DoctorPatientLinkRequest request, CancellationToken ct)
@@ -189,7 +203,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         var patient = await database.Accounts.AsNoTracking().Include(x => x.PatientProfile).Include(x => x.PremiumMembershipAccounts)
             .SingleAsync(x => x.Id == patientId, ct);
         var now = clock.GetUtcNow().UtcDateTime;
-        var history = await database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && x.PatientAccountId == patientId).ToArrayAsync(ct);
+        var history = await database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && x.PatientAccountId == patientId && x.InverseRescheduledFromAppointment == null).ToArrayAsync(ct);
         return new(patient.Id, patient.FullName, patient.PatientProfile?.PreferredName, patient.Email, patient.PhoneE164,
             patient.PatientProfile?.BirthDate is { } birth ? DateOnly.FromDateTime(birth) : null, patient.StatusCode,
             patient.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)),
@@ -334,21 +348,25 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
             .Select(x => new DoctorReportVersionResponse(x.VersionNumber, x.ClinicalSummary, x.Recommendations, x.ChangeReason, x.CreatedAtUtc, x.AuthorDoctorAccountId)).ToArrayAsync(ct);
     }
 
-    private IQueryable<Appointment> AppointmentQuery(ulong doctor) => database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor)
+    private IQueryable<Appointment> AppointmentQuery(ulong doctor) => database.Appointments.AsNoTracking().Where(x => x.DoctorAccountId == doctor && x.InverseRescheduledFromAppointment == null)
         .Include(x => x.PatientAccount).ThenInclude(x => x.PatientProfile).Include(x => x.AppointmentType)
         .Include(x => x.PaymentAppointment).Include(x => x.AppointmentReview).Include(x => x.MedicalReport)
-        .Include(x => x.InverseRescheduledFromAppointment);
+        .Include(x => x.InverseRescheduledFromAppointment).Include(x => x.AppointmentRescheduleHistories);
     private static DoctorAppointmentResponse MapAppointment(Appointment x, DateTime now)
     {
         var birth = x.PatientAccount.BirthDate ?? x.PatientAccount.PatientProfile?.BirthDate;
         int? age = birth.HasValue ? now.Year - birth.Value.Year - (birth.Value.Date > now.AddYears(-(now.Year - birth.Value.Year)).Date ? 1 : 0) : null;
-        return new(x.Id, x.PatientAccountId, x.PatientAccount.FullName, age, x.AppointmentTypeId, x.AppointmentType.Name, x.AppointmentType.CategoryCode,
+        return new(x.Id, x.AppointmentNumber, x.PatientAccountId, x.PatientAccount.FullName, age, x.AppointmentTypeId, x.AppointmentType.Name, x.AppointmentType.CategoryCode,
             x.StatusCode, x.ModalityCode, x.StartsAtUtc, x.EndsAtUtc, x.PriceAmount, x.DiscountPercent,
             x.PaymentAppointment?.StatusCode ?? "unpaid", x.PaymentLocationCode, x.PatientNotes, x.CancellationReason,
             x.RescheduledFromAppointmentId, x.InverseRescheduledFromAppointment?.Id, x.AppointmentReview?.Rating, x.AppointmentReview?.Comment,
+            x.ArrivedAtUtc, x.ArrivalQueueNumber,
+            x.AppointmentRescheduleHistories.OrderBy(h => h.SequenceNumber).Select(h => new AppointmentRescheduleHistoryResponse(h.SequenceNumber,
+                h.PreviousStartsAtUtc, h.PreviousEndsAtUtc, h.NewStartsAtUtc, h.NewEndsAtUtc, h.Reason, h.OccurredAtUtc)).ToArray(),
             x.ModalityCode == "online" && x.StatusCode == "confirmed" && x.PaymentAppointment?.StatusCode == "paid" && x.StartsAtUtc <= now.AddMinutes(15) && x.EndsAtUtc >= now,
             x.StatusCode is "pending" or "confirmed", x.StatusCode is "pending" or "confirmed",
-            x.StatusCode == "confirmed" && x.StartsAtUtc <= now, x.RowVersion);
+            (x.ModalityCode == "in_person" && x.StatusCode == "arrived" || x.ModalityCode == "online" && x.StatusCode == "confirmed") && x.StartsAtUtc <= now.AddMinutes(15),
+            x.StatusCode == "in_progress" && x.StartsAtUtc <= now, x.RowVersion);
     }
     private async Task EnsureLinkAsync(ulong doctor, ulong patient, ulong creator, CancellationToken ct)
     {

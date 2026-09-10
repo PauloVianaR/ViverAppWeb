@@ -107,7 +107,7 @@ else if (View is ClinicalView.Agenda or ClinicalView.History)
             }
             else
             {
-                <div class="section-heading"><div><p class="eyebrow">Consulta #@SelectedAppointment.Id</p><h2>@SelectedAppointment.PatientName</h2></div><span class="badge @StatusClass(SelectedAppointment.StatusCode)">@StatusLabel(SelectedAppointment.StatusCode)</span></div>
+                <div class="section-heading"><div><p class="eyebrow">Atendimento @SelectedAppointment.AppointmentNumber</p><h2>@SelectedAppointment.PatientName</h2></div><span class="badge @StatusClass(SelectedAppointment.StatusCode)">@StatusLabel(SelectedAppointment.StatusCode)</span></div>
                 <dl class="detail-grid">
                     <div><dt>Quando</dt><dd>@LocalDateTime(SelectedAppointment.StartsAtUtc)</dd></div>
                     <div><dt>Modalidade</dt><dd>@ModalityLabel(SelectedAppointment.ModalityCode)</dd></div>

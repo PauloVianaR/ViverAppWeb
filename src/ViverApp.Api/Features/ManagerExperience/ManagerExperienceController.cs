@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using ViverApp.Api.Features.ClinicalOperations;
+using ViverApp.Api.Features.ArrivalExperience;
 using ViverApp.Api.Features.DoctorExperience;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.PatientExperience;
@@ -21,6 +22,7 @@ public sealed class ManagerExperienceExceptionFilter : IExceptionFilter
         var result = context.Exception switch
         {
             ManagerRuleException e => (e.StatusCode, e.Message),
+            ArrivalRuleException e => (e.StatusCode, e.Message),
             SchedulingRuleException e => (e.StatusCode, e.Message),
             PatientExperienceException e => (e.StatusCode, e.Message),
             DbUpdateConcurrencyException => (409, "Os dados foram alterados por outra sessão. Atualize a página."),
@@ -36,7 +38,7 @@ public sealed class ManagerExperienceExceptionFilter : IExceptionFilter
 [ServiceFilter(typeof(ManagerExperienceExceptionFilter))]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class ManagerExperienceController(ManagerExperienceService service, PatientSchedulingService scheduling,
-    PrivateDocumentStore documents, IClinicalOperationsAuditWriter audit) : ControllerBase
+    PrivateDocumentStore documents, IClinicalOperationsAuditWriter audit, ArrivalExperienceService arrivals) : ControllerBase
 {
     private ulong Actor => ulong.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!, CultureInfo.InvariantCulture);
 
@@ -49,9 +51,9 @@ public sealed class ManagerExperienceController(ManagerExperienceService service
 
     [HttpGet("agenda")]
     public Task<ManagerAgendaResponse> Agenda(DateOnly from, DateOnly to, string? status = null, string? modality = null,
-        string? category = null, ulong? doctorAccountId = null, string? payment = null, TimeOnly? startTime = null,
+        string? category = null, ulong? doctorAccountId = null, ulong? appointmentNumber = null, string? payment = null, TimeOnly? startTime = null,
         TimeOnly? endTime = null, string? search = null, string sort = "date_asc", int page = 1, int pageSize = 20,
-        CancellationToken ct = default) => service.AgendaAsync(from, to, status, modality, category, doctorAccountId,
+        CancellationToken ct = default) => service.AgendaAsync(from, to, status, modality, category, doctorAccountId, appointmentNumber,
             payment, startTime, endTime, search, sort, page, pageSize, ct);
     [HttpGet("appointments/{id:long}")] public Task<ManagerAppointmentResponse> Appointment(ulong id, CancellationToken ct) => service.AppointmentAsync(id, ct);
     [HttpGet("booking/slots"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
@@ -79,6 +81,8 @@ public sealed class ManagerExperienceController(ManagerExperienceService service
     [HttpPost("appointments/{id:long}/payment"), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
     public Task<ManagerPaymentResponse> ConfirmPayment(ulong id, [FromHeader(Name = "Idempotency-Key")] string key,
         ManagerPaymentConfirmRequest request, CancellationToken ct) => service.ConfirmPaymentAsync(Actor, id, key, request, ct);
+    [HttpPost("appointments/{id:long}/arrival"), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
+    public Task<ArrivalResponse> RegisterArrival(ulong id, ArrivalRequest request, CancellationToken ct) => arrivals.RegisterAsync(Actor, id, request, ct);
 
     [HttpGet("patients")]
     public Task<ManagerPatientsResponse> Patients(string? search = null, string? status = null,

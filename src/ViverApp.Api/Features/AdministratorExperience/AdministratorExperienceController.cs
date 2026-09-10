@@ -9,6 +9,7 @@ using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.PatientExperience;
 using ViverApp.Api.Features.PatientScheduling;
 using ViverApp.Api.Features.ClinicalOperations;
+using ViverApp.Api.Features.ArrivalExperience;
 using ViverApp.Security;
 
 namespace ViverApp.Api.Features.AdministratorExperience;
@@ -17,8 +18,9 @@ public sealed class AdministratorExceptionFilter : IExceptionFilter
 {
     public void OnException(ExceptionContext context)
     {
-        if (context.Exception is not AdministratorRuleException error) return;
-        context.Result = new ObjectResult(new ProblemDetails { Status = error.StatusCode, Title = error.Message }) { StatusCode = error.StatusCode };
+        var error = context.Exception switch { AdministratorRuleException e => (e.StatusCode, e.Message), ManagerRuleException e => (e.StatusCode, e.Message), ArrivalRuleException e => (e.StatusCode, e.Message), _ => default };
+        if (error == default) return;
+        context.Result = new ObjectResult(new ProblemDetails { Status = error.Item1, Title = error.Item2 }) { StatusCode = error.Item1 };
         context.ExceptionHandled = true;
     }
 }
@@ -43,7 +45,7 @@ public sealed class AdministratorStepUpFilter(RecentAuthentication recent) : IAs
 [ServiceFilter(typeof(AdministratorExceptionFilter)), ServiceFilter(typeof(AdministratorStepUpFilter))]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class AdministratorExperienceController(AdministratorExperienceService service, PatientSchedulingService scheduling,
-    PrivateDocumentStore documents, IClinicalOperationsAuditWriter audit) : ControllerBase
+    PrivateDocumentStore documents, IClinicalOperationsAuditWriter audit, ArrivalExperienceService arrivals) : ControllerBase
 {
     private ulong Actor => ulong.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!, CultureInfo.InvariantCulture);
     [HttpGet("home")] public Task<AdministratorHomeResponse> Home(CancellationToken ct) => service.HomeAsync(Actor, ct);
@@ -51,13 +53,17 @@ public sealed class AdministratorExperienceController(AdministratorExperienceSer
     [HttpGet("doctor-access")] public Task<IReadOnlyList<AdministratorDoctorAccessResponse>> DoctorAccess(CancellationToken ct) => service.DoctorAccessAsync(ct);
     [HttpGet("agenda")]
     public Task<ManagerAgendaResponse> Agenda(DateOnly from, DateOnly to, string? status = null, string? modality = null, string? category = null,
-        ulong? doctorAccountId = null, string? payment = null, string? search = null, string sort = "date_asc", int page = 1, int pageSize = 20, CancellationToken ct = default) =>
-        service.AgendaAsync(from, to, status, modality, category, doctorAccountId, payment, search, sort, page, pageSize, ct);
+        ulong? doctorAccountId = null, ulong? appointmentNumber = null, string? payment = null, string? search = null, string sort = "date_asc", int page = 1, int pageSize = 20, CancellationToken ct = default) =>
+        service.AgendaAsync(from, to, status, modality, category, doctorAccountId, appointmentNumber, payment, search, sort, page, pageSize, ct);
     [HttpGet("appointments/{id:long}")] public Task<ManagerAppointmentResponse> Appointment(ulong id, CancellationToken ct) => service.AppointmentAsync(id, ct);
     [HttpGet("booking/slots"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)] public Task<IReadOnlyList<AvailableSlotResponse>> Slots(ulong patientAccountId, ulong doctorAccountId, uint appointmentTypeId, string modality, DateOnly from, int days = 14, CancellationToken ct = default) => scheduling.GetAvailableSlotsAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct);
     [HttpPost("appointments/{id:long}/cancel"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)] public Task<AppointmentResponse> Cancel(ulong id, AppointmentCancelRequest request, CancellationToken ct) => scheduling.CancelForManagerAsync(Actor, id, request, ct);
     [HttpPost("appointments/{id:long}/reschedule"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)] public async Task<AppointmentResponse> Reschedule(ulong id, [FromHeader(Name = "Idempotency-Key")] string key, AppointmentRescheduleRequest request, CancellationToken ct) { var result = await scheduling.RescheduleForManagerAsync(Actor, id, key, request, ct); if (result.Replayed) Response.Headers["Idempotent-Replayed"] = "true"; return result.Response; }
     [HttpPost("appointments/{id:long}/payment"), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)] public Task<ManagerPaymentResponse> Payment(ulong id, [FromHeader(Name = "Idempotency-Key")] string key, ManagerPaymentConfirmRequest request, CancellationToken ct) => service.ConfirmPaymentAsync(Actor, id, key, request, ct);
+    [HttpPost("appointments/{id:long}/arrival"), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)] public Task<ArrivalResponse> RegisterArrival(ulong id, ArrivalRequest request, CancellationToken ct) => arrivals.RegisterAsync(Actor, id, request, ct);
+    [HttpGet("patients")] public Task<ManagerPatientsResponse> Patients(string? search = null, string? status = null, bool? premium = null, int page = 1, int pageSize = 20, CancellationToken ct = default) => service.PatientsAsync(search, status, premium, page, pageSize, ct);
+    [HttpGet("patients/{id:long}")] public Task<ManagerPatientResponse> Patient(ulong id, CancellationToken ct) => service.PatientAsync(id, ct);
+    [HttpPut("patients/{id:long}"), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)] public Task<ManagerPatientResponse> UpdatePatient(ulong id, ManagerPatientUpdateRequest request, CancellationToken ct) => service.UpdatePatientAsync(Actor, id, request, ct);
     [HttpGet("analytics")] public Task<AdministratorAnalyticsResponse> Analytics(DateOnly from, DateOnly to, CancellationToken ct) => service.AnalyticsAsync(from, to, ct);
     [HttpGet("premium")] public Task<ViverApp.Api.Features.PatientScheduling.SchedulingPage<ManagerPremiumRequestResponse>> Premium(string? status = null, string? search = null, int page = 1, int pageSize = 20, CancellationToken ct = default) => service.PremiumAsync(status, search, page, pageSize, ct);
     [HttpPost("premium/{id:long}/decision"), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)] public Task<ManagerPremiumRequestResponse> PremiumDecision(ulong id, ManagerPremiumDecisionRequest request, CancellationToken ct) => service.DecidePremiumAsync(Actor, id, request, ct);

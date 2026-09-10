@@ -25,6 +25,8 @@ public static class PatientLabels
     {
         "pending" => "Pendente",
         "confirmed" => "Confirmado",
+        "arrived" => "Paciente chegou",
+        "in_progress" => "Em atendimento",
         "completed" => "Concluído",
         "no_show" => "Não compareceu",
         "canceled" => "Cancelado",
@@ -41,6 +43,13 @@ public static class PatientLabels
         _ => "Em processamento"
     };
     public static string Category(string code) => code switch { "surgery" => "Cirurgia", "examination" => "Exame", _ => "Consulta" };
+    public static string StatusFace(string code) => code switch { "pending" => "😞", "confirmed" => "😊", "arrived" => "🙋", "in_progress" => "🩺", "completed" => "😌", "canceled" => "✖", "no_show" => "😶", "rescheduled" => "🔄", _ => "•" };
+    public static string StatusCss(string code) => code switch
+    {
+        "pending" => "pending", "confirmed" => "confirmed", "arrived" => "arrived",
+        "in_progress" => "in-progress", "completed" => "completed", "canceled" => "canceled",
+        "no_show" => "no-show", "rescheduled" => "rescheduled", _ => "neutral"
+    };
     public static string Money(decimal value) => value.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
     public static string Method(string? value) => value switch { "PIX" => "Pix", "CREDIT_CARD" => "Cartão de crédito", "DEBIT_CARD" => "Cartão de débito", "BOLETO" => "Boleto", _ => "Não informado" };
 }

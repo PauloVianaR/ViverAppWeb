@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using ViverApp.Security;
 using Xunit;
 
@@ -145,6 +147,29 @@ public sealed class SecurityBaselineTests
                 SecuritySurface.Api));
 
         Assert.Contains("identificador local simples", exception.Message);
+    }
+
+    [Fact]
+    public void DevelopmentBaseline_AllowsExplicitLocalHttpWithoutChangingTheSecureDefault()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Security:AllowInsecureLocalHttp"] = "true",
+            })
+            .Build();
+
+        services.AddViverAppSecurityBaseline(
+            configuration,
+            CreateEnvironment(Environments.Development),
+            SecuritySurface.Api);
+
+        using var provider = services.BuildServiceProvider();
+        var options = provider.GetRequiredService<IOptions<AntiforgeryOptions>>().Value;
+
+        Assert.Equal("ViverApp.Api.Antiforgery.Local", options.Cookie.Name);
+        Assert.Equal(CookieSecurePolicy.SameAsRequest, options.Cookie.SecurePolicy);
     }
 
     private static IWebHostEnvironment CreateEnvironment(string name)

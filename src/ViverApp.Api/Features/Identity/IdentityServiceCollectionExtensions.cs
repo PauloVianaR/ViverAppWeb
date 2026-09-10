@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authentication.OAuth.Claims;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Hosting;
 
 namespace ViverApp.Api.Features.Identity;
 
@@ -11,9 +12,12 @@ public static class IdentityServiceCollectionExtensions
 {
     public static IServiceCollection AddViverAppIdentity(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment? environment = null)
     {
         var securityOptions = IdentitySecurityOptions.Load(configuration);
+        var allowInsecureLocalHttp = environment?.IsDevelopment() == true
+            && configuration.GetValue("Security:AllowInsecureLocalHttp", false);
         services.AddSingleton(securityOptions);
         services.AddScoped<ViverAppUserStore>();
         services.AddScoped<IUserStore<ViverAppUser>>(provider =>
@@ -75,12 +79,16 @@ public static class IdentityServiceCollectionExtensions
             IdentityConstants.ApplicationScheme,
             options =>
             {
-                options.Cookie.Name = "__Host-ViverApp.Session";
+                options.Cookie.Name = allowInsecureLocalHttp
+                    ? "ViverApp.Session.Local"
+                    : "__Host-ViverApp.Session";
                 options.Cookie.HttpOnly = true;
                 options.Cookie.IsEssential = true;
                 options.Cookie.Path = "/";
                 options.Cookie.SameSite = SameSiteMode.Lax;
-                options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+                options.Cookie.SecurePolicy = allowInsecureLocalHttp
+                    ? CookieSecurePolicy.SameAsRequest
+                    : CookieSecurePolicy.Always;
                 options.EventsType = typeof(ViverAppCookieEvents);
                 options.ExpireTimeSpan = TimeSpan.FromDays(30);
                 options.SlidingExpiration = false;
@@ -89,12 +97,16 @@ public static class IdentityServiceCollectionExtensions
             IdentityConstants.ExternalScheme,
             options =>
             {
-                options.Cookie.Name = "__Host-ViverApp.External";
+                options.Cookie.Name = allowInsecureLocalHttp
+                    ? "ViverApp.External.Local"
+                    : "__Host-ViverApp.External";
                 options.Cookie.HttpOnly = true;
                 options.Cookie.IsEssential = true;
                 options.Cookie.Path = "/";
                 options.Cookie.SameSite = SameSiteMode.Lax;
-                options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+                options.Cookie.SecurePolicy = allowInsecureLocalHttp
+                    ? CookieSecurePolicy.SameAsRequest
+                    : CookieSecurePolicy.Always;
                 options.ExpireTimeSpan = TimeSpan.FromMinutes(5);
                 options.SlidingExpiration = false;
             });
@@ -110,10 +122,14 @@ public static class IdentityServiceCollectionExtensions
                 options.SaveTokens = false;
                 options.UsePkce = true;
                 options.ClaimActions.MapJsonKey("email_verified", "email_verified");
-                options.CorrelationCookie.Name = "__Host-ViverApp.Google.Correlation.";
+                options.CorrelationCookie.Name = allowInsecureLocalHttp
+                    ? "ViverApp.Google.Correlation.Local."
+                    : "__Host-ViverApp.Google.Correlation.";
                 options.CorrelationCookie.Path = "/";
                 options.CorrelationCookie.SameSite = SameSiteMode.Lax;
-                options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.Always;
+                options.CorrelationCookie.SecurePolicy = allowInsecureLocalHttp
+                    ? CookieSecurePolicy.SameAsRequest
+                    : CookieSecurePolicy.Always;
                 options.Events.OnRemoteFailure = context =>
                 {
                     context.HandleResponse();

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using ViverApp.Api.Features.ClinicalOperations;
+using ViverApp.Api.Features.ArrivalExperience;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.PatientExperience;
 using ViverApp.Api.Features.PatientScheduling;
@@ -22,6 +23,7 @@ public sealed class DoctorExperienceExceptionFilter : IExceptionFilter
         var result = context.Exception switch
         {
             DoctorRuleException e => (e.StatusCode, e.Message),
+            ArrivalRuleException e => (e.StatusCode, e.Message),
             SchedulingRuleException e => (e.StatusCode, e.Message),
             ClinicalRuleException e => (e.StatusCode, e.Message),
             PatientExperienceException e => (e.StatusCode, e.Message),
@@ -39,7 +41,7 @@ public sealed class DoctorExperienceExceptionFilter : IExceptionFilter
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class DoctorExperienceController(DoctorExperienceService service, PatientSchedulingService scheduling,
     ClinicalOperationsService clinical, PrivateDocumentStore documents, ViverAppDbContext database,
-    IClinicalOperationsAuditWriter audit) : ControllerBase
+    IClinicalOperationsAuditWriter audit, ArrivalExperienceService arrivals) : ControllerBase
 {
     private ulong Actor => ulong.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!, CultureInfo.InvariantCulture);
 
@@ -56,8 +58,8 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
 
     [HttpGet("agenda")]
     public Task<DoctorAgendaResponse> Agenda(DateOnly from, DateOnly to, string? status = null, string? modality = null,
-        string? category = null, string? search = null, int page = 1, int pageSize = 20, CancellationToken ct = default) =>
-        service.AgendaAsync(Actor, from, to, status, modality, category, search, page, pageSize, ct);
+        string? category = null, ulong? appointmentNumber = null, string? search = null, int page = 1, int pageSize = 20, CancellationToken ct = default) =>
+        service.AgendaAsync(Actor, from, to, status, modality, category, appointmentNumber, search, page, pageSize, ct);
     [HttpGet("appointments/{id:long}")]
     public Task<DoctorAppointmentDetailResponse> Appointment(ulong id, CancellationToken ct) => service.AppointmentAsync(Actor, id, ct);
     [HttpGet("booking/slots"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
@@ -85,6 +87,8 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
     public Task<ClinicalReportResponse> Draft(ulong id, MedicalReportWriteRequest request, CancellationToken ct) => clinical.SaveDraftAsync(Actor, id, request, ct);
     [HttpPost("appointments/{id:long}/complete"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public Task<ClinicalAppointmentResponse> Complete(ulong id, CompleteAppointmentRequest request, CancellationToken ct) => clinical.CompleteAsync(Actor, id, request, ct);
+    [HttpPost("appointments/{id:long}/start"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
+    public Task<ArrivalResponse> Start(ulong id, StartAppointmentRequest request, CancellationToken ct) => arrivals.StartAsync(Actor, id, request, ct);
     [HttpPost("appointments/{id:long}/no-show"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public Task<ClinicalAppointmentResponse> NoShow(ulong id, RecordNoShowRequest request, CancellationToken ct) => clinical.RecordNoShowAsync(Actor, ViverAppRoles.Doctor, id, request, ct);
     [HttpPost("appointments/{id:long}/report/rectify"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
@@ -101,6 +105,13 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
     public Task<DoctorPatientResponse> Invite(DoctorPatientInviteRequest request, CancellationToken ct) => service.InvitePatientAsync(Actor, request, ct);
     [HttpPut("patients/{id:long}"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public Task<DoctorPatientResponse> UpdatePatient(ulong id, DoctorPatientUpdateRequest request, CancellationToken ct) => service.UpdatePatientAsync(Actor, id, request, ct);
+
+    [HttpGet("notifications")]
+    public Task<DoctorNotificationsResponse> Notifications(int page = 1, int pageSize = 20, CancellationToken ct = default) => arrivals.NotificationsAsync(Actor, page, pageSize, ct);
+    [HttpPost("notifications/{id:long}/read"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
+    public async Task<IActionResult> ReadNotification(ulong id, ArrivalRequest request, CancellationToken ct) { await arrivals.ReadAsync(Actor, id, request.RowVersion, ct); return NoContent(); }
+    [HttpPost("notifications/read-all"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
+    public async Task<IActionResult> ReadAllNotifications(CancellationToken ct) { await arrivals.ReadAllAsync(Actor, ct); return NoContent(); }
 
     [HttpGet("availability")]
     public Task<DoctorAvailabilityResponse> Availability(DateOnly from, DateOnly to, CancellationToken ct) => service.AvailabilityAsync(Actor, from, to, ct);

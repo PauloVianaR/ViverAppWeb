@@ -47,6 +47,6 @@ O cliente envia data e hora locais. A API resolve o timezone singleton da clíni
 
 ## Reagendamento e cancelamento
 
-O reagendamento não sobrescreve o registro original. A consulta anterior passa a `rescheduled`, a nova nasce `pending` e aponta para a anterior por `rescheduled_from_appointment_id`. O índice único impede mais de um substituto para o mesmo registro.
+O reagendamento atualiza data e hora do mesmo atendimento, mantendo ID, número humano, pagamento e o estado principal (`pending` ou `confirmed`). Cada alteração recebe sequência própria em `appointment_reschedule_history`, com horário anterior, novo horário, autor, motivo e instante. Registros antigos no formato substituto continuam legíveis, mas apenas o sucessor aparece nas listagens.
 
 O cancelamento exige motivo com 5 a 500 caracteres. Ambas as operações exigem a `rowVersion` atual, pertencimento ao paciente, status `pending` ou `confirmed` e antecedência configurada.

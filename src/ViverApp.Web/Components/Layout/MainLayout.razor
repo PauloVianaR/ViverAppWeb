@@ -26,6 +26,33 @@
         }
         @if (Account is not null && IsWorkspace)
         {
+            @if (Account.Role == "doctor")
+            {
+                <details class="doctor-notification-center">
+                    <summary class="topbar-action" aria-label="@NotificationLabel"><AppIcon Name="sparkles" /><span>Alertas</span>@if(UnreadCount>0){<strong class="notification-dot">@UnreadCount</strong>}</summary>
+                    <div class="notification-panel">
+                        <div class="section-heading"><h2>Chegadas</h2>@if(UnreadCount>0){<button class="button button--small button--secondary" @onclick="ReadAllAsync">Marcar todas como lidas</button>}</div>
+                        <button class="button button--small button--secondary" @onclick="()=>SoundMuted=!SoundMuted">@(SoundMuted?"Ativar som nesta sessão":"Silenciar nesta sessão")</button>
+                        @if(Notifications.Count==0)
+                        {
+                            <p class="muted">Nenhuma chegada notificada.</p>
+                        }
+                        else
+                        {
+                            @foreach(var item in Notifications.Take(10))
+                            {
+                                <div class="notification-entry">
+                                    <button class="notification-item @(item.IsRead?"":"notification-item--unread")" @onclick="()=>OpenNotificationAsync(item)"><strong>Atendimento @item.AppointmentNumber</strong><span>@(item.QueueNumber.HasValue?$"Senha {item.QueueNumber} · ":"")@(item.StartsAtUtc?.ToLocalTime().ToString("HH:mm"))</span></button>
+                                    @if(!item.IsRead)
+                                    {
+                                        <button class="notification-read" type="button" aria-label="Marcar atendimento @item.AppointmentNumber como lido" @onclick="()=>ReadNotificationAsync(item)">Marcar como lida</button>
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
+                </details>
+            }
             <button class="topbar-action" type="button" @onclick="LogoutAsync"><AppIcon Name="user" /><span>Sair</span></button>
         }
         else
@@ -61,19 +88,28 @@
     @if (IsWorkspace)
     {
         <nav class="mobile-navigation" aria-label="Navegação móvel da área @Shell.Label">
-            @foreach (var item in Shell.Items.Take(Shell.Profile == ShellProfile.Administrator ? 6 : 5))
+            @foreach (var item in Shell.Items.Take(Shell.Profile == ShellProfile.Administrator ? 7 : 5))
             {
                 <a class="@ActiveClass(item)" href="@item.Href" aria-current="@AriaCurrent(item)"><AppIcon Name="@item.Icon" /><span>@item.Label</span></a>
             }
         </nav>
     }
 </div>
+@if(ArrivalToast is not null){<aside class="arrival-toast" role="status" aria-live="polite"><strong>Paciente chegou</strong><span>Atendimento @ArrivalToast.AppointmentNumber · senha @ArrivalToast.QueueNumber</span><button type="button" @onclick="()=>OpenRealtimeAsync(ArrivalToast)">Abrir atendimento</button></aside>}
 <div id="blazor-error-ui" data-nosnippet>Ocorreu um erro inesperado. <a href="." class="reload">Recarregar</a><span class="dismiss">🗙</span></div>
 
 @code {
     private ShellDefinition Shell { get; set; } = ShellNavigationCatalog.Resolve("/");
     private IJSObjectReference? module;
+    private IJSObjectReference? notificationModule;
+    private DotNetObjectReference<MainLayout>? selfReference;
     private WebCurrentAccount? Account;
+    private readonly List<DoctorNotification> Notifications = [];
+    private DoctorNotification? ArrivalToast;
+    private bool NotificationConnected, PopupEnabled, SoundEnabled, SoundMuted, MarkReadOnOpen = true;
+    private int SoundVolume = 60;
+    private int UnreadCount => Notifications.Count(x => !x.IsRead);
+    private string NotificationLabel => UnreadCount == 0 ? "Notificações de chegada" : $"Notificações de chegada: {UnreadCount} não lida(s)";
     private bool IdentityResolved;
     private string CurrentPath => new Uri(Navigation.Uri).AbsolutePath;
     private bool IsProtectedPath => ShellNavigationCatalog.IsWorkspacePath(CurrentPath);
@@ -103,11 +139,43 @@
             if (Account is null) { Navigation.NavigateTo("/acesso?estado=sessao-expirada", true); return; }
             if (!ShellNavigationCatalog.OwnsPath(Account.Role, path)) { Navigation.NavigateTo(Account.Destination, true); return; }
             Shell = ShellNavigationCatalog.ResolveRole(Account.Role);
+            if (Account.Role == "doctor" && !NotificationConnected) await ConnectNotificationsAsync();
         }
         else Shell = ShellNavigationCatalog.Resolve("/");
         IdentityResolved = true;
         await InvokeAsync(StateHasChanged);
     }
+    private async Task ConnectNotificationsAsync()
+    {
+        notificationModule = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/doctor-notifications.js");
+        selfReference = DotNetObjectReference.Create(this);
+        var data = await notificationModule.InvokeAsync<DoctorNotificationsData>("connect", Backend.BaseUrl.ToString(), selfReference);
+        Notifications.Clear(); Notifications.AddRange(data.Items); PopupEnabled = data.PopupEnabled; SoundEnabled = data.SoundEnabled; SoundVolume = data.SoundVolume; MarkReadOnOpen = data.MarkReadOnOpen; NotificationConnected = true;
+    }
+    [JSInvokable]
+    public async Task ReceiveArrival(DoctorRealtimeNotification message)
+    {
+        var item = new DoctorNotification(message.Id, message.AppointmentId, message.AppointmentNumber, message.QueueNumber, message.StartsAtUtc, message.IsRead, message.CreatedAtUtc, message.RowVersion);
+        if (Notifications.All(x => x.Id != item.Id)) Notifications.Insert(0, item);
+        PopupEnabled = message.PopupEnabled; SoundEnabled = message.SoundEnabled; SoundVolume = message.SoundVolume;
+        if (PopupEnabled) ArrivalToast = item;
+        if (SoundEnabled && !SoundMuted && notificationModule is not null) await notificationModule.InvokeAsync<bool>("play", SoundVolume);
+        await InvokeAsync(StateHasChanged);
+    }
+    private async Task OpenNotificationAsync(DoctorNotification item)
+    {
+        if (MarkReadOnOpen && !item.IsRead) await ReadNotificationAsync(item);
+        Navigation.NavigateTo($"/medico/atendimentos/{item.AppointmentId}");
+    }
+    private async Task ReadNotificationAsync(DoctorNotification item)
+    {
+        if (item.IsRead || module is null) return;
+        await module.InvokeAsync<object?>("send", Backend.BaseUrl.ToString(), $"api/v1/doctor/notifications/{item.Id}/read", new { rowVersion = item.RowVersion });
+        var index = Notifications.FindIndex(x => x.Id == item.Id);
+        if (index >= 0) Notifications[index] = item with { IsRead = true, RowVersion = item.RowVersion + 1 };
+    }
+    private Task OpenRealtimeAsync(DoctorNotification item) { ArrivalToast=null; return OpenNotificationAsync(item); }
+    private async Task ReadAllAsync(){if(module is null)return;await module.InvokeAsync<object?>("send",Backend.BaseUrl.ToString(),"api/v1/doctor/notifications/read-all",new{});for(var i=0;i<Notifications.Count;i++)Notifications[i]=Notifications[i] with{IsRead=true};}
     private async Task LogoutAsync()
     {
         if (module is null) return;
@@ -126,6 +194,8 @@
     public async ValueTask DisposeAsync()
     {
         Navigation.LocationChanged -= HandleLocationChanged;
+        if (notificationModule is not null) { try { await notificationModule.InvokeVoidAsync("disconnect"); } catch (JSDisconnectedException) { } try { await notificationModule.DisposeAsync(); } catch (JSDisconnectedException) { } }
+        selfReference?.Dispose();
         if (module is not null) try { await module.DisposeAsync(); } catch (JSDisconnectedException) { }
     }
 }

@@ -43,7 +43,7 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
         var name = await database.Accounts.Where(x => x.Id == actor).Select(x => x.FullName).SingleAsync(ct);
         var premium = await IsPremiumAsync(actor, ct);
         var next = await database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == actor
-            && (x.StatusCode == "pending" || x.StatusCode == "confirmed") && x.EndsAtUtc > Now)
+            && (x.StatusCode == "pending" || x.StatusCode == "confirmed") && x.EndsAtUtc > Now && x.InverseRescheduledFromAppointment == null)
             .OrderBy(x => x.StartsAtUtc).Select(x => (ulong?)x.Id).FirstOrDefaultAsync(ct);
         var promotions = new List<PatientPromotionResponse>();
         if (!premium)
@@ -97,21 +97,23 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
     }
 
     public async Task<SchedulingPage<PatientAppointmentResponse>> AgendaAsync(ulong actor, int page, int pageSize,
-        string view, string? search, DateTime? from, DateTime? until, string? status, string? category, string? modality, CancellationToken ct)
+        string view, string? search, ulong? appointmentNumber, DateTime? from, DateTime? until, string? status, string? category, string? modality, CancellationToken ct)
     {
         ValidatePage(page, pageSize);
         if (view is not ("future" or "history" or "all")) throw Invalid("Visualização inválida.");
         if (from > until) throw Invalid("O período é inválido.");
         (from, until) = await UtcPeriodAsync(from, until, ct);
-        var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == actor);
-        if (view == "future") query = query.Where(x => (x.StatusCode == "pending" || x.StatusCode == "confirmed") && x.EndsAtUtc >= Now);
-        if (view == "history") query = query.Where(x => (x.StatusCode != "pending" && x.StatusCode != "confirmed") || x.EndsAtUtc < Now);
+        var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == actor && x.InverseRescheduledFromAppointment == null);
+        if (view == "future") query = query.Where(x => (x.StatusCode == "pending" || x.StatusCode == "confirmed" || x.StatusCode == "arrived" || x.StatusCode == "in_progress") && x.EndsAtUtc >= Now);
+        if (view == "history") query = query.Where(x => (x.StatusCode != "pending" && x.StatusCode != "confirmed" && x.StatusCode != "arrived" && x.StatusCode != "in_progress") || x.EndsAtUtc < Now);
         if (from.HasValue) query = query.Where(x => x.StartsAtUtc >= from);
         if (until.HasValue) query = query.Where(x => x.StartsAtUtc < until);
-        if (!string.IsNullOrEmpty(status)) query = query.Where(x => x.StatusCode == status);
+        if (status == "rescheduled") query = query.Where(x => x.AppointmentRescheduleHistories.Any() || x.RescheduledFromAppointmentId != null);
+        else if (!string.IsNullOrEmpty(status)) query = query.Where(x => x.StatusCode == status);
         if (!string.IsNullOrEmpty(category)) query = query.Where(x => x.AppointmentType.CategoryCode == category);
         if (!string.IsNullOrEmpty(modality)) query = query.Where(x => x.ModalityCode == modality);
-        if (!string.IsNullOrWhiteSpace(search)) query = query.Where(x => x.DoctorAccount.Account.FullName.Contains(search.Trim()) || x.AppointmentType.Name.Contains(search.Trim()));
+        if (appointmentNumber.HasValue) query = query.Where(x => x.AppointmentNumber == appointmentNumber);
+        if (!string.IsNullOrWhiteSpace(search)) { var term = search.Trim(); var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.DoctorAccount.Account.FullName.Contains(term) || x.AppointmentType.Name.Contains(term) || isNumber && x.AppointmentNumber == number); }
         var total = await query.CountAsync(ct);
         query = view == "history" ? query.OrderByDescending(x => x.StartsAtUtc).ThenByDescending(x => x.Id) : query.OrderBy(x => x.StartsAtUtc).ThenBy(x => x.Id);
         var ids = await query.Skip((page - 1) * pageSize).Take(pageSize).Select(x => x.Id).ToArrayAsync(ct);
@@ -230,7 +232,7 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
         ValidatePage(page, pageSize);
         if (view is not ("pending" or "history") || from > until || min < 0 || max < min) throw Invalid("Filtros inválidos.");
         (from, until) = await UtcPeriodAsync(from, until, ct);
-        var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == actor);
+        var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == actor && x.InverseRescheduledFromAppointment == null);
         query = view == "pending" ? query.Where(x => (x.StatusCode == "pending" || x.StatusCode == "confirmed") && x.StartsAtUtc > Now && (x.PaymentAppointment == null || x.PaymentAppointment.StatusCode == "pending" || x.PaymentAppointment.StatusCode == "failed" || x.PaymentAppointment.StatusCode == "canceled")) : query.Where(x => x.PaymentAppointment != null);
         if (from.HasValue) query = query.Where(x => (x.PaymentAppointment != null ? x.PaymentAppointment.CreatedAtUtc : x.CreatedAtUtc) >= from);
         if (until.HasValue) query = query.Where(x => (x.PaymentAppointment != null ? x.PaymentAppointment.CreatedAtUtc : x.CreatedAtUtc) < until);
