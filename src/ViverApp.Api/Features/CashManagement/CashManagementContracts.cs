@@ -71,7 +71,8 @@ public sealed record CashManualMovementRequest(
     [param: Required] string TypeCode,
     [param: Required] string DirectionCode,
     [param: Required] string MethodCode,
-    [param: Range(typeof(decimal), "0.01", "9999999.00")] decimal Amount,
+    [param: Range(typeof(decimal), "0.01", "9999999.00",
+        ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal Amount,
     ulong? RelatedMovementId,
     [param: Required, StringLength(240, MinimumLength = 3)] string Description,
     [param: Required, StringLength(500, MinimumLength = 5)] string Reason);

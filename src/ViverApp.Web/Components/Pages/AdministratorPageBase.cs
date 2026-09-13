@@ -17,16 +17,26 @@ public abstract class AdministratorPageBase : ComponentBase, IAsyncDisposable
     protected string? Notice { get => notice; set { notice = value; if (noticeError && value is not null) ErrorNotifier.Show(value); } }
     protected bool NoticeError { get => noticeError; set { noticeError = value; if (value && notice is not null) ErrorNotifier.Show(notice); } }
     private string? loadedUri;
+    private bool disposed;
     protected override Task OnParametersSetAsync() => ReloadForLocationAsync(Navigation.Uri);
     protected override async Task OnAfterRenderAsync(bool firstRender) { if (!firstRender) return; loadedUri = Navigation.Uri; Navigation.LocationChanged += OnLocationChanged; await Run(async () => { Module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/administrator-experience.js"); await Load(); }); Loading = false; StateHasChanged(); }
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs args) =>
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        var currentPath = new Uri(loadedUri ?? Navigation.Uri).AbsolutePath;
+        if (disposed || !HandlesLocation(currentPath, new Uri(args.Location).AbsolutePath)) return;
         _ = InvokeAsync(() => ReloadForLocationAsync(args.Location));
+    }
     private async Task ReloadForLocationAsync(string uri)
     {
-        if (Module is null || loadedUri == uri || Busy) return;
+        if (disposed || Module is null || loadedUri == uri || Busy) return;
         loadedUri = uri;
         await Run(Load);
-        StateHasChanged();
+        if (!disposed) StateHasChanged();
+    }
+    protected virtual bool HandlesLocation(string currentPath, string nextPath)
+    {
+        return currentPath is "/administracao/consultas" or "/administracao/consultas/historico"
+            && nextPath is "/administracao/consultas" or "/administracao/consultas/historico";
     }
     protected abstract Task Load();
     protected Task<T?> Get<T>(string path) => Request<T>(path, "GET", null);
@@ -40,6 +50,6 @@ public abstract class AdministratorPageBase : ComponentBase, IAsyncDisposable
     protected static string Escape(string value) => Uri.EscapeDataString(value);
     protected async Task Open(string id) => await Module!.InvokeVoidAsync("showDialog", id);
     protected async Task Close(string id) => await Module!.InvokeVoidAsync("closeDialog", id);
-    public async ValueTask DisposeAsync() { Navigation.LocationChanged -= OnLocationChanged; if (Module is not null) try { await Module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+    public async ValueTask DisposeAsync() { disposed = true; Navigation.LocationChanged -= OnLocationChanged; if (Module is not null) try { await Module.DisposeAsync(); } catch (JSDisconnectedException) { } }
     private sealed class AdministratorUiException(string message) : Exception(message);
 }

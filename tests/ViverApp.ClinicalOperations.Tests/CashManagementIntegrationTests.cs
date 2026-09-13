@@ -1,4 +1,8 @@
+using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using System.Security.Cryptography;
+using System.Net;
+using System.Reflection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -16,6 +20,25 @@ namespace ViverApp.ClinicalOperations.Tests;
 
 public sealed class CashManagementIntegrationTests
 {
+    [Fact]
+    public void ManualMovementAmountRangeUsesInvariantLimitsUnderBrazilianCulture()
+    {
+        var amount = typeof(CashManualMovementRequest).GetConstructors().Single().GetParameters()
+            .Single(parameter => parameter.Name == nameof(CashManualMovementRequest.Amount));
+        var range = amount.GetCustomAttribute<RangeAttribute>()!;
+        var previousCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("pt-BR");
+            Assert.True(range.IsValid(200m));
+            Assert.False(range.IsValid(0m));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previousCulture;
+        }
+    }
+
     [Fact]
     public async Task ReversalReplacementClosingAndPrintPreserveTheFinancialChain()
     {
@@ -108,7 +131,10 @@ public sealed class CashManagementIntegrationTests
             Token = string.Empty,
         };
         var clock = new FixedClock(now);
-        var audit = new DelegatingAuditWriter(new IdentityAuditWriter(database, new HttpContextAccessor(),
+        var httpContext = new DefaultHttpContext { TraceIdentifier = Guid.NewGuid().ToString("N") };
+        httpContext.Connection.RemoteIpAddress = IPAddress.Loopback;
+        var audit = new DelegatingAuditWriter(new IdentityAuditWriter(database,
+            new HttpContextAccessor { HttpContext = httpContext },
             IdentitySecurityOptions.Load(configuration, allowInsecureLoopbackHttp: true)));
         var cash = new CashManagementService(database, new NoOpPagBank(), options, audit, clock);
         await cash.RecordPaymentReceivedAsync(original, manager.Id, now, CancellationToken.None);

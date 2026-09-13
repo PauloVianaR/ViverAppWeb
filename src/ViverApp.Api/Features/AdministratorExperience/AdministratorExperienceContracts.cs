@@ -42,7 +42,8 @@ public sealed record AdministratorDoctorAccessResponse(ulong AccountId, string F
 public sealed record AdministratorSettingUpdateRequest([param: Required, StringLength(2000)] string ValueJson,
     [param: Range(1, long.MaxValue)] ulong RowVersion);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record AdministratorPremiumPlanUpdateRequest([param: Range(typeof(decimal), "0", "100")] decimal AppointmentDiscountPercent,
+public sealed record AdministratorPremiumPlanUpdateRequest([param: Range(typeof(decimal), "0", "100",
+    ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal AppointmentDiscountPercent,
     [param: Range(1, 3650)] ushort? ValidityDays, bool IsActive, [param: Range(1, long.MaxValue)] ulong RowVersion);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AdministratorAccountStatusRequest([param: Required, RegularExpression("^(blocked|reactivated)$")] string DecisionCode,

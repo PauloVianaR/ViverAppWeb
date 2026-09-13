@@ -17,6 +17,7 @@ public abstract class DoctorPageBase : ComponentBase, IAsyncDisposable
     protected string? Notice { get => notice; set { notice = value; if (noticeError && value is not null) ErrorNotifier.Show(value); } }
     protected bool NoticeError { get => noticeError; set { noticeError = value; if (value && notice is not null) ErrorNotifier.Show(notice); } }
     private string? loadedUri;
+    private bool disposed;
     protected override Task OnParametersSetAsync() => ReloadForLocationAsync(Navigation.Uri);
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -25,15 +26,28 @@ public abstract class DoctorPageBase : ComponentBase, IAsyncDisposable
         await Run(async () => { Module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/doctor-experience.js"); await Load(); });
         Loading = false; StateHasChanged();
     }
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs args) =>
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        var currentPath = new Uri(loadedUri ?? Navigation.Uri).AbsolutePath;
+        if (disposed || !HandlesLocation(currentPath, new Uri(args.Location).AbsolutePath)) return;
         _ = InvokeAsync(() => ReloadForLocationAsync(args.Location));
+    }
     private async Task ReloadForLocationAsync(string uri)
     {
-        if (Module is null || loadedUri == uri || Busy) return;
+        if (disposed || Module is null || loadedUri == uri || Busy) return;
         loadedUri = uri;
         await Run(Load);
-        StateHasChanged();
+        if (!disposed) StateHasChanged();
     }
+    protected virtual bool HandlesLocation(string currentPath, string nextPath)
+    {
+        return InSameRouteGroup(currentPath, nextPath,
+                "/medico/agenda", "/medico/historico")
+            || InSameRouteGroup(currentPath, nextPath,
+                "/medico/perfil", "/medico/disponibilidade");
+    }
+    private static bool InSameRouteGroup(string currentPath, string nextPath, string first, string second) =>
+        (currentPath == first || currentPath == second) && (nextPath == first || nextPath == second);
     protected abstract Task Load();
     protected Task<T?> Get<T>(string path) => Request<T>(path, "GET", null);
     protected async Task<T?> Request<T>(string path, string method, object? data, string? key = null)
@@ -54,6 +68,6 @@ public abstract class DoctorPageBase : ComponentBase, IAsyncDisposable
     protected static string Escape(string value) => Uri.EscapeDataString(value);
     protected async Task Open(string id) => await Module!.InvokeVoidAsync("showDialog", id);
     protected async Task Close(string id) => await Module!.InvokeVoidAsync("closeDialog", id);
-    public virtual async ValueTask DisposeAsync() { Navigation.LocationChanged -= OnLocationChanged; if (Module is not null) try { await Module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+    public virtual async ValueTask DisposeAsync() { disposed = true; Navigation.LocationChanged -= OnLocationChanged; if (Module is not null) try { await Module.DisposeAsync(); } catch (JSDisconnectedException) { } }
     protected sealed class DoctorUiException(string message) : Exception(message);
 }
