@@ -2,7 +2,7 @@
 
 ## Estado e objetivo
 
-**Estado:** planejada; depende das Fases 16 e 17 integradas à `main`.
+**Estado:** implementada em 14 de setembro de 2026 na branch `codex/fase-18-prontuario-eletronico`; validações manuais e externas remanescentes estão em `.local/PENDENCIAS.md`.
 
 **Branch prevista:** `codex/fase-18-prontuario-eletronico`, criada a partir da `main` atualizada após autorização de merge da Fase 17.
 
@@ -353,3 +353,30 @@ Queries projetam apenas campos permitidos, limitam intervalo/página, evitam N+1
 - build, suíte integral, segurança, privacidade e validação visual estão aprovados;
 - decisões das Fases 8/13/14 e matriz de paridade foram atualizadas;
 - Fase 19 não foi iniciada e nenhuma pendência real foi ocultada.
+
+## Implementação realizada
+
+- migration `0031__electronic_health_record.sql` aplicada integralmente em `viverappweb` no MySQL 8.0.41 antes da regeneração DB-First;
+- prontuário único por Paciente, rascunhos concorrentes por Médico/atendimento, registros finalizados e retificações encadeadas por versão;
+- versões clínicas e trilhas de acesso protegidas no próprio MySQL por bloqueio append-only de `UPDATE` e `DELETE`;
+- conteúdo tipado para anamnese, evolução, antecedentes, alergias, medicamentos, hábitos, exame, diagnóstico, conduta, plano, observações e sinais vitais;
+- endpoints separados para resumo, atendimentos, timeline, financeiro, registros/versões, rascunho, finalização, retificação, documentos, PDF e auditoria;
+- policies granulares para leitura, conteúdo clínico, autoria, documento, exportação e auditoria, além da revalidação de vínculo no banco;
+- Gestor exige finalidade explícita para conteúdo clínico; Administrador exige finalidade e sessão elevada recente; recusas também entram na trilha;
+- documento privado reutiliza validação real de conteúdo/malware e o R2 privado da Fase 15, sem URL pública;
+- PDF é gerado no servidor a partir de snapshot autorizado, sem HTML, script ou recurso remoto, com `no-store`, paginação, versão e aviso de confidencialidade;
+- interface responsiva única para Médico, Gestor e Administrador, acessível a partir do card do Paciente, com resumo recolhível, cinco abas e auditoria adicional para Administrador;
+- Médico possui autosave sinalizado, recuperação de rascunho, confirmação de finalização, retificação sem sobrescrita e anexos privados;
+- timeline agrega status dos atendimentos, chegada/início, movimentos do caixa, versões clínicas e documentos sem criar fontes paralelas.
+
+## Evidências automatizadas
+
+- build integral: zero erros e zero avisos;
+- suíte integral: 206 testes aprovados;
+- teste transacional no MySQL prova rascunho, rejeição de versão concorrente, finalização, retificação, preservação das duas versões, bloqueios por papel/finalidade/step-up e recusa de alteração direta da versão finalizada;
+- contratos verificam autenticação das rotas, policies por capacidade, CORS da finalidade clínica, proteção antes do prerender e PDF sem scripts/recursos remotos;
+- verificador confirma MySQL 8.0.41, banco `viverappweb`, migration `0031`, seis novas tabelas e quatro triggers append-only.
+
+## Revalidação normativa
+
+Em 14 de setembro de 2026 foram consultados o texto compilado da LGPD, a Lei nº 13.787/2018 e os documentos vigentes de certificação S-RES publicados pela SBIS. A implementação preserva integridade, confidencialidade, rastreabilidade e retenção configurável, mas não afirma certificação SBIS, NGS2, ICP-Brasil ou validade probatória. Certificação, assinatura digital qualificada, política final de retenção e textos jurídicos continuam dependentes de avaliação formal antes da produção.

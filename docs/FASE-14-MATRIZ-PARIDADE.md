@@ -18,14 +18,14 @@ Esta matriz fecha o inventário autorizado das Fases 10 a 14. “Coberto” pres
 | PG-10 | `DoctorHistoricView` | Médico; histórico próprio | `/medico/historico` | suíte clínica/Web | Coberto |
 | PG-11 | `DoctorHomeView` | Médico | `/api/v1/doctor/experience/home`; `/medico` | suíte clínica/Web | Coberto |
 | PG-12 | `DoctorMainPage` | Médico | shell médico | teste de navegação | Coberto |
-| PG-13 | `DoctorPatientListView` | Médico; vínculo obrigatório | `/medico/pacientes` | suíte clínica negativa | Coberto |
+| PG-13 | `DoctorPatientListView` | Médico; vínculo obrigatório | `/medico/pacientes` e `/medico/prontuario/{id}` | suíte clínica negativa + prontuário transacional | Coberto |
 | PG-14 | `DoctorProfileView` | Médico; contato/Google com reautenticação | `/medico/perfil` | suíte identidade/Web | Coberto |
 | PG-15 | `DoctorSchedulePage` | Médico agenda para paciente vinculado | `/medico/pacientes/{id}/agendar` | suíte agendamento | Coberto |
 | PG-16 | `LoginRegisterPage` | Google padrão; e-mail/telefone alternativos; sem cadastro Admin | `/api/v1/auth`; `/acesso` | suíte identidade/Web | Coberto |
 | PG-17 | `OnlinePage` | Paciente/Médico vinculados ao atendimento; sem gravação | hub autenticado; páginas `/video` | suíte vídeo/segurança | Coberto |
 | PG-18 | `PaymentSuccessfulPage` | retorno consulta o estado real | `/api/v1/payments`; `/paciente/pagamentos` | suíte PagBank/Web | Coberto |
 | PG-19 | `ManagerAgendaView` | Gestor; clínica única | `/api/v1/manager/agenda`; `/gestao/agenda` | suíte gestão/Web | Coberto |
-| PG-20 | `ManagerHistoricView` | Gestor; metadados sem conteúdo clínico | `/gestao/historico` | suíte gestão | Coberto |
+| PG-20 | `ManagerHistoricView` | Gestor; operação normal e conteúdo clínico somente com finalidade auditada | `/gestao/historico` e `/gestao/prontuario/{id}` | suíte gestão + policies da Fase 18 | Coberto |
 | PG-21 | `ManagerHomeView` | Gestor | `/api/v1/manager/home`; `/gestao` | suíte gestão/Web | Coberto |
 | PG-22 | `ManagerMainPage` | Gestor | shell laranja | teste de navegação | Coberto |
 | PG-23 | `ManagerPatientListView` | Gestor; diretório sem Administradores | `/gestao/pacientes` | políticas negativas | Coberto |
@@ -44,14 +44,14 @@ Esta matriz fecha o inventário autorizado das Fases 10 a 14. “Coberto” pres
 
 | ID | Popup MAUI / comando | Destino Web | Segurança / decisão | Evidência | Estado |
 |---|---|---|---|---|---|
-| PP-01 | `AppointmentAttachmentsPopup` | painel/dialog de documentos do atendimento | conteúdo somente para Paciente/Médico autorizado; Admin/Gestor veem metadados | suíte clínica negativa | Coberto |
+| PP-01 | `AppointmentAttachmentsPopup` | aba Documentos do prontuário | Médico vinculado; Gestor com finalidade; Administrador com finalidade e step-up; sempre storage privado | suíte clínica negativa + Fase 18 | Coberto |
 | PP-02 | `CancelSchedulePopup` | dialogs de cancelamento por papel | motivo, cutoff, versão, auditoria e step-up Admin | suíte agendamento | Coberto |
 | PP-03 | `ChangePasswordPopup` | `/seguranca` | hash adaptativo e reautenticação | suíte identidade | Coberto |
 | PP-04 | `CompleteSchedulePopup` | ação de conclusão médica | somente Médico responsável | suíte clínica | Coberto |
 | PP-05 | `ConfirmPaymentPopup` | detalhe Gestor/Admin | valor servidor, idempotência e ledger | suíte gestão/PagBank | Coberto |
 | PP-06 | `EditAppointmentPopup` | reagendamento por papel | slot servidor, concorrência e auditoria | suíte agendamento | Coberto |
 | PP-07 | `LoadingPopup` | skeleton/estado ocupado acessível | feedback sem bloquear leitor de tela | teste Web | Coberto |
-| PP-08 | `MedicalReportPopup` | editor/versionamento médico | conteúdo bloqueado a Admin/Gestor | suíte clínica negativa | Coberto |
+| PP-08 | `MedicalReportPopup` | prontuário estruturado/versionado | Médico é o único autor; Gestor justifica leitura; Administrador exige step-up e justificativa | suíte transacional e policies da Fase 18 | Coberto |
 | PP-09 | `PatientEditPopup` | perfil/detalhe do paciente por papel | DTO mínimo, ownership/policy | suítes paciente/médico/gestor | Coberto |
 | PP-10 | `PremiumUserRequestAnalysisPopup` | seção Premium administrativa/gerencial | comprovante privado, decisão concorrente, step-up Admin | contratos + auditoria | Coberto |
 | PP-11 | `RateSchedulePopup` | avaliação do atendimento | Paciente elegível; uma avaliação | suíte paciente | Coberto |
@@ -69,7 +69,7 @@ Esta matriz fecha o inventário autorizado das Fases 10 a 14. “Coberto” pres
 | Cadastro público de Administrador | Provisionamento seguro | Substituído por decisão explícita |
 | Google Pay separado | PagBank Checkout | Substituído por decisão explícita |
 | Gravação de vídeo | Desativada; nenhuma captura implementada | Substituído por decisão explícita |
-| Laudo completo para Admin/Gestor | Somente metadados; sigilo clínico preservado | Substituído por decisão explícita |
+| Laudo completo para Admin/Gestor | Leitura somente por ação explícita: finalidade auditada para Gestor e finalidade + step-up para Administrador; sem autoria | Substituído por decisão explícita da Fase 18 |
 | Regras no cliente | API como autoridade | Substituído por decisão explícita |
 | Layout estritamente móvel | Web responsiva com sidebar/navegação inferior | Substituído por decisão explícita |
 

@@ -57,3 +57,7 @@ O certificado HTTPS de desenvolvimento foi preservado. Como o host isolado não 
 Dependem de provedores, documentos ou decisões externas e permanecem em `.local/PENDENCIAS.md`: onboarding real por e-mail/SMS, comprovante Premium real não sensível, entrega da notificação de decisão Premium e zoom nativo de 200%.
 
 A conta sintética de Gestor e as capturas visuais permanecem somente em `.local`, fora do Git, até o proprietário confirmar que encerrou os testes manuais.
+
+## Decisão superveniente da Fase 18
+
+O Gestor ganhou uma área integrada de prontuário por Paciente. Dados cadastrais, agenda, timeline e financeiro seguem operacionais; conteúdo clínico e documentos exigem uma finalidade explícita de no mínimo 10 caracteres e geram trilha append-only de acesso permitido ou negado. O Gestor permanece sem qualquer capacidade de criar, finalizar ou retificar conteúdo médico.

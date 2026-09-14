@@ -13,6 +13,12 @@ public static class ViverAppPolicies
     public const string CashClose = "finance:cash-close";
     public const string CashPrint = "finance:cash-print";
     public const string PaymentReverse = "finance:payment-reverse";
+    public const string MedicalRecordRead = "medical-record:read";
+    public const string MedicalRecordClinicalRead = "medical-record:clinical-read";
+    public const string MedicalRecordWrite = "medical-record:write";
+    public const string MedicalRecordDocument = "medical-record:document";
+    public const string MedicalRecordExport = "medical-record:export";
+    public const string MedicalRecordAudit = "medical-record:audit";
     public const string MfaEnrollment = "identity:mfa-enrollment";
     public const string MfaSatisfied = "identity:mfa-satisfied";
 }

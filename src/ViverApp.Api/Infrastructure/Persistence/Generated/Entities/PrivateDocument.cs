@@ -37,6 +37,8 @@ public partial class PrivateDocument
 
     public DateTime CreatedAtUtc { get; set; }
 
+    public virtual MedicalRecordDocument? MedicalRecordDocument { get; set; }
+
     public virtual Account OwnerAccount { get; set; } = null!;
 
     public virtual ICollection<PremiumMembership> PremiumMembershipPrivateDocuments { get; set; } = new List<PremiumMembership>();

@@ -291,13 +291,13 @@ Cada fase deve:
 
 ## Fase 17 — Caixa e reversões financeiras
 
-**Estado:** implementada em 10 de setembro de 2026 na branch `codex/fase-17-caixa-reversoes`; migrations DB-First aplicadas no MySQL local, build e validações automatizadas concluídas. Homologações manual e externa permanecem registradas localmente.
+**Estado:** concluída e integrada à `main` no merge `031b9d2` em 14 de setembro de 2026. Migrations DB-First aplicadas no MySQL local, build e validações automatizadas concluídas; homologações manuais e externas remanescentes estão registradas localmente.
 
 **Plano detalhado:** [Caixa e reversões financeiras](FASE-17-CAIXA-E-REVERSOES-FINANCEIRAS.md).
 
 ## Fase 18 — Prontuário eletrônico
 
-**Estado:** planejada; depende das Fases 16 e 17 integradas à `main`.
+**Estado:** implementada em 14 de setembro de 2026 na branch `codex/fase-18-prontuario-eletronico`; migration DB-First aplicada no MySQL local, suíte automatizada aprovada e homologações manuais registradas localmente.
 
 **Plano detalhado:** [Prontuário eletrônico](FASE-18-PRONTUARIO-ELETRONICO.md).
 

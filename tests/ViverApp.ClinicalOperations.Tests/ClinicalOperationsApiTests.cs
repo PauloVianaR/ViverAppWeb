@@ -10,6 +10,7 @@ using ViverApp.Api.Features.ClinicalOperations;
 using ViverApp.Api.Features.DoctorExperience;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.ManagerExperience;
+using ViverApp.Api.Features.MedicalRecords;
 using Xunit;
 
 namespace ViverApp.ClinicalOperations.Tests;
@@ -47,6 +48,54 @@ public sealed class ClinicalOperationsApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("/api/v1/medical-records/patients/1/summary")]
+    [InlineData("/api/v1/medical-records/patients/1/timeline?from=2026-01-01&to=2026-01-02")]
+    [InlineData("/api/v1/medical-records/patients/1/entries")]
+    [InlineData("/api/v1/medical-records/patients/1/documents")]
+    public async Task MedicalRecordEndpoints_RequireAuthentication(string path)
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost"),
+        });
+        using var response = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task MedicalRecordPolicies_SeparateReadWriteExportAndAudit()
+    {
+        using var scope = factory.Services.CreateScope();
+        var provider = scope.ServiceProvider.GetRequiredService<IAuthorizationPolicyProvider>();
+        var read = await provider.GetPolicyAsync(ViverAppPolicies.MedicalRecordRead);
+        var write = await provider.GetPolicyAsync(ViverAppPolicies.MedicalRecordWrite);
+        var audit = await provider.GetPolicyAsync(ViverAppPolicies.MedicalRecordAudit);
+        Assert.Equal([ViverAppRoles.Doctor, ViverAppRoles.Manager, ViverAppRoles.Administrator],
+            Assert.Single(read!.Requirements.OfType<RolesAuthorizationRequirement>()).AllowedRoles);
+        Assert.Equal([ViverAppRoles.Doctor], Assert.Single(write!.Requirements.OfType<RolesAuthorizationRequirement>()).AllowedRoles);
+        Assert.Equal([ViverAppRoles.Administrator], Assert.Single(audit!.Requirements.OfType<RolesAuthorizationRequirement>()).AllowedRoles);
+        Assert.Contains(audit.Requirements.OfType<ClaimsAuthorizationRequirement>(), x =>
+            x.ClaimType == ViverAppClaimTypes.MfaSatisfied && x.AllowedValues!.Contains(bool.TrueString));
+    }
+
+    [Fact]
+    public void ClinicalPdf_IsPrivateStaticContentWithoutScriptsOrRemoteResources()
+    {
+        var snapshot = new MedicalRecordPdfSnapshot(
+            new MedicalRecordPatientSummary(10, "Paciente de Teste", null, new DateOnly(1990, 1, 1), 36,
+                null, null, null, null, "active", false, false, 1, 1, 0, 0, 0, null, null, DateTime.UtcNow),
+            new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 2), [], [], null, DateTime.UtcNow);
+        var pdf = new ClinicalPdfRenderer().Render(snapshot);
+        var text = System.Text.Encoding.Latin1.GetString(pdf);
+        Assert.StartsWith("%PDF-1.7", text, StringComparison.Ordinal);
+        Assert.Contains("DOCUMENTO CONFIDENCIAL", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("/JavaScript", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("http://", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("https://", text, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task ClinicalStaffPolicy_AllowsOnlyDoctorManagerAndAdministrator()
     {
@@ -80,7 +129,7 @@ public sealed class ClinicalOperationsApiTests : IAsyncLifetime
         using var request = new HttpRequestMessage(HttpMethod.Options, "/api/v1/patient/appointments");
         request.Headers.Add("Origin", "https://localhost:7110");
         request.Headers.Add("Access-Control-Request-Method", "POST");
-        request.Headers.Add("Access-Control-Request-Headers", "idempotency-key,x-csrf-token");
+        request.Headers.Add("Access-Control-Request-Headers", "idempotency-key,x-csrf-token,x-clinical-purpose");
 
         using var response = await client.SendAsync(request);
 
@@ -88,6 +137,7 @@ public sealed class ClinicalOperationsApiTests : IAsyncLifetime
         var allowedHeaders = string.Join(',', response.Headers.GetValues("Access-Control-Allow-Headers"));
         Assert.Contains("idempotency-key", allowedHeaders, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("x-csrf-token", allowedHeaders, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("x-clinical-purpose", allowedHeaders, StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]

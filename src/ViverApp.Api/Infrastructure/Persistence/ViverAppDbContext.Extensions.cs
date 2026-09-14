@@ -31,6 +31,15 @@ public partial class ViverAppDbContext
         modelBuilder.Entity<MedicalReport>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
+        modelBuilder.Entity<ElectronicHealthRecord>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
+        modelBuilder.Entity<MedicalRecordDraft>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
+        modelBuilder.Entity<MedicalRecordDocument>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
         modelBuilder.Entity<AppointmentType>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();

@@ -1,0 +1,9 @@
+@if (!string.IsNullOrWhiteSpace(Value))
+{
+    <section><h3>@Label</h3><p>@Value</p></section>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+    [Parameter] public string? Value { get; set; }
+}

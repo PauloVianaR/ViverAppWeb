@@ -171,6 +171,21 @@ public static class IdentityServiceCollectionExtensions
                 ViverAppRoles.Administrator));
         foreach (var policyName in new[]
         {
+            ViverAppPolicies.MedicalRecordRead,
+            ViverAppPolicies.MedicalRecordClinicalRead,
+            ViverAppPolicies.MedicalRecordDocument,
+            ViverAppPolicies.MedicalRecordExport,
+        })
+        {
+            authorization.AddPolicy(policyName, policy => policy.RequireRole(
+                ViverAppRoles.Doctor, ViverAppRoles.Manager, ViverAppRoles.Administrator));
+        }
+        authorization.AddPolicy(ViverAppPolicies.MedicalRecordWrite, policy => policy.RequireRole(ViverAppRoles.Doctor));
+        authorization.AddPolicy(ViverAppPolicies.MedicalRecordAudit, policy => policy
+            .RequireRole(ViverAppRoles.Administrator)
+            .RequireClaim(ViverAppClaimTypes.MfaSatisfied, bool.TrueString));
+        foreach (var policyName in new[]
+        {
             ViverAppPolicies.CashRead,
             ViverAppPolicies.CashWrite,
             ViverAppPolicies.CashClose,

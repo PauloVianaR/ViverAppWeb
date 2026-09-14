@@ -6,6 +6,7 @@ using ViverApp.Api.Features.AdministratorExperience;
 using ViverApp.Api.Features.DoctorExperience;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.ManagerExperience;
+using ViverApp.Api.Features.MedicalRecords;
 using ViverApp.Api.Features.PatientScheduling;
 using ViverApp.Api.Features.Payments;
 using ViverApp.Api.Features.PatientExperience;
@@ -77,6 +78,9 @@ builder.Services.AddScoped<IPatientSchedulingAuditWriter, PatientSchedulingAudit
 builder.Services.AddScoped<PatientSchedulingService>();
 builder.Services.AddScoped<IClinicalOperationsAuditWriter, ClinicalOperationsAuditWriter>();
 builder.Services.AddScoped<ClinicalOperationsService>();
+builder.Services.AddScoped<MedicalRecordService>();
+builder.Services.AddScoped<MedicalRecordExceptionFilter>();
+builder.Services.AddSingleton<ClinicalPdfRenderer>();
 builder.Services.AddScoped<CashManagementService>();
 builder.Services.AddScoped<CashRuleExceptionFilter>();
 builder.Services.AddScoped<ViverApp.Api.Features.ArrivalExperience.ArrivalExperienceService>();

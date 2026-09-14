@@ -1,0 +1,311 @@
+@page "/medico/prontuario/{PatientId:long}"
+@page "/gestao/prontuario/{PatientId:long}"
+@page "/administracao/prontuario/{PatientId:long}"
+@implements IAsyncDisposable
+@inject IJSRuntime JavaScript
+@inject WebBackendOptions Backend
+@inject NavigationManager Navigation
+@inject UiErrorNotifier Errors
+
+<PageTitle>Prontuário eletrônico | ViverApp</PageTitle>
+
+@if (Loading)
+{
+    <LoadingSkeleton Lines="8" />
+}
+else if (Summary is null)
+{
+    <InterfaceState Title="Prontuário indisponível" Description="Não foi possível localizar um paciente autorizado para este acesso." Icon="shield" />
+}
+else
+{
+    <header class="workspace-heading medical-record-heading">
+        <div>
+            <p class="eyebrow">@AreaLabel · prontuário eletrônico</p>
+            <h1 class="page-title">@Summary.FullName</h1>
+            <p class="page-description">Registro longitudinal privado, versionado e auditado.</p>
+        </div>
+        <div class="medical-record-actions">
+            <a class="button button--secondary" href="@PatientsPath">Voltar aos pacientes</a>
+            <button type="button" class="button" @onclick="DownloadPdfAsync" disabled="@Busy">Gerar PDF</button>
+        </div>
+    </header>
+
+    @if (Notice is not null)
+    {
+        <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="status">@Notice</p>
+    }
+
+    <section class="medical-record-shell">
+        <aside class="surface patient-record-summary">
+            <details open>
+                <summary><strong>Resumo do paciente</strong><span>mostrar/ocultar</span></summary>
+                <div class="patient-record-identity">
+                    <span class="patient-record-avatar" aria-hidden="true">@Initials(Summary.FullName)</span>
+                    <div><h2>@(Summary.PreferredName ?? Summary.FullName)</h2><p>@(Summary.Age.HasValue ? $"{Summary.Age} anos" : "Idade não informada")</p></div>
+                </div>
+                <dl class="patient-record-facts">
+                    @if (Summary.TaxId is not null) { <div><dt>CPF</dt><dd>@Cpf(Summary.TaxId)</dd></div> }
+                    @if (Summary.Email is not null) { <div><dt>E-mail</dt><dd>@Summary.Email</dd></div> }
+                    @if (Summary.Phone is not null) { <div><dt>Telefone</dt><dd>@Summary.Phone</dd></div> }
+                    @if (Summary.Address is not null) { <div><dt>Endereço</dt><dd>@Summary.Address</dd></div> }
+                    <div><dt>Conta</dt><dd>@(Summary.PortalAccessEnabled ? "Acesso ao portal" : "Somente cadastro interno")</dd></div>
+                    <div><dt>Plano</dt><dd>@(Summary.IsPremium ? "Premium" : "Regular")</dd></div>
+                </dl>
+                <div class="patient-record-counters" aria-label="Indicadores do paciente">
+                    <span><strong>@Summary.AppointmentCount</strong> atendimentos</span>
+                    <span><strong>@Summary.CompletedCount</strong> concluídos</span>
+                    <span><strong>@Summary.NoShowCount</strong> faltas</span>
+                    <span><strong>@Summary.CanceledCount</strong> cancelados</span>
+                    <span><strong>@Summary.DocumentCount</strong> documentos</span>
+                </div>
+            </details>
+        </aside>
+
+        <div class="medical-record-main">
+            @if (NeedsPurpose)
+            {
+                <section class="surface clinical-purpose" aria-labelledby="purpose-title">
+                    <div><h2 id="purpose-title">Acesso clínico justificado</h2><p>Informe a finalidade antes de abrir registros, documentos ou gerar PDF clínico. O acesso fica auditado.</p></div>
+                    <div class="field"><label for="clinical-purpose">Finalidade do acesso</label><input id="clinical-purpose" @bind="Purpose" maxlength="500" placeholder="Ex.: suporte ao atendimento presencial de hoje" /></div>
+                    @if (Role == "administrator") { <p class="administrator-elevated">O Administrador também precisa estar em uma sessão elevada nos últimos 5 minutos.</p> }
+                </section>
+            }
+
+            <nav class="medical-record-tabs" aria-label="Seções do prontuário">
+                @foreach (var tab in Tabs)
+                {
+                    <button type="button" class="@(ActiveTab == tab.Value ? "active" : null)" aria-current="@(ActiveTab == tab.Value ? "page" : null)" @onclick="() => ActivateAsync(tab.Value)">@tab.Label</button>
+                }
+            </nav>
+
+            @if (ActiveTab == RecordTab.Overview)
+            {
+                <section class="record-overview-grid">
+                    <article class="surface record-overview-card"><p class="eyebrow">Agenda</p><h2>Último e próximo atendimento</h2><dl><div><dt>Último</dt><dd>@DateLabel(Summary.LastAppointmentAtUtc)</dd></div><div><dt>Próximo</dt><dd>@DateLabel(Summary.NextAppointmentAtUtc)</dd></div></dl></article>
+                    <article class="surface record-overview-card"><p class="eyebrow">Clínico</p><h2>Última atualização</h2><p>@DateLabel(Summary.LastClinicalUpdateAtUtc)</p><small>Alergias, medicamentos e condições aparecem dentro da versão clínica autorizada.</small></article>
+                    <article class="surface record-overview-card"><p class="eyebrow">Privacidade</p><h2>Acesso protegido</h2><p>Cada consulta revalida papel, vínculo e finalidade. Documentos e PDFs não usam CDN pública.</p></article>
+                </section>
+            }
+            else if (ActiveTab == RecordTab.Timeline)
+            {
+                <MobileFilterPanel AriaLabel="Filtros da linha do tempo">
+                    <form @onsubmit="LoadTimelineAsync" @onsubmit:preventDefault>
+                        <div class="medical-record-filter-grid">
+                            <div class="field"><label for="timeline-from">De</label><input id="timeline-from" type="date" @bind="FromDate" /></div>
+                            <div class="field"><label for="timeline-to">Até</label><input id="timeline-to" type="date" @bind="ToDate" /></div>
+                            <div class="field"><label for="timeline-type">Tipo</label><select id="timeline-type" @bind="TimelineType"><option value="">Todos</option><option value="appointment">Atendimento</option><option value="financial">Financeiro</option><option value="clinical">Clínico</option><option value="document">Documento</option></select></div>
+                            <div class="field"><label for="timeline-order">Ordem</label><select id="timeline-order" @bind="TimelineOrder"><option value="desc">Mais recentes</option><option value="asc">Mais antigos</option></select></div>
+                        </div>
+                        <button class="button" disabled="@Busy">Aplicar filtros</button>
+                    </form>
+                </MobileFilterPanel>
+                @if (Timeline.Count == 0) { <InterfaceState Title="Nenhum evento no período" Description="Ajuste os filtros para consultar outra faixa de datas." Icon="history" /> }
+                else { <ol class="record-timeline">@foreach (var item in Timeline) { <li class="surface @(item.Restricted ? "restricted" : null)"><time>@Local(item.OccurredAtUtc)</time><div><strong>@item.Title</strong>@if(item.AppointmentNumber.HasValue){<span>Atendimento #@item.AppointmentNumber</span>}@if(item.Description is not null){<p>@item.Description</p>}@if(item.ActorName is not null){<small>Por @item.ActorName</small>}</div></li> }</ol> }
+            }
+            else if (ActiveTab == RecordTab.Clinical)
+            {
+                @if (Role == "doctor")
+                {
+                    <section class="surface clinical-editor" @oninput="ScheduleAutosave">
+                        <div class="section-heading"><div><p class="eyebrow">Autoria médica</p><h2>@(RectifyingEntry is null ? "Anamnese e evolução" : $"Retificar atendimento #{RectifyingEntry.AppointmentNumber}")</h2></div><span class="autosave-state" aria-live="polite">@AutosaveState</span></div>
+                        @if (RectifyingEntry is null)
+                        {
+                            <div class="field"><label for="record-appointment">Atendimento</label><select id="record-appointment" value="@SelectedAppointmentId" @onchange="AppointmentChangedAsync"><option value="0">Selecione</option>@foreach(var appointment in Appointments){<option value="@appointment.Id">#@appointment.AppointmentNumber · @Local(appointment.StartsAtUtc) · @StatusLabel(appointment.StatusCode)</option>}</select></div>
+                        }
+                        else
+                        {
+                            <div class="field"><label for="correction-reason">Motivo da retificação</label><textarea id="correction-reason" @bind="CorrectionReason" minlength="5" maxlength="1000"></textarea></div>
+                        }
+                        <div class="clinical-form-grid">
+                            <div class="field field--wide"><label for="chief">Queixa principal</label><textarea id="chief" @bind="ChiefComplaint" @bind:event="oninput" maxlength="12000"></textarea></div>
+                            <div class="field field--wide"><label for="present-history">História da doença atual</label><textarea id="present-history" @bind="PresentIllnessHistory" @bind:event="oninput" maxlength="12000"></textarea></div>
+                            <div class="field"><label for="personal-history">Antecedentes pessoais</label><textarea id="personal-history" @bind="PersonalHistory" @bind:event="oninput" maxlength="12000"></textarea></div>
+                            <div class="field"><label for="family-history">Antecedentes familiares</label><textarea id="family-history" @bind="FamilyHistory" @bind:event="oninput" maxlength="12000"></textarea></div>
+                            <div class="field"><label for="allergies">Alergias</label><textarea id="allergies" @bind="Allergies" @bind:event="oninput" maxlength="12000"></textarea></div>
+                            <div class="field"><label for="medications">Medicamentos em uso</label><textarea id="medications" @bind="Medications" @bind:event="oninput" maxlength="12000"></textarea></div>
+                            <div class="field"><label for="habits">Hábitos relevantes</label><textarea id="habits" @bind="RelevantHabits" @bind:event="oninput" maxlength="12000"></textarea></div>
+                            <div class="field"><label for="physical">Exame físico</label><textarea id="physical" @bind="PhysicalExamination" @bind:event="oninput" maxlength="12000"></textarea></div>
+                            <div class="field"><label for="diagnostic">Hipóteses e diagnósticos</label><textarea id="diagnostic" @bind="DiagnosticHypotheses" @bind:event="oninput" maxlength="12000"></textarea></div>
+                            <div class="field"><label for="conduct">Conduta e orientações</label><textarea id="conduct" @bind="ConductAndGuidance" @bind:event="oninput" maxlength="12000"></textarea></div>
+                            <div class="field"><label for="follow-up">Plano de acompanhamento</label><textarea id="follow-up" @bind="FollowUpPlan" @bind:event="oninput" maxlength="12000"></textarea></div>
+                            <div class="field"><label for="evolution">Evolução clínica</label><textarea id="evolution" @bind="ClinicalEvolution" @bind:event="oninput" maxlength="12000"></textarea></div>
+                            <div class="field field--wide"><label for="notes">Observações</label><textarea id="notes" @bind="AdditionalNotes" @bind:event="oninput" maxlength="12000"></textarea></div>
+                        </div>
+                        <fieldset class="vitals-grid"><legend>Sinais vitais</legend><div class="field"><label for="sys">Sistólica</label><input id="sys" type="number" min="40" max="300" @bind="Systolic" @bind:event="oninput" /></div><div class="field"><label for="dia">Diastólica</label><input id="dia" type="number" min="20" max="200" @bind="Diastolic" @bind:event="oninput" /></div><div class="field"><label for="heart">FC bpm</label><input id="heart" type="number" min="20" max="300" @bind="HeartRate" @bind:event="oninput" /></div><div class="field"><label for="temp">Temperatura</label><input id="temp" type="number" min="25" max="45" step="0.1" @bind="Temperature" @bind:event="oninput" /></div><div class="field"><label for="weight">Peso kg</label><input id="weight" type="number" min="0.1" max="500" step="0.01" @bind="Weight" @bind:event="oninput" /></div><div class="field"><label for="height">Altura cm</label><input id="height" type="number" min="20" max="260" step="0.1" @bind="Height" @bind:event="oninput" /></div></fieldset>
+                        <div class="medical-record-actions">
+                            @if (RectifyingEntry is null)
+                            {
+                                <button type="button" class="button button--secondary" @onclick="SaveDraftAsync" disabled="@(Busy || SelectedAppointmentId == 0)">Salvar rascunho</button>
+                                <button type="button" class="button" @onclick="FinalizeAsync" disabled="@(Busy || Draft is null || SelectedAppointment?.StatusCode != "in_progress")">Revisar e finalizar</button>
+                            }
+                            else
+                            {
+                                <button type="button" class="button button--secondary" @onclick="CancelRectification">Cancelar</button>
+                                <button type="button" class="button" @onclick="RectifyAsync" disabled="@Busy">Criar nova versão</button>
+                            }
+                        </div>
+                        @if (SelectedAppointment is not null && SelectedAppointment.StatusCode != "in_progress" && RectifyingEntry is null) { <p class="muted">Para finalizar, o atendimento precisa estar iniciado. O rascunho pode ser salvo antes disso.</p> }
+                    </section>
+                }
+
+                @if (Entries.Count == 0) { <InterfaceState Title="Nenhum registro finalizado" Description="Os registros clínicos concluídos aparecerão aqui em ordem cronológica." Icon="shield" /> }
+                else
+                {
+                    <div class="record-entry-list">
+                        @foreach (var entry in Entries)
+                        {
+                            <article class="surface record-entry">
+                                <header><div><p class="eyebrow">Atendimento #@entry.AppointmentNumber</p><h2>@entry.DoctorName</h2><span>@entry.LicenseLabel · @Local(entry.FinalizedAtUtc)</span></div><span class="badge badge--success">Versão @entry.CurrentVersionNumber</span></header>
+                                @foreach (var version in entry.Versions ?? [])
+                                {
+                                    <details open="@version.IsCurrent">
+                                        <summary>Versão @version.VersionNumber @(version.IsCurrent ? "· vigente" : "· substituída")</summary>
+                                        @if (version.CorrectionReason is not null) { <p><strong>Motivo:</strong> @version.CorrectionReason</p> }
+                                        <div class="clinical-content">
+                                            <ContentField Label="Queixa principal" Value="@version.Content.ChiefComplaint" />
+                                            <ContentField Label="História da doença atual" Value="@version.Content.PresentIllnessHistory" />
+                                            <ContentField Label="Antecedentes pessoais" Value="@version.Content.PersonalHistory" />
+                                            <ContentField Label="Antecedentes familiares" Value="@version.Content.FamilyHistory" />
+                                            <ContentField Label="Alergias" Value="@version.Content.Allergies" />
+                                            <ContentField Label="Medicamentos em uso" Value="@version.Content.Medications" />
+                                            <ContentField Label="Hábitos relevantes" Value="@version.Content.RelevantHabits" />
+                                            <ContentField Label="Exame físico" Value="@version.Content.PhysicalExamination" />
+                                            <ContentField Label="Hipóteses e diagnósticos" Value="@version.Content.DiagnosticHypotheses" />
+                                            <ContentField Label="Conduta e orientações" Value="@version.Content.ConductAndGuidance" />
+                                            <ContentField Label="Plano de acompanhamento" Value="@version.Content.FollowUpPlan" />
+                                            <ContentField Label="Evolução clínica" Value="@version.Content.ClinicalEvolution" />
+                                            <ContentField Label="Observações" Value="@version.Content.AdditionalNotes" />
+                                            <ContentField Label="Pressão arterial" Value="@BloodPressure(version.Content)" />
+                                            <ContentField Label="Frequência cardíaca" Value='@Measure(version.Content.HeartRateBpm, "bpm")' />
+                                            <ContentField Label="Temperatura" Value='@Measure(version.Content.TemperatureCelsius, "°C")' />
+                                            <ContentField Label="Peso" Value='@Measure(version.Content.WeightKg, "kg")' />
+                                            <ContentField Label="Altura" Value='@Measure(version.Content.HeightCm, "cm")' />
+                                        </div>
+                                    </details>
+                                }
+                                @if (Role == "doctor") { <button type="button" class="button button--secondary button--small" @onclick="() => StartRectification(entry)">Retificar sem apagar o original</button> }
+                            </article>
+                        }
+                    </div>
+                }
+            }
+            else if (ActiveTab == RecordTab.Financial)
+            {
+                @if (Financial is null || Financial.Items.Count == 0) { <InterfaceState Title="Sem movimentações no período" Description="Pagamentos e reversões do livro-caixa aparecerão aqui." Icon="card" /> }
+                else { <section class="financial-summary"><div class="surface"><span>Recebido</span><strong>@Money(Financial.Received)</strong></div><div class="surface"><span>Estornado</span><strong>@Money(Financial.Reversed)</strong></div><div class="surface"><span>Saldo líquido</span><strong>@Money(Financial.Net)</strong></div></section><div class="surface record-table-wrap"><table><thead><tr><th>Atendimento</th><th>Data</th><th>Situação</th><th>Forma</th><th>Valor</th></tr></thead><tbody>@foreach(var item in Financial.Items){<tr><td>#@item.AppointmentNumber</td><td>@Local(item.AppointmentAtUtc)</td><td>@PaymentStatus(item.StatusCode)</td><td>@item.MethodLabel</td><td>@Money(item.Amount)</td></tr>}</tbody></table></div> }
+            }
+            else if (ActiveTab == RecordTab.Documents)
+            {
+                @if (Role == "doctor")
+                {
+                    <section class="surface document-upload"><h2>Novo documento privado</h2><div class="medical-record-filter-grid"><div class="field"><label for="document-appointment">Atendimento</label><select id="document-appointment" @bind="DocumentAppointmentId"><option value="0">Selecione</option>@foreach(var appointment in Appointments){<option value="@appointment.Id">#@appointment.AppointmentNumber · @Local(appointment.StartsAtUtc)</option>}</select></div><div class="field"><label for="document-category">Categoria</label><select id="document-category" @bind="DocumentCategory"><option value="attachment">Anexo</option><option value="exam">Exame</option><option value="report">Laudo</option></select></div><div class="field field--wide"><label for="medical-record-file">Arquivo PDF, PNG ou JPEG · até 10 MB</label><input id="medical-record-file" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" /></div></div><button type="button" class="button" @onclick="UploadDocumentAsync" disabled="@(Busy || DocumentAppointmentId == 0)">Enviar com segurança</button></section>
+                }
+                @if (Documents.Count == 0) { <InterfaceState Title="Nenhum documento" Description="Laudos, exames e anexos privados aparecerão aqui." Icon="shield" /> }
+                else { <div class="document-grid">@foreach(var document in Documents){<article class="surface document-card"><div><span class="badge">@DocumentCategoryLabel(document.CategoryCode)</span><h2>@document.FileName</h2><p>@FileSize(document.SizeBytes) · @Local(document.CreatedAtUtc)</p>@if(document.AppointmentNumber.HasValue){<small>Atendimento #@document.AppointmentNumber</small>}</div><div class="medical-record-actions"><button type="button" class="button button--secondary button--small" @onclick="()=>DownloadDocumentAsync(document)">Baixar</button>@if(Role=="doctor"){<button type="button" class="button button--danger button--small" @onclick="()=>DeleteDocumentAsync(document)">Excluir</button>}</div></article>}</div> }
+            }
+            else if (ActiveTab == RecordTab.Access)
+            {
+                @if (AccessEvents.Count == 0) { <InterfaceState Title="Sem acessos registrados" Description="A trilha autorizada aparecerá aqui." Icon="shield" /> }
+                else { <div class="surface record-table-wrap"><table><thead><tr><th>Quando</th><th>Responsável</th><th>Papel</th><th>Escopo</th><th>Resultado</th><th>Finalidade</th></tr></thead><tbody>@foreach(var item in AccessEvents){<tr><td>@Local(item.OccurredAtUtc)</td><td>@item.ActorName</td><td>@RoleLabel(item.ActorRole)</td><td>@ScopeLabel(item.ScopeCode)</td><td>@(item.OutcomeCode=="allowed"?"Permitido":"Negado")</td><td>@(item.Purpose??"—")</td></tr>}</tbody></table></div> }
+            }
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public ulong PatientId { get; set; }
+    private enum RecordTab { Overview, Timeline, Clinical, Financial, Documents, Access }
+    private sealed record TabOption(RecordTab Value, string Label);
+    private IJSObjectReference? Module;
+    private WebMedicalRecordPatientSummary? Summary;
+    private readonly List<WebMedicalRecordTimelineEvent> Timeline = [];
+    private readonly List<WebMedicalRecordEntry> Entries = [];
+    private readonly List<WebMedicalRecordAppointmentOption> Appointments = [];
+    private readonly List<WebMedicalRecordDocument> Documents = [];
+    private readonly List<WebMedicalRecordAccessEvent> AccessEvents = [];
+    private WebMedicalRecordFinancialSummary? Financial;
+    private WebMedicalRecordDraft? Draft;
+    private WebMedicalRecordEntry? RectifyingEntry;
+    private bool Loading = true, Busy, NoticeError, IsSavingDraft;
+    private string? Notice;
+    private string Purpose = "", TimelineType = "", TimelineOrder = "desc", AutosaveState = "Nenhuma alteração pendente";
+    private DateTime FromDate = DateTime.Today.AddYears(-1), ToDate = DateTime.Today;
+    private ulong SelectedAppointmentId, DocumentAppointmentId;
+    private string DocumentCategory = "attachment", CorrectionReason = "";
+    private string ChiefComplaint="",PresentIllnessHistory="",PersonalHistory="",FamilyHistory="",Allergies="",Medications="",RelevantHabits="",PhysicalExamination="",DiagnosticHypotheses="",ConductAndGuidance="",FollowUpPlan="",ClinicalEvolution="",AdditionalNotes="";
+    private ushort? Systolic, Diastolic, HeartRate; private decimal? Temperature, Weight, Height;
+    private CancellationTokenSource? AutosaveCancellation;
+    private RecordTab ActiveTab = RecordTab.Overview;
+    private string Role { get { var path=Navigation.ToBaseRelativePath(Navigation.Uri);return path.StartsWith("medico/",StringComparison.OrdinalIgnoreCase)?"doctor":path.StartsWith("gestao/",StringComparison.OrdinalIgnoreCase)?"manager":"administrator"; } }
+    private string AreaLabel => Role switch { "doctor"=>"Médico", "manager"=>"Gestor", _=>"Administrador" };
+    private string PatientsPath => Role switch { "doctor"=>"/medico/pacientes", "manager"=>"/gestao/pacientes", _=>"/administracao/pacientes" };
+    private bool NeedsPurpose => Role is "manager" or "administrator";
+    private WebMedicalRecordAppointmentOption? SelectedAppointment => Appointments.FirstOrDefault(x=>x.Id==SelectedAppointmentId);
+    private IReadOnlyList<TabOption> Tabs => Role=="administrator"
+        ? [new(RecordTab.Overview,"Visão geral"),new(RecordTab.Timeline,"Linha do tempo"),new(RecordTab.Clinical,"Prontuário"),new(RecordTab.Financial,"Financeiro"),new(RecordTab.Documents,"Documentos"),new(RecordTab.Access,"Auditoria")]
+        : [new(RecordTab.Overview,"Visão geral"),new(RecordTab.Timeline,"Linha do tempo"),new(RecordTab.Clinical,"Prontuário"),new(RecordTab.Financial,"Financeiro"),new(RecordTab.Documents,"Documentos")];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if(!firstRender)return;
+        try { Module=await JavaScript.InvokeAsync<IJSObjectReference>("import","/js/medical-records.js"); Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary"); Appointments.AddRange(await Get<IReadOnlyList<WebMedicalRecordAppointmentOption>>($"api/v1/medical-records/patients/{PatientId}/appointments")??[]); }
+        catch(Exception e){ShowError(e);}
+        finally{Loading=false;StateHasChanged();}
+    }
+    private async Task ActivateAsync(RecordTab tab)
+    {
+        if(Busy)return;
+        if(tab is RecordTab.Clinical or RecordTab.Documents or RecordTab.Access && NeedsPurpose && Purpose.Trim().Length<10){ShowError("Informe uma finalidade com ao menos 10 caracteres antes de abrir conteúdo clínico.");return;}
+        ActiveTab=tab;
+        await RunAsync(async()=>{switch(tab){case RecordTab.Timeline:await LoadTimelineCoreAsync();break;case RecordTab.Clinical:await LoadEntriesAsync();break;case RecordTab.Financial:await LoadFinancialAsync();break;case RecordTab.Documents:await LoadDocumentsAsync();break;case RecordTab.Access:await LoadAccessAsync();break;}});
+    }
+    private Task LoadTimelineAsync()=>RunAsync(LoadTimelineCoreAsync);
+    private async Task LoadTimelineCoreAsync(){var data=await Get<WebMedicalRecordPage<WebMedicalRecordTimelineEvent>>($"api/v1/medical-records/patients/{PatientId}/timeline?from={FromDate:yyyy-MM-dd}&to={ToDate:yyyy-MM-dd}&type={Uri.EscapeDataString(TimelineType)}&order={TimelineOrder}&pageSize=200");Timeline.Clear();Timeline.AddRange(data?.Items??[]);}
+    private async Task LoadEntriesAsync(){var data=await Get<IReadOnlyList<WebMedicalRecordEntry>>($"api/v1/medical-records/patients/{PatientId}/entries?includeVersions=true",Purpose);Entries.Clear();Entries.AddRange(data??[]);}
+    private async Task LoadFinancialAsync()=>Financial=await Get<WebMedicalRecordFinancialSummary>($"api/v1/medical-records/patients/{PatientId}/financial?from={FromDate:yyyy-MM-dd}&to={ToDate:yyyy-MM-dd}");
+    private async Task LoadDocumentsAsync(){var data=await Get<IReadOnlyList<WebMedicalRecordDocument>>($"api/v1/medical-records/patients/{PatientId}/documents",Purpose);Documents.Clear();Documents.AddRange(data??[]);}
+    private async Task LoadAccessAsync(){var data=await Get<IReadOnlyList<WebMedicalRecordAccessEvent>>($"api/v1/medical-records/patients/{PatientId}/access-history",Purpose);AccessEvents.Clear();AccessEvents.AddRange(data??[]);}
+    private async Task AppointmentChangedAsync(ChangeEventArgs e){SelectedAppointmentId=ulong.TryParse(e.Value?.ToString(),out var id)?id:0;Draft=null;ClearEditor();if(SelectedAppointmentId==0)return;await RunAsync(async()=>{Draft=await Get<WebMedicalRecordDraft>($"api/v1/medical-records/patients/{PatientId}/appointments/{SelectedAppointmentId}/draft");if(Draft is not null)LoadContent(Draft.Content);AutosaveState=Draft is null?"Novo rascunho":"Rascunho recuperado";});}
+    private Task SaveDraftAsync()=>RunAsync(()=>SaveDraftCoreAsync(false));
+    private async Task SaveDraftCoreAsync(bool automatic)
+    {
+        if(SelectedAppointmentId==0||RectifyingEntry is not null||IsSavingDraft)return;IsSavingDraft=true;
+        try{Draft=await Send<WebMedicalRecordDraft>($"api/v1/medical-records/patients/{PatientId}/appointments/{SelectedAppointmentId}/draft","PUT",new WebMedicalRecordDraftWriteRequest(Draft?.RowVersion??0,BuildContent()));AutosaveState=$"Salvo às {DateTime.Now:HH:mm:ss}";if(!automatic)ShowSuccess("Rascunho salvo com segurança.");}
+        finally{IsSavingDraft=false;}
+    }
+    private Task ScheduleAutosave(ChangeEventArgs args){if(Role!="doctor"||SelectedAppointmentId==0||RectifyingEntry is not null)return Task.CompletedTask;AutosaveCancellation?.Cancel();AutosaveCancellation?.Dispose();AutosaveCancellation=new();var token=AutosaveCancellation.Token;AutosaveState="Alterações pendentes";_ = DebouncedAutosaveAsync(token);return Task.CompletedTask;}
+    private async Task DebouncedAutosaveAsync(CancellationToken token){try{await Task.Delay(1500,token);await InvokeAsync(async()=>{try{await SaveDraftCoreAsync(true);StateHasChanged();}catch(Exception e){ShowError(e);StateHasChanged();}});}catch(OperationCanceledException){}}
+    private Task FinalizeAsync()=>RunAsync(async()=>{if(Draft is null)return;if(!await JavaScript.InvokeAsync<bool>("confirm","Após finalizar, esta versão não poderá ser alterada. Deseja continuar?"))return;await Send<WebMedicalRecordVersion>($"api/v1/medical-records/patients/{PatientId}/appointments/{SelectedAppointmentId}/finalize","POST",new WebMedicalRecordFinalizeRequest(Draft.RowVersion));Draft=null;ClearEditor();await LoadEntriesAsync();Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary");ShowSuccess("Registro finalizado e protegido contra alterações.");});
+    private void StartRectification(WebMedicalRecordEntry entry){var current=entry.Versions?.FirstOrDefault(x=>x.IsCurrent);if(current is null)return;RectifyingEntry=entry;CorrectionReason="";LoadContent(current.Content);AutosaveState="Retificação cria uma nova versão";}
+    private void CancelRectification(){RectifyingEntry=null;CorrectionReason="";ClearEditor();}
+    private Task RectifyAsync()=>RunAsync(async()=>{var entry=RectifyingEntry??throw new InvalidOperationException();if(CorrectionReason.Trim().Length<5){ShowError("Informe o motivo da retificação com ao menos 5 caracteres.");return;}await Send<WebMedicalRecordVersion>($"api/v1/medical-records/patients/{PatientId}/entries/{entry.Id}/rectify","POST",new WebMedicalRecordRectifyRequest(entry.CurrentVersionId,CorrectionReason.Trim(),BuildContent()));RectifyingEntry=null;CorrectionReason="";ClearEditor();await LoadEntriesAsync();ShowSuccess("Nova versão criada. O registro original foi preservado.");});
+    private Task UploadDocumentAsync()=>RunAsync(async()=>{await Module!.InvokeAsync<WebMedicalRecordDocument>("upload",Backend.BaseUrl.ToString(),$"api/v1/medical-records/patients/{PatientId}/documents?appointmentId={DocumentAppointmentId}&categoryCode={DocumentCategory}","medical-record-file");await LoadDocumentsAsync();ShowSuccess("Documento armazenado de forma privada.");});
+    private Task DownloadDocumentAsync(WebMedicalRecordDocument document)=>RunAsync(()=>Module!.InvokeVoidAsync("download",Backend.BaseUrl.ToString(),$"api/v1/medical-records/patients/{PatientId}/documents/{document.Id}",Purpose,document.FileName).AsTask());
+    private Task DeleteDocumentAsync(WebMedicalRecordDocument document)=>RunAsync(async()=>{if(!await JavaScript.InvokeAsync<bool>("confirm",$"Remover {document.FileName} da visualização do prontuário?"))return;await Send<object?>($"api/v1/medical-records/patients/{PatientId}/documents/{document.Id}?rowVersion={document.RowVersion}","DELETE",null);await LoadDocumentsAsync();ShowSuccess("Documento removido logicamente; a trilha clínica foi preservada.");});
+    private Task DownloadPdfAsync()=>RunAsync(async()=>{if(NeedsPurpose&&Purpose.Trim().Length<10){ShowError("Informe uma finalidade com ao menos 10 caracteres antes de gerar o PDF.");return;}var includeClinical=ActiveTab==RecordTab.Clinical;await Module!.InvokeVoidAsync("downloadPdf",Backend.BaseUrl.ToString(),$"api/v1/medical-records/patients/{PatientId}/pdf",new WebMedicalRecordPdfRequest(DateOnly.FromDateTime(FromDate),DateOnly.FromDateTime(ToDate),true,includeClinical,true,NeedsPurpose?Purpose.Trim():null));ShowSuccess("PDF privado gerado conforme o recorte autorizado.");});
+    private async Task<T?> Get<T>(string path,string? purpose=null)=>Module is null?default:await Module.InvokeAsync<T?>("get",Backend.BaseUrl.ToString(),path,purpose);
+    private async Task<T?> Send<T>(string path,string method,object? body)=>Module is null?default:await Module.InvokeAsync<T?>("send",Backend.BaseUrl.ToString(),path,method,body,(string?)null);
+    private async Task RunAsync(Func<Task> action){if(Busy)return;Busy=true;Notice=null;NoticeError=false;try{await action();}catch(Exception e){ShowError(e);}finally{Busy=false;StateHasChanged();}}
+    private void ShowError(Exception e)=>ShowError(e is JSException?e.Message:UiErrorNotifier.UnexpectedMessage);
+    private void ShowError(string message){Notice=UiErrorNotifier.Normalize(message);NoticeError=true;Errors.Show(Notice);}
+    private void ShowSuccess(string message){Notice=message;NoticeError=false;}
+    private WebMedicalRecordContent BuildContent()=>new(Empty(ChiefComplaint),Empty(PresentIllnessHistory),Empty(PersonalHistory),Empty(FamilyHistory),Empty(Allergies),Empty(Medications),Empty(RelevantHabits),Empty(PhysicalExamination),Empty(DiagnosticHypotheses),Empty(ConductAndGuidance),Empty(FollowUpPlan),Empty(ClinicalEvolution),Empty(AdditionalNotes),Systolic,Diastolic,HeartRate,Temperature,Weight,Height);
+    private void LoadContent(WebMedicalRecordContent c){ChiefComplaint=c.ChiefComplaint??"";PresentIllnessHistory=c.PresentIllnessHistory??"";PersonalHistory=c.PersonalHistory??"";FamilyHistory=c.FamilyHistory??"";Allergies=c.Allergies??"";Medications=c.Medications??"";RelevantHabits=c.RelevantHabits??"";PhysicalExamination=c.PhysicalExamination??"";DiagnosticHypotheses=c.DiagnosticHypotheses??"";ConductAndGuidance=c.ConductAndGuidance??"";FollowUpPlan=c.FollowUpPlan??"";ClinicalEvolution=c.ClinicalEvolution??"";AdditionalNotes=c.AdditionalNotes??"";Systolic=c.SystolicPressureMmhg;Diastolic=c.DiastolicPressureMmhg;HeartRate=c.HeartRateBpm;Temperature=c.TemperatureCelsius;Weight=c.WeightKg;Height=c.HeightCm;}
+    private void ClearEditor()=>LoadContent(WebMedicalRecordContent.Empty);
+    private static string? Empty(string value)=>string.IsNullOrWhiteSpace(value)?null:value.Trim();
+    private static string? BloodPressure(WebMedicalRecordContent content)=>content.SystolicPressureMmhg.HasValue&&content.DiastolicPressureMmhg.HasValue?$"{content.SystolicPressureMmhg}/{content.DiastolicPressureMmhg} mmHg":null;
+    private static string? Measure<T>(T? value,string unit) where T:struct=>value.HasValue?$"{value.Value} {unit}":null;
+    private static string Initials(string value)=>string.Concat(value.Split(' ',StringSplitOptions.RemoveEmptyEntries).Take(2).Select(x=>char.ToUpperInvariant(x[0])));
+    private static string Cpf(string value){var d=new string(value.Where(char.IsAsciiDigit).ToArray());return d.Length==11?$"{d[..3]}.{d[3..6]}.{d[6..9]}-{d[9..]}":value;}
+    private static string Local(DateTime utc)=>DateTime.SpecifyKind(utc,DateTimeKind.Utc).ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+    private static string DateLabel(DateTime? utc)=>utc.HasValue?Local(utc.Value):"Não informado";
+    private static string Money(decimal value)=>value.ToString("C",System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
+    private static string StatusLabel(string x)=>x switch{"pending"=>"Pendente","confirmed"=>"Confirmado","arrived"=>"Paciente chegou","in_progress"=>"Em atendimento","completed"=>"Concluído","canceled"=>"Cancelado","no_show"=>"Falta",_=>x};
+    private static string PaymentStatus(string x)=>x switch{"paid"=>"Pago","reversed" or "refunded"=>"Cancelado","reversal_pending"=>"Cancelamento pendente","pending"=>"Pendente","failed"=>"Falhou",_=>x};
+    private static string DocumentCategoryLabel(string x)=>x switch{"exam"=>"Exame","report"=>"Laudo","administrative"=>"Administrativo",_=>"Anexo"};
+    private static string FileSize(ulong bytes)=>bytes>=1048576?$"{bytes/1048576d:0.0} MB":$"{bytes/1024d:0} KB";
+    private static string RoleLabel(string x)=>x switch{"doctor"=>"Médico","manager"=>"Gestor","administrator"=>"Administrador",_=>x};
+    private static string ScopeLabel(string x)=>x switch{"summary"=>"Resumo","timeline"=>"Linha do tempo","clinical"=>"Clínico","financial"=>"Financeiro","document"=>"Documento","pdf"=>"PDF","audit"=>"Auditoria",_=>x};
+    public async ValueTask DisposeAsync(){AutosaveCancellation?.Cancel();AutosaveCancellation?.Dispose();if(Module is not null)try{await Module.DisposeAsync();}catch(JSDisconnectedException){}}
+}

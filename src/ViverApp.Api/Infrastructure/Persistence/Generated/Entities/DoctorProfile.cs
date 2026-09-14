@@ -43,6 +43,12 @@ public partial class DoctorProfile
 
     public virtual ICollection<DoctorWeeklyHour> DoctorWeeklyHours { get; set; } = new List<DoctorWeeklyHour>();
 
+    public virtual ICollection<MedicalRecordDraft> MedicalRecordDrafts { get; set; } = new List<MedicalRecordDraft>();
+
+    public virtual ICollection<MedicalRecordEntry> MedicalRecordEntries { get; set; } = new List<MedicalRecordEntry>();
+
+    public virtual ICollection<MedicalRecordVersion> MedicalRecordVersions { get; set; } = new List<MedicalRecordVersion>();
+
     public virtual ICollection<MedicalReportVersion> MedicalReportVersions { get; set; } = new List<MedicalReportVersion>();
 
     public virtual ICollection<MedicalReport> MedicalReports { get; set; } = new List<MedicalReport>();

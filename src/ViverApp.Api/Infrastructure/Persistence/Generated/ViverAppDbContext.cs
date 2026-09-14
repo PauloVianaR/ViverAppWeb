@@ -58,6 +58,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<ClinicWeeklyHour> ClinicWeeklyHours { get; set; }
 
+    public virtual DbSet<ClinicalAccessEvent> ClinicalAccessEvents { get; set; }
+
     public virtual DbSet<ContactChangeRequest> ContactChangeRequests { get; set; }
 
     public virtual DbSet<DoctorAvailabilityException> DoctorAvailabilityExceptions { get; set; }
@@ -76,6 +78,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<DoctorWeeklyHour> DoctorWeeklyHours { get; set; }
 
+    public virtual DbSet<ElectronicHealthRecord> ElectronicHealthRecords { get; set; }
+
     public virtual DbSet<ExternalLogin> ExternalLogins { get; set; }
 
     public virtual DbSet<Holiday> Holidays { get; set; }
@@ -83,6 +87,14 @@ public partial class ViverAppDbContext : DbContext
     public virtual DbSet<IdempotencyRecord> IdempotencyRecords { get; set; }
 
     public virtual DbSet<ManagerPreference> ManagerPreferences { get; set; }
+
+    public virtual DbSet<MedicalRecordDocument> MedicalRecordDocuments { get; set; }
+
+    public virtual DbSet<MedicalRecordDraft> MedicalRecordDrafts { get; set; }
+
+    public virtual DbSet<MedicalRecordEntry> MedicalRecordEntries { get; set; }
+
+    public virtual DbSet<MedicalRecordVersion> MedicalRecordVersions { get; set; }
 
     public virtual DbSet<MedicalReport> MedicalReports { get; set; }
 
@@ -1214,6 +1226,52 @@ public partial class ViverAppDbContext : DbContext
                 .HasColumnName("updated_at_utc");
         });
 
+        modelBuilder.Entity<ClinicalAccessEvent>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("clinical_access_events");
+
+            entity.HasIndex(e => new { e.ActorAccountId, e.OccurredAtUtc }, "ix_clinical_access_events_actor_time");
+
+            entity.HasIndex(e => new { e.PatientAccountId, e.OccurredAtUtc }, "ix_clinical_access_events_patient_time");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ActorAccountId).HasColumnName("actor_account_id");
+            entity.Property(e => e.ActorRoleCode)
+                .HasMaxLength(20)
+                .HasColumnName("actor_role_code");
+            entity.Property(e => e.EntityId)
+                .HasMaxLength(80)
+                .HasColumnName("entity_id");
+            entity.Property(e => e.EntityType)
+                .HasMaxLength(40)
+                .HasColumnName("entity_type");
+            entity.Property(e => e.OccurredAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("occurred_at_utc");
+            entity.Property(e => e.OutcomeCode)
+                .HasMaxLength(12)
+                .HasColumnName("outcome_code");
+            entity.Property(e => e.PatientAccountId).HasColumnName("patient_account_id");
+            entity.Property(e => e.Purpose)
+                .HasMaxLength(500)
+                .HasColumnName("purpose");
+            entity.Property(e => e.ScopeCode)
+                .HasMaxLength(24)
+                .HasColumnName("scope_code");
+
+            entity.HasOne(d => d.ActorAccount).WithMany(p => p.ClinicalAccessEventActorAccounts)
+                .HasForeignKey(d => d.ActorAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_clinical_access_events_actor");
+
+            entity.HasOne(d => d.PatientAccount).WithMany(p => p.ClinicalAccessEventPatientAccounts)
+                .HasForeignKey(d => d.PatientAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_clinical_access_events_patient");
+        });
+
         modelBuilder.Entity<ContactChangeRequest>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
@@ -1532,6 +1590,32 @@ public partial class ViverAppDbContext : DbContext
                 .HasConstraintName("fk_doctor_weekly_hours_doctor");
         });
 
+        modelBuilder.Entity<ElectronicHealthRecord>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("electronic_health_records");
+
+            entity.HasIndex(e => e.PatientAccountId, "ux_electronic_health_records_patient").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.PatientAccountId).HasColumnName("patient_account_id");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.PatientAccount).WithOne(p => p.ElectronicHealthRecord)
+                .HasForeignKey<ElectronicHealthRecord>(d => d.PatientAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_electronic_health_records_patient");
+        });
+
         modelBuilder.Entity<ExternalLogin>(entity =>
         {
             entity.HasKey(e => new { e.ProviderCode, e.ProviderSubject }).HasName("PRIMARY");
@@ -1643,6 +1727,314 @@ public partial class ViverAppDbContext : DbContext
             entity.HasOne(d => d.ManagerAccount).WithOne(p => p.ManagerPreference)
                 .HasForeignKey<ManagerPreference>(d => d.ManagerAccountId)
                 .HasConstraintName("fk_manager_preferences_account");
+        });
+
+        modelBuilder.Entity<MedicalRecordDocument>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("medical_record_documents");
+
+            entity.HasIndex(e => e.DeletedByAccountId, "fk_medical_record_documents_deleted_by");
+
+            entity.HasIndex(e => e.UploadedByAccountId, "fk_medical_record_documents_uploader");
+
+            entity.HasIndex(e => e.MedicalRecordVersionId, "fk_medical_record_documents_version");
+
+            entity.HasIndex(e => e.AppointmentId, "ix_medical_record_documents_appointment");
+
+            entity.HasIndex(e => new { e.HealthRecordId, e.CreatedAtUtc }, "ix_medical_record_documents_record_time");
+
+            entity.HasIndex(e => e.PrivateDocumentId, "ux_medical_record_documents_private").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.CategoryCode)
+                .HasMaxLength(24)
+                .HasColumnName("category_code");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.DeletedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("deleted_at_utc");
+            entity.Property(e => e.DeletedByAccountId).HasColumnName("deleted_by_account_id");
+            entity.Property(e => e.HealthRecordId).HasColumnName("health_record_id");
+            entity.Property(e => e.MedicalRecordVersionId).HasColumnName("medical_record_version_id");
+            entity.Property(e => e.PrivateDocumentId).HasColumnName("private_document_id");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.StatusCode)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'available'")
+                .HasColumnName("status_code");
+            entity.Property(e => e.UploadedByAccountId).HasColumnName("uploaded_by_account_id");
+
+            entity.HasOne(d => d.Appointment).WithMany(p => p.MedicalRecordDocuments)
+                .HasForeignKey(d => d.AppointmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_documents_appointment");
+
+            entity.HasOne(d => d.DeletedByAccount).WithMany(p => p.MedicalRecordDocumentDeletedByAccounts)
+                .HasForeignKey(d => d.DeletedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_documents_deleted_by");
+
+            entity.HasOne(d => d.HealthRecord).WithMany(p => p.MedicalRecordDocuments)
+                .HasForeignKey(d => d.HealthRecordId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_documents_record");
+
+            entity.HasOne(d => d.MedicalRecordVersion).WithMany(p => p.MedicalRecordDocuments)
+                .HasForeignKey(d => d.MedicalRecordVersionId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_documents_version");
+
+            entity.HasOne(d => d.PrivateDocument).WithOne(p => p.MedicalRecordDocument)
+                .HasForeignKey<MedicalRecordDocument>(d => d.PrivateDocumentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_documents_private");
+
+            entity.HasOne(d => d.UploadedByAccount).WithMany(p => p.MedicalRecordDocumentUploadedByAccounts)
+                .HasForeignKey(d => d.UploadedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_documents_uploader");
+        });
+
+        modelBuilder.Entity<MedicalRecordDraft>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("medical_record_drafts");
+
+            entity.HasIndex(e => e.AuthorDoctorAccountId, "fk_medical_record_drafts_author");
+
+            entity.HasIndex(e => new { e.HealthRecordId, e.UpdatedAtUtc }, "ix_medical_record_drafts_record_updated");
+
+            entity.HasIndex(e => new { e.AppointmentId, e.AuthorDoctorAccountId }, "ux_medical_record_drafts_appointment_author").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AdditionalNotes)
+                .HasColumnType("text")
+                .HasColumnName("additional_notes");
+            entity.Property(e => e.Allergies)
+                .HasColumnType("text")
+                .HasColumnName("allergies");
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.AuthorDoctorAccountId).HasColumnName("author_doctor_account_id");
+            entity.Property(e => e.ChiefComplaint)
+                .HasColumnType("text")
+                .HasColumnName("chief_complaint");
+            entity.Property(e => e.ClinicalEvolution)
+                .HasColumnType("text")
+                .HasColumnName("clinical_evolution");
+            entity.Property(e => e.ConductAndGuidance)
+                .HasColumnType("text")
+                .HasColumnName("conduct_and_guidance");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.DiagnosticHypotheses)
+                .HasColumnType("text")
+                .HasColumnName("diagnostic_hypotheses");
+            entity.Property(e => e.DiastolicPressureMmhg).HasColumnName("diastolic_pressure_mmhg");
+            entity.Property(e => e.ExpiresAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("expires_at_utc");
+            entity.Property(e => e.FamilyHistory)
+                .HasColumnType("text")
+                .HasColumnName("family_history");
+            entity.Property(e => e.FollowUpPlan)
+                .HasColumnType("text")
+                .HasColumnName("follow_up_plan");
+            entity.Property(e => e.HealthRecordId).HasColumnName("health_record_id");
+            entity.Property(e => e.HeartRateBpm).HasColumnName("heart_rate_bpm");
+            entity.Property(e => e.HeightCm)
+                .HasPrecision(5, 1)
+                .HasColumnName("height_cm");
+            entity.Property(e => e.Medications)
+                .HasColumnType("text")
+                .HasColumnName("medications");
+            entity.Property(e => e.PersonalHistory)
+                .HasColumnType("text")
+                .HasColumnName("personal_history");
+            entity.Property(e => e.PhysicalExamination)
+                .HasColumnType("text")
+                .HasColumnName("physical_examination");
+            entity.Property(e => e.PresentIllnessHistory)
+                .HasColumnType("text")
+                .HasColumnName("present_illness_history");
+            entity.Property(e => e.RelevantHabits)
+                .HasColumnType("text")
+                .HasColumnName("relevant_habits");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.SystolicPressureMmhg).HasColumnName("systolic_pressure_mmhg");
+            entity.Property(e => e.TemperatureCelsius)
+                .HasPrecision(4, 1)
+                .HasColumnName("temperature_celsius");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+            entity.Property(e => e.WeightKg)
+                .HasPrecision(6)
+                .HasColumnName("weight_kg");
+
+            entity.HasOne(d => d.Appointment).WithMany(p => p.MedicalRecordDrafts)
+                .HasForeignKey(d => d.AppointmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_drafts_appointment");
+
+            entity.HasOne(d => d.AuthorDoctorAccount).WithMany(p => p.MedicalRecordDrafts)
+                .HasForeignKey(d => d.AuthorDoctorAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_drafts_author");
+
+            entity.HasOne(d => d.HealthRecord).WithMany(p => p.MedicalRecordDrafts)
+                .HasForeignKey(d => d.HealthRecordId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_drafts_record");
+        });
+
+        modelBuilder.Entity<MedicalRecordEntry>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("medical_record_entries");
+
+            entity.HasIndex(e => e.CurrentVersionId, "fk_medical_record_entries_current_version");
+
+            entity.HasIndex(e => new { e.AuthorDoctorAccountId, e.CreatedAtUtc }, "ix_medical_record_entries_author_created");
+
+            entity.HasIndex(e => new { e.HealthRecordId, e.CreatedAtUtc }, "ix_medical_record_entries_record_created");
+
+            entity.HasIndex(e => e.AppointmentId, "ux_medical_record_entries_appointment").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.AuthorDoctorAccountId).HasColumnName("author_doctor_account_id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.CurrentVersionId).HasColumnName("current_version_id");
+            entity.Property(e => e.HealthRecordId).HasColumnName("health_record_id");
+
+            entity.HasOne(d => d.Appointment).WithOne(p => p.MedicalRecordEntry)
+                .HasForeignKey<MedicalRecordEntry>(d => d.AppointmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_entries_appointment");
+
+            entity.HasOne(d => d.AuthorDoctorAccount).WithMany(p => p.MedicalRecordEntries)
+                .HasForeignKey(d => d.AuthorDoctorAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_entries_author");
+
+            entity.HasOne(d => d.CurrentVersion).WithMany(p => p.MedicalRecordEntries)
+                .HasForeignKey(d => d.CurrentVersionId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_entries_current_version");
+
+            entity.HasOne(d => d.HealthRecord).WithMany(p => p.MedicalRecordEntries)
+                .HasForeignKey(d => d.HealthRecordId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_entries_record");
+        });
+
+        modelBuilder.Entity<MedicalRecordVersion>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("medical_record_versions");
+
+            entity.HasIndex(e => new { e.AuthorDoctorAccountId, e.FinalizedAtUtc }, "ix_medical_record_versions_author_time");
+
+            entity.HasIndex(e => new { e.MedicalRecordEntryId, e.VersionNumber }, "ux_medical_record_versions_number").IsUnique();
+
+            entity.HasIndex(e => e.SupersedesVersionId, "ux_medical_record_versions_superseded_once").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AdditionalNotes)
+                .HasColumnType("text")
+                .HasColumnName("additional_notes");
+            entity.Property(e => e.Allergies)
+                .HasColumnType("text")
+                .HasColumnName("allergies");
+            entity.Property(e => e.AuthorDoctorAccountId).HasColumnName("author_doctor_account_id");
+            entity.Property(e => e.ChiefComplaint)
+                .HasColumnType("text")
+                .HasColumnName("chief_complaint");
+            entity.Property(e => e.ClinicalEvolution)
+                .HasColumnType("text")
+                .HasColumnName("clinical_evolution");
+            entity.Property(e => e.ConductAndGuidance)
+                .HasColumnType("text")
+                .HasColumnName("conduct_and_guidance");
+            entity.Property(e => e.ContentSha256)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("content_sha256");
+            entity.Property(e => e.CorrectionReason)
+                .HasMaxLength(1000)
+                .HasColumnName("correction_reason");
+            entity.Property(e => e.DiagnosticHypotheses)
+                .HasColumnType("text")
+                .HasColumnName("diagnostic_hypotheses");
+            entity.Property(e => e.DiastolicPressureMmhg).HasColumnName("diastolic_pressure_mmhg");
+            entity.Property(e => e.FamilyHistory)
+                .HasColumnType("text")
+                .HasColumnName("family_history");
+            entity.Property(e => e.FinalizedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("finalized_at_utc");
+            entity.Property(e => e.FollowUpPlan)
+                .HasColumnType("text")
+                .HasColumnName("follow_up_plan");
+            entity.Property(e => e.HeartRateBpm).HasColumnName("heart_rate_bpm");
+            entity.Property(e => e.HeightCm)
+                .HasPrecision(5, 1)
+                .HasColumnName("height_cm");
+            entity.Property(e => e.MedicalRecordEntryId).HasColumnName("medical_record_entry_id");
+            entity.Property(e => e.Medications)
+                .HasColumnType("text")
+                .HasColumnName("medications");
+            entity.Property(e => e.PersonalHistory)
+                .HasColumnType("text")
+                .HasColumnName("personal_history");
+            entity.Property(e => e.PhysicalExamination)
+                .HasColumnType("text")
+                .HasColumnName("physical_examination");
+            entity.Property(e => e.PresentIllnessHistory)
+                .HasColumnType("text")
+                .HasColumnName("present_illness_history");
+            entity.Property(e => e.RelevantHabits)
+                .HasColumnType("text")
+                .HasColumnName("relevant_habits");
+            entity.Property(e => e.SupersedesVersionId).HasColumnName("supersedes_version_id");
+            entity.Property(e => e.SystolicPressureMmhg).HasColumnName("systolic_pressure_mmhg");
+            entity.Property(e => e.TemperatureCelsius)
+                .HasPrecision(4, 1)
+                .HasColumnName("temperature_celsius");
+            entity.Property(e => e.VersionNumber).HasColumnName("version_number");
+            entity.Property(e => e.WeightKg)
+                .HasPrecision(6)
+                .HasColumnName("weight_kg");
+
+            entity.HasOne(d => d.AuthorDoctorAccount).WithMany(p => p.MedicalRecordVersions)
+                .HasForeignKey(d => d.AuthorDoctorAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_versions_author");
+
+            entity.HasOne(d => d.MedicalRecordEntry).WithMany(p => p.MedicalRecordVersions)
+                .HasForeignKey(d => d.MedicalRecordEntryId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_versions_entry");
+
+            entity.HasOne(d => d.SupersedesVersion).WithOne(p => p.InverseSupersedesVersion)
+                .HasForeignKey<MedicalRecordVersion>(d => d.SupersedesVersionId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_record_versions_supersedes");
         });
 
         modelBuilder.Entity<MedicalReport>(entity =>

@@ -32,7 +32,7 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(53, applicationEntities.Length);
+        Assert.Equal(59, applicationEntities.Length);
         Assert.DoesNotContain(
             applicationEntities,
             entity => string.Equals(entity.GetTableName(), "__schema_migrations", StringComparison.Ordinal));
@@ -45,6 +45,12 @@ public sealed class DatabaseContractTests
         var medicalReport = context.Model.FindEntityType(typeof(MedicalReport));
         Assert.NotNull(medicalReport);
         Assert.True(medicalReport.FindProperty(nameof(MedicalReport.RowVersion))!.IsConcurrencyToken);
+        Assert.True(context.Model.FindEntityType(typeof(ElectronicHealthRecord))!.FindProperty(nameof(ElectronicHealthRecord.RowVersion))!.IsConcurrencyToken);
+        Assert.True(context.Model.FindEntityType(typeof(MedicalRecordDraft))!.FindProperty(nameof(MedicalRecordDraft.RowVersion))!.IsConcurrencyToken);
+        Assert.True(context.Model.FindEntityType(typeof(MedicalRecordDocument))!.FindProperty(nameof(MedicalRecordDocument.RowVersion))!.IsConcurrencyToken);
+        Assert.NotNull(context.Model.FindEntityType(typeof(MedicalRecordEntry)));
+        Assert.NotNull(context.Model.FindEntityType(typeof(MedicalRecordVersion)));
+        Assert.NotNull(context.Model.FindEntityType(typeof(ClinicalAccessEvent)));
         var payment = context.Model.FindEntityType(typeof(Payment));
         Assert.NotNull(payment);
         Assert.True(payment.FindProperty(nameof(Payment.RowVersion))!.IsConcurrencyToken);
@@ -91,7 +97,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031", migrations);
 
         var portalAccessColumn = await ExecuteScalarAsync(connection,
             "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'viverappweb' AND table_name = 'accounts' AND column_name = 'portal_access_enabled' AND is_nullable = 'NO'");
@@ -374,6 +380,16 @@ public sealed class DatabaseContractTests
             connection,
             "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema = 'viverappweb' AND trigger_name IN ('trg_cash_movements_block_update','trg_cash_movements_block_delete','trg_cash_closures_block_update','trg_cash_closures_block_delete','trg_payment_reversal_events_block_update','trg_payment_reversal_events_block_delete')");
         Assert.Equal("6", appendOnlyTriggers);
+
+        var medicalRecordTables = await ExecuteScalarAsync(
+            connection,
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'viverappweb' AND table_name IN ('electronic_health_records','medical_record_drafts','medical_record_entries','medical_record_versions','medical_record_documents','clinical_access_events')");
+        Assert.Equal("6", medicalRecordTables);
+
+        var medicalRecordTriggers = await ExecuteScalarAsync(
+            connection,
+            "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema = 'viverappweb' AND trigger_name IN ('trg_medical_record_versions_block_update','trg_medical_record_versions_block_delete','trg_clinical_access_events_block_update','trg_clinical_access_events_block_delete')");
+        Assert.Equal("4", medicalRecordTriggers);
 
         var managerPreferences = await ExecuteScalarAsync(
             connection,

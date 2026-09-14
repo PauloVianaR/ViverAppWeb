@@ -124,6 +124,20 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.DoesNotContain(heading, html, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("/medico/prontuario/1")]
+    [InlineData("/gestao/prontuario/1")]
+    [InlineData("/administracao/prontuario/1")]
+    public async Task MedicalRecordRoutes_RemainProtectedBeforeRenderingSensitiveContent(string path)
+    {
+        using var client = CreateClient();
+        using var response = await client.GetAsync(path);
+        var html = await ReadUtf8Async(response.Content);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Validando acesso", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("Registro longitudinal privado", html, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void AdministratorNavigation_CoversPatientOperations()
     {

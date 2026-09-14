@@ -205,6 +205,17 @@ public sealed class PrivateDocumentStore
         return (bytes, document.ContentType, document.OriginalFileName);
     }
 
+    public async Task<(byte[] Content, string Mime, string Name)> DownloadAuthorizedClinicalAsync(Guid id, CancellationToken ct)
+    {
+        var document = await database.PrivateDocuments.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == id && x.StatusCode == "available", ct)
+            ?? throw PatientExperienceService.Missing();
+        var bytes = await LoadContentAsync(document, ct);
+        if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(bytes), document.Sha256))
+            throw PatientExperienceService.Missing();
+        return (bytes, document.ContentType, document.OriginalFileName);
+    }
+
     public async Task<(byte[] Content, string Mime, string Name, Guid DocumentId)> DownloadPremiumForManagerAsync(
         ulong manager,
         ulong membershipId,

@@ -66,12 +66,13 @@ public static class SecurityServiceCollectionExtensions
                         "Accept",
                         "Content-Type",
                         "Idempotency-Key",
+                        "X-Clinical-Purpose",
                         "X-CSRF-TOKEN",
                         CorrelationIdMiddleware.HeaderName,
                         "traceparent",
                         "tracestate",
                         "baggage")
-                    .WithExposedHeaders(CorrelationIdMiddleware.HeaderName, "Retry-After", "Idempotent-Replayed")
+                    .WithExposedHeaders(CorrelationIdMiddleware.HeaderName, "Retry-After", "Idempotent-Replayed", "Content-Disposition")
                     .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
             });
         });
