@@ -17,7 +17,7 @@
     <p class="notice notice--error">@Notice</p>
 }
 
-<section class="surface patient-panel">
+<MobileFilterPanel AriaLabel="Filtros do período analítico">
     <div class="administrator-actions" role="group" aria-label="Período">
         <button class="button button--secondary" @onclick="() => Period(1)">1 mês</button>
         <button class="button button--secondary" @onclick="() => Period(3)">3 meses</button>
@@ -31,7 +31,7 @@
         </div>
         <button class="button">Aplicar intervalo</button>
     </form>
-</section>
+</MobileFilterPanel>
 
 @if (Loading)
 {
@@ -39,13 +39,15 @@
 }
 else if (Data is not null)
 {
+    <div class="mobile-metric-flow">
     <section class="administrator-kpis" aria-label="Indicadores do período">
         <button type="button" class="surface administrator-kpi metric-card" @onclick='()=>SelectMetric("revenue")'><strong>@Money(Data.Revenue)</strong><span>Receita · antes @Money(Data.PreviousRevenue)</span></button>
         <button type="button" class="surface administrator-kpi metric-card" @onclick='()=>SelectMetric("appointments")'><strong>@Data.Appointments</strong><span>Consultas · antes @Data.PreviousAppointments</span></button>
         <button type="button" class="surface administrator-kpi metric-card" @onclick='()=>SelectMetric("ticket")'><strong>@Money(Data.AverageTicket)</strong><span>Ticket médio</span></button>
         <button type="button" class="surface administrator-kpi metric-card" @onclick='()=>SelectMetric("satisfaction")'><strong>@(Data.Satisfaction?.ToString("0.0") ?? "—")</strong><span>Satisfação / 5</span></button>
     </section>
-    <MetricEvidenceDrilldown Title="@MetricTitle" Items="@MetricItems" Close="()=>SelectedMetric=null" />
+    <MetricEvidenceDrilldown Title="@MetricTitle" Items="@MetricItems" MobileAfterCard="@MobileMetricAfterCard" Close="()=>SelectedMetric=null" />
+    </div>
 
     <div class="administrator-analytics-grid">
         <AdministratorCartesianChart Title="Evolução da Receita" Description="Receita mensal de pacientes Premium e Regulares."
@@ -79,6 +81,7 @@ else if (Data is not null)
     private DateTime From = DateTime.Today.AddMonths(-3);
     private DateTime To = DateTime.Today;
     private string? SelectedMetric;
+    private int MobileMetricAfterCard => SelectedMetric is "revenue" or "appointments" ? 2 : 4;
 
     private IReadOnlyList<AdministratorChartSeries> RevenueByUserTypeSeries => Data is null ? [] :
     [

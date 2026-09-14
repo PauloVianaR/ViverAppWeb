@@ -22,13 +22,21 @@ public static class CashLabels
 {
     public static string Method(string code) => code switch
     {
-        "cash" => "Dinheiro", "pix" => "Pix", "debit_card" => "Cartão de débito",
-        "credit_card" => "Cartão de crédito", "pagbank_online" => "PagBank online", _ => "Outras formas",
+        "cash" => "Dinheiro",
+        "pix" => "Pix",
+        "debit_card" => "Cartão de débito",
+        "credit_card" => "Cartão de crédito",
+        "pagbank_online" => "PagBank online",
+        _ => "Outras formas",
     };
     public static string Type(string code) => code switch
     {
-        "payment_received" => "Pagamento recebido", "payment_reversal" => "Cancelamento de pagamento",
-        "supply" => "Suprimento", "withdrawal" => "Sangria", "adjustment" => "Ajuste corretivo",
-        "provider_fee" => "Tarifa do provedor", _ => code,
+        "payment_received" => "Pagamento recebido",
+        "payment_reversal" => "Cancelamento de pagamento",
+        "supply" => "Suprimento",
+        "withdrawal" => "Sangria",
+        "adjustment" => "Ajuste corretivo",
+        "provider_fee" => "Tarifa do provedor",
+        _ => code,
     };
 }

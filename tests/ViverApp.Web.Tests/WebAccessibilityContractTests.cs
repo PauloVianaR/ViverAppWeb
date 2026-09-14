@@ -223,6 +223,20 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.True(ContrastRatio(foreground, background) >= 4.5);
     }
 
+    [Fact]
+    public void MobileNavigation_MovesOnlyDestinationsAfterTheFirstFourIntoMoreMenu()
+    {
+        var manager = ShellNavigationCatalog.ResolveRole("manager");
+        var administrator = ShellNavigationCatalog.ResolveRole("administrator");
+        var patient = ShellNavigationCatalog.ResolveRole("patient");
+
+        Assert.Equal(new[] { "Início", "Agenda", "Pacientes", "Histórico" }, manager.MobilePrimaryItems.Select(x => x.Label));
+        Assert.Equal(new[] { "Caixa", "Perfil" }, manager.MobileOverflowItems.Select(x => x.Label));
+        Assert.Equal(new[] { "Analytics", "Caixa", "Alertas", "Usuários" }, administrator.MobileOverflowItems.Select(x => x.Label));
+        Assert.Equal(patient.Items, patient.MobilePrimaryItems);
+        Assert.Empty(patient.MobileOverflowItems);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]

@@ -207,8 +207,11 @@
         z-index: 30;
     }
 
-    .mobile-navigation a {
+    .mobile-navigation > a,
+    .mobile-navigation-more__toggle {
         align-items: center;
+        background: transparent;
+        border: 0;
         border-radius: var(--radius-md);
         color: var(--color-text-subtle);
         display: flex;
@@ -223,19 +226,42 @@
         text-decoration: none;
     }
 
-    .mobile-navigation a.active { background: var(--color-brand-soft); color: var(--color-brand-strong); }
+    .mobile-navigation > a.active,
+    .mobile-navigation-more__toggle.active { background: var(--color-brand-soft); color: var(--color-brand-strong); }
 
-    .app-shell--administrator .mobile-navigation {
-        grid-template-columns: repeat(7, minmax(0, 1fr));
+    .mobile-navigation-more { min-width: 0; position: relative; }
+    .mobile-navigation-more__toggle { height: 100%; width: 100%; }
+    .mobile-navigation-more__menu {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        bottom: calc(100% + var(--space-3));
+        box-shadow: var(--shadow-lg);
+        display: grid;
+        gap: var(--space-1);
+        min-width: min(15rem, calc(100vw - 2rem));
+        padding: var(--space-2);
+        position: absolute;
+        right: 0;
     }
-
-    .app-shell--administrator .mobile-navigation a {
-        font-size: clamp(0.52rem, 2.35vw, 0.66rem);
+    .mobile-navigation-more__menu a {
+        align-items: center;
+        border-radius: var(--radius-md);
+        color: var(--color-text-muted);
+        display: flex;
+        font-size: var(--text-sm);
+        font-weight: 760;
+        gap: var(--space-3);
+        min-height: 3rem;
+        padding: var(--space-3);
+        text-decoration: none;
     }
+    .mobile-navigation-more__menu a.active { background: var(--color-brand-soft); color: var(--color-brand-strong); }
 }
 
 @media (max-width: 22rem) {
-    .mobile-navigation a span {
+    .mobile-navigation > a span,
+    .mobile-navigation-more__toggle span {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;

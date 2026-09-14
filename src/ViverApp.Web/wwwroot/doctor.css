@@ -21,4 +21,4 @@
 .doctor-results--compact .patient-actions { justify-content:flex-end; }
 @media(max-width:68rem){.doctor-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}.doctor-profile-grid,.doctor-service-list{grid-template-columns:1fr;}}
 @media(max-width:68rem){.doctor-results--compact .doctor-card{display:block}.doctor-view-toggle{display:none}}
-@media(max-width:28rem){.doctor-kpis{grid-template-columns:1fr;}.doctor-results-heading{align-items:flex-start;flex-direction:column}}
+@media(max-width:28rem){.doctor-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}.doctor-results-heading{align-items:flex-start;flex-direction:column}}

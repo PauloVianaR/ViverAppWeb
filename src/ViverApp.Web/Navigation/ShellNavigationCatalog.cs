@@ -15,7 +15,14 @@ public sealed record ShellDefinition(
     ShellProfile Profile,
     string Label,
     string Context,
-    IReadOnlyList<ShellNavigationItem> Items);
+    IReadOnlyList<ShellNavigationItem> Items)
+{
+    public IReadOnlyList<ShellNavigationItem> MobilePrimaryItems =>
+        Items.Count > 5 ? Items.Take(4).ToArray() : Items;
+
+    public IReadOnlyList<ShellNavigationItem> MobileOverflowItems =>
+        Items.Count > 5 ? Items.Skip(4).ToArray() : [];
+}
 
 public static class ShellNavigationCatalog
 {
