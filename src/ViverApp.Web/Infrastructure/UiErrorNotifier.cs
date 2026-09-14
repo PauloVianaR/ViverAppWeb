@@ -15,7 +15,11 @@ public sealed class UiErrorNotifier
         var value = message.Trim();
         if (value.Contains("One or more validation errors occurred", StringComparison.OrdinalIgnoreCase)
             || value.Contains("Internal Server Error", StringComparison.OrdinalIgnoreCase)
-            || value.StartsWith("An error occurred", StringComparison.OrdinalIgnoreCase))
+            || value.StartsWith("An error occurred", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("TypeError", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Failed to fetch", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Failed to complete negotiation", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Unhandled exception", StringComparison.OrdinalIgnoreCase))
             return UnexpectedMessage;
         return value;
     }

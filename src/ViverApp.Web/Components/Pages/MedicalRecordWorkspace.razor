@@ -214,7 +214,7 @@ else
 }
 
 @code {
-    [Parameter] public ulong PatientId { get; set; }
+    [Parameter] public long PatientId { get; set; }
     private enum RecordTab { Overview, Timeline, Clinical, Financial, Documents, Access }
     private sealed record TabOption(RecordTab Value, string Label);
     private IJSObjectReference? Module;

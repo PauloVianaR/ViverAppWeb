@@ -34,6 +34,8 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.Contains("Cadastro rápido com Google", html, StringComparison.Ordinal);
         Assert.Contains("Criar conta com Google", html, StringComparison.Ordinal);
         Assert.Contains("Escolha seu perfil", html, StringComparison.Ordinal);
+        Assert.Contains("Ocorreu um erro interno não classificado. Contate o administrador do sistema.", html, StringComparison.Ordinal);
+        Assert.Contains("role=\"alertdialog\"", html, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -256,9 +258,29 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     [InlineData("")]
     [InlineData("One or more validation errors occurred.")]
     [InlineData("Internal Server Error")]
+    [InlineData("TypeError: Failed to fetch")]
+    [InlineData("Failed to complete negotiation with the server")]
+    [InlineData("There was an unhandled exception on the current circuit")]
     public void ErrorDialog_DoesNotExposeGenericOrEnglishInternalFailures(string? message)
     {
         Assert.Equal(UiErrorNotifier.UnexpectedMessage, UiErrorNotifier.Normalize(message));
+    }
+
+    [Fact]
+    public void MedicalRecordRoute_UsesAParameterCompatibleWithTheLongConstraint()
+    {
+        var parameter = typeof(ViverApp.Web.Components.Pages.MedicalRecordWorkspace)
+            .GetProperty("PatientId");
+
+        Assert.NotNull(parameter);
+        Assert.Equal(typeof(long), parameter.PropertyType);
+    }
+
+    [Fact]
+    public void ApplicationErrorBoundary_ContainsUnhandledComponentFailures()
+    {
+        Assert.True(typeof(Microsoft.AspNetCore.Components.Web.ErrorBoundary)
+            .IsAssignableFrom(typeof(ViverApp.Web.Components.DesignSystem.ApplicationErrorBoundary)));
     }
 
     [Fact]

@@ -372,7 +372,7 @@ Queries projetam apenas campos permitidos, limitam intervalo/página, evitam N+1
 ## Evidências automatizadas
 
 - build integral: zero erros e zero avisos;
-- suíte integral: 206 testes aprovados;
+- suíte integral: 211 testes aprovados, incluindo regressão do tipo de parâmetro da rota e contenção global de falhas da interface;
 - teste transacional no MySQL prova rascunho, rejeição de versão concorrente, finalização, retificação, preservação das duas versões, bloqueios por papel/finalidade/step-up e recusa de alteração direta da versão finalizada;
 - contratos verificam autenticação das rotas, policies por capacidade, CORS da finalidade clínica, proteção antes do prerender e PDF sem scripts/recursos remotos;
 - verificador confirma MySQL 8.0.41, banco `viverappweb`, migration `0031`, seis novas tabelas e quatro triggers append-only.

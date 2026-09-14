@@ -23,7 +23,7 @@ O Médico seleciona um atendimento vinculado, preenche anamnese e sinais vitais,
 ## Evidências
 
 - `dotnet build ViverApp.slnx --no-restore`: zero erros e avisos;
-- `dotnet test ViverApp.slnx --no-build --no-restore --maxcpucount:1`: 206 testes aprovados; a execução serial evita disputa entre suítes que compartilham o MySQL local;
+- `dotnet test ViverApp.slnx --no-build --no-restore --maxcpucount:1`: 211 testes aprovados; a execução serial evita disputa entre suítes que compartilham o MySQL local;
 - `dotnet format ViverApp.slnx --no-restore --verify-no-changes`: exigido antes do encerramento;
 - `ViverApp.Database verify`: MySQL 8.0.41, `viverappweb` e migration `0031` aprovados;
 - teste clínico transacional deixa o banco inalterado e comprova versionamento, concorrência, autoria, finalidade, step-up e triggers append-only;
@@ -32,3 +32,10 @@ O Médico seleciona um atendimento vinculado, preenche anamnese e sinais vitais,
 ## Limites legais declarados
 
 O produto não exibe selo nem afirma certificação SBIS, NGS2, assinatura ICP-Brasil ou eliminação segura do papel. A Lei nº 13.787/2018 prevê requisitos específicos para digitalização e guarda, e a SBIS mantém processo formal de certificação. Política de retenção, textos jurídicos e eventual assinatura digital precisam de validação especializada antes da produção.
+
+## Correção posterior ao primeiro teste manual
+
+- corrigida a incompatibilidade entre a restrição `long` das rotas e o antigo parâmetro `ulong` do componente, que encerrava o circuito Blazor ao abrir qualquer prontuário;
+- adicionada uma barreira global para conter falhas não tratadas de componentes, registrar o diagnóstico técnico somente no servidor e acionar o popup padronizado para o usuário;
+- o fallback de desconexão do circuito também passou a usar uma apresentação modal responsiva com a mensagem segura em português;
+- mensagens técnicas de transporte, como `TypeError`, `Failed to fetch` e falha de negociação, não são mais exibidas literalmente ao usuário.
