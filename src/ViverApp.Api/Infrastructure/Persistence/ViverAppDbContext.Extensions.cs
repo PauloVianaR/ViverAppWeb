@@ -37,6 +37,13 @@ public partial class ViverAppDbContext
         modelBuilder.Entity<Payment>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
+        // O scaffold Oracle não identifica a coluna gerada que sustenta a unicidade do pagamento ativo.
+        modelBuilder.Entity<Payment>()
+            .Property(entity => entity.ActiveAppointmentId)
+            .ValueGeneratedOnAddOrUpdate();
+        modelBuilder.Entity<PaymentReversal>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
         modelBuilder.Entity<PremiumMembership>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();

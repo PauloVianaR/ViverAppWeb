@@ -18,7 +18,7 @@ public sealed class IdentitySecurityOptions
 
     public Uri? WebReturnUrl { get; private init; }
 
-    public static IdentitySecurityOptions Load(IConfiguration configuration)
+    public static IdentitySecurityOptions Load(IConfiguration configuration, bool allowInsecureLoopbackHttp = false)
     {
         var encodedPepper = configuration["Authentication:ChallengePepper"];
         byte[] pepper;
@@ -71,7 +71,8 @@ public sealed class IdentitySecurityOptions
         if (!string.IsNullOrWhiteSpace(returnUrlValue))
         {
             if (!Uri.TryCreate(returnUrlValue, UriKind.Absolute, out returnUrl)
-                || returnUrl.Scheme != Uri.UriSchemeHttps
+                || (returnUrl.Scheme != Uri.UriSchemeHttps
+                    && !(allowInsecureLoopbackHttp && returnUrl.Scheme == Uri.UriSchemeHttp && returnUrl.IsLoopback))
                 || !string.IsNullOrEmpty(returnUrl.UserInfo))
             {
                 throw new InvalidOperationException(

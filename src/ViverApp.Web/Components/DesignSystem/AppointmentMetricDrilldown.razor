@@ -1,6 +1,6 @@
 @if (Numbers is not null)
 {
-    <section class="surface metric-drilldown" aria-live="polite" aria-label="Detalhamento do indicador">
+    <section class="surface metric-drilldown" style="--mobile-drilldown-order: @MobileOrder" aria-live="polite" aria-label="Detalhamento do indicador">
         <div><p class="eyebrow">Origem do indicador</p><h2>@Title</h2></div>
         @if (Numbers.Count == 0)
         {
@@ -21,4 +21,6 @@
     [Parameter] public string Title { get; set; } = "Detalhamento";
     [Parameter] public IReadOnlyList<ulong>? Numbers { get; set; }
     [Parameter] public EventCallback Close { get; set; }
+    [Parameter] public int MobileAfterCard { get; set; } = 100;
+    private int MobileOrder => MobileAfterCard * 10 + 5;
 }

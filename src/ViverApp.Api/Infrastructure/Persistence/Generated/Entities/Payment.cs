@@ -9,6 +9,8 @@ public partial class Payment
 
     public ulong AppointmentId { get; set; }
 
+    public ulong? SupersedesPaymentId { get; set; }
+
     public string ProviderCode { get; set; } = null!;
 
     public string StatusCode { get; set; } = null!;
@@ -49,6 +51,14 @@ public partial class Payment
 
     public DateTime? RefundedAtUtc { get; set; }
 
+    public string? ReversalReason { get; set; }
+
+    public DateTime? ReversalRequestedAtUtc { get; set; }
+
+    public ulong? ReversedByAccountId { get; set; }
+
+    public ulong? ActiveAppointmentId { get; set; }
+
     public ulong RowVersion { get; set; }
 
     public string? MethodCode { get; set; }
@@ -61,11 +71,23 @@ public partial class Payment
 
     public string? AuthorizationReference { get; set; }
 
-    public virtual Appointment Appointment { get; set; } = null!;
+    public virtual Appointment? Appointment { get; set; }
+
+    public virtual Appointment AppointmentNavigation { get; set; } = null!;
+
+    public virtual ICollection<CashMovement> CashMovements { get; set; } = new List<CashMovement>();
 
     public virtual Account? ConfirmedByAccount { get; set; }
 
+    public virtual Payment? InverseSupersedesPayment { get; set; }
+
     public virtual ICollection<PaymentEvent> PaymentEvents { get; set; } = new List<PaymentEvent>();
 
+    public virtual PaymentReversal? PaymentReversal { get; set; }
+
     public virtual Appointment? ProviderReferenceAppointment { get; set; }
+
+    public virtual Account? ReversedByAccount { get; set; }
+
+    public virtual Payment? SupersedesPayment { get; set; }
 }

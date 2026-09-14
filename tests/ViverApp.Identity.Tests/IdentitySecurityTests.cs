@@ -120,6 +120,21 @@ public sealed class IdentitySecurityTests
     }
 
     [Fact]
+    public void IdentityConfiguration_AllowsLoopbackHttpOnlyWhenDevelopmentFallbackIsExplicit()
+    {
+        var configuration = CreateConfiguration(new Dictionary<string, string?>
+        {
+            ["Authentication:WebReturnUrl"] = "http://localhost:5186/auth/result",
+        });
+
+        Assert.Throws<InvalidOperationException>(() => IdentitySecurityOptions.Load(configuration));
+
+        var options = IdentitySecurityOptions.Load(configuration, allowInsecureLoopbackHttp: true);
+
+        Assert.Equal("http://localhost:5186/auth/result", options.WebReturnUrl?.ToString());
+    }
+
+    [Fact]
     public void ReturnUrl_IsFixedByServerConfiguration()
     {
         var options = IdentitySecurityOptions.Load(CreateConfiguration());
@@ -153,6 +168,28 @@ public sealed class IdentitySecurityTests
         AssertMfaRequirement(adminPolicy);
         var roles = Assert.Single(adminPolicy.Requirements.OfType<RolesAuthorizationRequirement>());
         Assert.Contains(ViverAppRoles.Administrator, roles.AllowedRoles);
+    }
+
+    [Fact]
+    public async Task FinancialPolicies_AllowManagerAndRequireAdministratorMfa()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddViverAppIdentity(CreateConfiguration());
+        await using var provider = services.BuildServiceProvider();
+        var authorization = provider.GetRequiredService<IAuthorizationService>();
+
+        static ClaimsPrincipal Principal(string role, bool mfa = false)
+        {
+            var claims = new List<Claim> { new(ClaimTypes.Role, role) };
+            if (mfa) claims.Add(new Claim(ViverAppClaimTypes.MfaSatisfied, bool.TrueString));
+            return new ClaimsPrincipal(new ClaimsIdentity(claims, "test", ClaimTypes.Name, ClaimTypes.Role));
+        }
+
+        Assert.True((await authorization.AuthorizeAsync(Principal(ViverAppRoles.Manager), null, ViverAppPolicies.CashRead)).Succeeded);
+        Assert.False((await authorization.AuthorizeAsync(Principal(ViverAppRoles.Administrator), null, ViverAppPolicies.CashRead)).Succeeded);
+        Assert.True((await authorization.AuthorizeAsync(Principal(ViverAppRoles.Administrator, mfa: true), null, ViverAppPolicies.CashRead)).Succeeded);
+        Assert.False((await authorization.AuthorizeAsync(Principal(ViverAppRoles.Patient), null, ViverAppPolicies.CashRead)).Succeeded);
     }
 
     [Fact]

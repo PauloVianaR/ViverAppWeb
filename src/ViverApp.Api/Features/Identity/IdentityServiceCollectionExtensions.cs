@@ -15,9 +15,9 @@ public static class IdentityServiceCollectionExtensions
         IConfiguration configuration,
         IHostEnvironment? environment = null)
     {
-        var securityOptions = IdentitySecurityOptions.Load(configuration);
         var allowInsecureLocalHttp = environment?.IsDevelopment() == true
             && configuration.GetValue("Security:AllowInsecureLocalHttp", false);
+        var securityOptions = IdentitySecurityOptions.Load(configuration, allowInsecureLocalHttp);
         services.AddSingleton(securityOptions);
         services.AddScoped<ViverAppUserStore>();
         services.AddScoped<IUserStore<ViverAppUser>>(provider =>
@@ -169,6 +169,23 @@ public static class IdentityServiceCollectionExtensions
             policy => policy.RequireRole(
                 ViverAppRoles.Manager,
                 ViverAppRoles.Administrator));
+        foreach (var policyName in new[]
+        {
+            ViverAppPolicies.CashRead,
+            ViverAppPolicies.CashWrite,
+            ViverAppPolicies.CashClose,
+            ViverAppPolicies.CashPrint,
+            ViverAppPolicies.PaymentReverse,
+        })
+        {
+            authorization.AddPolicy(
+                policyName,
+                policy => policy
+                    .RequireAssertion(context =>
+                        context.User.IsInRole(ViverAppRoles.Manager)
+                        || (context.User.IsInRole(ViverAppRoles.Administrator)
+                            && context.User.HasClaim(ViverAppClaimTypes.MfaSatisfied, bool.TrueString))));
+        }
         authorization.AddPolicy(
             ViverAppPolicies.MfaEnrollment,
             policy => policy.RequireAuthenticatedUser());

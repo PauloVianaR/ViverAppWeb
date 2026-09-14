@@ -32,7 +32,7 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(49, applicationEntities.Length);
+        Assert.Equal(53, applicationEntities.Length);
         Assert.DoesNotContain(
             applicationEntities,
             entity => string.Equals(entity.GetTableName(), "__schema_migrations", StringComparison.Ordinal));
@@ -40,6 +40,7 @@ public sealed class DatabaseContractTests
         var account = context.Model.FindEntityType(typeof(Account));
         Assert.NotNull(account);
         Assert.False(account.FindProperty(nameof(Account.RoleCode))!.IsNullable);
+        Assert.False(account.FindProperty(nameof(Account.PortalAccessEnabled))!.IsNullable);
         Assert.True(account.FindProperty(nameof(Account.RowVersion))!.IsConcurrencyToken);
         var medicalReport = context.Model.FindEntityType(typeof(MedicalReport));
         Assert.NotNull(medicalReport);
@@ -47,6 +48,12 @@ public sealed class DatabaseContractTests
         var payment = context.Model.FindEntityType(typeof(Payment));
         Assert.NotNull(payment);
         Assert.True(payment.FindProperty(nameof(Payment.RowVersion))!.IsConcurrencyToken);
+        Assert.Equal(Microsoft.EntityFrameworkCore.Metadata.ValueGenerated.OnAddOrUpdate,
+            payment.FindProperty(nameof(Payment.ActiveAppointmentId))!.ValueGenerated);
+        Assert.True(context.Model.FindEntityType(typeof(PaymentReversal))!.FindProperty(nameof(PaymentReversal.RowVersion))!.IsConcurrencyToken);
+        Assert.NotNull(context.Model.FindEntityType(typeof(CashMovement)));
+        Assert.NotNull(context.Model.FindEntityType(typeof(CashClosure)));
+        Assert.NotNull(context.Model.FindEntityType(typeof(PaymentReversalEvent)));
         var statusHistory = context.Model.FindEntityType(typeof(AppointmentStatusHistory));
         Assert.NotNull(statusHistory);
         Assert.True(statusHistory.FindProperty(nameof(AppointmentStatusHistory.ActorAccountId))!.IsNullable);
@@ -84,7 +91,15 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030", migrations);
+
+        var portalAccessColumn = await ExecuteScalarAsync(connection,
+            "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'viverappweb' AND table_name = 'accounts' AND column_name = 'portal_access_enabled' AND is_nullable = 'NO'");
+        Assert.Equal("1", portalAccessColumn);
+
+        var optionalAddressColumns = await ExecuteScalarAsync(connection,
+            "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'viverappweb' AND table_name = 'account_addresses' AND column_name IN ('postal_code','street','number','district','city','state_code') AND is_nullable = 'YES'");
+        Assert.Equal("6", optionalAddressColumns);
 
         var arrivalColumns = await ExecuteScalarAsync(connection,
             """
@@ -349,6 +364,16 @@ public sealed class DatabaseContractTests
                     'reviewed_by_account_id', 'review_notes')))
             """);
         Assert.Equal("5", managerExperienceColumns);
+
+        var cashTables = await ExecuteScalarAsync(
+            connection,
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'viverappweb' AND table_name IN ('cash_movements','cash_closures','payment_reversals','payment_reversal_events')");
+        Assert.Equal("4", cashTables);
+
+        var appendOnlyTriggers = await ExecuteScalarAsync(
+            connection,
+            "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema = 'viverappweb' AND trigger_name IN ('trg_cash_movements_block_update','trg_cash_movements_block_delete','trg_cash_closures_block_update','trg_cash_closures_block_delete','trg_payment_reversal_events_block_update','trg_payment_reversal_events_block_delete')");
+        Assert.Equal("6", appendOnlyTriggers);
 
         var managerPreferences = await ExecuteScalarAsync(
             connection,

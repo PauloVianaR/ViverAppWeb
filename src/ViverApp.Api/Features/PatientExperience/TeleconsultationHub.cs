@@ -30,8 +30,8 @@ public sealed class TeleconsultationAccess(ViverAppDbContext database, TimeProvi
         var session = sessionId.ToByteArray(); var now = clock.GetUtcNow().UtcDateTime;
         if (!await database.AuthSessions.AnyAsync(x => x.Id.SequenceEqual(session) && x.AccountId == actor && x.RevokedAtUtc == null
             && x.ExpiresAtUtc > now && x.Account.StatusCode == "active" && x.MfaSatisfied, ct)) throw new HubException("Sua sessão expirou. Entre novamente.");
-        var appointment = await database.Appointments.AsNoTracking().Include(x => x.PaymentAppointment).SingleOrDefaultAsync(x => x.Id == id && (x.PatientAccountId == actor || x.DoctorAccountId == actor), ct);
-        if (appointment is null || appointment.ModalityCode != "online" || appointment.StatusCode != "confirmed" || appointment.PaymentAppointment?.StatusCode != "paid"
+        var appointment = await database.Appointments.AsNoTracking().Include(x => x.CurrentPayment).SingleOrDefaultAsync(x => x.Id == id && (x.PatientAccountId == actor || x.DoctorAccountId == actor), ct);
+        if (appointment is null || appointment.ModalityCode != "online" || appointment.StatusCode != "confirmed" || appointment.CurrentPayment?.StatusCode != "paid"
             || appointment.StartsAtUtc > now.AddMinutes(15) || appointment.EndsAtUtc < now) throw new HubException("A sala não está disponível. A entrada é permitida 15 minutos antes e durante o atendimento confirmado e pago.");
         if (appointment.PatientAccountId == actor && !user.IsInRole(ViverAppRoles.Patient)
             || appointment.DoctorAccountId == actor && !user.IsInRole(ViverAppRoles.Doctor)) throw new HubException("Atendimento indisponível.");

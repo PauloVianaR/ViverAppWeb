@@ -13,4 +13,4 @@
 .manager-boundary { padding:1rem; background:#fff8ed; border-left:4px solid #a63f08; border-radius:.5rem; }
 .manager-premium-card { border-top:3px solid var(--color-brand); }
 @media(max-width:78rem){.manager-kpis{grid-template-columns:repeat(3,minmax(0,1fr));}.manager-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-@media(max-width:40rem){.manager-kpis,.manager-filter-grid,.manager-profile-grid,.manager-choice-list{grid-template-columns:1fr;}}
+@media(max-width:40rem){.manager-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}.manager-filter-grid,.manager-profile-grid,.manager-choice-list{grid-template-columns:1fr;}}

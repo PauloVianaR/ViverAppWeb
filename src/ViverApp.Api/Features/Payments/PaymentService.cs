@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MySql.Data.MySqlClient;
+using ViverApp.Api.Features.CashManagement;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 
@@ -15,7 +16,8 @@ public sealed class PaymentService(
     IPagBankClient pagBank,
     PagBankOptions options,
     IPaymentAuditWriter auditWriter,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    CashManagementService? cash = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -74,7 +76,9 @@ public sealed class PaymentService(
             throw Conflict("O agendamento não possui uma cobrança válida.");
         }
 
-        var payment = await database.Payments.SingleOrDefaultAsync(item => item.AppointmentId == appointmentId, cancellationToken);
+        var payment = await database.Payments.SingleOrDefaultAsync(
+            item => item.AppointmentId == appointmentId && item.ActiveAppointmentId != null,
+            cancellationToken);
         if (payment?.CheckoutUrl is not null)
         {
             var existing = ToResponse(payment);
@@ -89,6 +93,7 @@ public sealed class PaymentService(
             payment = new Payment
             {
                 AppointmentId = appointmentId,
+                SupersedesPaymentId = appointment.CurrentPaymentId,
                 ProviderReferenceAppointmentId = appointmentId,
                 ProviderCode = "pagbank",
                 StatusCode = "pending",
@@ -102,6 +107,7 @@ public sealed class PaymentService(
             };
             database.Payments.Add(payment);
             await database.SaveChangesAsync(cancellationToken);
+            appointment.CurrentPaymentId = payment.Id;
         }
 
         var appointmentTypeName = await database.AppointmentTypes.AsNoTracking()
@@ -160,7 +166,9 @@ public sealed class PaymentService(
         CancellationToken cancellationToken)
     {
         var snapshot = await database.Payments.AsNoTracking()
-            .Where(item => item.AppointmentId == appointmentId && item.Appointment.PatientAccountId == patientId)
+            .Where(item => item.Id == item.AppointmentNavigation.CurrentPaymentId
+                && item.AppointmentNavigation.Id == appointmentId
+                && item.AppointmentNavigation.PatientAccountId == patientId)
             .Select(item => new { item.Id, item.NextReconciliationAtUtc })
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw NotFound("Pagamento não encontrado.");
@@ -263,7 +271,7 @@ public sealed class PaymentService(
         }
 
         var transition = PaymentStateMachine.Decide(payment.StatusCode, target, payment.ProviderEventAtUtc, resource.OccurredAtUtc);
-        ApplyProviderEvent(payment, receipt, "webhook", resource, transition, now);
+        await ApplyProviderEventAsync(payment, receipt, "webhook", resource, transition, now, cancellationToken);
         FinishReceipt(receipt, "processed", transition.Apply ? "applied" : transition.IgnoredReason!, resource.Id, now);
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -283,72 +291,11 @@ public sealed class PaymentService(
         PaymentRefundRequest request,
         CancellationToken cancellationToken)
     {
-        EnsureEnabled();
-        if (!options.RefundsEnabled)
-        {
-            throw new PaymentRuleException(StatusCodes.Status503ServiceUnavailable, "Reembolsos por API não estão habilitados.");
-        }
-
-        ValidateIdempotencyKey(idempotencyKey);
-        var scope = $"payment.refund:{actorId}";
-        var requestHash = SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('|', paymentId, request.RowVersion, request.Reason.Trim())));
-        var stored = await database.IdempotencyRecords.AsNoTracking()
-            .SingleOrDefaultAsync(item => item.ScopeCode == scope && item.IdempotencyKey == idempotencyKey, cancellationToken);
-        if (stored is not null)
-        {
-            if (!CryptographicOperations.FixedTimeEquals(stored.RequestHash, requestHash))
-            {
-                throw Conflict("A chave de idempotência já foi usada para outra operação.");
-            }
-
-            return DeserializeStored(stored);
-        }
-
-        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-        var payment = await database.Payments
-            .FromSqlInterpolated($"SELECT * FROM payments WHERE id = {paymentId} FOR UPDATE")
-            .SingleOrDefaultAsync(cancellationToken)
-            ?? throw NotFound("Pagamento não encontrado.");
-        var appointmentStatus = await database.Appointments.AsNoTracking()
-            .Where(item => item.Id == payment.AppointmentId)
-            .Select(item => item.StatusCode)
-            .SingleAsync(cancellationToken);
-        if (payment.RowVersion != request.RowVersion)
-        {
-            throw Conflict("O pagamento foi alterado por outra operação. Recarregue e tente novamente.");
-        }
-
-        if (payment.StatusCode != "paid" || appointmentStatus != "canceled" || string.IsNullOrWhiteSpace(payment.ProviderTransactionId))
-        {
-            throw Conflict("Somente um pagamento pago de agendamento cancelado pode ser reembolsado.");
-        }
-
-        var now = timeProvider.GetUtcNow().UtcDateTime;
-        var provider = await pagBank.RefundChargeAsync(
-            payment.ProviderTransactionId,
-            ToCents(payment.Amount),
-            NormalizeProviderIdempotencyKey(idempotencyKey),
-            cancellationToken);
-        payment.StatusCode = "refunded";
-        payment.ProviderStatusCode = provider.Status;
-        payment.ProviderEventAtUtc = provider.OccurredAtUtc ?? now;
-        payment.RefundAmount = payment.Amount;
-        payment.RefundedAtUtc = now;
-        payment.UpdatedAtUtc = now;
-        payment.NextReconciliationAtUtc = null;
-        payment.RowVersion++;
-        AddEvent(payment, null, "refund", provider, "refunded", true, null, now);
-        var response = ToResponse(payment);
-        StoreIdempotency(scope, idempotencyKey, requestHash, response, now);
-        await database.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        await auditWriter.WriteAsync(
-            "payment.refunded",
-            actorId,
-            payment.Id,
-            new Dictionary<string, string> { ["reason"] = LimitText(request.Reason.Trim(), 200) },
-            cancellationToken);
-        return response;
+        if (cash is null) throw new PaymentRuleException(503, "O serviço financeiro está indisponível.");
+        await cash.ReverseAsync(actorId, idempotencyKey, paymentId,
+            new PaymentReversalRequest(request.RowVersion, request.Reason), cancellationToken);
+        return ToResponse(await database.Payments.AsNoTracking()
+            .SingleAsync(item => item.Id == paymentId, cancellationToken));
     }
 
     public async Task<int> ReconcileDueAsync(CancellationToken cancellationToken)
@@ -388,7 +335,7 @@ public sealed class PaymentService(
     {
         var snapshot = await database.Payments.AsNoTracking()
             .Where(item => item.Id == paymentId && item.ProviderCheckoutId != null)
-            .Select(item => new { item.ProviderCheckoutId, item.Appointment.StatusCode })
+            .Select(item => new { item.ProviderCheckoutId, item.AppointmentNavigation.StatusCode })
             .SingleOrDefaultAsync(cancellationToken);
         if (snapshot is null)
         {
@@ -412,7 +359,7 @@ public sealed class PaymentService(
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var target = PaymentStateMachine.Normalize(resource.Status, resource.TotalCents, resource.RefundedCents);
         var transition = PaymentStateMachine.Decide(payment.StatusCode, target, payment.ProviderEventAtUtc, resource.OccurredAtUtc);
-        ApplyProviderEvent(payment, null, "reconciliation", resource, transition, now);
+        await ApplyProviderEventAsync(payment, null, "reconciliation", resource, transition, now, cancellationToken);
         payment.LastReconciledAtUtc = now;
         payment.ReconciliationAttemptCount = 0;
         await database.SaveChangesAsync(cancellationToken);
@@ -445,17 +392,18 @@ public sealed class PaymentService(
         }
 
         return await database.Payments
-            .FromSqlInterpolated($"SELECT * FROM payments WHERE ((provider_reference_appointment_id = {appointmentId} OR (provider_reference_appointment_id IS NULL AND appointment_id = {appointmentId})) AND {appointmentId} > 0) OR provider_checkout_id = {resource.Id} OR provider_transaction_id = {resource.Id} LIMIT 1 FOR UPDATE")
+            .FromSqlInterpolated($"SELECT * FROM payments WHERE (((provider_reference_appointment_id = {appointmentId} OR (provider_reference_appointment_id IS NULL AND appointment_id = {appointmentId})) AND active_appointment_id IS NOT NULL AND {appointmentId} > 0) OR provider_checkout_id = {resource.Id} OR provider_transaction_id = {resource.Id}) ORDER BY id DESC LIMIT 1 FOR UPDATE")
             .SingleOrDefaultAsync(cancellationToken);
     }
 
-    private void ApplyProviderEvent(
+    private async Task ApplyProviderEventAsync(
         Payment payment,
         PaymentWebhookReceipt? receipt,
         string source,
         PagBankResource resource,
         PaymentTransition transition,
-        DateTime now)
+        DateTime now,
+        CancellationToken cancellationToken)
     {
         if (receipt is null && !transition.Apply && transition.IgnoredReason == "duplicate_status")
         {
@@ -470,6 +418,11 @@ public sealed class PaymentService(
 
         payment.StatusCode = transition.TargetStatus;
         if (resource.MethodCode is "PIX" or "CREDIT_CARD" or "DEBIT_CARD" or "BOLETO") payment.MethodCode = resource.MethodCode;
+        if (resource.MethodCode is "CREDIT_CARD" or "DEBIT_CARD")
+        {
+            payment.CardLastFour = resource.CardLastFour ?? payment.CardLastFour;
+            payment.AuthorizationReference = resource.AuthorizationReference ?? payment.AuthorizationReference;
+        }
         payment.ProviderStatusCode = resource.Status;
         payment.ProviderEventAtUtc = resource.OccurredAtUtc ?? now;
         if (resource.RawKind == "charge")
@@ -486,6 +439,8 @@ public sealed class PaymentService(
         {
             payment.PaidAtUtc ??= resource.OccurredAtUtc ?? now;
             ConfirmAppointment(payment.AppointmentId, now);
+            if (cash is not null)
+                await cash.RecordPaymentReceivedAsync(payment, payment.ConfirmedByAccountId, payment.PaidAtUtc.Value, cancellationToken);
         }
         else if (transition.TargetStatus == "canceled")
         {

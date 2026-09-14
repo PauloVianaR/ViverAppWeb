@@ -285,13 +285,13 @@ Cada fase deve:
 
 ## Fase 16 — Pacientes, atendimento e chegada
 
-**Estado:** implementação e validações automatizadas concluídas na branch `codex/fase-16-pacientes-atendimento-chegada`; chegada, reagendamento no mesmo atendimento, navegação Agenda/Histórico, cores, filtro por número e rastreabilidade dos indicadores também foram aprovados no navegador integrado. A confirmação física no monitor 3 está registrada localmente; falta a integração formal à `main`.
+**Estado:** concluída, validada pelo proprietário e integrada à `main` no merge `f59755c` em 10 de setembro de 2026.
 
 **Plano detalhado:** [Pacientes, atendimento e chegada](FASE-16-PACIENTES-ATENDIMENTO-E-CHEGADA.md).
 
 ## Fase 17 — Caixa e reversões financeiras
 
-**Estado:** planejada; depende da Fase 16 integrada à `main`.
+**Estado:** implementada em 10 de setembro de 2026 na branch `codex/fase-17-caixa-reversoes`; migrations DB-First aplicadas no MySQL local, build e validações automatizadas concluídas. Homologações manual e externa permanecem registradas localmente.
 
 **Plano detalhado:** [Caixa e reversões financeiras](FASE-17-CAIXA-E-REVERSOES-FINANCEIRAS.md).
 

@@ -5,6 +5,7 @@ public static class SecurityPolicyNames
     public const string WebClientCors = "web-client";
     public const string PublicFormRateLimit = "public-form";
     public const string SensitiveRateLimit = "sensitive";
+    public const string AuthenticatedOperationRateLimit = "authenticated-operation";
     public const string WriteRateLimit = "write";
     public const string UploadRateLimit = "patient-upload";
     public const string SlotRateLimit = "patient-slots";

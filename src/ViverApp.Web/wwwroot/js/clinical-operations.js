@@ -3,6 +3,8 @@ async function readResponse(response) {
         return response.status === 204 ? null : await response.json();
     }
 
+    const unexpected = "Ocorreu um erro interno não classificado. Contate o administrador do sistema.";
+    if (response.status >= 500) throw Object.assign(new Error(unexpected), { status: response.status });
     let message = response.status === 401
         ? "Sua sessão expirou ou você ainda não entrou."
         : response.status === 403
@@ -10,7 +12,10 @@ async function readResponse(response) {
             : "Não foi possível concluir a operação clínica.";
     try {
         const problem = await response.json();
-        message = problem.title || message;
+        const validationFields = problem.errors ? Object.keys(problem.errors) : [];
+        const firstValidation = problem.errors ? Object.values(problem.errors).flat().find(value => value && !/one or more validation errors|the .+ field is required/i.test(value)) : null;
+        const safeTitle = problem.title && !/one or more validation errors occurred|internal server error|^an error occurred/i.test(problem.title) ? problem.title : null;
+        message = firstValidation || safeTitle || (validationFields.length ? "Revise os campos informados. Há informações ausentes ou inválidas." : message);
     } catch {
         // Não propaga conteúdo de proxies ou páginas HTML para a interface.
     }

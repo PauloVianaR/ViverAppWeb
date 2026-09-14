@@ -5,7 +5,7 @@
 <header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Minha agenda</h1><p class="page-description">Próximos atendimentos, histórico e documentos do seu cuidado.</p></div><a class="button" href="/paciente/agendar">Novo agendamento</a></header>
 @if (Notice is not null) { <p class="notice notice--error" role="alert">@Notice</p> }
 <div class="patient-tabs" aria-label="Visualização da agenda"><button class="button @(View == "future" ? null : "button--secondary")" aria-pressed="@(View == "future")" disabled="@Busy" @onclick='() => ChangeView("future")'>Próximos</button><button class="button @(View == "history" ? null : "button--secondary")" aria-pressed="@(View == "history")" disabled="@Busy" @onclick='() => ChangeView("history")'>Histórico</button></div>
-<section class="surface patient-panel" aria-label="Filtros da agenda">
+<MobileFilterPanel AriaLabel="Filtros da agenda">
     <form @onsubmit="Apply" @onsubmit:preventDefault>
         <div class="patient-filter-grid">
             <div class="field"><label for="agenda-search">Serviço ou médico</label><input id="agenda-search" @bind="Search" maxlength="100" /></div>
@@ -17,7 +17,7 @@
             <div class="field"><label for="agenda-modality">Modalidade</label><select id="agenda-modality" @bind="Modality"><option value="">Todas</option><option value="in_person">Presencial</option><option value="online">Online</option></select></div>
         </div><div class="patient-actions"><button class="button" disabled="@Busy">Aplicar filtros</button><button type="button" class="button button--secondary" @onclick="Clear" disabled="@Busy">Limpar filtros</button></div>
     </form>
-</section>
+</MobileFilterPanel>
 @if (Loading) { <LoadingSkeleton Lines="5" /> }
 else if (PageData?.Items.Count > 0) { <p class="muted" role="status">@PageData.TotalCount atendimento(s) · horários no fuso da clínica</p><div class="patient-grid">@foreach(var item in PageData.Items){<PatientVisitCard Model="item" Clinic="Clinic" />}</div> }
 else { <InterfaceState Title="Nenhum atendimento encontrado" Description="Altere os filtros ou escolha um novo horário." Icon="calendar" ActionHref="/paciente/agendar" ActionLabel="Agendar" /> }

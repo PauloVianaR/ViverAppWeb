@@ -129,8 +129,8 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     {
         var shell = ShellNavigationCatalog.ResolveRole("administrator");
         Assert.Equal(ShellProfile.Administrator, shell.Profile);
-        Assert.Equal(7, shell.Items.Count);
-        Assert.Equal(new[] { "/administracao", "/administracao/clinica", "/administracao/consultas", "/administracao/pacientes", "/administracao/analytics", "/administracao/notificacoes", "/administracao/usuarios" }, shell.Items.Select(x => x.Href));
+        Assert.Equal(8, shell.Items.Count);
+        Assert.Equal(new[] { "/administracao", "/administracao/clinica", "/administracao/consultas", "/administracao/pacientes", "/administracao/analytics", "/administracao/caixa", "/administracao/notificacoes", "/administracao/usuarios" }, shell.Items.Select(x => x.Href));
     }
 
     [Fact]
@@ -221,6 +221,37 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     public void DesignTokens_MeetWcagAaForNormalText(string foreground, string background)
     {
         Assert.True(ContrastRatio(foreground, background) >= 4.5);
+    }
+
+    [Fact]
+    public void MobileNavigation_MovesOnlyDestinationsAfterTheFirstFourIntoMoreMenu()
+    {
+        var manager = ShellNavigationCatalog.ResolveRole("manager");
+        var administrator = ShellNavigationCatalog.ResolveRole("administrator");
+        var patient = ShellNavigationCatalog.ResolveRole("patient");
+
+        Assert.Equal(new[] { "Início", "Agenda", "Pacientes", "Histórico" }, manager.MobilePrimaryItems.Select(x => x.Label));
+        Assert.Equal(new[] { "Caixa", "Perfil" }, manager.MobileOverflowItems.Select(x => x.Label));
+        Assert.Equal(new[] { "Analytics", "Caixa", "Alertas", "Usuários" }, administrator.MobileOverflowItems.Select(x => x.Label));
+        Assert.Equal(patient.Items, patient.MobilePrimaryItems);
+        Assert.Empty(patient.MobileOverflowItems);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("One or more validation errors occurred.")]
+    [InlineData("Internal Server Error")]
+    public void ErrorDialog_DoesNotExposeGenericOrEnglishInternalFailures(string? message)
+    {
+        Assert.Equal(UiErrorNotifier.UnexpectedMessage, UiErrorNotifier.Normalize(message));
+    }
+
+    [Fact]
+    public void ErrorDialog_PreservesAnExplanatoryPortugueseMessage()
+    {
+        const string message = "O CPF informado é inválido.";
+        Assert.Equal(message, UiErrorNotifier.Normalize(message));
     }
 
     private HttpClient CreateClient() => factory.CreateClient(new WebApplicationFactoryClientOptions

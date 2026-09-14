@@ -67,6 +67,8 @@ public partial class Appointment
 
     public string PaymentLocationCode { get; set; } = null!;
 
+    public ulong? CurrentPaymentId { get; set; }
+
     public virtual ICollection<AppointmentDocument> AppointmentDocuments { get; set; } = new List<AppointmentDocument>();
 
     public virtual ICollection<AppointmentRescheduleHistory> AppointmentRescheduleHistories { get; set; } = new List<AppointmentRescheduleHistory>();
@@ -81,9 +83,13 @@ public partial class Appointment
 
     public virtual Account? CanceledByAccount { get; set; }
 
+    public virtual ICollection<CashMovement> CashMovements { get; set; } = new List<CashMovement>();
+
     public virtual Account? CompletedByAccount { get; set; }
 
     public virtual Account CreatedByAccount { get; set; } = null!;
+
+    public virtual Payment? CurrentPayment { get; set; }
 
     public virtual DoctorProfile DoctorAccount { get; set; } = null!;
 
@@ -97,7 +103,7 @@ public partial class Appointment
 
     public virtual Account PatientAccount { get; set; } = null!;
 
-    public virtual Payment? PaymentAppointment { get; set; }
+    public virtual ICollection<Payment> PaymentAppointmentNavigations { get; set; } = new List<Payment>();
 
     public virtual ICollection<Payment> PaymentProviderReferenceAppointments { get; set; } = new List<Payment>();
 

@@ -57,12 +57,15 @@ public sealed class PaymentSecurityTests
         Assert.NotNull(checkout.PayUrl);
 
         using var chargeJson = JsonDocument.Parse("""
-            {"id":"CHEC_123","reference_id":"appointment-7","status":"ACTIVE","payments":[{"charges":[{"id":"CHAR_123","status":"PAID","amount":{"value":12500,"summary":{"total":12500,"refunded":0}}}]}]}
+            {"id":"CHEC_123","reference_id":"appointment-7","status":"ACTIVE","payments":[{"charges":[{"id":"CHAR_123","status":"PAID","amount":{"value":12500,"summary":{"total":12500,"refunded":0}},"payment_response":{"reference":"NSU-123","raw_data":{"authorization_code":"AUTH-456"}},"payment_method":{"type":"CREDIT_CARD","card":{"last_digits":"4242"}}}]}]}
             """);
         var charge = PagBankResourceParser.Parse(chargeJson.RootElement);
         Assert.Equal("CHAR_123", charge.Id);
         Assert.Equal("appointment-7", charge.ReferenceId);
         Assert.Equal(12_500, charge.TotalCents);
+        Assert.Equal("CREDIT_CARD", charge.MethodCode);
+        Assert.Equal("4242", charge.CardLastFour);
+        Assert.Equal("AUTH-456", charge.AuthorizationReference);
     }
 
     [Fact]

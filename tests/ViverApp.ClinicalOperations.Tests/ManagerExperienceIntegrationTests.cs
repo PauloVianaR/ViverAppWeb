@@ -18,20 +18,22 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
 {
     private const string Marker = "__phase13_test__";
     private IConfiguration configuration = null!;
-    private ulong managerId, doctorId, appointmentId;
+    private ulong managerId, doctorId, patientId, appointmentId, offlinePatientId;
+    private string offlinePatientTaxId = null!;
     private DateTime now;
     private DateOnly appointmentLocalDate;
 
     public async Task InitializeAsync()
     {
         configuration = new ConfigurationBuilder().AddUserSecrets<ManagerExperienceIntegrationTests>().Build();
-        await CleanupAsync(); now = DateTime.UtcNow;
+        now = DateTime.UtcNow;
+        offlinePatientTaxId = CreateCpf();
         await using var db = CreateContext();
         var manager = Account($"manager-{Guid.NewGuid():N}@phase13.example.test", ViverAppRoles.Manager, "Gestora Fase Treze");
         var doctor = Account($"doctor-{Guid.NewGuid():N}@phase13.example.test", ViverAppRoles.Doctor, "Dra. Operação");
         var patient = Account($"patient-{Guid.NewGuid():N}@phase13.example.test", ViverAppRoles.Patient, "Paciente Operacional");
         db.Accounts.AddRange(manager, doctor, patient); await db.SaveChangesAsync(); managerId = manager.Id;
-        doctorId = doctor.Id;
+        doctorId = doctor.Id; patientId = patient.Id;
         db.ManagerPreferences.Add(new ManagerPreference { ManagerAccountId = manager.Id, EmailEnabled = true, SmsEnabled = true, UpdatedAtUtc = now, RowVersion = 1 });
         db.DoctorProfiles.Add(new DoctorProfile { AccountId = doctor.Id, ProfessionalTitle = "Dra.", LicenseStateCode = "SP", LicenseNumber = "130001", DefaultAppointmentDurationMinutes = 30, CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 });
         db.PatientProfiles.Add(new PatientProfile { AccountId = patient.Id, PreferredName = "Paciente", CreatedAtUtc = now, UpdatedAtUtc = now });
@@ -103,6 +105,38 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ManagerCanRegisterAClinicPatientWithoutContactOrPortalAccess()
+    {
+        await using var db = CreateContext();
+        var service = CreateService(db);
+
+        var patient = await service.CreatePatientAsync(managerId,
+            new ManagerPatientCreateRequest(
+                "Paciente somente da clínica",
+                "Paciente interno",
+                offlinePatientTaxId,
+                new DateOnly(1990, 5, 20),
+                null,
+                null,
+                new ManagerPatientAddressRequest("39900000", null, null, null, null, "Almenara", "MG"),
+                false),
+            CancellationToken.None);
+
+        Assert.False(patient.PortalAccessEnabled);
+        Assert.Equal("active", patient.StatusCode);
+        Assert.Null(patient.Email);
+        Assert.Null(patient.Phone);
+        Assert.Equal(offlinePatientTaxId, patient.TaxId);
+        Assert.Equal("39900000", patient.Address?.PostalCode);
+        Assert.Null(patient.Address?.Street);
+        Assert.Equal("Almenara", patient.Address?.City);
+        Assert.Equal("MG", patient.Address?.StateCode);
+        offlinePatientId = patient.AccountId;
+        var persisted = await db.Accounts.SingleAsync(x => x.Id == patient.AccountId);
+        Assert.False(persisted.PortalAccessEnabled);
+    }
+
+    [Fact]
     public async Task ArrivalIsIdempotentAndCreatesOneDurableDoctorNotification()
     {
         var timezone = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
@@ -139,6 +173,21 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         var startDenied = await Assert.ThrowsAsync<ArrivalRuleException>(() =>
             service.StartAsync(doctorId + 1, appointmentId, new StartAppointmentRequest(first.RowVersion), CancellationToken.None));
         Assert.Equal(404, startDenied.StatusCode);
+
+        var canceled = await service.CancelAsync(managerId, appointmentId,
+            new ArrivalCancellationRequest(first.RowVersion, "Paciente desistiu de aguardar"), CancellationToken.None);
+        Assert.Equal("confirmed", canceled.StatusCode);
+        Assert.Null(canceled.ArrivedAtUtc);
+        Assert.Null(canceled.BusinessDate);
+        Assert.Null(canceled.QueueNumber);
+        verification.ChangeTracker.Clear();
+        Assert.NotNull(await verification.DoctorNotifications
+            .Where(x => x.DoctorAccountId == doctorId && x.AppointmentId == appointmentId)
+            .Select(x => x.ReadAtUtc)
+            .SingleAsync());
+        Assert.Contains(await verification.AppointmentStatusHistories.Where(x => x.AppointmentId == appointmentId).ToArrayAsync(),
+            x => x.FromStatusCode == "arrived" && x.ToStatusCode == "confirmed"
+                && x.Reason!.Contains("Paciente desistiu", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -165,21 +214,44 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
     private async Task CleanupAsync()
     {
         if (configuration is null) return; await using var db = CreateContext();
-        var accountIds = await db.Accounts.Where(x => x.Email != null && x.Email.EndsWith("@phase13.example.test")).Select(x => x.Id).ToArrayAsync();
-        var appointmentIds = await db.Appointments.Where(x => accountIds.Contains(x.PatientAccountId) || accountIds.Contains(x.DoctorAccountId) || accountIds.Contains(x.CreatedByAccountId)).Select(x => x.Id).ToArrayAsync();
+        var accountIds = new[] { managerId, doctorId, patientId, offlinePatientId }.Where(x => x != 0).Distinct().ToArray();
+        if (accountIds.Length == 0) return;
+        var allAppointmentIds = await db.Appointments.Where(x => accountIds.Contains(x.PatientAccountId) || accountIds.Contains(x.DoctorAccountId) || accountIds.Contains(x.CreatedByAccountId)).Select(x => x.Id).ToArrayAsync();
+        var retainedAppointmentIds = await db.CashMovements.Where(x => x.AppointmentId.HasValue && allAppointmentIds.Contains(x.AppointmentId.Value)).Select(x => x.AppointmentId!.Value).Distinct().ToArrayAsync();
+        var retainedAccounts = await db.Appointments.Where(x => retainedAppointmentIds.Contains(x.Id)).Select(x => new { x.PatientAccountId, x.DoctorAccountId, x.CreatedByAccountId }).ToArrayAsync();
+        var retainedAccountIds = retainedAccounts.SelectMany(x => new[] { x.PatientAccountId, x.DoctorAccountId, x.CreatedByAccountId }).Distinct().ToArray();
+        var appointmentIds = allAppointmentIds.Except(retainedAppointmentIds).ToArray();
+        var deletableAccountIds = accountIds.Except(retainedAccountIds).ToArray();
         var paymentIds = await db.Payments.Where(x => appointmentIds.Contains(x.AppointmentId)).Select(x => x.Id).ToArrayAsync();
         await db.PaymentEvents.Where(x => paymentIds.Contains(x.PaymentId)).ExecuteDeleteAsync();
-        var idempotencyScopes = accountIds.Select(x => $"manager.payment:{x}").ToArray();
+        var idempotencyScopes = deletableAccountIds.Select(x => $"manager.payment:{x}").ToArray();
         await db.IdempotencyRecords.Where(x => idempotencyScopes.Contains(x.ScopeCode)).ExecuteDeleteAsync();
+        await db.Appointments.Where(x => appointmentIds.Contains(x.Id)).ExecuteUpdateAsync(update => update.SetProperty(x => x.CurrentPaymentId, (ulong?)null));
         await db.Payments.Where(x => paymentIds.Contains(x.Id)).ExecuteDeleteAsync();
         await db.DoctorNotifications.Where(x => appointmentIds.Contains(x.AppointmentId)).ExecuteDeleteAsync();
         await db.AppointmentStatusHistories.Where(x => appointmentIds.Contains(x.AppointmentId)).ExecuteDeleteAsync();
+        await db.Appointments.Where(x => appointmentIds.Contains(x.Id) && x.RescheduledFromAppointmentId != null)
+            .ExecuteUpdateAsync(update => update.SetProperty(x => x.RescheduledFromAppointmentId, (ulong?)null));
         await db.Appointments.Where(x => appointmentIds.Contains(x.Id)).ExecuteDeleteAsync();
-        await db.ManagerPreferences.Where(x => accountIds.Contains(x.ManagerAccountId)).ExecuteDeleteAsync();
-        await db.DoctorProfiles.Where(x => accountIds.Contains(x.AccountId)).ExecuteDeleteAsync();
-        await db.PatientProfiles.Where(x => accountIds.Contains(x.AccountId)).ExecuteDeleteAsync();
-        await db.Accounts.Where(x => accountIds.Contains(x.Id)).ExecuteDeleteAsync();
-        await db.AppointmentTypes.Where(x => x.Name.StartsWith(Marker)).ExecuteDeleteAsync();
+        await db.ManagerPreferences.Where(x => deletableAccountIds.Contains(x.ManagerAccountId)).ExecuteDeleteAsync();
+        await db.DoctorProfiles.Where(x => deletableAccountIds.Contains(x.AccountId)).ExecuteDeleteAsync();
+        await db.PatientProfiles.Where(x => deletableAccountIds.Contains(x.AccountId)).ExecuteDeleteAsync();
+        await db.Accounts.Where(x => deletableAccountIds.Contains(x.Id)).ExecuteDeleteAsync();
+        await db.AppointmentTypes.Where(x => x.Name.StartsWith(Marker) && !x.Appointments.Any()).ExecuteDeleteAsync();
+    }
+    private static string CreateCpf()
+    {
+        string seed;
+        do seed = RandomNumberGenerator.GetInt32(100_000_000, 1_000_000_000).ToString("D9", System.Globalization.CultureInfo.InvariantCulture);
+        while (seed.Distinct().Count() == 1);
+        static int Digit(string value, int weight)
+        {
+            var sum = value.Select((character, index) => (character - '0') * (weight - index)).Sum();
+            var remainder = sum % 11;
+            return remainder < 2 ? 0 : 11 - remainder;
+        }
+        var first = Digit(seed, 10);
+        return $"{seed}{first}{Digit(seed + first, 11)}";
     }
     private static Account Account(string email, string role, string name) => new() { RoleCode = role, StatusCode = "active", FullName = name, Email = email, NormalizedEmail = email.ToUpperInvariant(), EmailVerified = true, SecurityStamp = RandomNumberGenerator.GetBytes(32), CreatedAtUtc = DateTime.UtcNow, UpdatedAtUtc = DateTime.UtcNow, RowVersion = 1 };
     private sealed class NoOpAuditWriter : IClinicalOperationsAuditWriter { public Task WriteAsync(string eventCode, ulong actorAccountId, string entityType, string entityId, IReadOnlyDictionary<string, string>? safeData, CancellationToken cancellationToken) => Task.CompletedTask; }

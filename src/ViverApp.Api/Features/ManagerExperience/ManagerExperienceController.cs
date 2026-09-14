@@ -78,17 +78,19 @@ public sealed class ManagerExperienceController(ManagerExperienceService service
         if (result.Replayed) Response.Headers["Idempotent-Replayed"] = "true";
         return result.Response;
     }
-    [HttpPost("appointments/{id:long}/payment"), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
+    [HttpPost("appointments/{id:long}/payment"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<ManagerPaymentResponse> ConfirmPayment(ulong id, [FromHeader(Name = "Idempotency-Key")] string key,
         ManagerPaymentConfirmRequest request, CancellationToken ct) => service.ConfirmPaymentAsync(Actor, id, key, request, ct);
-    [HttpPost("appointments/{id:long}/arrival"), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
+    [HttpPost("appointments/{id:long}/arrival"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<ArrivalResponse> RegisterArrival(ulong id, ArrivalRequest request, CancellationToken ct) => arrivals.RegisterAsync(Actor, id, request, ct);
+    [HttpPost("appointments/{id:long}/arrival/cancel"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
+    public Task<ArrivalResponse> CancelArrival(ulong id, ArrivalCancellationRequest request, CancellationToken ct) => arrivals.CancelAsync(Actor, id, request, ct);
 
     [HttpGet("patients")]
     public Task<ManagerPatientsResponse> Patients(string? search = null, string? status = null,
         bool? premium = null, int page = 1, int pageSize = 20, CancellationToken ct = default) => service.PatientsAsync(search, status, premium, page, pageSize, ct);
     [HttpGet("patients/{id:long}")] public Task<ManagerPatientResponse> Patient(ulong id, CancellationToken ct) => service.PatientAsync(id, ct);
-    [HttpPost("patients"), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
+    [HttpPost("patients"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<ManagerPatientResponse> CreatePatient(ManagerPatientCreateRequest request, CancellationToken ct) => service.CreatePatientAsync(Actor, request, ct);
     [HttpPut("patients/{id:long}"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public Task<ManagerPatientResponse> UpdatePatient(ulong id, ManagerPatientUpdateRequest request, CancellationToken ct) => service.UpdatePatientAsync(Actor, id, request, ct);
@@ -97,9 +99,9 @@ public sealed class ManagerExperienceController(ManagerExperienceService service
     public Task<SchedulingPage<ManagerPremiumRequestResponse>> Premium(string? status = null,
         string? search = null, int page = 1, int pageSize = 20, CancellationToken ct = default) => service.PremiumAsync(status, search, page, pageSize, ct);
     [HttpGet("premium/{id:long}")] public Task<ManagerPremiumRequestResponse> PremiumRequest(ulong id, CancellationToken ct) => service.PremiumRequestAsync(id, ct);
-    [HttpPost("premium/{id:long}/decision"), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
+    [HttpPost("premium/{id:long}/decision"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<ManagerPremiumRequestResponse> DecidePremium(ulong id, ManagerPremiumDecisionRequest request, CancellationToken ct) => service.DecidePremiumAsync(Actor, id, request, ct);
-    [HttpGet("premium/{id:long}/proof"), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
+    [HttpGet("premium/{id:long}/proof"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public async Task<IActionResult> PremiumProof(ulong id, CancellationToken ct)
     {
         var result = await documents.DownloadPremiumForManagerAsync(Actor, id, ct);

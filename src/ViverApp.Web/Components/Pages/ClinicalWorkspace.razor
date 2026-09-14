@@ -3,6 +3,7 @@
 @inject IJSRuntime JavaScript
 @inject NavigationManager Navigation
 @inject WebBackendOptions Backend
+@inject UiErrorNotifier Errors
 
 <PageTitle>@PageHeading | ViverApp</PageTitle>
 
@@ -253,7 +254,7 @@ else
             if (View == ClinicalView.History) { FromDate = DateTime.Today.AddMonths(-6); ToDate = DateTime.Today; }
             await LoadCurrentViewAsync();
         }
-        catch (JSException exception) { ShowError(exception.Message); }
+        catch (Exception exception) { ShowError(exception is JSException ? exception.Message : UiErrorNotifier.UnexpectedMessage); }
         finally { IsLoading = false; StateHasChanged(); }
     }
 
@@ -272,7 +273,7 @@ else
             var page = await GetAsync<WebClinicalPage<WebClinicalAppointment>>(path);
             Appointments.Clear(); Appointments.AddRange(page.Items); AppointmentTotal = page.Total; SelectedAppointment = null;
         }
-        catch (JSException exception) { ShowError(exception.Message); }
+        catch (Exception exception) { ShowError(exception is JSException ? exception.Message : UiErrorNotifier.UnexpectedMessage); }
         finally { IsBusy = false; }
     }
 
@@ -280,7 +281,7 @@ else
     {
         IsBusy = true; ClearNotice();
         try { SelectedAppointment = await GetAsync<WebClinicalAppointment>($"api/v1/clinical/appointments/{id}"); ClinicalSummary = SelectedAppointment.MedicalReport?.ClinicalSummary ?? string.Empty; Recommendations = SelectedAppointment.MedicalReport?.Recommendations ?? string.Empty; }
-        catch (JSException exception) { ShowError(exception.Message); }
+        catch (Exception exception) { ShowError(exception is JSException ? exception.Message : UiErrorNotifier.UnexpectedMessage); }
         finally { IsBusy = false; }
     }
 
@@ -289,7 +290,7 @@ else
         if (module is null) return;
         IsBusy = true; ClearNotice();
         try { var path = "api/v1/clinical/patients?pageSize=100" + (string.IsNullOrWhiteSpace(Search) ? string.Empty : $"&search={Uri.EscapeDataString(Search.Trim())}"); var page = await GetAsync<WebClinicalPage<WebClinicalPatient>>(path); Patients.Clear(); Patients.AddRange(page.Items); PatientTotal = page.Total; }
-        catch (JSException exception) { ShowError(exception.Message); }
+        catch (Exception exception) { ShowError(exception is JSException ? exception.Message : UiErrorNotifier.UnexpectedMessage); }
         finally { IsBusy = false; }
     }
 
@@ -298,7 +299,7 @@ else
         if (SelectedAppointment is null) return;
         IsBusy = true; ClearNotice();
         try { var report = await SendAsync<WebClinicalReport>($"api/v1/clinical/appointments/{SelectedAppointment.Id}/medical-report", "PUT", new WebMedicalReportWriteRequest(SelectedAppointment.MedicalReport?.RowVersion ?? 0, ClinicalSummary.Trim(), Optional(Recommendations))); SelectedAppointment = SelectedAppointment with { MedicalReport = report }; ShowSuccess("Rascunho salvo com segurança."); await LoadAppointmentsPreservingSelectionAsync(); }
-        catch (JSException exception) { ShowError(exception.Message); }
+        catch (Exception exception) { ShowError(exception is JSException ? exception.Message : UiErrorNotifier.UnexpectedMessage); }
         finally { IsBusy = false; }
     }
 
@@ -307,7 +308,7 @@ else
         if (SelectedAppointment is null) return;
         IsBusy = true; ClearNotice();
         try { SelectedAppointment = await SendAsync<WebClinicalAppointment>($"api/v1/clinical/appointments/{SelectedAppointment.Id}/complete", "POST", new WebCompleteAppointmentRequest(SelectedAppointment.RowVersion, SelectedAppointment.MedicalReport?.RowVersion ?? 0, ClinicalSummary.Trim(), Optional(Recommendations))); ShowSuccess("Consulta concluída e relatório publicado. O conteúdo agora é imutável."); await LoadAppointmentsPreservingSelectionAsync(); }
-        catch (JSException exception) { ShowError(exception.Message); }
+        catch (Exception exception) { ShowError(exception is JSException ? exception.Message : UiErrorNotifier.UnexpectedMessage); }
         finally { IsBusy = false; }
     }
 
@@ -316,7 +317,7 @@ else
         if (SelectedAppointment is null) return;
         IsBusy = true; ClearNotice();
         try { SelectedAppointment = await SendAsync<WebClinicalAppointment>($"api/v1/clinical/appointments/{SelectedAppointment.Id}/no-show", "POST", new WebRecordNoShowRequest(SelectedAppointment.RowVersion)); ShowSuccess("Falta registrada e auditada."); await LoadAppointmentsPreservingSelectionAsync(); }
-        catch (JSException exception) { ShowError(exception.Message); }
+        catch (Exception exception) { ShowError(exception is JSException ? exception.Message : UiErrorNotifier.UnexpectedMessage); }
         finally { IsBusy = false; }
     }
 
@@ -327,7 +328,7 @@ else
         if (module is null || SelectedDoctorId == 0) return;
         IsBusy = true; ClearNotice();
         try { var items = await GetAsync<IReadOnlyList<WebDoctorWeeklyHour>>($"api/v1/professionals/{SelectedDoctorId}/weekly-hours"); WeeklyHours.Clear(); WeeklyHours.AddRange(items); ResetAvailabilityForm(); }
-        catch (JSException exception) { ShowError(exception.Message); }
+        catch (Exception exception) { ShowError(exception is JSException ? exception.Message : UiErrorNotifier.UnexpectedMessage); }
         finally { IsBusy = false; }
     }
 
@@ -335,7 +336,7 @@ else
     {
         IsBusy = true; ClearNotice();
         try { var request = new WebDoctorWeeklyHourWriteRequest(Weekday, StartTime.ToTimeSpan(), EndTime.ToTimeSpan(), ValidFromDate.HasValue ? DateOnly.FromDateTime(ValidFromDate.Value) : null, ValidUntilDate.HasValue ? DateOnly.FromDateTime(ValidUntilDate.Value) : null, HourActive, EditingHourVersion); if (EditingHourId == 0) await SendAsync<WebDoctorWeeklyHour>($"api/v1/professionals/{SelectedDoctorId}/weekly-hours", "POST", request); else await SendAsync<WebDoctorWeeklyHour>($"api/v1/professionals/{SelectedDoctorId}/weekly-hours/{EditingHourId}", "PUT", request); ShowSuccess("Disponibilidade atualizada."); await LoadAvailabilityAsync(); }
-        catch (JSException exception) { ShowError(exception.Message); }
+        catch (Exception exception) { ShowError(exception is JSException ? exception.Message : UiErrorNotifier.UnexpectedMessage); }
         finally { IsBusy = false; }
     }
 
@@ -343,7 +344,7 @@ else
     {
         IsBusy = true; ClearNotice();
         try { await SendAsync<object?>($"api/v1/professionals/{SelectedDoctorId}/weekly-hours/{hour.Id}?rowVersion={hour.RowVersion}", "DELETE", null); ShowSuccess("Período removido."); await LoadAvailabilityAsync(); }
-        catch (JSException exception) { ShowError(exception.Message); }
+        catch (Exception exception) { ShowError(exception is JSException ? exception.Message : UiErrorNotifier.UnexpectedMessage); }
         finally { IsBusy = false; }
     }
 
@@ -352,7 +353,7 @@ else
 
     private async ValueTask<T> GetAsync<T>(string path) => module is null ? throw new InvalidOperationException("clinical_module_missing") : await module.InvokeAsync<T>("get", Backend.BaseUrl, path);
     private async ValueTask<T> SendAsync<T>(string path, string method, object? body) => module is null ? throw new InvalidOperationException("clinical_module_missing") : await module.InvokeAsync<T>("send", Backend.BaseUrl, path, method, body);
-    private void ShowError(string message) { Notice = message; NoticeIsError = true; NoticeIsUnauthorized = message.Contains("sessão", StringComparison.OrdinalIgnoreCase) || message.Contains("entrou", StringComparison.OrdinalIgnoreCase); }
+    private void ShowError(string message) { Notice = UiErrorNotifier.Normalize(message); NoticeIsError = true; NoticeIsUnauthorized = Notice.Contains("sessão", StringComparison.OrdinalIgnoreCase) || Notice.Contains("entrou", StringComparison.OrdinalIgnoreCase); Errors.Show(Notice); }
     private void ShowSuccess(string message) { Notice = message; NoticeIsError = false; NoticeIsUnauthorized = false; }
     private void ClearNotice() { Notice = null; NoticeIsError = false; NoticeIsUnauthorized = false; }
     private static string? Optional(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

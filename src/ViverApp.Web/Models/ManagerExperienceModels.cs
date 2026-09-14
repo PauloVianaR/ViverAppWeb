@@ -18,16 +18,16 @@ public sealed record ManagerAppointment(ulong Id, ulong AppointmentNumber, ulong
     ulong? RescheduledToAppointmentId, byte? Rating, string? ReviewComment, ManagerPaymentMetadata Payment,
     ManagerReportMetadata Report, int AttachmentCount, DateTime? ArrivedAtUtc, DateOnly? ArrivalBusinessDate,
     uint? ArrivalQueueNumber, IReadOnlyList<WebAppointmentRescheduleHistory> RescheduleHistory,
-    bool CanRegisterArrival, bool CanCancel, bool CanReschedule, bool CanConfirmPayment, ulong RowVersion);
+    bool CanRegisterArrival, bool CanCancelArrival, bool CanCancel, bool CanReschedule, bool CanConfirmPayment, ulong RowVersion);
 public sealed record ManagerAgendaCounters(int Total, int Online, int InPerson, int Rescheduled, int Paid, int PendingPayment);
 public sealed record ManagerAgendaSources(IReadOnlyList<ulong> Total, IReadOnlyList<ulong> Online,
     IReadOnlyList<ulong> InPerson, IReadOnlyList<ulong> Rescheduled, IReadOnlyList<ulong> Paid,
     IReadOnlyList<ulong> PendingPayment);
 public sealed record ManagerAgendaData(ManagerAgendaCounters Counters, ManagerAgendaSources Sources, WebPage<ManagerAppointment> Page);
-public sealed record ManagerPatientAddress(string PostalCode, string Street, string Number, string? Complement, string District, string City, string StateCode);
+public sealed record ManagerPatientAddress(string? PostalCode, string? Street, string? Number, string? Complement, string? District, string? City, string? StateCode);
 public sealed record ManagerPatient(ulong AccountId, string FullName, string? PreferredName, string? TaxId, string? Email,
     string? Phone, bool EmailVerified, bool PhoneVerified, DateOnly? BirthDate, ManagerPatientAddress? Address,
-    string StatusCode, bool IsPremium, string PremiumStatus, ulong? PremiumRequestId,
+    string StatusCode, bool PortalAccessEnabled, bool IsPremium, string PremiumStatus, ulong? PremiumRequestId,
     int AppointmentCount, DateTime? LastAppointmentAtUtc, DateTime? NextAppointmentAtUtc, ulong RowVersion);
 public sealed record ManagerPatientCounters(int Total, int Premium, int Active, int Blocked, int PremiumPending);
 public sealed record ManagerPatientSources(IReadOnlyList<string> Total, IReadOnlyList<string> Premium,
@@ -45,5 +45,5 @@ public static class ManagerLabels
     public static string Category(string code) => PatientLabels.Category(code);
     public static string Modality(string code) => code == "online" ? "Online" : "Presencial";
     public static string Money(decimal value) => PatientLabels.Money(value);
-    public static string Method(string? code) => code switch { "credit_card" => "Cartão de crédito", "debit_card" => "Cartão de débito", "pix" => "Pix", "cash" => "Dinheiro", _ => "Não informado" };
+    public static string Method(string? code) => code switch { "credit_card" => "Cartão de crédito", "debit_card" => "Cartão de débito", "pix" => "Pix", "cash" => "Dinheiro", "pagbank_online" => "PagBank online", _ => "Não informado" };
 }

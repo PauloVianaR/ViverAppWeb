@@ -2,9 +2,9 @@
 
 ## Estado e objetivo
 
-**Estado:** planejada; depende da Fase 16 integrada à `main`.
+**Estado:** implementada em 10 de setembro de 2026 na branch `codex/fase-17-caixa-reversoes`; validações automatizadas concluídas. A homologação visual autenticada no monitor 3 e as integrações externas deliberadamente não acionadas permanecem registradas no arquivo local de pendências.
 
-**Branch prevista:** `codex/fase-17-caixa-reversoes`, criada a partir da `main` atualizada após autorização de merge da Fase 16.
+**Branch executada:** `codex/fase-17-caixa-reversoes`, criada a partir da `main` após a integração da Fase 16 pelo merge `f59755c`.
 
 Implementar um livro-caixa diário, histórico e auditável para Gestor e Administrador, incluindo totais por forma de pagamento, impressão, cancelamento/estorno de pagamentos e novo pagamento para o mesmo atendimento sem apagar o histórico.
 
@@ -264,7 +264,7 @@ DTOs não expõem entidades EF. Totais e relatórios são calculados no servidor
 - entradas, reversões, suprimentos, sangrias, ajustes e líquido fecham matematicamente;
 - paginação não altera totais;
 - mudança de data/fuso classifica o movimento corretamente;
-- Imprimir contém movimentos e totais;
+- Imprimir contém somente cabeçalho, metadados e movimentos;
 - Imprimir Totais não contém movimentos individuais;
 - A4 não corta valores/linhas essenciais em celular ou desktop.
 
@@ -299,3 +299,22 @@ DTOs não expõem entidades EF. Totais e relatórios são calculados no servidor
 - build, suíte integral, testes financeiros/segurança e validação visual estão aprovados;
 - prontuário e Fase 19 não foram antecipados;
 - nenhuma pendência real foi ocultada.
+
+## Implementação e evidências
+
+- as migrations `0025` a `0030` foram executadas integralmente no banco local `viverappweb`, em MySQL 8.0.41, e o scaffold EF foi regenerado por DB-First;
+- o schema agora preserva várias tentativas de pagamento por atendimento, aponta o pagamento atual, registra reversões e eventos, mantém livro-caixa e fechamento imutáveis e protege os registros append-only por triggers;
+- a API entrega consulta diária/histórica paginada, filtros, totais calculados no servidor, movimentos manuais compensatórios, fechamento, duas visões de impressão e reversão idempotente;
+- a interface de Gestor e Administrador possui a nova área **Caixa**, filtros, totais por método, movimentos, fechamento e as ações exatas **Imprimir** e **Imprimir Totais**; os detalhes de atendimento permitem cancelar o pagamento elegível e registrar outro depois da reversão confirmada;
+- o fluxo PagBank permanece restrito a ambiente não produtivo e só confirma a reversão local quando o estado retornado pelo provedor corresponde efetivamente a reembolso; produção continua bloqueada sem autorização operacional explícita;
+- o cenário de integração em MySQL comprova recebimento, reversão, novo pagamento, cadeia de duas tentativas com uma única ativa, três movimentos preservados, totais, ambos os modos de impressão, fechamento, restrição pós-fechamento do Gestor, operação elevada do Administrador e proteção append-only;
+- o fallback de desenvolvimento por HTTP foi validado sem excluir ou reparar certificados: somente loopback em `Development` com `Security:AllowInsecureLocalHttp=true` pode dispensar redirecionamento HTTPS; produção continua exigindo HTTPS;
+- os ajustes complementares mantêm todo cancelamento financeiro como fato compensatório e também devolvem o atendimento a **Pendente**, permitindo novo pagamento; a chegada pode ser cancelada por Gestor/Admin somente com motivo e sua notificação médica pendente é encerrada;
+- pacientes cadastrados por Gestor/Admin agora podem existir somente no cadastro clínico, com nome, CPF único e nascimento obrigatórios, contatos/endereço opcionais e onboarding explicitamente opcional; `portal_access_enabled` distingue essas pessoas de contas capazes de entrar no portal;
+- o rate limiting continua protegendo acessos anônimos, autenticação, uploads e integrações externas, enquanto operações autenticadas usuais usam partição por conta e limites operacionais altos, eliminando o bloqueio de uma sequência humana normal de agenda/pagamento/reversão;
+- os dois relatórios A4 foram isolados do restante da página: **Imprimir** contém somente cabeçalho, metadados e movimentações, enquanto **Imprimir Totais** contém somente cabeçalho, metadados e os totais por forma; navegação, link de salto, rodapé e blocos indevidos não entram na impressão;
+- o endereço de pacientes internos aceita preenchimento parcial no banco e nos contratos DB-First, mantendo nome, CPF e nascimento obrigatórios; erros operacionais continuam no aviso da página e também abrem um diálogo responsivo com fundo desfocado, mensagens explicativas em português e fallback seguro para falhas inesperadas;
+- a validação monetária dos contratos usa limites decimais em cultura invariável; uma requisição HTTP autenticada em `pt-BR` deixou de falhar antes do controller, e a sangria continua coberta por integração transacional com auditoria e rollback do dado sintético;
+- as recargas acionadas por mudança de URL ficaram limitadas aos componentes que realmente compartilham rotas — Agenda/Histórico e Perfil/Disponibilidade —, impedindo que a tela descartada gere um popup falso sem reintroduzir o problema de troca entre Agenda e Histórico;
+- build da solution concluído sem avisos ou erros; 195 testes aprovados em 7 projetos e verificação final confirmou MySQL 8.0.41, banco `viverappweb` e migrations aplicadas;
+- o navegador integrado autenticado confirmou em HTTP a sequência Caixa → Pacientes → Agenda → Histórico, a troca direta Agenda/Histórico e as ações não destrutivas do formulário de sangria sem popup espúrio. A homologação estritamente visual no monitor 3 continua separada, pois a superfície integrada não identifica o monitor físico.

@@ -144,8 +144,32 @@ public sealed class ClinicalOperationsApiTests : IAsyncLifetime
         var cardResults = new List<ValidationResult>();
         Assert.False(Validator.TryValidateObject(card, new ValidationContext(card), cardResults, true));
 
-        var patient = new ManagerPatientCreateRequest("A", "invalid", null, null);
+        var patient = new ManagerPatientCreateRequest(
+            "A",
+            null,
+            "invalid",
+            DateOnly.FromDateTime(DateTime.Today),
+            null,
+            null,
+            null,
+            false);
         var patientResults = new List<ValidationResult>();
         Assert.False(Validator.TryValidateObject(patient, new ValidationContext(patient), patientResults, true));
+
+        var offlinePatient = new ManagerPatientCreateRequest(
+            "Paciente sem portal",
+            null,
+            "12345678901",
+            DateOnly.FromDateTime(DateTime.Today.AddYears(-35)),
+            null,
+            null,
+            null,
+            false);
+        var offlineResults = new List<ValidationResult>();
+        Assert.True(Validator.TryValidateObject(offlinePatient, new ValidationContext(offlinePatient), offlineResults, true));
+
+        var onboardingWithoutContact = offlinePatient with { SendOnboarding = true };
+        var onboardingResults = new List<ValidationResult>();
+        Assert.False(Validator.TryValidateObject(onboardingWithoutContact, new ValidationContext(onboardingWithoutContact), onboardingResults, true));
     }
 }

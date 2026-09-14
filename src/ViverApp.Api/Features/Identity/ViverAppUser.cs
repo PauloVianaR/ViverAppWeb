@@ -24,6 +24,8 @@ public sealed class ViverAppUser
 
     public bool PhoneNumberConfirmed { get; set; }
 
+    public bool PortalAccessEnabled { get; set; } = true;
+
     public string? TaxId { get; set; }
 
     public DateTime? BirthDate { get; set; }

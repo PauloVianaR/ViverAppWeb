@@ -1,0 +1,26 @@
+<section class="surface patient-panel mobile-filter-panel @(Expanded ? "mobile-filter-panel--open" : null) @Class" aria-label="@AriaLabel">
+    <button type="button" class="mobile-filter-panel__summary" aria-expanded="@Expanded" aria-controls="mobile-filter-panel-content" @onclick="Toggle">
+        <span><AppIcon Name="filter" /><strong>@Title</strong></span>
+        <small>@(Expanded ? "Toque para ocultar" : "Toque para exibir")</small>
+    </button>
+    <div id="mobile-filter-panel-content" class="mobile-filter-panel__content">
+        @ChildContent
+    </div>
+</section>
+
+@code {
+    [Parameter]
+    public string Title { get; set; } = "Filtros";
+
+    [Parameter]
+    public string AriaLabel { get; set; } = "Filtros da página";
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter, EditorRequired]
+    public RenderFragment ChildContent { get; set; } = default!;
+
+    private bool Expanded;
+    private void Toggle() => Expanded = !Expanded;
+}

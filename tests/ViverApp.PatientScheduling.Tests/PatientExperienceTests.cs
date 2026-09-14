@@ -124,6 +124,7 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         await db.MedicalReports.Where(x => x.AppointmentId == appointment).ExecuteDeleteAsync();
         await db.PrivateDocuments.Where(x => ids.Contains(x.OwnerAccountId)).ExecuteDeleteAsync();
         await db.AppointmentReviews.Where(x => x.AppointmentId == appointment).ExecuteDeleteAsync();
+        await db.Appointments.Where(x => x.Id == appointment).ExecuteUpdateAsync(update => update.SetProperty(x => x.CurrentPaymentId, (ulong?)null));
         await db.Payments.Where(x => x.AppointmentId == appointment).ExecuteDeleteAsync();
         await db.AppointmentStatusHistories.Where(x => x.AppointmentId == appointment).ExecuteDeleteAsync();
         await db.Appointments.Where(x => x.Id == appointment).ExecuteDeleteAsync();
@@ -373,7 +374,9 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         await Assert.ThrowsAsync<HubException>(() => access.RequireAsync(principal, appointment, default));
         await db.Appointments.Where(x => x.Id == appointment).ExecuteUpdateAsync(s => s.SetProperty(x => x.ModalityCode, "online").SetProperty(x => x.StatusCode, "confirmed").SetProperty(x => x.StartsAtUtc, now).SetProperty(x => x.EndsAtUtc, now.AddMinutes(30)));
         await Assert.ThrowsAsync<HubException>(() => access.RequireAsync(principal, appointment, default));
-        db.Payments.Add(new() { AppointmentId = appointment, ProviderReferenceAppointmentId = appointment, ProviderCode = "pagbank", StatusCode = "paid", Amount = 123.45m, CurrencyCode = "BRL", CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 }); await db.SaveChangesAsync();
+        var paidPayment = new Payment { AppointmentId = appointment, ProviderReferenceAppointmentId = appointment, ProviderCode = "pagbank", StatusCode = "paid", Amount = 123.45m, CurrencyCode = "BRL", CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 };
+        db.Payments.Add(paidPayment); await db.SaveChangesAsync();
+        await db.Appointments.Where(x => x.Id == appointment).ExecuteUpdateAsync(update => update.SetProperty(x => x.CurrentPaymentId, paidPayment.Id));
         Assert.Equal(appointment, (await access.RequireAsync(principal, appointment, default)).Id);
         await Assert.ThrowsAsync<HubException>(() => access.RequireAsync(principal, ulong.MaxValue, default));
         await db.AuthSessions.Where(x => x.AccountId == patient).ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAtUtc, now));

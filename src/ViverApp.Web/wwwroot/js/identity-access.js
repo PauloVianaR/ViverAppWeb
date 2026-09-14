@@ -7,6 +7,8 @@ async function readResponse(response) {
         return response.status === 204 ? null : await response.json();
     }
 
+    const unexpected = "Ocorreu um erro interno não classificado. Contate o administrador do sistema.";
+    if (response.status >= 500) throw Object.assign(new Error(unexpected), { status: response.status });
     let message = response.status === 401
         ? "Credenciais inválidas ou sessão expirada."
         : response.status === 403
@@ -14,10 +16,10 @@ async function readResponse(response) {
             : "Não foi possível concluir a operação.";
     try {
         const problem = await response.json();
-        const firstValidation = problem.errors
-            ? Object.values(problem.errors).flat().find(Boolean)
-            : null;
-        message = firstValidation || problem.title || message;
+        const validationFields = problem.errors ? Object.keys(problem.errors) : [];
+        const firstValidation = problem.errors ? Object.values(problem.errors).flat().find(value => value && !/one or more validation errors|the .+ field is required/i.test(value)) : null;
+        const safeTitle = problem.title && !/one or more validation errors occurred|internal server error|^an error occurred/i.test(problem.title) ? problem.title : null;
+        message = firstValidation || safeTitle || (validationFields.length ? "Revise os campos informados. Há informações ausentes ou inválidas." : message);
     } catch {
         // Nunca apresenta HTML ou texto não confiável vindo de proxies.
     }

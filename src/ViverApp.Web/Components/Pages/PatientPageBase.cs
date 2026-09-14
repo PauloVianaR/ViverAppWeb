@@ -8,11 +8,14 @@ public abstract class PatientPageBase : ComponentBase, IAsyncDisposable
     [Inject] protected IJSRuntime JavaScript { get; set; } = null!;
     [Inject] protected WebBackendOptions Backend { get; set; } = null!;
     [Inject] protected NavigationManager Navigation { get; set; } = null!;
+    [Inject] protected UiErrorNotifier ErrorNotifier { get; set; } = null!;
     protected IJSObjectReference? Module;
     protected bool Loading = true;
     protected bool Busy;
-    protected string? Notice;
-    protected bool NoticeError;
+    private string? notice;
+    private bool noticeError;
+    protected string? Notice { get => notice; set { notice = value; if (noticeError && value is not null) ErrorNotifier.Show(value); } }
+    protected bool NoticeError { get => noticeError; set { noticeError = value; if (value && notice is not null) ErrorNotifier.Show(notice); } }
     private string? loadedUri;
     protected override async Task OnParametersSetAsync()
     {
@@ -49,6 +52,7 @@ public abstract class PatientPageBase : ComponentBase, IAsyncDisposable
         try { await action(); }
         catch (PatientUiException error) { Notice = error.Message; NoticeError = true; }
         catch (JSException) { Notice = "Não foi possível conectar. Confira sua conexão e tente novamente."; NoticeError = true; }
+        catch (Exception) { Notice = UiErrorNotifier.UnexpectedMessage; NoticeError = true; }
         finally { Busy = false; }
     }
     protected async Task Download(Guid id) => await Run(async () =>

@@ -25,6 +25,9 @@
 .patient-visit__top { display: flex; gap: 1rem; justify-content: space-between; align-items: flex-start; }
 .metric-card{appearance:none;width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer}.metric-card:hover,.metric-card:focus-visible{transform:translateY(-2px);box-shadow:0 .65rem 1.5rem rgba(24,39,75,.12)}.metric-drilldown{display:grid;gap:.75rem;margin-block:0 1.25rem;padding:1rem 1.25rem;border-left:4px solid var(--color-brand)}.metric-drilldown h2,.metric-drilldown p{margin:0}.metric-drilldown__numbers{display:flex;gap:.5rem;flex-wrap:wrap}.metric-drilldown .button{justify-self:start}
 .metric-drilldown__list{display:grid;gap:.35rem;margin:0;padding-left:1.35rem;max-height:18rem;overflow:auto}
+.mobile-filter-panel__summary{display:none}
+.mobile-filter-panel__content{display:contents}
+.mobile-metric-flow{display:contents}
 .patient-visit__top .badge { flex-shrink: 0; }
 .patient-visit__top p { margin-block: .4rem; }
 .patient-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; padding-block: 1rem; border-block: 1px solid var(--color-border); }
@@ -56,5 +59,25 @@
 @media (min-width: 100rem) { .patient-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 68rem) { .patient-home-grid { grid-template-columns: 1fr; } .patient-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 48rem) { .patient-grid, .patient-video-grid { grid-template-columns: 1fr; } .patient-visit__top { flex-wrap: wrap; } }
+@media (max-width: 46rem) {
+    .mobile-filter-panel{overflow:hidden;padding:0}
+    .mobile-filter-panel__summary{align-items:center;background:transparent;border:0;color:inherit;cursor:pointer;display:flex;justify-content:space-between;gap:1rem;padding:1rem;text-align:left;width:100%}
+    .mobile-filter-panel__summary>span{align-items:center;display:flex;gap:.65rem}
+    .mobile-filter-panel__summary small{color:var(--color-text-muted);white-space:nowrap}
+    .mobile-filter-panel__content{display:none;padding:0 1rem 1rem}
+    .mobile-filter-panel--open .mobile-filter-panel__summary{border-bottom:1px solid var(--color-border)}
+    .mobile-filter-panel--open .mobile-filter-panel__content{display:block}
+    .mobile-metric-flow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-block:1.25rem}
+    .mobile-metric-flow>.manager-kpis,.mobile-metric-flow>.doctor-kpis,.mobile-metric-flow>.administrator-kpis{display:contents}
+    .mobile-metric-flow .metric-card:nth-child(1){order:10}
+    .mobile-metric-flow .metric-card:nth-child(2){order:20}
+    .mobile-metric-flow .metric-card:nth-child(3){order:30}
+    .mobile-metric-flow .metric-card:nth-child(4){order:40}
+    .mobile-metric-flow .metric-card:nth-child(5){order:50}
+    .mobile-metric-flow .metric-card:nth-child(6){order:60}
+    .mobile-metric-flow .metric-drilldown{grid-column:1/-1;margin:0;order:var(--mobile-drilldown-order)}
+    .mobile-metric-flow .metric-card,.cash-summary .manager-kpi{min-width:0;padding:.85rem}
+    .mobile-metric-flow .metric-card strong,.cash-summary .manager-kpi strong{font-size:clamp(1.05rem,5.4vw,1.6rem);overflow-wrap:anywhere}
+}
 @media (max-width: 26rem) { .patient-filter-grid, .patient-facts { grid-template-columns: 1fr; } .patient-facts__wide { grid-column: auto; } .patient-tabs .button { flex: 1; padding-inline: .65rem; } .patient-document { flex-direction: column; align-items: stretch; } }
 @media (prefers-reduced-motion: reduce) { .patient-panel, .patient-visit { scroll-behavior: auto; } }

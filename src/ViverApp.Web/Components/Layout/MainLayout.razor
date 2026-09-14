@@ -88,15 +88,33 @@
     @if (IsWorkspace)
     {
         <nav class="mobile-navigation" aria-label="Navegação móvel da área @Shell.Label">
-            @foreach (var item in Shell.Items.Take(Shell.Profile == ShellProfile.Administrator ? 7 : 5))
+            @foreach (var item in Shell.MobilePrimaryItems)
             {
                 <a class="@ActiveClass(item)" href="@item.Href" aria-current="@AriaCurrent(item)"><AppIcon Name="@item.Icon" /><span>@item.Label</span></a>
+            }
+            @if (Shell.MobileOverflowItems.Count > 0)
+            {
+                <div class="mobile-navigation-more">
+                    <button type="button" class="mobile-navigation-more__toggle @(OverflowIsActive ? "active" : null)" aria-expanded="@MobileMoreOpen" aria-controls="mobile-navigation-overflow" @onclick="ToggleMobileMore">
+                        <AppIcon Name="more" /><span>Outros</span>
+                    </button>
+                    @if (MobileMoreOpen)
+                    {
+                        <div id="mobile-navigation-overflow" class="mobile-navigation-more__menu">
+                            @foreach (var item in Shell.MobileOverflowItems)
+                            {
+                                <a class="@ActiveClass(item)" href="@item.Href" aria-current="@AriaCurrent(item)" @onclick="CloseMobileMore"><AppIcon Name="@item.Icon" /><span>@item.Label</span></a>
+                            }
+                        </div>
+                    }
+                </div>
             }
         </nav>
     }
 </div>
 @if(ArrivalToast is not null){<aside class="arrival-toast" role="status" aria-live="polite"><strong>Paciente chegou</strong><span>Atendimento @ArrivalToast.AppointmentNumber · senha @ArrivalToast.QueueNumber</span><button type="button" @onclick="()=>OpenRealtimeAsync(ArrivalToast)">Abrir atendimento</button></aside>}
 <div id="blazor-error-ui" data-nosnippet>Ocorreu um erro inesperado. <a href="." class="reload">Recarregar</a><span class="dismiss">🗙</span></div>
+<GlobalErrorDialog />
 
 @code {
     private ShellDefinition Shell { get; set; } = ShellNavigationCatalog.Resolve("/");
@@ -114,6 +132,8 @@
     private string CurrentPath => new Uri(Navigation.Uri).AbsolutePath;
     private bool IsProtectedPath => ShellNavigationCatalog.IsWorkspacePath(CurrentPath);
     private bool IsWorkspace => Shell.Profile != ShellProfile.Public;
+    private bool OverflowIsActive => Shell.MobileOverflowItems.Any(IsActive);
+    private bool MobileMoreOpen;
 
     protected override void OnInitialized() => Navigation.LocationChanged += HandleLocationChanged;
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -124,6 +144,7 @@
     }
     private void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
     {
+        MobileMoreOpen = false;
         IdentityResolved = !ShellNavigationCatalog.IsWorkspacePath(new Uri(args.Location).AbsolutePath);
         Shell = ShellNavigationCatalog.Resolve("/");
         _ = InvokeAsync(ResolveIdentityAsync);
@@ -183,6 +204,8 @@
         Navigation.NavigateTo("/acesso", true);
     }
     private string? ActiveClass(ShellNavigationItem item) => IsActive(item) ? "active" : null;
+    private void ToggleMobileMore() => MobileMoreOpen = !MobileMoreOpen;
+    private void CloseMobileMore() => MobileMoreOpen = false;
     private string? AriaCurrent(ShellNavigationItem item) => IsActive(item) ? "page" : null;
     private bool IsActive(ShellNavigationItem item)
     {

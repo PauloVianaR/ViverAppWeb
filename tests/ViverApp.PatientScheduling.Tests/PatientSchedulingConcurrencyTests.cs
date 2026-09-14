@@ -282,6 +282,7 @@ public sealed class PatientSchedulingConcurrencyTests
             .ToArrayAsync();
         await database.IdempotencyRecords.Where(item => item.ScopeCode.EndsWith($":{fixture.PatientId}"))
             .ExecuteDeleteAsync();
+        await database.Appointments.Where(item => appointmentIds.Contains(item.Id)).ExecuteUpdateAsync(update => update.SetProperty(item => item.CurrentPaymentId, (ulong?)null));
         await database.Payments.Where(item => appointmentIds.Contains(item.AppointmentId)).ExecuteDeleteAsync();
         await database.AppointmentStatusHistories.Where(item => appointmentIds.Contains(item.AppointmentId))
             .ExecuteDeleteAsync();
