@@ -29,20 +29,26 @@ public sealed class CashManagementService(
         ulong? appointmentNumber,
         string? patient,
         string? responsible,
+        string? cardLastFour,
+        string? authorizationReference,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
         ValidateQuery(date, method, type, page, pageSize);
-        var query = Filtered(date, method, type, appointmentNumber, patient, responsible);
+        var normalizedCardLastFour = NormalizeCardLastFour(cardLastFour);
+        var normalizedAuthorization = NormalizeAuthorization(authorizationReference);
+        var query = Filtered(date, method, type, appointmentNumber, patient, responsible,
+            normalizedCardLastFour, normalizedAuthorization);
         var total = await query.CountAsync(cancellationToken);
-        var rows = await query.OrderByDescending(item => item.OccurredAtUtc)
+        var lastMovementId = await query.MaxAsync(item => (ulong?)item.Id, cancellationToken);
+        var rows = await query.OrderBy(item => item.OccurredAtUtc).ThenBy(item => item.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToArrayAsync(cancellationToken);
         var summary = await SummaryAsync(query, cancellationToken);
         var closure = await ClosureAsync(date, cancellationToken);
-        return new(date, (await ClinicAsync(cancellationToken)).TimezoneName, closure, summary,
+        return new(date, (await ClinicAsync(cancellationToken)).TimezoneName, closure, summary, lastMovementId,
             new(rows.Select(Map).ToArray(), page, pageSize, total));
     }
 
@@ -54,17 +60,22 @@ public sealed class CashManagementService(
         ulong? appointmentNumber,
         string? patient,
         string? responsible,
+        string? cardLastFour,
+        string? authorizationReference,
         bool totalsOnly,
         CancellationToken cancellationToken)
     {
         ValidateQuery(date, method, type, 1, 100);
-        var query = Filtered(date, method, type, appointmentNumber, patient, responsible);
+        var normalizedCardLastFour = NormalizeCardLastFour(cardLastFour);
+        var normalizedAuthorization = NormalizeAuthorization(authorizationReference);
+        var query = Filtered(date, method, type, appointmentNumber, patient, responsible,
+            normalizedCardLastFour, normalizedAuthorization);
         var clinic = await ClinicAsync(cancellationToken);
         var actorName = await database.Accounts.AsNoTracking().Where(item => item.Id == actor)
             .Select(item => item.FullName).SingleAsync(cancellationToken);
         var movements = totalsOnly
             ? []
-            : (await query.OrderBy(item => item.OccurredAtUtc).ToArrayAsync(cancellationToken)).Select(Map).ToArray();
+            : (await query.OrderBy(item => item.OccurredAtUtc).ThenBy(item => item.Id).ToArrayAsync(cancellationToken)).Select(Map).ToArray();
         var filters = string.Join(" · ", new[]
         {
             method is null ? null : $"Forma: {method}",
@@ -72,6 +83,8 @@ public sealed class CashManagementService(
             appointmentNumber is null ? null : $"Atendimento: {appointmentNumber}",
             string.IsNullOrWhiteSpace(patient) ? null : $"Paciente: {patient.Trim()}",
             string.IsNullOrWhiteSpace(responsible) ? null : $"Responsável: {responsible.Trim()}",
+            normalizedCardLastFour is null ? null : $"Final do cartão: {normalizedCardLastFour}",
+            normalizedAuthorization is null ? null : $"Autorização: {normalizedAuthorization}",
         }.Where(item => item is not null));
         await audit.WriteAsync(totalsOnly ? "cash.totals_printed" : "cash.movements_printed", actor, "cash_day",
             date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), null, cancellationToken);
@@ -94,7 +107,7 @@ public sealed class CashManagementService(
         if (expectedDirection is not ("entry" or "outflow") || request.DirectionCode != expectedDirection)
             throw Invalid("A direção da movimentação não corresponde ao tipo informado.");
         var reason = Useful(request.Reason, 5, "Informe um motivo com pelo menos 5 caracteres.");
-        var description = Useful(request.Description, 3, "Informe uma descrição válida.");
+        var description = ManualDescription(request.TypeCode, expectedDirection);
         if (request.TypeCode == "adjustment" && request.RelatedMovementId is null)
             throw Invalid("Um ajuste corretivo deve indicar o movimento compensado.");
         if (request.TypeCode != "adjustment" && request.RelatedMovementId is not null)
@@ -102,7 +115,7 @@ public sealed class CashManagementService(
         var now = clock.GetUtcNow().UtcDateTime;
         var date = await OperationalDateAsync(now, cancellationToken);
         await using var transaction = await BeginTransactionAsync(cancellationToken);
-        var replay = await database.CashMovements.AsNoTracking().Include(item => item.ResponsibleAccount)
+        var replay = await database.CashMovements.AsNoTracking().Include(item => item.Payment).Include(item => item.ResponsibleAccount)
             .SingleOrDefaultAsync(item => item.IdempotencyKey == idempotencyKey, cancellationToken);
         if (replay is not null)
         {
@@ -137,7 +150,7 @@ public sealed class CashManagementService(
         await audit.WriteAsync("cash.manual_movement.created", actor, "cash_movement", movement.Id.ToString(CultureInfo.InvariantCulture),
             new Dictionary<string, string> { ["type"] = movement.TypeCode, ["direction"] = movement.DirectionCode }, cancellationToken);
         if (transaction is not null) await transaction.CommitAsync(cancellationToken);
-        var recorded = await database.CashMovements.AsNoTracking().Include(item => item.ResponsibleAccount)
+        var recorded = await database.CashMovements.AsNoTracking().Include(item => item.Payment).Include(item => item.ResponsibleAccount)
             .SingleAsync(item => item.Id == movement.Id, cancellationToken);
         return Map(recorded);
     }
@@ -157,7 +170,7 @@ public sealed class CashManagementService(
             return await MapClosureAsync(existing, cancellationToken);
         }
 
-        var query = Filtered(date, null, null, null, null, null);
+        var query = Filtered(date, null, null, null, null, null, null, null);
         var lastMovementId = await query.MaxAsync(item => (ulong?)item.Id, cancellationToken);
         if (lastMovementId != request.ExpectedLastMovementId)
             throw Conflict("O caixa recebeu novas movimentações. Revise os totais antes de fechar.");
@@ -352,17 +365,22 @@ public sealed class CashManagementService(
         });
     }
 
-    private IQueryable<CashMovement> Filtered(DateOnly date, string? method, string? type, ulong? appointmentNumber, string? patient, string? responsible)
+    private IQueryable<CashMovement> Filtered(DateOnly date, string? method, string? type, ulong? appointmentNumber,
+        string? patient, string? responsible, string? cardLastFour, string? authorizationReference)
     {
         var day = date.ToDateTime(TimeOnly.MinValue);
         IQueryable<CashMovement> query = database.CashMovements.AsNoTracking().Where(item => item.OperationalDate == day)
             .Include(item => item.Appointment!).ThenInclude(item => item.PatientAccount)
+            .Include(item => item.Payment)
             .Include(item => item.ResponsibleAccount);
         if (method is not null) query = query.Where(item => item.MethodCode == method);
         if (type is not null) query = query.Where(item => item.TypeCode == type);
         if (appointmentNumber.HasValue) query = query.Where(item => item.Appointment != null && item.Appointment.AppointmentNumber == appointmentNumber);
         var patientTerm = Text(patient); if (patientTerm is not null) query = query.Where(item => item.Appointment != null && item.Appointment.PatientAccount.FullName.Contains(patientTerm));
         var responsibleTerm = Text(responsible); if (responsibleTerm is not null) query = query.Where(item => item.ResponsibleAccount != null && item.ResponsibleAccount.FullName.Contains(responsibleTerm));
+        if (cardLastFour is not null) query = query.Where(item => item.Payment != null && item.Payment.CardLastFour == cardLastFour);
+        if (authorizationReference is not null) query = query.Where(item => item.Payment != null
+            && item.Payment.AuthorizationReference != null && item.Payment.AuthorizationReference.Contains(authorizationReference));
         return query;
     }
 
@@ -404,7 +422,8 @@ public sealed class CashManagementService(
 
     private static CashMovementResponse Map(CashMovement item) => new(item.Id, DateOnly.FromDateTime(item.OperationalDate), item.DirectionCode,
         item.TypeCode, item.MethodCode, item.Amount, item.AppointmentId, item.Appointment?.AppointmentNumber, item.PaymentId,
-        item.RelatedMovementId, item.Appointment?.PatientAccount.FullName, item.ResponsibleAccount?.FullName, item.Description,
+        item.RelatedMovementId, item.Appointment?.PatientAccount.FullName, item.ResponsibleAccount?.FullName,
+        item.Payment?.CardLastFour, item.Payment?.AuthorizationReference, item.Description,
         item.Reason, DateTime.SpecifyKind(item.OccurredAtUtc, DateTimeKind.Utc), item.AfterClosure);
 
     private static PaymentReversalResponse MapReversal(PaymentReversal item) => new(item.Id, item.PaymentId, item.Payment.AppointmentId,
@@ -426,7 +445,26 @@ public sealed class CashManagementService(
 
     private static string LedgerMethod(Payment payment) => payment.ProviderCode == "pagbank" ? "pagbank_online" :
         Methods.Contains(payment.MethodCode, StringComparer.Ordinal) ? payment.MethodCode! : "other";
+    private static string ManualDescription(string type, string direction) => type switch
+    {
+        "supply" => "Suprimento manual",
+        "withdrawal" => "Sangria manual",
+        _ => direction == "entry" ? "Ajuste manual de entrada" : "Ajuste manual de saída",
+    };
     private static string? Text(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string? NormalizeCardLastFour(string? value)
+    {
+        var normalized = Text(value);
+        if (normalized is not null && (normalized.Length != 4 || normalized.Any(character => !char.IsAsciiDigit(character))))
+            throw Invalid("Informe exatamente os quatro últimos dígitos do cartão.");
+        return normalized;
+    }
+    private static string? NormalizeAuthorization(string? value)
+    {
+        var normalized = Text(value);
+        if (normalized?.Length > 100) throw Invalid("O número de autorização deve ter no máximo 100 caracteres.");
+        return normalized;
+    }
     private static string Useful(string value, int minimum, string message) => string.IsNullOrWhiteSpace(value) || value.Trim().Length < minimum ? throw Invalid(message) : value.Trim();
     private static void ValidateQuery(DateOnly date, string? method, string? type, int page, int pageSize)
     {

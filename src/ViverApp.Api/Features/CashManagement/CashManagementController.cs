@@ -36,14 +36,18 @@ public sealed class CashManagementController(CashManagementService service) : Co
     [HttpGet, Authorize(Policy = ViverAppPolicies.CashRead)]
     public Task<CashDayResponse> Day(DateOnly date, string? method = null, string? type = null,
         ulong? appointmentNumber = null, string? patient = null, string? responsible = null,
+        string? cardLastFour = null, string? authorizationReference = null,
         int page = 1, int pageSize = 25, CancellationToken cancellationToken = default) =>
-        service.DayAsync(date, method, type, appointmentNumber, patient, responsible, page, pageSize, cancellationToken);
+        service.DayAsync(date, method, type, appointmentNumber, patient, responsible, cardLastFour,
+            authorizationReference, page, pageSize, cancellationToken);
 
     [HttpGet("print"), Authorize(Policy = ViverAppPolicies.CashPrint), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<CashPrintResponse> Print(DateOnly date, bool totalsOnly, string? method = null, string? type = null,
         ulong? appointmentNumber = null, string? patient = null, string? responsible = null,
+        string? cardLastFour = null, string? authorizationReference = null,
         CancellationToken cancellationToken = default) =>
-        service.PrintAsync(Actor, date, method, type, appointmentNumber, patient, responsible, totalsOnly, cancellationToken);
+        service.PrintAsync(Actor, date, method, type, appointmentNumber, patient, responsible, cardLastFour,
+            authorizationReference, totalsOnly, cancellationToken);
 
     [HttpPost("movements"), Authorize(Policy = ViverAppPolicies.CashWrite), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<CashMovementResponse> AddMovement([FromHeader(Name = "Idempotency-Key")] string key,

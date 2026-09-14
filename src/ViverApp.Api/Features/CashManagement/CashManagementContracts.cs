@@ -34,6 +34,8 @@ public sealed record CashMovementResponse(
     ulong? RelatedMovementId,
     string? PatientName,
     string? ResponsibleName,
+    string? CardLastFour,
+    string? AuthorizationReference,
     string Description,
     string? Reason,
     DateTime OccurredAtUtc,
@@ -52,6 +54,7 @@ public sealed record CashDayResponse(
     string TimezoneName,
     CashClosureResponse? Closure,
     CashSummaryResponse Summary,
+    ulong? LastMovementId,
     SchedulingPage<CashMovementResponse> Page);
 
 public sealed record CashPrintResponse(
@@ -74,7 +77,6 @@ public sealed record CashManualMovementRequest(
     [param: Range(typeof(decimal), "0.01", "9999999.00",
         ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal Amount,
     ulong? RelatedMovementId,
-    [param: Required, StringLength(240, MinimumLength = 3)] string Description,
     [param: Required, StringLength(500, MinimumLength = 5)] string Reason);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

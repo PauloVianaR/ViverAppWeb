@@ -108,7 +108,9 @@ public sealed class CashManagementIntegrationTests
             Amount = 180m,
             CurrencyCode = "BRL",
             IdempotencyKey = Guid.NewGuid(),
-            MethodCode = "cash",
+            MethodCode = "credit_card",
+            CardLastFour = "4242",
+            AuthorizationReference = "AUTH-PHASE17",
             ConfirmedByAccountId = manager.Id,
             PaidAtUtc = now,
             CreatedAtUtc = now,
@@ -142,9 +144,11 @@ public sealed class CashManagementIntegrationTests
         var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(now,
             TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo")));
 
-        var before = await cash.DayAsync(date, null, null, appointment.AppointmentNumber, null, null, 1, 25, CancellationToken.None);
+        var before = await cash.DayAsync(date, null, null, appointment.AppointmentNumber, null, null, null, null, 1, 25, CancellationToken.None);
         Assert.Equal(180m, before.Summary.NetTotal);
         Assert.Single(before.Page.Items);
+        Assert.Equal("4242", before.Page.Items[0].CardLastFour);
+        Assert.Equal("AUTH-PHASE17", before.Page.Items[0].AuthorizationReference);
 
         var reversed = await cash.ReverseAsync(manager.Id, Guid.NewGuid().ToString("N"), original.Id,
             new PaymentReversalRequest(original.RowVersion, "Pagamento lançado na forma incorreta"), CancellationToken.None);
@@ -167,40 +171,47 @@ public sealed class CashManagementIntegrationTests
 
         var withdrawal = await cash.AddManualAsync(manager.Id, ViverAppRoles.Manager, Guid.NewGuid().ToString("N"),
             new CashManualMovementRequest("withdrawal", "outflow", "cash", 200m, null,
-                "Sangria", "Sangria operacional"), CancellationToken.None);
+                "Sangria operacional"), CancellationToken.None);
         Assert.Equal("withdrawal", withdrawal.TypeCode);
         Assert.Equal("outflow", withdrawal.DirectionCode);
         Assert.Equal(200m, withdrawal.Amount);
+        Assert.Equal("Sangria manual", withdrawal.Description);
+        Assert.Equal("Sangria operacional", withdrawal.Reason);
 
-        var day = await cash.DayAsync(date, null, null, appointment.AppointmentNumber, null, null, 1, 25, CancellationToken.None);
+        var day = await cash.DayAsync(date, null, null, appointment.AppointmentNumber, null, null, null, null, 1, 25, CancellationToken.None);
         Assert.Equal(360m, day.Summary.GrossEntries);
         Assert.Equal(180m, day.Summary.PaymentReversals);
         Assert.Equal(180m, day.Summary.NetTotal);
         Assert.Equal(3, day.Summary.MovementCount);
         Assert.Contains(day.Page.Items, item => item.TypeCode == "payment_reversal" && item.RelatedMovementId.HasValue);
 
-        var unfilteredDay = await cash.DayAsync(date, null, null, null, null, null, 1, 25, CancellationToken.None);
+        var unfilteredDay = await cash.DayAsync(date, null, null, null, null, null, null, null, 1, 25, CancellationToken.None);
         Assert.Equal(200m, unfilteredDay.Summary.Withdrawals);
         Assert.Equal(-20m, unfilteredDay.Summary.NetTotal);
         Assert.Equal(4, unfilteredDay.Summary.MovementCount);
         Assert.Contains(unfilteredDay.Page.Items, item => item.Id == withdrawal.Id && item.TypeCode == "withdrawal");
+        Assert.Equal(unfilteredDay.Page.Items.OrderBy(item => item.OccurredAtUtc).ThenBy(item => item.Id), unfilteredDay.Page.Items);
+        Assert.Equal(unfilteredDay.Page.Items.Max(item => item.Id), unfilteredDay.LastMovementId);
 
-        var fullPrint = await cash.PrintAsync(manager.Id, date, null, null, appointment.AppointmentNumber, null, null, false, CancellationToken.None);
-        var totalsPrint = await cash.PrintAsync(manager.Id, date, null, null, appointment.AppointmentNumber, null, null, true, CancellationToken.None);
+        var cardFiltered = await cash.DayAsync(date, null, null, null, null, null, "4242", "PHASE17", 1, 25, CancellationToken.None);
+        Assert.Equal(2, cardFiltered.Page.Items.Count);
+        Assert.All(cardFiltered.Page.Items, item => Assert.Equal(original.Id, item.PaymentId));
+
+        var fullPrint = await cash.PrintAsync(manager.Id, date, null, null, appointment.AppointmentNumber, null, null, null, null, false, CancellationToken.None);
+        var totalsPrint = await cash.PrintAsync(manager.Id, date, null, null, appointment.AppointmentNumber, null, null, null, null, true, CancellationToken.None);
         Assert.Equal(3, fullPrint.Movements.Count);
         Assert.Empty(totalsPrint.Movements);
         Assert.Equal(fullPrint.Summary.NetTotal, totalsPrint.Summary.NetTotal);
 
-        var lastMovement = unfilteredDay.Page.Items.Max(item => item.Id);
-        var closure = await cash.CloseAsync(manager.Id, date, new CashCloseRequest(lastMovement), CancellationToken.None);
+        var closure = await cash.CloseAsync(manager.Id, date, new CashCloseRequest(unfilteredDay.LastMovementId), CancellationToken.None);
         Assert.Equal(-20m, closure.Snapshot.NetTotal);
         Assert.Equal(200m, closure.Snapshot.Withdrawals);
         var denied = await Assert.ThrowsAsync<CashRuleException>(() => cash.AddManualAsync(manager.Id, ViverAppRoles.Manager,
             Guid.NewGuid().ToString("N"), new CashManualMovementRequest("supply", "entry", "cash", 25m, null,
-                "Troco adicional", "Abertura complementar após fechamento"), CancellationToken.None));
+                "Abertura complementar após fechamento"), CancellationToken.None));
         Assert.Equal(403, denied.StatusCode);
         var postClose = await cash.AddManualAsync(administrator.Id, ViverAppRoles.Administrator, Guid.NewGuid().ToString("N"),
-            new CashManualMovementRequest("supply", "entry", "cash", 25m, null, "Troco adicional",
+            new CashManualMovementRequest("supply", "entry", "cash", 25m, null,
                 "Abertura complementar após fechamento"), CancellationToken.None);
         Assert.True(postClose.AfterClosure);
 

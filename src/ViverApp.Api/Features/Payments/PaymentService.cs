@@ -418,6 +418,11 @@ public sealed class PaymentService(
 
         payment.StatusCode = transition.TargetStatus;
         if (resource.MethodCode is "PIX" or "CREDIT_CARD" or "DEBIT_CARD" or "BOLETO") payment.MethodCode = resource.MethodCode;
+        if (resource.MethodCode is "CREDIT_CARD" or "DEBIT_CARD")
+        {
+            payment.CardLastFour = resource.CardLastFour ?? payment.CardLastFour;
+            payment.AuthorizationReference = resource.AuthorizationReference ?? payment.AuthorizationReference;
+        }
         payment.ProviderStatusCode = resource.Status;
         payment.ProviderEventAtUtc = resource.OccurredAtUtc ?? now;
         if (resource.RawKind == "charge")

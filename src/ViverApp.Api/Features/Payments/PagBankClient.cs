@@ -34,7 +34,9 @@ public sealed record PagBankResource(
     long? TotalCents,
     long? RefundedCents,
     string RawKind,
-    string? MethodCode = null);
+    string? MethodCode = null,
+    string? CardLastFour = null,
+    string? AuthorizationReference = null);
 
 internal sealed class PagBankClient(HttpClient httpClient, PagBankOptions options) : IPagBankClient
 {
@@ -183,6 +185,15 @@ internal static class PagBankResourceParser
             ?? ReadDateTime(selected, "created_at")
             ?? ReadDateTime(root, "created_at");
         var expires = ReadDateTime(root, "expiration_date");
+        var paymentMethod = selected.TryGetProperty("payment_method", out var method) ? method : default;
+        var card = paymentMethod.ValueKind == JsonValueKind.Object && paymentMethod.TryGetProperty("card", out var cardElement)
+            ? cardElement
+            : default;
+        var paymentResponse = selected.TryGetProperty("payment_response", out var response) ? response : default;
+        var rawResponse = paymentResponse.ValueKind == JsonValueKind.Object
+            && paymentResponse.TryGetProperty("raw_data", out var rawData)
+                ? rawData
+                : default;
         return new PagBankResource(
             id,
             reference,
@@ -193,7 +204,9 @@ internal static class PagBankResourceParser
             total,
             refunded,
             charge.HasValue ? "charge" : "checkout",
-            selected.TryGetProperty("payment_method", out var method) ? ReadString(method, "type") : null);
+            ReadString(paymentMethod, "type"),
+            CardLastFour(card),
+            Authorization(rawResponse, paymentResponse));
     }
 
     private static JsonElement? FindObject(JsonElement element, Func<JsonElement, bool> predicate)
@@ -306,6 +319,18 @@ internal static class PagBankResourceParser
         DateTimeOffset.TryParse(ReadString(element, name), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out var value)
             ? value.UtcDateTime
             : null;
+
+    private static string? CardLastFour(JsonElement card)
+    {
+        var value = ReadString(card, "last_digits");
+        return value is { Length: 4 } && value.All(char.IsAsciiDigit) ? value : null;
+    }
+
+    private static string? Authorization(JsonElement rawResponse, JsonElement paymentResponse)
+    {
+        var value = ReadString(rawResponse, "authorization_code") ?? ReadString(paymentResponse, "reference");
+        return value is { Length: > 0 and <= 100 } ? value : null;
+    }
 
     private static PaymentRuleException Invalid() =>
         new(StatusCodes.Status502BadGateway, "O PagBank retornou uma resposta inválida.");

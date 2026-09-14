@@ -5,11 +5,12 @@ public sealed record CashSummary(decimal GrossEntries, decimal PaymentReversals,
     decimal AdjustmentsNet, decimal NetTotal, int MovementCount, IReadOnlyList<CashMethodTotal> ByMethod);
 public sealed record CashMovement(ulong Id, DateOnly OperationalDate, string DirectionCode, string TypeCode, string MethodCode,
     decimal Amount, ulong? AppointmentId, ulong? AppointmentNumber, ulong? PaymentId, ulong? RelatedMovementId,
-    string? PatientName, string? ResponsibleName, string Description, string? Reason, DateTime OccurredAtUtc, bool AfterClosure);
+    string? PatientName, string? ResponsibleName, string? CardLastFour, string? AuthorizationReference,
+    string Description, string? Reason, DateTime OccurredAtUtc, bool AfterClosure);
 public sealed record CashClosure(ulong Id, DateOnly OperationalDate, string ResponsibleName, DateTime ClosedAtUtc,
     ulong? LastMovementId, CashSummary Snapshot);
 public sealed record CashDay(DateOnly OperationalDate, string TimezoneName, CashClosure? Closure, CashSummary Summary,
-    WebPage<CashMovement> Page);
+    ulong? LastMovementId, WebPage<CashMovement> Page);
 public sealed record CashPrint(string ClinicName, DateOnly OperationalDate, string TimezoneName, string IssuedBy,
     DateTime IssuedAtUtc, string FilterDescription, CashClosure? Closure, CashSummary Summary,
     IReadOnlyList<CashMovement> Movements, bool TotalsOnly);
