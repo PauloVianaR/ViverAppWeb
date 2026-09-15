@@ -151,7 +151,9 @@ public sealed class MedicalRecordService(
     {
         await AuthorizeAsync(actorId, roleCode, recentAuthentication, patientId, "summary", null, ct);
         var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == patientId);
-        if (roleCode == ViverAppRoles.Doctor) query = query.Where(x => x.DoctorAccountId == actorId);
+        if (roleCode == ViverAppRoles.Doctor)
+            query = query.Where(x => x.DoctorAccountId == actorId
+                && (x.StatusCode == "confirmed" || x.StatusCode == "arrived" || x.StatusCode == "in_progress"));
         return await query.OrderByDescending(x => x.StartsAtUtc).Take(100)
             .Select(x => new MedicalRecordAppointmentOption(x.Id, x.AppointmentNumber, x.StartsAtUtc,
                 x.StatusCode, x.AppointmentType.Name)).ToArrayAsync(ct);
@@ -267,7 +269,6 @@ public sealed class MedicalRecordService(
         if (draft.RowVersion != request.DraftRowVersion) throw Conflict("Existe uma versão mais nova do rascunho. Revise antes de finalizar.");
         if (draft.Appointment.StatusCode != "in_progress") throw Conflict("Inicie o atendimento antes de finalizar o prontuário.");
         var content = Normalize(ToContent(draft));
-        ValidateFinalContent(content);
         var existing = await database.MedicalRecordEntries.Include(x => x.CurrentVersion)
             .SingleOrDefaultAsync(x => x.AppointmentId == appointmentId, ct);
         var hash = Hash(content);
@@ -325,7 +326,6 @@ public sealed class MedicalRecordService(
         ulong doctorId, ulong patientId, ulong entryId, MedicalRecordRectifyRequest request, CancellationToken ct)
     {
         var content = Normalize(request.Content);
-        ValidateFinalContent(content);
         var reason = request.CorrectionReason.Trim();
         if (reason.Length is < 5 or > 1000) throw Invalid("Informe um motivo de retificação entre 5 e 1.000 caracteres.");
         await AuthorizeAsync(doctorId, ViverAppRoles.Doctor, true, patientId, "clinical", null, ct);
@@ -607,9 +607,21 @@ public sealed class MedicalRecordService(
             if (result?.Length > 12000) throw Invalid("Cada campo clínico deve ter no máximo 12.000 caracteres.");
             return result;
         }
-        if (value.SystolicPressureMmhg is < 40 or > 300 || value.DiastolicPressureMmhg is < 20 or > 200
-            || value.HeartRateBpm is < 20 or > 300 || value.TemperatureCelsius is < 25 or > 45
-            || value.WeightKg is < 0.1m or > 500 || value.HeightCm is < 20 or > 260)
+        static ushort? OptionalUnsigned(ushort? number) => number == 0 ? null : number;
+        static decimal? OptionalDecimal(decimal? number) => number == 0 ? null : number;
+        var systolic = OptionalUnsigned(value.SystolicPressureMmhg);
+        var diastolic = OptionalUnsigned(value.DiastolicPressureMmhg);
+        var heartRate = OptionalUnsigned(value.HeartRateBpm);
+        var temperature = OptionalDecimal(value.TemperatureCelsius);
+        var weight = OptionalDecimal(value.WeightKg);
+        var height = OptionalDecimal(value.HeightCm);
+        if (systolic is >= 4 and <= 30) systolic = (ushort)(systolic.Value * 10);
+        if (diastolic is >= 2 and <= 20) diastolic = (ushort)(diastolic.Value * 10);
+        if (height is > 0 and <= 3) height *= 100;
+
+        if (systolic is < 40 or > 300 || diastolic is < 20 or > 200
+            || heartRate is < 20 or > 300 || temperature is < 25 or > 45
+            || weight is < 0.1m or > 500 || height is < 20 or > 260)
             throw Invalid("Revise os sinais vitais informados.");
         return value with
         {
@@ -626,13 +638,13 @@ public sealed class MedicalRecordService(
             FollowUpPlan = Clean(value.FollowUpPlan),
             ClinicalEvolution = Clean(value.ClinicalEvolution),
             AdditionalNotes = Clean(value.AdditionalNotes),
+            SystolicPressureMmhg = systolic,
+            DiastolicPressureMmhg = diastolic,
+            HeartRateBpm = heartRate,
+            TemperatureCelsius = temperature,
+            WeightKg = weight,
+            HeightCm = height,
         };
-    }
-
-    private static void ValidateFinalContent(MedicalRecordContent x)
-    {
-        var length = (x.ChiefComplaint?.Length ?? 0) + (x.ClinicalEvolution?.Length ?? 0) + (x.ConductAndGuidance?.Length ?? 0);
-        if (length < 20) throw Invalid("Antes de finalizar, registre ao menos 20 caracteres entre queixa, evolução e conduta.");
     }
 
     private static byte[] Hash(MedicalRecordContent content) => SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(content));

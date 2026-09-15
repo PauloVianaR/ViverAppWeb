@@ -356,7 +356,7 @@ Queries projetam apenas campos permitidos, limitam intervalo/página, evitam N+1
 
 ## Implementação realizada
 
-- migration `0031__electronic_health_record.sql` aplicada integralmente em `viverappweb` no MySQL 8.0.41 antes da regeneração DB-First;
+- migrations `0031__electronic_health_record.sql` e `0032__optional_medical_record_content.sql` aplicadas integralmente em `viverappweb` no MySQL 8.0.41 antes das respectivas regenerações DB-First;
 - prontuário único por Paciente, rascunhos concorrentes por Médico/atendimento, registros finalizados e retificações encadeadas por versão;
 - versões clínicas e trilhas de acesso protegidas no próprio MySQL por bloqueio append-only de `UPDATE` e `DELETE`;
 - conteúdo tipado para anamnese, evolução, antecedentes, alergias, medicamentos, hábitos, exame, diagnóstico, conduta, plano, observações e sinais vitais;
@@ -365,17 +365,17 @@ Queries projetam apenas campos permitidos, limitam intervalo/página, evitam N+1
 - Gestor exige finalidade explícita para conteúdo clínico; Administrador exige finalidade e sessão elevada recente; recusas também entram na trilha;
 - documento privado reutiliza validação real de conteúdo/malware e o R2 privado da Fase 15, sem URL pública;
 - PDF é gerado no servidor a partir de snapshot autorizado, sem HTML, script ou recurso remoto, com `no-store`, paginação, versão e aviso de confidencialidade;
-- interface responsiva única para Médico, Gestor e Administrador, acessível a partir do card do Paciente, com resumo recolhível, cinco abas e auditoria adicional para Administrador;
+- interface responsiva única para Médico, Gestor e Administrador, acessível a partir do card do Paciente, com visão geral no resumo recolhível, quatro abas operacionais e auditoria adicional para Administrador;
 - Médico possui autosave sinalizado, recuperação de rascunho, confirmação de finalização, retificação sem sobrescrita e anexos privados;
 - timeline agrega status dos atendimentos, chegada/início, movimentos do caixa, versões clínicas e documentos sem criar fontes paralelas.
 
 ## Evidências automatizadas
 
 - build integral: zero erros e zero avisos;
-- suíte integral: 211 testes aprovados, incluindo regressão do tipo de parâmetro da rota e contenção global de falhas da interface;
+- suíte integral: 212 testes aprovados, incluindo regressões do tipo de parâmetro da rota, contenção global de falhas, limpeza de stack trace, conteúdo clínico opcional e seleção de atendimentos elegíveis;
 - teste transacional no MySQL prova rascunho, rejeição de versão concorrente, finalização, retificação, preservação das duas versões, bloqueios por papel/finalidade/step-up e recusa de alteração direta da versão finalizada;
 - contratos verificam autenticação das rotas, policies por capacidade, CORS da finalidade clínica, proteção antes do prerender e PDF sem scripts/recursos remotos;
-- verificador confirma MySQL 8.0.41, banco `viverappweb`, migration `0031`, seis novas tabelas e quatro triggers append-only.
+- verificador confirma MySQL 8.0.41, banco `viverappweb`, migrations até `0032`, seis novas tabelas, ausência da restrição de conteúdo mínimo e quatro triggers append-only.
 
 ## Revalidação normativa
 

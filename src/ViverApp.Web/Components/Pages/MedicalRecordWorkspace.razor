@@ -52,6 +52,11 @@ else
                     <div><dt>Conta</dt><dd>@(Summary.PortalAccessEnabled ? "Acesso ao portal" : "Somente cadastro interno")</dd></div>
                     <div><dt>Plano</dt><dd>@(Summary.IsPremium ? "Premium" : "Regular")</dd></div>
                 </dl>
+                <div class="patient-record-overview" aria-label="Visão geral do paciente">
+                    <div><span>Último atendimento</span><strong>@DateLabel(Summary.LastAppointmentAtUtc)</strong></div>
+                    <div><span>Próximo atendimento</span><strong>@DateLabel(Summary.NextAppointmentAtUtc)</strong></div>
+                    <div><span>Última atualização clínica</span><strong>@DateLabel(Summary.LastClinicalUpdateAtUtc)</strong></div>
+                </div>
                 <div class="patient-record-counters" aria-label="Indicadores do paciente">
                     <span><strong>@Summary.AppointmentCount</strong> atendimentos</span>
                     <span><strong>@Summary.CompletedCount</strong> concluídos</span>
@@ -79,15 +84,7 @@ else
                 }
             </nav>
 
-            @if (ActiveTab == RecordTab.Overview)
-            {
-                <section class="record-overview-grid">
-                    <article class="surface record-overview-card"><p class="eyebrow">Agenda</p><h2>Último e próximo atendimento</h2><dl><div><dt>Último</dt><dd>@DateLabel(Summary.LastAppointmentAtUtc)</dd></div><div><dt>Próximo</dt><dd>@DateLabel(Summary.NextAppointmentAtUtc)</dd></div></dl></article>
-                    <article class="surface record-overview-card"><p class="eyebrow">Clínico</p><h2>Última atualização</h2><p>@DateLabel(Summary.LastClinicalUpdateAtUtc)</p><small>Alergias, medicamentos e condições aparecem dentro da versão clínica autorizada.</small></article>
-                    <article class="surface record-overview-card"><p class="eyebrow">Privacidade</p><h2>Acesso protegido</h2><p>Cada consulta revalida papel, vínculo e finalidade. Documentos e PDFs não usam CDN pública.</p></article>
-                </section>
-            }
-            else if (ActiveTab == RecordTab.Timeline)
+            @if (ActiveTab == RecordTab.Timeline)
             {
                 <MobileFilterPanel AriaLabel="Filtros da linha do tempo">
                     <form @onsubmit="LoadTimelineAsync" @onsubmit:preventDefault>
@@ -111,7 +108,7 @@ else
                         <div class="section-heading"><div><p class="eyebrow">Autoria médica</p><h2>@(RectifyingEntry is null ? "Anamnese e evolução" : $"Retificar atendimento #{RectifyingEntry.AppointmentNumber}")</h2></div><span class="autosave-state" aria-live="polite">@AutosaveState</span></div>
                         @if (RectifyingEntry is null)
                         {
-                            <div class="field"><label for="record-appointment">Atendimento</label><select id="record-appointment" value="@SelectedAppointmentId" @onchange="AppointmentChangedAsync"><option value="0">Selecione</option>@foreach(var appointment in Appointments){<option value="@appointment.Id">#@appointment.AppointmentNumber · @Local(appointment.StartsAtUtc) · @StatusLabel(appointment.StatusCode)</option>}</select></div>
+                            <div class="field"><label for="record-appointment">Atendimento</label><select id="record-appointment" value="@SelectedAppointmentId" @onchange="AppointmentChangedAsync" disabled="@Busy"><option value="0">Selecione</option>@foreach(var appointment in EditableAppointments){<option value="@appointment.Id">#@appointment.AppointmentNumber · @Local(appointment.StartsAtUtc) · @StatusLabel(appointment.StatusCode)</option>}</select></div>
                         }
                         else
                         {
@@ -132,12 +129,12 @@ else
                             <div class="field"><label for="evolution">Evolução clínica</label><textarea id="evolution" @bind="ClinicalEvolution" @bind:event="oninput" maxlength="12000"></textarea></div>
                             <div class="field field--wide"><label for="notes">Observações</label><textarea id="notes" @bind="AdditionalNotes" @bind:event="oninput" maxlength="12000"></textarea></div>
                         </div>
-                        <fieldset class="vitals-grid"><legend>Sinais vitais</legend><div class="field"><label for="sys">Sistólica</label><input id="sys" type="number" min="40" max="300" @bind="Systolic" @bind:event="oninput" /></div><div class="field"><label for="dia">Diastólica</label><input id="dia" type="number" min="20" max="200" @bind="Diastolic" @bind:event="oninput" /></div><div class="field"><label for="heart">FC bpm</label><input id="heart" type="number" min="20" max="300" @bind="HeartRate" @bind:event="oninput" /></div><div class="field"><label for="temp">Temperatura</label><input id="temp" type="number" min="25" max="45" step="0.1" @bind="Temperature" @bind:event="oninput" /></div><div class="field"><label for="weight">Peso kg</label><input id="weight" type="number" min="0.1" max="500" step="0.01" @bind="Weight" @bind:event="oninput" /></div><div class="field"><label for="height">Altura cm</label><input id="height" type="number" min="20" max="260" step="0.1" @bind="Height" @bind:event="oninput" /></div></fieldset>
+                        <fieldset class="vitals-grid"><legend>Sinais vitais opcionais</legend><div class="field"><label for="sys">Sistólica</label><input id="sys" type="number" min="4" max="300" placeholder="120 ou 12" @bind="Systolic" @bind:event="oninput" /></div><div class="field"><label for="dia">Diastólica</label><input id="dia" type="number" min="2" max="200" placeholder="80 ou 8" @bind="Diastolic" @bind:event="oninput" /></div><div class="field"><label for="heart">FC bpm</label><input id="heart" type="number" min="20" max="300" placeholder="72" @bind="HeartRate" @bind:event="oninput" /></div><div class="field"><label for="temp">Temperatura °C</label><input id="temp" type="number" min="25" max="45" step="0.1" placeholder="36,5" @bind="Temperature" @bind:event="oninput" /></div><div class="field"><label for="weight">Peso kg</label><input id="weight" type="number" min="0.1" max="500" step="0.01" placeholder="70" @bind="Weight" @bind:event="oninput" /></div><div class="field"><label for="height">Altura</label><input id="height" type="number" min="0.2" max="260" step="0.01" placeholder="170 ou 1,70" @bind="Height" @bind:event="oninput" /></div></fieldset>
                         <div class="medical-record-actions">
                             @if (RectifyingEntry is null)
                             {
                                 <button type="button" class="button button--secondary" @onclick="SaveDraftAsync" disabled="@(Busy || SelectedAppointmentId == 0)">Salvar rascunho</button>
-                                <button type="button" class="button" @onclick="FinalizeAsync" disabled="@(Busy || Draft is null || SelectedAppointment?.StatusCode != "in_progress")">Revisar e finalizar</button>
+                                <button type="button" class="button" @onclick="FinalizeAsync" disabled="@(Busy || SelectedAppointmentId == 0 || SelectedAppointment?.StatusCode != "in_progress")">Revisar e finalizar</button>
                             }
                             else
                             {
@@ -215,7 +212,7 @@ else
 
 @code {
     [Parameter] public long PatientId { get; set; }
-    private enum RecordTab { Overview, Timeline, Clinical, Financial, Documents, Access }
+    private enum RecordTab { Timeline, Clinical, Financial, Documents, Access }
     private sealed record TabOption(RecordTab Value, string Label);
     private IJSObjectReference? Module;
     private WebMedicalRecordPatientSummary? Summary;
@@ -236,20 +233,23 @@ else
     private string ChiefComplaint="",PresentIllnessHistory="",PersonalHistory="",FamilyHistory="",Allergies="",Medications="",RelevantHabits="",PhysicalExamination="",DiagnosticHypotheses="",ConductAndGuidance="",FollowUpPlan="",ClinicalEvolution="",AdditionalNotes="";
     private ushort? Systolic, Diastolic, HeartRate; private decimal? Temperature, Weight, Height;
     private CancellationTokenSource? AutosaveCancellation;
-    private RecordTab ActiveTab = RecordTab.Overview;
+    private Task AutosaveTask = Task.CompletedTask;
+    private bool EditorDirty;
+    private RecordTab ActiveTab = RecordTab.Timeline;
     private string Role { get { var path=Navigation.ToBaseRelativePath(Navigation.Uri);return path.StartsWith("medico/",StringComparison.OrdinalIgnoreCase)?"doctor":path.StartsWith("gestao/",StringComparison.OrdinalIgnoreCase)?"manager":"administrator"; } }
     private string AreaLabel => Role switch { "doctor"=>"Médico", "manager"=>"Gestor", _=>"Administrador" };
     private string PatientsPath => Role switch { "doctor"=>"/medico/pacientes", "manager"=>"/gestao/pacientes", _=>"/administracao/pacientes" };
     private bool NeedsPurpose => Role is "manager" or "administrator";
     private WebMedicalRecordAppointmentOption? SelectedAppointment => Appointments.FirstOrDefault(x=>x.Id==SelectedAppointmentId);
+    private IEnumerable<WebMedicalRecordAppointmentOption> EditableAppointments => Appointments.Where(x=>x.StatusCode is "confirmed" or "arrived" or "in_progress");
     private IReadOnlyList<TabOption> Tabs => Role=="administrator"
-        ? [new(RecordTab.Overview,"Visão geral"),new(RecordTab.Timeline,"Linha do tempo"),new(RecordTab.Clinical,"Prontuário"),new(RecordTab.Financial,"Financeiro"),new(RecordTab.Documents,"Documentos"),new(RecordTab.Access,"Auditoria")]
-        : [new(RecordTab.Overview,"Visão geral"),new(RecordTab.Timeline,"Linha do tempo"),new(RecordTab.Clinical,"Prontuário"),new(RecordTab.Financial,"Financeiro"),new(RecordTab.Documents,"Documentos")];
+        ? [new(RecordTab.Timeline,"Linha do tempo"),new(RecordTab.Clinical,"Prontuário"),new(RecordTab.Financial,"Financeiro"),new(RecordTab.Documents,"Documentos"),new(RecordTab.Access,"Auditoria")]
+        : [new(RecordTab.Timeline,"Linha do tempo"),new(RecordTab.Clinical,"Prontuário"),new(RecordTab.Financial,"Financeiro"),new(RecordTab.Documents,"Documentos")];
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if(!firstRender)return;
-        try { Module=await JavaScript.InvokeAsync<IJSObjectReference>("import","/js/medical-records.js"); Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary"); Appointments.AddRange(await Get<IReadOnlyList<WebMedicalRecordAppointmentOption>>($"api/v1/medical-records/patients/{PatientId}/appointments")??[]); }
+        try { Module=await JavaScript.InvokeAsync<IJSObjectReference>("import","/js/medical-records.js"); Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary"); Appointments.AddRange(await Get<IReadOnlyList<WebMedicalRecordAppointmentOption>>($"api/v1/medical-records/patients/{PatientId}/appointments")??[]); await LoadTimelineCoreAsync(); }
         catch(Exception e){ShowError(e);}
         finally{Loading=false;StateHasChanged();}
     }
@@ -266,17 +266,37 @@ else
     private async Task LoadFinancialAsync()=>Financial=await Get<WebMedicalRecordFinancialSummary>($"api/v1/medical-records/patients/{PatientId}/financial?from={FromDate:yyyy-MM-dd}&to={ToDate:yyyy-MM-dd}");
     private async Task LoadDocumentsAsync(){var data=await Get<IReadOnlyList<WebMedicalRecordDocument>>($"api/v1/medical-records/patients/{PatientId}/documents",Purpose);Documents.Clear();Documents.AddRange(data??[]);}
     private async Task LoadAccessAsync(){var data=await Get<IReadOnlyList<WebMedicalRecordAccessEvent>>($"api/v1/medical-records/patients/{PatientId}/access-history",Purpose);AccessEvents.Clear();AccessEvents.AddRange(data??[]);}
-    private async Task AppointmentChangedAsync(ChangeEventArgs e){SelectedAppointmentId=ulong.TryParse(e.Value?.ToString(),out var id)?id:0;Draft=null;ClearEditor();if(SelectedAppointmentId==0)return;await RunAsync(async()=>{Draft=await Get<WebMedicalRecordDraft>($"api/v1/medical-records/patients/{PatientId}/appointments/{SelectedAppointmentId}/draft");if(Draft is not null)LoadContent(Draft.Content);AutosaveState=Draft is null?"Novo rascunho":"Rascunho recuperado";});}
+    private async Task AppointmentChangedAsync(ChangeEventArgs e)
+    {
+        var nextId=ulong.TryParse(e.Value?.ToString(),out var id)?id:0;
+        if(nextId==SelectedAppointmentId)return;
+        await RunAsync(async()=>
+        {
+            var previous=SelectedAppointment;
+            var mustPreserve=EditorDirty;
+            AutosaveCancellation?.Cancel();
+            await AutosaveTask;
+            if(EditorDirty&&SelectedAppointmentId!=0)await SaveDraftCoreAsync(true);
+            SelectedAppointmentId=nextId;
+            Draft=null;
+            ClearEditor();
+            if(SelectedAppointmentId==0){AutosaveState="Nenhum atendimento selecionado";return;}
+            Draft=await Get<WebMedicalRecordDraft>($"api/v1/medical-records/patients/{PatientId}/appointments/{SelectedAppointmentId}/draft");
+            if(Draft is not null)LoadContent(Draft.Content);
+            AutosaveState=Draft is null?"Novo rascunho":"Rascunho recuperado";
+            if(mustPreserve&&previous is not null)ShowSuccess($"O rascunho do atendimento #{previous.AppointmentNumber} foi salvo antes da troca.");
+        });
+    }
     private Task SaveDraftAsync()=>RunAsync(()=>SaveDraftCoreAsync(false));
     private async Task SaveDraftCoreAsync(bool automatic)
     {
         if(SelectedAppointmentId==0||RectifyingEntry is not null||IsSavingDraft)return;IsSavingDraft=true;
-        try{Draft=await Send<WebMedicalRecordDraft>($"api/v1/medical-records/patients/{PatientId}/appointments/{SelectedAppointmentId}/draft","PUT",new WebMedicalRecordDraftWriteRequest(Draft?.RowVersion??0,BuildContent()));AutosaveState=$"Salvo às {DateTime.Now:HH:mm:ss}";if(!automatic)ShowSuccess("Rascunho salvo com segurança.");}
+        try{Draft=await Send<WebMedicalRecordDraft>($"api/v1/medical-records/patients/{PatientId}/appointments/{SelectedAppointmentId}/draft","PUT",new WebMedicalRecordDraftWriteRequest(Draft?.RowVersion??0,BuildContent()));EditorDirty=false;AutosaveState=$"Salvo às {DateTime.Now:HH:mm:ss}";if(!automatic)ShowSuccess("Rascunho salvo com segurança.");}
         finally{IsSavingDraft=false;}
     }
-    private Task ScheduleAutosave(ChangeEventArgs args){if(Role!="doctor"||SelectedAppointmentId==0||RectifyingEntry is not null)return Task.CompletedTask;AutosaveCancellation?.Cancel();AutosaveCancellation?.Dispose();AutosaveCancellation=new();var token=AutosaveCancellation.Token;AutosaveState="Alterações pendentes";_ = DebouncedAutosaveAsync(token);return Task.CompletedTask;}
+    private Task ScheduleAutosave(ChangeEventArgs args){if(Role!="doctor"||SelectedAppointmentId==0||RectifyingEntry is not null)return Task.CompletedTask;EditorDirty=true;AutosaveCancellation?.Cancel();AutosaveCancellation?.Dispose();AutosaveCancellation=new();var token=AutosaveCancellation.Token;AutosaveState="Alterações pendentes";AutosaveTask=DebouncedAutosaveAsync(token);return Task.CompletedTask;}
     private async Task DebouncedAutosaveAsync(CancellationToken token){try{await Task.Delay(1500,token);await InvokeAsync(async()=>{try{await SaveDraftCoreAsync(true);StateHasChanged();}catch(Exception e){ShowError(e);StateHasChanged();}});}catch(OperationCanceledException){}}
-    private Task FinalizeAsync()=>RunAsync(async()=>{if(Draft is null)return;if(!await JavaScript.InvokeAsync<bool>("confirm","Após finalizar, esta versão não poderá ser alterada. Deseja continuar?"))return;await Send<WebMedicalRecordVersion>($"api/v1/medical-records/patients/{PatientId}/appointments/{SelectedAppointmentId}/finalize","POST",new WebMedicalRecordFinalizeRequest(Draft.RowVersion));Draft=null;ClearEditor();await LoadEntriesAsync();Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary");ShowSuccess("Registro finalizado e protegido contra alterações.");});
+    private Task FinalizeAsync()=>RunAsync(async()=>{AutosaveCancellation?.Cancel();await AutosaveTask;if(EditorDirty||Draft is null)await SaveDraftCoreAsync(true);if(Draft is null)return;if(!await JavaScript.InvokeAsync<bool>("confirm","Após finalizar, esta versão não poderá ser alterada. Deseja continuar?"))return;await Send<WebMedicalRecordVersion>($"api/v1/medical-records/patients/{PatientId}/appointments/{SelectedAppointmentId}/finalize","POST",new WebMedicalRecordFinalizeRequest(Draft.RowVersion));Draft=null;ClearEditor();await LoadEntriesAsync();Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary");ShowSuccess("Registro finalizado e protegido contra alterações.");});
     private void StartRectification(WebMedicalRecordEntry entry){var current=entry.Versions?.FirstOrDefault(x=>x.IsCurrent);if(current is null)return;RectifyingEntry=entry;CorrectionReason="";LoadContent(current.Content);AutosaveState="Retificação cria uma nova versão";}
     private void CancelRectification(){RectifyingEntry=null;CorrectionReason="";ClearEditor();}
     private Task RectifyAsync()=>RunAsync(async()=>{var entry=RectifyingEntry??throw new InvalidOperationException();if(CorrectionReason.Trim().Length<5){ShowError("Informe o motivo da retificação com ao menos 5 caracteres.");return;}await Send<WebMedicalRecordVersion>($"api/v1/medical-records/patients/{PatientId}/entries/{entry.Id}/rectify","POST",new WebMedicalRecordRectifyRequest(entry.CurrentVersionId,CorrectionReason.Trim(),BuildContent()));RectifyingEntry=null;CorrectionReason="";ClearEditor();await LoadEntriesAsync();ShowSuccess("Nova versão criada. O registro original foi preservado.");});
@@ -291,7 +311,7 @@ else
     private void ShowError(string message){Notice=UiErrorNotifier.Normalize(message);NoticeError=true;Errors.Show(Notice);}
     private void ShowSuccess(string message){Notice=message;NoticeError=false;}
     private WebMedicalRecordContent BuildContent()=>new(Empty(ChiefComplaint),Empty(PresentIllnessHistory),Empty(PersonalHistory),Empty(FamilyHistory),Empty(Allergies),Empty(Medications),Empty(RelevantHabits),Empty(PhysicalExamination),Empty(DiagnosticHypotheses),Empty(ConductAndGuidance),Empty(FollowUpPlan),Empty(ClinicalEvolution),Empty(AdditionalNotes),Systolic,Diastolic,HeartRate,Temperature,Weight,Height);
-    private void LoadContent(WebMedicalRecordContent c){ChiefComplaint=c.ChiefComplaint??"";PresentIllnessHistory=c.PresentIllnessHistory??"";PersonalHistory=c.PersonalHistory??"";FamilyHistory=c.FamilyHistory??"";Allergies=c.Allergies??"";Medications=c.Medications??"";RelevantHabits=c.RelevantHabits??"";PhysicalExamination=c.PhysicalExamination??"";DiagnosticHypotheses=c.DiagnosticHypotheses??"";ConductAndGuidance=c.ConductAndGuidance??"";FollowUpPlan=c.FollowUpPlan??"";ClinicalEvolution=c.ClinicalEvolution??"";AdditionalNotes=c.AdditionalNotes??"";Systolic=c.SystolicPressureMmhg;Diastolic=c.DiastolicPressureMmhg;HeartRate=c.HeartRateBpm;Temperature=c.TemperatureCelsius;Weight=c.WeightKg;Height=c.HeightCm;}
+    private void LoadContent(WebMedicalRecordContent c){ChiefComplaint=c.ChiefComplaint??"";PresentIllnessHistory=c.PresentIllnessHistory??"";PersonalHistory=c.PersonalHistory??"";FamilyHistory=c.FamilyHistory??"";Allergies=c.Allergies??"";Medications=c.Medications??"";RelevantHabits=c.RelevantHabits??"";PhysicalExamination=c.PhysicalExamination??"";DiagnosticHypotheses=c.DiagnosticHypotheses??"";ConductAndGuidance=c.ConductAndGuidance??"";FollowUpPlan=c.FollowUpPlan??"";ClinicalEvolution=c.ClinicalEvolution??"";AdditionalNotes=c.AdditionalNotes??"";Systolic=c.SystolicPressureMmhg;Diastolic=c.DiastolicPressureMmhg;HeartRate=c.HeartRateBpm;Temperature=c.TemperatureCelsius;Weight=c.WeightKg;Height=c.HeightCm;EditorDirty=false;}
     private void ClearEditor()=>LoadContent(WebMedicalRecordContent.Empty);
     private static string? Empty(string value)=>string.IsNullOrWhiteSpace(value)?null:value.Trim();
     private static string? BloodPressure(WebMedicalRecordContent content)=>content.SystolicPressureMmhg.HasValue&&content.DiastolicPressureMmhg.HasValue?$"{content.SystolicPressureMmhg}/{content.DiastolicPressureMmhg} mmHg":null;

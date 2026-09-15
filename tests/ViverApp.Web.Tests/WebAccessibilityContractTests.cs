@@ -267,6 +267,13 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public void ErrorDialog_RemovesClientStackFromCataloguedMessage()
+    {
+        const string message = "Revise os sinais vitais informados. Error: Revise os sinais vitais informados. at read (https://localhost/js/medical-records.js:15:11)";
+        Assert.Equal("Revise os sinais vitais informados.", UiErrorNotifier.Normalize(message));
+    }
+
+    [Fact]
     public void MedicalRecordRoute_UsesAParameterCompatibleWithTheLongConstraint()
     {
         var parameter = typeof(ViverApp.Web.Components.Pages.MedicalRecordWorkspace)

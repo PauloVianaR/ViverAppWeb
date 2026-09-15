@@ -97,7 +97,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032", migrations);
 
         var portalAccessColumn = await ExecuteScalarAsync(connection,
             "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'viverappweb' AND table_name = 'accounts' AND column_name = 'portal_access_enabled' AND is_nullable = 'NO'");
@@ -390,6 +390,11 @@ public sealed class DatabaseContractTests
             connection,
             "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema = 'viverappweb' AND trigger_name IN ('trg_medical_record_versions_block_update','trg_medical_record_versions_block_delete','trg_clinical_access_events_block_update','trg_clinical_access_events_block_delete')");
         Assert.Equal("4", medicalRecordTriggers);
+
+        var requiredClinicalContentConstraint = await ExecuteScalarAsync(
+            connection,
+            "SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema = 'viverappweb' AND table_name = 'medical_record_versions' AND constraint_name = 'ck_medical_record_versions_content'");
+        Assert.Equal("0", requiredClinicalContentConstraint);
 
         var managerPreferences = await ExecuteScalarAsync(
             connection,

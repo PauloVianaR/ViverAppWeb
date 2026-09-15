@@ -64,7 +64,25 @@ public sealed class MedicalRecordIntegrationTests
             RowVersion = 1,
             PaymentLocationCode = "clinic",
         };
-        context.Appointments.Add(appointment);
+        var pendingAppointment = new Appointment
+        {
+            AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
+            PatientAccountId = patient.Id,
+            DoctorAccountId = doctor.Id,
+            AppointmentTypeId = type.Id,
+            CreatedByAccountId = manager.Id,
+            StatusCode = "pending",
+            ModalityCode = "in_person",
+            StartsAtUtc = now.AddDays(1),
+            EndsAtUtc = now.AddDays(1).AddMinutes(30),
+            PriceAmount = 200,
+            CurrencyCode = "BRL",
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+            PaymentLocationCode = "clinic",
+        };
+        context.Appointments.AddRange(appointment, pendingAppointment);
         context.DoctorPatientLinks.Add(new DoctorPatientLink
         {
             DoctorAccountId = doctor.Id,
@@ -78,10 +96,20 @@ public sealed class MedicalRecordIntegrationTests
         await context.SaveChangesAsync();
 
         var service = new MedicalRecordService(context, null!, new NoOpAudit(), new FixedTime(now));
-        var firstContent = Content("Paciente relata melhora progressiva há duas semanas.");
+        var selectableAppointments = await service.AppointmentsAsync(
+            doctor.Id, ViverAppRoles.Doctor, true, patient.Id, CancellationToken.None);
+        Assert.Single(selectableAppointments);
+        Assert.Equal(appointment.Id, selectableAppointments[0].Id);
+
+        var firstContent = OptionalContent();
         var draft = await service.SaveDraftAsync(doctor.Id, patient.Id, appointment.Id,
             new MedicalRecordDraftWriteRequest(0, firstContent), CancellationToken.None);
         Assert.Equal(1UL, draft.RowVersion);
+        Assert.Null(draft.Content.ChiefComplaint);
+        Assert.Equal((ushort)120, draft.Content.SystolicPressureMmhg);
+        Assert.Equal((ushort)80, draft.Content.DiastolicPressureMmhg);
+        Assert.Null(draft.Content.HeartRateBpm);
+        Assert.Equal(170m, draft.Content.HeightCm);
         var stale = await Assert.ThrowsAsync<MedicalRecordRuleException>(() => service.SaveDraftAsync(doctor.Id, patient.Id,
             appointment.Id, new MedicalRecordDraftWriteRequest(0, firstContent), CancellationToken.None));
         Assert.Equal((int)HttpStatusCode.Conflict, stale.StatusCode);
@@ -120,12 +148,9 @@ public sealed class MedicalRecordIntegrationTests
         await transaction.RollbackAsync();
     }
 
-    private static MedicalRecordContent Content(string evolution) => new(
-        "Retorno para reavaliação clínica.", "Sintomas iniciados há cerca de duas semanas.", null, null,
-        "Nega alergias conhecidas.", "Não informou medicamentos de uso contínuo.", null,
-        "Paciente em bom estado geral.", "Quadro clínico em acompanhamento.",
-        "Manter orientações e retornar se houver piora.", "Retorno em trinta dias.", evolution, null,
-        120, 80, 72, 36.5m, 70m, 170m);
+    private static MedicalRecordContent OptionalContent() => new(
+        null, null, null, null, null, null, null, null, null, null, null, null, null,
+        12, 8, 0, 0, 0, 1.70m);
 
     private static Account Account(string email, string role, string name) => new()
     {
