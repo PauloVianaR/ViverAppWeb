@@ -32,7 +32,7 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(59, applicationEntities.Length);
+        Assert.Equal(60, applicationEntities.Length);
         Assert.DoesNotContain(
             applicationEntities,
             entity => string.Equals(entity.GetTableName(), "__schema_migrations", StringComparison.Ordinal));
@@ -72,6 +72,7 @@ public sealed class DatabaseContractTests
         Assert.NotNull(context.Model.FindEntityType(typeof(AppointmentNumberSequence)));
         Assert.NotNull(context.Model.FindEntityType(typeof(ArrivalQueueSequence)));
         Assert.NotNull(context.Model.FindEntityType(typeof(AppointmentRescheduleHistory)));
+        Assert.True(context.Model.FindEntityType(typeof(AccountUiPreference))!.FindProperty(nameof(AccountUiPreference.RowVersion))!.IsConcurrencyToken);
         Assert.True(context.Model.FindEntityType(typeof(ApplicationSetting))!.FindProperty(nameof(ApplicationSetting.RowVersion))!.IsConcurrencyToken);
         Assert.True(context.Model.FindEntityType(typeof(PremiumPlan))!.FindProperty(nameof(PremiumPlan.RowVersion))!.IsConcurrencyToken);
         Assert.NotNull(context.Model.FindEntityType(typeof(Holiday))!.FindProperty(nameof(Holiday.IsAnnual)));
@@ -97,7 +98,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034", migrations);
 
         var portalAccessColumn = await ExecuteScalarAsync(connection,
             "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'viverappweb' AND table_name = 'accounts' AND column_name = 'portal_access_enabled' AND is_nullable = 'NO'");
@@ -106,6 +107,14 @@ public sealed class DatabaseContractTests
         var optionalAddressColumns = await ExecuteScalarAsync(connection,
             "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'viverappweb' AND table_name = 'account_addresses' AND column_name IN ('postal_code','street','number','district','city','state_code') AND is_nullable = 'YES'");
         Assert.Equal("6", optionalAddressColumns);
+
+        var operationalSettings = await ExecuteScalarAsync(connection,
+            "SELECT GROUP_CONCAT(CONCAT(setting_key, '=', value_json) ORDER BY setting_key SEPARATOR ',') FROM application_settings WHERE setting_key IN ('doctor.patient_scheduling_enabled','manager.medical_records_write_enabled','premium.manager_can_manage')");
+        Assert.Equal("doctor.patient_scheduling_enabled=false,manager.medical_records_write_enabled=true,premium.manager_can_manage=true", operationalSettings);
+
+        var clinicalAuthors = await ExecuteScalarAsync(connection,
+            "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'viverappweb' AND table_name IN ('medical_record_drafts','medical_record_entries','medical_record_versions') AND column_name = 'author_account_id' AND is_nullable = 'NO'");
+        Assert.Equal("3", clinicalAuthors);
 
         var arrivalColumns = await ExecuteScalarAsync(connection,
             """
@@ -289,7 +298,7 @@ public sealed class DatabaseContractTests
             FROM application_settings
             WHERE setting_key LIKE 'appointments.%'
             """);
-        Assert.Equal("21", schedulingSettings);
+        Assert.Equal("22", schedulingSettings);
 
         var administratorSchema = await ExecuteScalarAsync(
             connection,
@@ -403,6 +412,11 @@ public sealed class DatabaseContractTests
             WHERE table_schema = 'viverappweb' AND table_name = 'manager_preferences'
             """);
         Assert.Equal("1", managerPreferences);
+
+        var accountUiPreferences = await ExecuteScalarAsync(
+            connection,
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'viverappweb' AND table_name = 'account_ui_preferences'");
+        Assert.Equal("1", accountUiPreferences);
     }
 
     private static ViverAppDbContext CreateContext()

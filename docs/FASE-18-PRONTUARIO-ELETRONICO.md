@@ -313,7 +313,7 @@ Queries projetam apenas campos permitidos, limitam intervalo/página, evitam N+1
 ### Autorização e privacidade
 
 - Médico A não acessa Paciente/registro/documento do Médico B sem vínculo permitido;
-- Gestor sem motivo e Admin sem step-up recebem recusa;
+- Gestor autenticado acessa o prontuário operacional sem finalidade obrigatória; Admin sem finalidade ou sem step-up recebe recusa;
 - URL, ID, filtro ou PDF não amplia escopo;
 - eventos restritos não revelam título/trecho/metadado clínico;
 - logs, erros, outbox e analytics não recebem conteúdo;
@@ -336,9 +336,9 @@ Queries projetam apenas campos permitidos, limitam intervalo/página, evitam N+1
 2. Cria rascunho, perde/reconecta a sessão e recupera a versão correta.
 3. Finaliza anamnese/evolução e gera PDF clínico autorizado.
 4. Retifica com motivo; original e nova versão permanecem consultáveis.
-5. Gestor abre o mesmo prontuário, vê agenda/financeiro e justifica acesso clínico.
+5. Gestor abre o mesmo prontuário e vê agenda, conteúdo clínico permitido e financeiro sem finalidade obrigatória, mantendo auditoria do acesso.
 6. Administrador usa MFA/step-up, justifica o acesso e gera seu recorte autorizado.
-7. Outro Médico, Gestor sem motivo e sessão Admin não elevada recebem recusa.
+7. Outro Médico e sessão Admin sem finalidade ou não elevada recebem recusa.
 8. Timeline mostra chegada da Fase 16 e pagamento/reversão/substituto da Fase 17 sem duplicar fontes.
 
 ## Critérios de saída
@@ -347,7 +347,7 @@ Queries projetam apenas campos permitidos, limitam intervalo/página, evitam N+1
 - visão geral, timeline, clínico, financeiro, documentos e PDF estão completos;
 - Médico é o único autor de conteúdo clínico;
 - versões finalizadas são imutáveis e retificações preservam histórico;
-- acessos de Gestor/Admin são justificados, elevados quando necessário e auditados;
+- acessos do Gestor são auditados sem finalidade obrigatória; acessos do Admin exigem finalidade, elevação recente e auditoria;
 - dados/documentos permanecem privados, sem vazamento por cache, log, URL ou CDN;
 - migration foi aplicada no MySQL local 8.0.41 e EF regenerado por DB-First;
 - build, suíte integral, segurança, privacidade e validação visual estão aprovados;
@@ -362,7 +362,7 @@ Queries projetam apenas campos permitidos, limitam intervalo/página, evitam N+1
 - conteúdo tipado para anamnese, evolução, antecedentes, alergias, medicamentos, hábitos, exame, diagnóstico, conduta, plano, observações e sinais vitais;
 - endpoints separados para resumo, atendimentos, timeline, financeiro, registros/versões, rascunho, finalização, retificação, documentos, PDF e auditoria;
 - policies granulares para leitura, conteúdo clínico, autoria, documento, exportação e auditoria, além da revalidação de vínculo no banco;
-- Gestor exige finalidade explícita para conteúdo clínico; Administrador exige finalidade e sessão elevada recente; recusas também entram na trilha;
+- Gestor acessa o conteúdo clínico permitido sem finalidade obrigatória; Administrador exige finalidade e sessão elevada recente; acessos e recusas entram na trilha;
 - documento privado reutiliza validação real de conteúdo/malware e o R2 privado da Fase 15, sem URL pública;
 - PDF é gerado no servidor a partir de snapshot autorizado, sem HTML, script ou recurso remoto, com `no-store`, paginação, versão e aviso de confidencialidade;
 - interface responsiva única para Médico, Gestor e Administrador, acessível a partir do card do Paciente, com visão geral no resumo recolhível, quatro abas operacionais e auditoria adicional para Administrador;
@@ -372,10 +372,10 @@ Queries projetam apenas campos permitidos, limitam intervalo/página, evitam N+1
 ## Evidências automatizadas
 
 - build integral: zero erros e zero avisos;
-- suíte integral: 212 testes aprovados, incluindo regressões do tipo de parâmetro da rota, contenção global de falhas, limpeza de stack trace, conteúdo clínico opcional e seleção de atendimentos elegíveis;
+- suíte integral: 214 testes aprovados nos sete projetos, incluindo regressões do tipo de parâmetro da rota, contenção global de falhas, limpeza de stack trace, conteúdo clínico opcional, seleção de atendimentos elegíveis e os ajustes de ciclo de vida;
 - teste transacional no MySQL prova rascunho, rejeição de versão concorrente, finalização, retificação, preservação das duas versões, bloqueios por papel/finalidade/step-up e recusa de alteração direta da versão finalizada;
 - contratos verificam autenticação das rotas, policies por capacidade, CORS da finalidade clínica, proteção antes do prerender e PDF sem scripts/recursos remotos;
-- verificador confirma MySQL 8.0.41, banco `viverappweb`, migrations até `0032`, seis novas tabelas, ausência da restrição de conteúdo mínimo e quatro triggers append-only.
+- verificador confirma MySQL 8.0.41, banco `viverappweb`, migrations até `0033`, a preferência visual por conta, os controles temporários do Gestor, a categoria Procedimento, seis tabelas clínicas, ausência da restrição de conteúdo mínimo e quatro triggers append-only.
 
 ## Revalidação normativa
 

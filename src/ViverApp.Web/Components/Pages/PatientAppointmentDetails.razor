@@ -7,7 +7,7 @@
 @if (Loading) { <LoadingSkeleton Lines="5" /> }
 else if (Visit is not null)
 {
-    <PatientVisitCard Model="Visit" Clinic="Clinic" />
+    <PatientVisitCard Model="Visit" Clinic="Clinic" ShowDetailsLink="false" />
     <section class="surface patient-panel patient-section"><h2>Gerenciar atendimento</h2><div class="patient-actions">
         @if (Visit.CanReschedule) { <a class="button button--secondary" href="/paciente/agendar?reschedule=@Id">Reagendar</a> }
         @if (Visit.CanCancel) { <button class="button button--danger" disabled="@Busy" @onclick='() => Open("cancel-visit")'>Cancelar com motivo</button> }

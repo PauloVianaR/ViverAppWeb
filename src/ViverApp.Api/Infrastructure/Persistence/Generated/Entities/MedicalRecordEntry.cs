@@ -11,7 +11,7 @@ public partial class MedicalRecordEntry
 
     public ulong AppointmentId { get; set; }
 
-    public ulong AuthorDoctorAccountId { get; set; }
+    public ulong AuthorAccountId { get; set; }
 
     public ulong? CurrentVersionId { get; set; }
 
@@ -19,7 +19,7 @@ public partial class MedicalRecordEntry
 
     public virtual Appointment Appointment { get; set; } = null!;
 
-    public virtual DoctorProfile AuthorDoctorAccount { get; set; } = null!;
+    public virtual Account AuthorAccount { get; set; } = null!;
 
     public virtual MedicalRecordVersion? CurrentVersion { get; set; }
 

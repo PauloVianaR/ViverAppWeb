@@ -21,6 +21,10 @@ public sealed record ArrivalCancellationRequest(
 public sealed record ArrivalResponse(ulong AppointmentId, ulong AppointmentNumber, string StatusCode,
     DateTime? ArrivedAtUtc, DateOnly? BusinessDate, uint? QueueNumber, ulong RowVersion);
 public sealed record StartAppointmentRequest(ulong RowVersion);
+public sealed record AppointmentTransitionRequest([param: Range(1, long.MaxValue)] ulong RowVersion);
+public sealed record AppointmentReopenRequest(
+    [param: Range(1, long.MaxValue)] ulong RowVersion,
+    [param: Required, StringLength(500, MinimumLength = 5)] string Reason);
 public sealed record DoctorNotificationResponse(ulong Id, ulong AppointmentId, ulong AppointmentNumber,
     uint? QueueNumber, DateTime? StartsAtUtc, bool IsRead, DateTime CreatedAtUtc, ulong RowVersion);
 public sealed record DoctorNotificationsResponse(int UnreadCount, bool PopupEnabled, bool SoundEnabled,
@@ -203,8 +207,8 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
         if (appointment.DoctorAccountId != doctor) throw new ArrivalRuleException(404, "Atendimento não encontrado.");
         if (appointment.StatusCode == "in_progress") { await transaction.CommitAsync(ct); return MapArrival(appointment); }
         if (appointment.RowVersion != request.RowVersion) throw new ArrivalRuleException(409, "O atendimento foi alterado por outra sessão.");
-        var valid = appointment.ModalityCode == "in_person" ? appointment.StatusCode == "arrived" : appointment.StatusCode == "confirmed";
-        if (!valid) throw new ArrivalRuleException(409, "O atendimento ainda não pode ser iniciado.");
+        if (appointment.StatusCode is not ("confirmed" or "arrived"))
+            throw new ArrivalRuleException(409, "Somente um atendimento confirmado ou com chegada pode ser iniciado.");
         var now = clock.GetUtcNow().UtcDateTime;
         var previous = appointment.StatusCode;
         appointment.StatusCode = "in_progress"; appointment.UpdatedAtUtc = now; appointment.RowVersion++;
@@ -223,6 +227,141 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
             .ExecuteUpdateAsync(x => x.SetProperty(n => n.ReadAtUtc, now).SetProperty(n => n.RowVersion, n => n.RowVersion + 1), ct);
         await database.SaveChangesAsync(ct);
         await audit.WriteAsync("appointment.started", doctor, "appointment", appointment.Id.ToString(CultureInfo.InvariantCulture), null, ct);
+        await transaction.CommitAsync(ct);
+        return MapArrival(appointment);
+    }
+
+    public async Task<ArrivalResponse> RevertStartAsync(
+        ulong doctor,
+        ulong appointmentId,
+        AppointmentTransitionRequest request,
+        CancellationToken ct)
+    {
+        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var appointment = await database.Appointments
+            .FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {appointmentId} FOR UPDATE")
+            .SingleOrDefaultAsync(ct) ?? throw new ArrivalRuleException(404, "Atendimento não encontrado.");
+        if (appointment.DoctorAccountId != doctor) throw new ArrivalRuleException(404, "Atendimento não encontrado.");
+        if (appointment.RowVersion != request.RowVersion)
+            throw new ArrivalRuleException(409, "O atendimento foi alterado por outra sessão.");
+        if (appointment.StatusCode != "in_progress")
+            throw new ArrivalRuleException(409, "Somente um atendimento iniciado pode voltar ao estado anterior.");
+
+        var previous = await database.AppointmentStatusHistories.AsNoTracking()
+            .Where(item => item.AppointmentId == appointmentId && item.ToStatusCode == "in_progress")
+            .OrderByDescending(item => item.Id)
+            .Select(item => item.FromStatusCode)
+            .FirstOrDefaultAsync(ct);
+        if (previous is not ("confirmed" or "arrived")) previous = "confirmed";
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        appointment.StatusCode = previous;
+        appointment.UpdatedAtUtc = now;
+        appointment.RowVersion++;
+        database.AppointmentStatusHistories.Add(new AppointmentStatusHistory
+        {
+            AppointmentId = appointment.Id,
+            ActorAccountId = doctor,
+            FromStatusCode = "in_progress",
+            ToStatusCode = previous,
+            Reason = "Início do atendimento desfeito pelo médico",
+            StartsAtUtc = appointment.StartsAtUtc,
+            EndsAtUtc = appointment.EndsAtUtc,
+            OccurredAtUtc = now,
+        });
+        await database.SaveChangesAsync(ct);
+        await audit.WriteAsync("appointment.start_reverted", doctor, "appointment",
+            appointment.Id.ToString(CultureInfo.InvariantCulture),
+            new Dictionary<string, string> { ["restoredStatus"] = previous }, ct);
+        await transaction.CommitAsync(ct);
+        return MapArrival(appointment);
+    }
+
+    public async Task<ArrivalResponse> CompleteForManagementAsync(
+        ulong actor,
+        ulong appointmentId,
+        AppointmentTransitionRequest request,
+        CancellationToken ct)
+    {
+        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var appointment = await database.Appointments
+            .FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {appointmentId} FOR UPDATE")
+            .SingleOrDefaultAsync(ct) ?? throw new ArrivalRuleException(404, "Atendimento não encontrado.");
+        if (appointment.RowVersion != request.RowVersion)
+            throw new ArrivalRuleException(409, "O atendimento foi alterado por outra sessão.");
+        if (appointment.StatusCode is not ("confirmed" or "arrived" or "in_progress"))
+            throw new ArrivalRuleException(409, "Somente um atendimento confirmado, com chegada ou iniciado pode ser concluído.");
+
+        var previous = appointment.StatusCode;
+        var now = clock.GetUtcNow().UtcDateTime;
+        appointment.StatusCode = "completed";
+        appointment.CompletedByAccountId = actor;
+        appointment.CompletedAtUtc = now;
+        appointment.UpdatedAtUtc = now;
+        appointment.RowVersion++;
+        database.AppointmentStatusHistories.Add(new AppointmentStatusHistory
+        {
+            AppointmentId = appointment.Id,
+            ActorAccountId = actor,
+            FromStatusCode = previous,
+            ToStatusCode = "completed",
+            Reason = "Atendimento concluído com confirmação explícita",
+            StartsAtUtc = appointment.StartsAtUtc,
+            EndsAtUtc = appointment.EndsAtUtc,
+            OccurredAtUtc = now,
+        });
+        await database.SaveChangesAsync(ct);
+        await audit.WriteAsync("appointment.completed", actor, "appointment",
+            appointment.Id.ToString(CultureInfo.InvariantCulture),
+            new Dictionary<string, string> { ["previousStatus"] = previous }, ct);
+        await transaction.CommitAsync(ct);
+        return MapArrival(appointment);
+    }
+
+    public async Task<ArrivalResponse> ReopenAsync(
+        ulong administrator,
+        ulong appointmentId,
+        AppointmentReopenRequest request,
+        CancellationToken ct)
+    {
+        var reason = request.Reason.Trim();
+        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var appointment = await database.Appointments
+            .FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {appointmentId} FOR UPDATE")
+            .SingleOrDefaultAsync(ct) ?? throw new ArrivalRuleException(404, "Atendimento não encontrado.");
+        if (appointment.RowVersion != request.RowVersion)
+            throw new ArrivalRuleException(409, "O atendimento foi alterado por outra sessão.");
+        if (appointment.StatusCode != "completed")
+            throw new ArrivalRuleException(409, "Somente um atendimento concluído pode ser reaberto.");
+
+        var previous = await database.AppointmentStatusHistories.AsNoTracking()
+            .Where(item => item.AppointmentId == appointmentId && item.ToStatusCode == "completed")
+            .OrderByDescending(item => item.Id)
+            .Select(item => item.FromStatusCode)
+            .FirstOrDefaultAsync(ct);
+        if (previous is not ("confirmed" or "arrived" or "in_progress")) previous = "confirmed";
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        appointment.StatusCode = previous;
+        appointment.CompletedByAccountId = null;
+        appointment.CompletedAtUtc = null;
+        appointment.UpdatedAtUtc = now;
+        appointment.RowVersion++;
+        database.AppointmentStatusHistories.Add(new AppointmentStatusHistory
+        {
+            AppointmentId = appointment.Id,
+            ActorAccountId = administrator,
+            FromStatusCode = "completed",
+            ToStatusCode = previous,
+            Reason = $"Atendimento reaberto pelo Administrador: {reason}",
+            StartsAtUtc = appointment.StartsAtUtc,
+            EndsAtUtc = appointment.EndsAtUtc,
+            OccurredAtUtc = now,
+        });
+        await database.SaveChangesAsync(ct);
+        await audit.WriteAsync("appointment.reopened", administrator, "appointment",
+            appointment.Id.ToString(CultureInfo.InvariantCulture),
+            new Dictionary<string, string> { ["restoredStatus"] = previous, ["reason"] = reason }, ct);
         await transaction.CommitAsync(ct);
         return MapArrival(appointment);
     }

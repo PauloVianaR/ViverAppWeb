@@ -8,7 +8,7 @@
 else if (Home is not null)
 {
     <section class="patient-home-grid" aria-label="Seu próximo cuidado">
-        <div>@if (Home.NextAppointment is not null) { <PatientVisitCard Model="Home.NextAppointment" Clinic="Home.Clinic" /> }
+        <div>@if (Home.NextAppointment is not null) { <AppointmentViewToggle Mode="AppointmentViewMode" Changed="ChangeAppointmentView" Disabled="Busy" /><div class="patient-grid appointment-results--@AppointmentViewMode"><PatientVisitCard Model="Home.NextAppointment" Clinic="Home.Clinic" /></div> }
             else { <section class="surface patient-panel patient-welcome"><AppIcon Name="calendar" /><h2>Sua próxima consulta começa aqui</h2><p>Escolha um serviço, conheça os profissionais e encontre o melhor horário para você.</p><a class="button" href="/paciente/agendar">Agendar atendimento</a></section> }</div>
         <aside class="surface patient-panel"><h2>Como podemos ajudar?</h2><div class="patient-shortcuts"><a href="/paciente/agendar">Novo agendamento →</a><a href="/paciente/agenda">Minha agenda e histórico →</a><a href="/paciente/pagamentos">Pagamentos →</a><a href="/paciente/perfil">Meu perfil e Premium →</a></div><p class="muted">@Home.Clinic.Name</p><p>@Home.Clinic.Address</p></aside>
     </section>
@@ -27,7 +27,7 @@ else if (Home is not null)
     private PatientHomeData? Home;
     private IReadOnlyList<PatientService> Services = [];
     private int PromotionIndex;
-    protected override async Task Load() { Home = await Get<PatientHomeData>("api/v1/patient/experience/home"); var exams = await Get<WebPage<PatientService>>("api/v1/patient/experience/services?category=examination&pageSize=3"); var surgeries = await Get<WebPage<PatientService>>("api/v1/patient/experience/services?category=surgery&pageSize=3"); Services = (exams?.Items ?? []).Concat(surgeries?.Items ?? []).ToArray(); }
+    protected override async Task Load() { await LoadAppointmentViewAsync(); Home = await Get<PatientHomeData>("api/v1/patient/experience/home"); var exams = await Get<WebPage<PatientService>>("api/v1/patient/experience/services?category=examination&pageSize=3"); var surgeries = await Get<WebPage<PatientService>>("api/v1/patient/experience/services?category=surgery&pageSize=3"); var procedures = await Get<WebPage<PatientService>>("api/v1/patient/experience/services?category=procedure&pageSize=3"); Services = (exams?.Items ?? []).Concat(surgeries?.Items ?? []).Concat(procedures?.Items ?? []).ToArray(); }
     private void PreviousPromotion() => PromotionIndex = (PromotionIndex + Home!.Promotions.Count - 1) % Home.Promotions.Count;
     private void NextPromotion() => PromotionIndex = (PromotionIndex + 1) % Home!.Promotions.Count;
 }

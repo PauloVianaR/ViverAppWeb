@@ -99,7 +99,7 @@ public sealed class MedicalRecordService(
                 roleCode == ViverAppRoles.Doctor ? (x.VersionNumber == 1 ? "Registro clínico finalizado" : "Registro clínico retificado") : "Registro restrito",
                 null, x.FinalizedAtUtc, x.MedicalRecordEntry.AppointmentId,
                 x.MedicalRecordEntry.Appointment.AppointmentNumber,
-                roleCode == ViverAppRoles.Doctor ? x.AuthorDoctorAccount.Account.FullName : null,
+                roleCode == ViverAppRoles.Doctor ? x.AuthorAccount.FullName : null,
                 roleCode == ViverAppRoles.Doctor ? ViverAppRoles.Doctor : null,
                 roleCode != ViverAppRoles.Doctor))
             .ToArrayAsync(ct);
@@ -150,10 +150,10 @@ public sealed class MedicalRecordService(
         ulong actorId, string roleCode, bool recentAuthentication, ulong patientId, CancellationToken ct)
     {
         await AuthorizeAsync(actorId, roleCode, recentAuthentication, patientId, "summary", null, ct);
-        var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == patientId);
+        var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == patientId
+            && (x.StatusCode == "confirmed" || x.StatusCode == "arrived" || x.StatusCode == "in_progress" || x.StatusCode == "completed"));
         if (roleCode == ViverAppRoles.Doctor)
-            query = query.Where(x => x.DoctorAccountId == actorId
-                && (x.StatusCode == "confirmed" || x.StatusCode == "arrived" || x.StatusCode == "in_progress"));
+            query = query.Where(x => x.DoctorAccountId == actorId);
         return await query.OrderByDescending(x => x.StartsAtUtc).Take(100)
             .Select(x => new MedicalRecordAppointmentOption(x.Id, x.AppointmentNumber, x.StartsAtUtc,
                 x.StatusCode, x.AppointmentType.Name)).ToArrayAsync(ct);
@@ -166,10 +166,10 @@ public sealed class MedicalRecordService(
         await AuthorizeAsync(actorId, roleCode, recentAuthentication, patientId, "clinical", purpose, ct);
         var query = database.MedicalRecordEntries.AsNoTracking()
             .Include(x => x.Appointment)
-            .Include(x => x.AuthorDoctorAccount).ThenInclude(x => x.Account)
-            .Include(x => x.CurrentVersion)
+            .Include(x => x.AuthorAccount).ThenInclude(x => x.DoctorProfile)
+            .Include(x => x.CurrentVersion)!.ThenInclude(x => x!.AuthorAccount).ThenInclude(x => x.DoctorProfile)
             .Where(x => x.HealthRecord.PatientAccountId == patientId);
-        if (roleCode == ViverAppRoles.Doctor) query = query.Where(x => x.AuthorDoctorAccountId == actorId);
+        if (roleCode == ViverAppRoles.Doctor) query = query.Where(x => x.Appointment.DoctorAccountId == actorId);
         var entries = await query.OrderByDescending(x => x.Appointment.StartsAtUtc).ToArrayAsync(ct);
         var result = new List<MedicalRecordEntryResponse>(entries.Length);
         foreach (var entry in entries)
@@ -179,7 +179,7 @@ public sealed class MedicalRecordService(
             if (includeVersions)
             {
                 var loaded = await database.MedicalRecordVersions.AsNoTracking()
-                    .Include(x => x.AuthorDoctorAccount).ThenInclude(x => x.Account)
+                    .Include(x => x.AuthorAccount).ThenInclude(x => x.DoctorProfile)
                     .Include(x => x.MedicalRecordEntry).ThenInclude(x => x.Appointment)
                     .Where(x => x.MedicalRecordEntryId == entry.Id)
                     .OrderByDescending(x => x.VersionNumber).ToArrayAsync(ct);
@@ -187,37 +187,38 @@ public sealed class MedicalRecordService(
             }
             result.Add(new(entry.Id, entry.AppointmentId, entry.Appointment.AppointmentNumber,
                 entry.Appointment.StartsAtUtc, current.Id, current.VersionNumber,
-                entry.AuthorDoctorAccount.Account.FullName, License(entry.AuthorDoctorAccount),
+                current.AuthorAccount.FullName, License(current.AuthorAccount),
                 current.FinalizedAtUtc, versions));
         }
         return result;
     }
 
     public async Task<MedicalRecordDraftResponse?> DraftAsync(
-        ulong doctorId, ulong patientId, ulong appointmentId, CancellationToken ct)
+        ulong actorId, string roleCode, ulong patientId, ulong appointmentId, CancellationToken ct)
     {
-        await AuthorizeAsync(doctorId, ViverAppRoles.Doctor, true, patientId, "clinical", null, ct);
+        await AuthorizeWriteAsync(actorId, roleCode, patientId, ct);
         var draft = await database.MedicalRecordDrafts.AsNoTracking()
             .Include(x => x.Appointment)
-            .Include(x => x.AuthorDoctorAccount).ThenInclude(x => x.Account)
-            .SingleOrDefaultAsync(x => x.AppointmentId == appointmentId && x.AuthorDoctorAccountId == doctorId
+            .Include(x => x.AuthorAccount).ThenInclude(x => x.DoctorProfile)
+            .SingleOrDefaultAsync(x => x.AppointmentId == appointmentId && x.AuthorAccountId == actorId
                 && x.HealthRecord.PatientAccountId == patientId, ct);
         return draft is null ? null : MapDraft(draft);
     }
 
     public async Task<MedicalRecordDraftResponse> SaveDraftAsync(
-        ulong doctorId, ulong patientId, ulong appointmentId, MedicalRecordDraftWriteRequest request, CancellationToken ct)
+        ulong actorId, string roleCode, ulong patientId, ulong appointmentId, MedicalRecordDraftWriteRequest request, CancellationToken ct)
     {
         var content = Normalize(request.Content);
-        await AuthorizeAsync(doctorId, ViverAppRoles.Doctor, true, patientId, "clinical", null, ct);
-        var appointment = await database.Appointments.Include(x => x.DoctorAccount).ThenInclude(x => x.Account)
-            .SingleOrDefaultAsync(x => x.Id == appointmentId && x.PatientAccountId == patientId && x.DoctorAccountId == doctorId, ct)
+        await AuthorizeWriteAsync(actorId, roleCode, patientId, ct);
+        var appointment = await database.Appointments
+            .SingleOrDefaultAsync(x => x.Id == appointmentId && x.PatientAccountId == patientId
+                && (roleCode != ViverAppRoles.Doctor || x.DoctorAccountId == actorId), ct)
             ?? throw Missing();
-        if (appointment.StatusCode is not ("confirmed" or "arrived" or "in_progress"))
-            throw Conflict("O rascunho só pode ser registrado em um atendimento confirmado, com chegada ou iniciado.");
+        if (appointment.StatusCode is not ("confirmed" or "arrived" or "in_progress" or "completed"))
+            throw Conflict("O registro clínico só pode ser escrito em um atendimento confirmado, com chegada, iniciado ou finalizado.");
         var record = await GetOrCreateRecordAsync(patientId, ct);
         var now = UtcNow;
-        var draft = await database.MedicalRecordDrafts.SingleOrDefaultAsync(x => x.AppointmentId == appointmentId && x.AuthorDoctorAccountId == doctorId, ct);
+        var draft = await database.MedicalRecordDrafts.SingleOrDefaultAsync(x => x.AppointmentId == appointmentId && x.AuthorAccountId == actorId, ct);
         if (draft is null)
         {
             if (request.RowVersion != 0) throw Conflict("O rascunho foi alterado em outra sessão. Recarregue antes de continuar.");
@@ -225,13 +226,13 @@ public sealed class MedicalRecordService(
             {
                 HealthRecordId = record.Id,
                 AppointmentId = appointmentId,
-                AuthorDoctorAccountId = doctorId,
+                AuthorAccountId = actorId,
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now,
                 ExpiresAtUtc = now.AddDays(30),
                 RowVersion = 1,
                 Appointment = appointment,
-                AuthorDoctorAccount = appointment.DoctorAccount,
+                AuthorAccount = await database.Accounts.SingleAsync(x => x.Id == actorId, ct),
             };
             Assign(draft, content);
             database.MedicalRecordDrafts.Add(draft);
@@ -245,29 +246,30 @@ public sealed class MedicalRecordService(
             draft.ExpiresAtUtc = now.AddDays(30);
             draft.RowVersion++;
             draft.Appointment = appointment;
-            draft.AuthorDoctorAccount = appointment.DoctorAccount;
+            draft.AuthorAccount = await database.Accounts.SingleAsync(x => x.Id == actorId, ct);
         }
         await SaveAsync(ct);
-        await audit.WriteAsync("medical_record.draft_saved", doctorId, "medical_record_draft", draft.Id.ToString(CultureInfo.InvariantCulture),
+        await audit.WriteAsync("medical_record.draft_saved", actorId, "medical_record_draft", draft.Id.ToString(CultureInfo.InvariantCulture),
             new Dictionary<string, string> { ["appointmentId"] = appointmentId.ToString(CultureInfo.InvariantCulture) }, ct);
         return MapDraft(draft);
     }
 
     public async Task<MedicalRecordVersionResponse> FinalizeAsync(
-        ulong doctorId, ulong patientId, ulong appointmentId, MedicalRecordFinalizeRequest request, CancellationToken ct)
+        ulong actorId, string roleCode, ulong patientId, ulong appointmentId, MedicalRecordFinalizeRequest request, CancellationToken ct)
     {
-        await AuthorizeAsync(doctorId, ViverAppRoles.Doctor, true, patientId, "clinical", null, ct);
+        await AuthorizeWriteAsync(actorId, roleCode, patientId, ct);
         var ownsTransaction = database.Database.CurrentTransaction is null;
         await using var transaction = ownsTransaction
             ? await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
             : null;
         var draft = await database.MedicalRecordDrafts
             .Include(x => x.Appointment)
-            .Include(x => x.AuthorDoctorAccount).ThenInclude(x => x.Account)
-            .SingleOrDefaultAsync(x => x.AppointmentId == appointmentId && x.AuthorDoctorAccountId == doctorId
+            .Include(x => x.AuthorAccount).ThenInclude(x => x.DoctorProfile)
+            .SingleOrDefaultAsync(x => x.AppointmentId == appointmentId && x.AuthorAccountId == actorId
                 && x.HealthRecord.PatientAccountId == patientId, ct) ?? throw Missing("Rascunho clínico não encontrado.");
         if (draft.RowVersion != request.DraftRowVersion) throw Conflict("Existe uma versão mais nova do rascunho. Revise antes de finalizar.");
-        if (draft.Appointment.StatusCode != "in_progress") throw Conflict("Inicie o atendimento antes de finalizar o prontuário.");
+        if (draft.Appointment.StatusCode is not ("confirmed" or "arrived" or "in_progress" or "completed"))
+            throw Conflict("O registro clínico só pode ser salvo em um atendimento confirmado, com chegada, iniciado ou finalizado.");
         var content = Normalize(ToContent(draft));
         var existing = await database.MedicalRecordEntries.Include(x => x.CurrentVersion)
             .SingleOrDefaultAsync(x => x.AppointmentId == appointmentId, ct);
@@ -275,83 +277,85 @@ public sealed class MedicalRecordService(
         if (existing?.CurrentVersion is { } current && CryptographicOperations.FixedTimeEquals(current.ContentSha256, hash))
         {
             if (ownsTransaction) await transaction!.RollbackAsync(ct);
-            await database.Entry(current).Reference(x => x.AuthorDoctorAccount).LoadAsync(ct);
-            await database.Entry(current.AuthorDoctorAccount).Reference(x => x.Account).LoadAsync(ct);
+            await database.Entry(current).Reference(x => x.AuthorAccount).LoadAsync(ct);
+            await database.Entry(current.AuthorAccount).Reference(x => x.DoctorProfile).LoadAsync(ct);
             await database.Entry(current).Reference(x => x.MedicalRecordEntry).LoadAsync(ct);
             await database.Entry(current.MedicalRecordEntry).Reference(x => x.Appointment).LoadAsync(ct);
             return MapVersion(current, true);
         }
-        if (existing is not null) throw Conflict("Este atendimento já possui um registro finalizado. Use a retificação.");
+        if (existing is not null)
+        {
+            var next = NewVersion(existing.Id, actorId, existing.CurrentVersion!.VersionNumber + 1,
+                existing.CurrentVersionId, "Conteúdo clínico atualizado", content, hash, UtcNow);
+            database.MedicalRecordVersions.Add(next);
+            await SaveAsync(ct);
+            existing.CurrentVersionId = next.Id;
+            database.MedicalRecordDrafts.Remove(draft);
+            await SaveAsync(ct);
+            await audit.WriteAsync("medical_record.version_saved", actorId, "medical_record_version", next.Id.ToString(CultureInfo.InvariantCulture),
+                new Dictionary<string, string> { ["appointmentId"] = appointmentId.ToString(CultureInfo.InvariantCulture), ["version"] = next.VersionNumber.ToString(CultureInfo.InvariantCulture) }, ct);
+            if (ownsTransaction) await transaction!.CommitAsync(ct);
+            next.AuthorAccount = draft.AuthorAccount;
+            next.MedicalRecordEntry = existing;
+            existing.Appointment = draft.Appointment;
+            return MapVersion(next, true);
+        }
         var now = UtcNow;
         var entry = new MedicalRecordEntry
         {
             HealthRecordId = draft.HealthRecordId,
             AppointmentId = appointmentId,
-            AuthorDoctorAccountId = doctorId,
+            AuthorAccountId = actorId,
             CreatedAtUtc = now,
         };
         database.MedicalRecordEntries.Add(entry);
         await SaveAsync(ct);
-        var version = NewVersion(entry.Id, doctorId, 1, null, null, content, hash, now);
+        var version = NewVersion(entry.Id, actorId, 1, null, null, content, hash, now);
         database.MedicalRecordVersions.Add(version);
         await SaveAsync(ct);
         entry.CurrentVersionId = version.Id;
         database.MedicalRecordDrafts.Remove(draft);
-        draft.Appointment.StatusCode = "completed";
-        draft.Appointment.CompletedByAccountId = doctorId;
-        draft.Appointment.CompletedAtUtc = now;
-        draft.Appointment.UpdatedAtUtc = now;
-        draft.Appointment.RowVersion++;
-        database.AppointmentStatusHistories.Add(new AppointmentStatusHistory
-        {
-            AppointmentId = appointmentId,
-            FromStatusCode = "in_progress",
-            ToStatusCode = "completed",
-            ActorAccountId = doctorId,
-            StartsAtUtc = draft.Appointment.StartsAtUtc,
-            EndsAtUtc = draft.Appointment.EndsAtUtc,
-            OccurredAtUtc = now,
-        });
         await SaveAsync(ct);
-        await audit.WriteAsync("medical_record.finalized", doctorId, "medical_record_version", version.Id.ToString(CultureInfo.InvariantCulture),
+        await audit.WriteAsync("medical_record.finalized", actorId, "medical_record_version", version.Id.ToString(CultureInfo.InvariantCulture),
             new Dictionary<string, string> { ["appointmentId"] = appointmentId.ToString(CultureInfo.InvariantCulture), ["version"] = "1" }, ct);
         if (ownsTransaction) await transaction!.CommitAsync(ct);
-        version.AuthorDoctorAccount = draft.AuthorDoctorAccount;
+        version.AuthorAccount = draft.AuthorAccount;
         version.MedicalRecordEntry = entry;
         entry.Appointment = draft.Appointment;
         return MapVersion(version, true);
     }
 
     public async Task<MedicalRecordVersionResponse> RectifyAsync(
-        ulong doctorId, ulong patientId, ulong entryId, MedicalRecordRectifyRequest request, CancellationToken ct)
+        ulong actorId, string roleCode, ulong patientId, ulong entryId, MedicalRecordRectifyRequest request, CancellationToken ct)
     {
         var content = Normalize(request.Content);
         var reason = request.CorrectionReason.Trim();
         if (reason.Length is < 5 or > 1000) throw Invalid("Informe um motivo de retificação entre 5 e 1.000 caracteres.");
-        await AuthorizeAsync(doctorId, ViverAppRoles.Doctor, true, patientId, "clinical", null, ct);
+        await AuthorizeWriteAsync(actorId, roleCode, patientId, ct);
         var ownsTransaction = database.Database.CurrentTransaction is null;
         await using var transaction = ownsTransaction
             ? await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
             : null;
         var entry = await database.MedicalRecordEntries
             .Include(x => x.Appointment)
-            .Include(x => x.AuthorDoctorAccount).ThenInclude(x => x.Account)
+            .Include(x => x.AuthorAccount).ThenInclude(x => x.DoctorProfile)
             .Include(x => x.CurrentVersion)
-            .SingleOrDefaultAsync(x => x.Id == entryId && x.HealthRecord.PatientAccountId == patientId && x.AuthorDoctorAccountId == doctorId, ct)
+            .SingleOrDefaultAsync(x => x.Id == entryId && x.HealthRecord.PatientAccountId == patientId
+                && (roleCode != ViverAppRoles.Doctor || x.Appointment.DoctorAccountId == actorId), ct)
             ?? throw Missing();
         if (entry.CurrentVersionId != request.CurrentVersionId || entry.CurrentVersion is null)
             throw Conflict("O registro foi retificado em outra sessão. Recarregue antes de continuar.");
         var now = UtcNow;
-        var version = NewVersion(entry.Id, doctorId, entry.CurrentVersion.VersionNumber + 1,
+        var version = NewVersion(entry.Id, actorId, entry.CurrentVersion.VersionNumber + 1,
             entry.CurrentVersionId, reason, content, Hash(content), now);
         database.MedicalRecordVersions.Add(version);
         await SaveAsync(ct);
         entry.CurrentVersionId = version.Id;
         await SaveAsync(ct);
-        await audit.WriteAsync("medical_record.rectified", doctorId, "medical_record_version", version.Id.ToString(CultureInfo.InvariantCulture),
+        await audit.WriteAsync("medical_record.rectified", actorId, "medical_record_version", version.Id.ToString(CultureInfo.InvariantCulture),
             new Dictionary<string, string> { ["entryId"] = entryId.ToString(CultureInfo.InvariantCulture), ["version"] = version.VersionNumber.ToString(CultureInfo.InvariantCulture) }, ct);
         if (ownsTransaction) await transaction!.CommitAsync(ct);
-        version.AuthorDoctorAccount = entry.AuthorDoctorAccount;
+        version.AuthorAccount = entry.AuthorAccount;
         version.MedicalRecordEntry = entry;
         return MapVersion(version, true);
     }
@@ -363,7 +367,7 @@ public sealed class MedicalRecordService(
         var query = database.MedicalRecordDocuments.AsNoTracking()
             .Include(x => x.PrivateDocument).Include(x => x.UploadedByAccount).Include(x => x.Appointment)
             .Where(x => x.HealthRecord.PatientAccountId == patientId && x.StatusCode == "available");
-        if (roleCode == ViverAppRoles.Doctor) query = query.Where(x => x.HealthRecord.MedicalRecordEntries.Any(e => e.AuthorDoctorAccountId == actorId)
+        if (roleCode == ViverAppRoles.Doctor) query = query.Where(x => x.HealthRecord.MedicalRecordEntries.Any(e => e.AuthorAccountId == actorId)
             || x.Appointment != null && x.Appointment.DoctorAccountId == actorId);
         return await query.OrderByDescending(x => x.CreatedAtUtc)
             .Select(x => new MedicalRecordDocumentResponse(x.Id, x.PrivateDocument.OriginalFileName,
@@ -493,12 +497,13 @@ public sealed class MedicalRecordService(
     private async Task<IReadOnlyList<MedicalRecordEntryResponse>> EntriesWithoutAuditAsync(ulong actorId, string roleCode, ulong patientId, CancellationToken ct)
     {
         var entries = await database.MedicalRecordEntries.AsNoTracking().Include(x => x.Appointment)
-            .Include(x => x.AuthorDoctorAccount).ThenInclude(x => x.Account).Include(x => x.CurrentVersion)
-            .Where(x => x.HealthRecord.PatientAccountId == patientId && (roleCode != ViverAppRoles.Doctor || x.AuthorDoctorAccountId == actorId))
+            .Include(x => x.AuthorAccount).ThenInclude(x => x.DoctorProfile)
+            .Include(x => x.CurrentVersion)!.ThenInclude(x => x!.AuthorAccount).ThenInclude(x => x.DoctorProfile)
+            .Where(x => x.HealthRecord.PatientAccountId == patientId && (roleCode != ViverAppRoles.Doctor || x.Appointment.DoctorAccountId == actorId))
             .OrderByDescending(x => x.Appointment.StartsAtUtc).ToArrayAsync(ct);
         return entries.Select(x => new MedicalRecordEntryResponse(x.Id, x.AppointmentId, x.Appointment.AppointmentNumber,
             x.Appointment.StartsAtUtc, x.CurrentVersionId!.Value, x.CurrentVersion!.VersionNumber,
-            x.AuthorDoctorAccount.Account.FullName, License(x.AuthorDoctorAccount), x.CurrentVersion.FinalizedAtUtc,
+            x.CurrentVersion.AuthorAccount.FullName, License(x.CurrentVersion.AuthorAccount), x.CurrentVersion.FinalizedAtUtc,
             new[] { MapVersionForLoadedEntry(x.CurrentVersion, x) })).ToArray();
     }
 
@@ -520,10 +525,15 @@ public sealed class MedicalRecordService(
         };
         if (ClinicalScopes.Contains(scope, StringComparer.Ordinal) || scope == "audit")
         {
-            if (roleCode is ViverAppRoles.Manager or ViverAppRoles.Administrator)
+            if (roleCode == ViverAppRoles.Administrator)
                 allowed &= normalizedPurpose?.Length is >= 10 and <= 500;
         }
-        var storedPurpose = roleCode == ViverAppRoles.Doctor ? null : normalizedPurpose ?? "Acesso operacional autorizado ao prontuário";
+        var storedPurpose = roleCode switch
+        {
+            ViverAppRoles.Doctor => null,
+            ViverAppRoles.Manager => normalizedPurpose ?? "Acesso gerencial autorizado ao prontuário",
+            _ => normalizedPurpose ?? "Acesso operacional autorizado ao prontuário",
+        };
         database.ClinicalAccessEvents.Add(new ClinicalAccessEvent
         {
             PatientAccountId = patientId,
@@ -539,10 +549,25 @@ public sealed class MedicalRecordService(
         {
             if (roleCode == ViverAppRoles.Administrator && !recentAuthentication)
                 throw Forbidden("Confirme novamente sua identidade antes de acessar conteúdo clínico.");
-            if (roleCode is ViverAppRoles.Manager or ViverAppRoles.Administrator && normalizedPurpose is null or { Length: < 10 })
+            if (roleCode == ViverAppRoles.Administrator && normalizedPurpose is (null or { Length: < 10 }))
                 throw Forbidden("Informe uma finalidade com ao menos 10 caracteres para acessar conteúdo clínico.");
             throw Missing();
         }
+    }
+
+    private async Task AuthorizeWriteAsync(ulong actorId, string roleCode, ulong patientId, CancellationToken ct)
+    {
+        if (roleCode is not (ViverAppRoles.Doctor or ViverAppRoles.Manager)) throw Missing();
+        if (roleCode == ViverAppRoles.Manager)
+        {
+            var enabled = await database.ApplicationSettings.AsNoTracking()
+                .Where(x => x.SettingKey == "manager.medical_records_write_enabled")
+                .Select(x => x.ValueJson)
+                .SingleOrDefaultAsync(ct);
+            if (!string.Equals(enabled?.Trim(), "true", StringComparison.OrdinalIgnoreCase))
+                throw Forbidden("A escrita do prontuário pelo gestor está desabilitada nas configurações administrativas.");
+        }
+        await AuthorizeAsync(actorId, roleCode, true, patientId, "clinical", null, ct);
     }
 
     private async Task<ElectronicHealthRecord> GetOrCreateRecordAsync(ulong patientId, CancellationToken ct)
@@ -567,13 +592,13 @@ public sealed class MedicalRecordService(
         catch (DbUpdateConcurrencyException) { throw Conflict("Os dados foram alterados em outra sessão. Recarregue antes de continuar."); }
     }
 
-    private static MedicalRecordVersion NewVersion(ulong entryId, ulong doctorId, uint number, ulong? supersedes,
+    private static MedicalRecordVersion NewVersion(ulong entryId, ulong actorId, uint number, ulong? supersedes,
         string? reason, MedicalRecordContent content, byte[] hash, DateTime now)
     {
         var version = new MedicalRecordVersion
         {
             MedicalRecordEntryId = entryId,
-            AuthorDoctorAccountId = doctorId,
+            AuthorAccountId = actorId,
             VersionNumber = number,
             SupersedesVersionId = supersedes,
             CorrectionReason = reason,
@@ -585,18 +610,18 @@ public sealed class MedicalRecordService(
     }
 
     private static MedicalRecordDraftResponse MapDraft(MedicalRecordDraft x) => new(x.Id, x.AppointmentId,
-        x.Appointment.AppointmentNumber, x.Appointment.StartsAtUtc, x.AuthorDoctorAccountId,
-        x.AuthorDoctorAccount.Account.FullName, ToContent(x), x.UpdatedAtUtc, x.ExpiresAtUtc, x.RowVersion);
+        x.Appointment.AppointmentNumber, x.Appointment.StartsAtUtc, x.AuthorAccountId,
+        x.AuthorAccount.FullName, ToContent(x), x.UpdatedAtUtc, x.ExpiresAtUtc, x.RowVersion);
 
     private static MedicalRecordVersionResponse MapVersion(MedicalRecordVersion x, bool current) => new(x.Id,
         x.MedicalRecordEntryId, x.MedicalRecordEntry.AppointmentId, x.MedicalRecordEntry.Appointment.AppointmentNumber,
-        x.VersionNumber, x.SupersedesVersionId, x.CorrectionReason, x.AuthorDoctorAccountId,
-        x.AuthorDoctorAccount.Account.FullName, License(x.AuthorDoctorAccount), ToContent(x), x.FinalizedAtUtc, current);
+        x.VersionNumber, x.SupersedesVersionId, x.CorrectionReason, x.AuthorAccountId,
+        x.AuthorAccount.FullName, License(x.AuthorAccount), ToContent(x), x.FinalizedAtUtc, current);
 
     private static MedicalRecordVersionResponse MapVersionForLoadedEntry(MedicalRecordVersion x, MedicalRecordEntry entry) => new(x.Id,
         entry.Id, entry.AppointmentId, entry.Appointment.AppointmentNumber, x.VersionNumber, x.SupersedesVersionId,
-        x.CorrectionReason, x.AuthorDoctorAccountId, entry.AuthorDoctorAccount.Account.FullName,
-        License(entry.AuthorDoctorAccount), ToContent(x), x.FinalizedAtUtc, true);
+        x.CorrectionReason, x.AuthorAccountId, x.AuthorAccount.FullName,
+        License(x.AuthorAccount), ToContent(x), x.FinalizedAtUtc, true);
 
     private static MedicalRecordContent Normalize(MedicalRecordContent? value)
     {
@@ -683,7 +708,9 @@ public sealed class MedicalRecordService(
 
     private DateTime UtcNow => timeProvider.GetUtcNow().UtcDateTime;
     private static int CalculateAge(DateOnly birth, DateOnly today) { var age = today.Year - birth.Year; return birth > today.AddYears(-age) ? age - 1 : age; }
-    private static string License(DoctorProfile doctor) => $"CRM {doctor.LicenseStateCode} {doctor.LicenseNumber}";
+    private static string License(Account author) => author.DoctorProfile is { } doctor
+        ? $"CRM {doctor.LicenseStateCode} {doctor.LicenseNumber}"
+        : author.RoleCode == ViverAppRoles.Manager ? "Gestor da clínica" : "Administrador";
     private static string? FormatAddress(AccountAddress? x) => x is null ? null : string.Join(" · ", new[]
     {
         string.Join(", ", new[] { x.Street, x.Number }.Where(v => !string.IsNullOrWhiteSpace(v))), x.Complement,

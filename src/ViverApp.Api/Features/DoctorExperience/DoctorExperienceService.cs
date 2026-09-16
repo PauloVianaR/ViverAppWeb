@@ -14,7 +14,16 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
 {
     private static readonly string[] AppointmentStatuses = ["pending", "confirmed", "arrived", "in_progress", "completed", "canceled", "rescheduled", "no_show"];
     private static readonly string[] Modalities = ["in_person", "online"];
-    private static readonly string[] Categories = ["consultation", "examination", "surgery"];
+    private static readonly string[] Categories = ["consultation", "examination", "surgery", "procedure"];
+
+    public async Task<DoctorCapabilitiesResponse> CapabilitiesAsync(CancellationToken ct) =>
+        new(await SettingEnabledAsync("doctor.patient_scheduling_enabled", false, ct));
+
+    public async Task EnsurePatientSchedulingEnabledAsync(CancellationToken ct)
+    {
+        if (!await SettingEnabledAsync("doctor.patient_scheduling_enabled", false, ct))
+            throw Forbidden("O agendamento de pacientes pelo médico está desabilitado nas configurações administrativas.");
+    }
 
     public async Task<DoctorHomeResponse> HomeAsync(ulong doctor, CancellationToken ct)
     {
@@ -357,7 +366,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         var birth = x.PatientAccount.BirthDate ?? x.PatientAccount.PatientProfile?.BirthDate;
         int? age = birth.HasValue ? now.Year - birth.Value.Year - (birth.Value.Date > now.AddYears(-(now.Year - birth.Value.Year)).Date ? 1 : 0) : null;
         return new(x.Id, x.AppointmentNumber, x.PatientAccountId, x.PatientAccount.FullName, age, x.AppointmentTypeId, x.AppointmentType.Name, x.AppointmentType.CategoryCode,
-            x.StatusCode, x.ModalityCode, x.StartsAtUtc, x.EndsAtUtc, x.PriceAmount, x.DiscountPercent,
+            x.StatusCode, x.ModalityCode, x.StartsAtUtc, x.EndsAtUtc, x.PriceAmount, x.BasePriceAmount ?? x.PriceAmount, x.DiscountPercent,
             x.CurrentPayment?.StatusCode ?? "unpaid", x.PaymentLocationCode, x.PatientNotes, x.CancellationReason,
             x.RescheduledFromAppointmentId, x.InverseRescheduledFromAppointment?.Id, x.AppointmentReview?.Rating, x.AppointmentReview?.Comment,
             x.ArrivedAtUtc, x.ArrivalQueueNumber,
@@ -365,8 +374,8 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
                 h.PreviousStartsAtUtc, h.PreviousEndsAtUtc, h.NewStartsAtUtc, h.NewEndsAtUtc, h.Reason, h.OccurredAtUtc)).ToArray(),
             x.ModalityCode == "online" && x.StatusCode == "confirmed" && x.CurrentPayment?.StatusCode == "paid" && x.StartsAtUtc <= now.AddMinutes(15) && x.EndsAtUtc >= now,
             x.StatusCode is "pending" or "confirmed", x.StatusCode is "pending" or "confirmed",
-            (x.ModalityCode == "in_person" && x.StatusCode == "arrived" || x.ModalityCode == "online" && x.StatusCode == "confirmed") && x.StartsAtUtc <= now.AddMinutes(15),
-            x.StatusCode == "in_progress" && x.StartsAtUtc <= now, x.RowVersion);
+            x.StatusCode is "confirmed" or "arrived", x.StatusCode == "in_progress",
+            x.StatusCode is "confirmed" or "arrived" or "in_progress", x.RowVersion);
     }
     private async Task EnsureLinkAsync(ulong doctor, ulong patient, ulong creator, CancellationToken ct)
     {
@@ -398,6 +407,12 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         var name = await database.Clinics.AsNoTracking().Select(x => x.TimezoneName).SingleOrDefaultAsync(ct) ?? "America/Sao_Paulo";
         try { return TimeZoneInfo.FindSystemTimeZoneById(name); } catch (TimeZoneNotFoundException) { throw new DoctorRuleException(503, "Fuso horário indisponível."); }
     }
+    private async Task<bool> SettingEnabledAsync(string key, bool fallback, CancellationToken ct)
+    {
+        var value = await database.ApplicationSettings.AsNoTracking().Where(x => x.SettingKey == key)
+            .Select(x => x.ValueJson).SingleOrDefaultAsync(ct);
+        return value is null ? fallback : string.Equals(value.Trim(), "true", StringComparison.OrdinalIgnoreCase);
+    }
     private static DateTime StartUtc(DateOnly date, TimeZoneInfo timezone) => TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(date.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified), timezone);
     private static string? Text(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     private static void Page(int page, int pageSize) { if (page < 1 || pageSize is < 1 or > 100) throw Invalid("Paginação inválida."); }
@@ -405,6 +420,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
     private async Task SaveAsync(CancellationToken ct) { try { await database.SaveChangesAsync(ct); } catch (DbUpdateConcurrencyException) { throw Conflict("Os dados foram alterados por outra sessão."); } catch (DbUpdateException) { throw Conflict("A operação não pôde ser concluída."); } }
     internal static DoctorRuleException Invalid(string message) => new(400, message);
     internal static DoctorRuleException Missing() => new(404, "Recurso não encontrado.");
+    internal static DoctorRuleException Forbidden(string message) => new(403, message);
     internal static DoctorRuleException Conflict(string message) => new(409, message);
 }
 

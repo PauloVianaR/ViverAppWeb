@@ -180,7 +180,7 @@ public static class IdentityServiceCollectionExtensions
             authorization.AddPolicy(policyName, policy => policy.RequireRole(
                 ViverAppRoles.Doctor, ViverAppRoles.Manager, ViverAppRoles.Administrator));
         }
-        authorization.AddPolicy(ViverAppPolicies.MedicalRecordWrite, policy => policy.RequireRole(ViverAppRoles.Doctor));
+        authorization.AddPolicy(ViverAppPolicies.MedicalRecordWrite, policy => policy.RequireRole(ViverAppRoles.Doctor, ViverAppRoles.Manager));
         authorization.AddPolicy(ViverAppPolicies.MedicalRecordAudit, policy => policy
             .RequireRole(ViverAppRoles.Administrator)
             .RequireClaim(ViverAppClaimTypes.MfaSatisfied, bool.TrueString));

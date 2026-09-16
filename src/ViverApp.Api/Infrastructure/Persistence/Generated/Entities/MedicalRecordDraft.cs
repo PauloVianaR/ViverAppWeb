@@ -11,7 +11,7 @@ public partial class MedicalRecordDraft
 
     public ulong AppointmentId { get; set; }
 
-    public ulong AuthorDoctorAccountId { get; set; }
+    public ulong AuthorAccountId { get; set; }
 
     public string? ChiefComplaint { get; set; }
 
@@ -61,7 +61,7 @@ public partial class MedicalRecordDraft
 
     public virtual Appointment Appointment { get; set; } = null!;
 
-    public virtual DoctorProfile AuthorDoctorAccount { get; set; } = null!;
+    public virtual Account AuthorAccount { get; set; } = null!;
 
     public virtual ElectronicHealthRecord HealthRecord { get; set; } = null!;
 }

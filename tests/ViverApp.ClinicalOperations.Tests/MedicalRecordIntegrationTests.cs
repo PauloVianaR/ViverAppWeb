@@ -102,7 +102,7 @@ public sealed class MedicalRecordIntegrationTests
         Assert.Equal(appointment.Id, selectableAppointments[0].Id);
 
         var firstContent = OptionalContent();
-        var draft = await service.SaveDraftAsync(doctor.Id, patient.Id, appointment.Id,
+        var draft = await service.SaveDraftAsync(doctor.Id, ViverAppRoles.Doctor, patient.Id, appointment.Id,
             new MedicalRecordDraftWriteRequest(0, firstContent), CancellationToken.None);
         Assert.Equal(1UL, draft.RowVersion);
         Assert.Null(draft.Content.ChiefComplaint);
@@ -110,19 +110,19 @@ public sealed class MedicalRecordIntegrationTests
         Assert.Equal((ushort)80, draft.Content.DiastolicPressureMmhg);
         Assert.Null(draft.Content.HeartRateBpm);
         Assert.Equal(170m, draft.Content.HeightCm);
-        var stale = await Assert.ThrowsAsync<MedicalRecordRuleException>(() => service.SaveDraftAsync(doctor.Id, patient.Id,
+        var stale = await Assert.ThrowsAsync<MedicalRecordRuleException>(() => service.SaveDraftAsync(doctor.Id, ViverAppRoles.Doctor, patient.Id,
             appointment.Id, new MedicalRecordDraftWriteRequest(0, firstContent), CancellationToken.None));
         Assert.Equal((int)HttpStatusCode.Conflict, stale.StatusCode);
 
-        var finalized = await service.FinalizeAsync(doctor.Id, patient.Id, appointment.Id,
+        var finalized = await service.FinalizeAsync(doctor.Id, ViverAppRoles.Doctor, patient.Id, appointment.Id,
             new MedicalRecordFinalizeRequest(draft.RowVersion), CancellationToken.None);
         Assert.Equal(1U, finalized.VersionNumber);
         Assert.True(finalized.IsCurrent);
-        Assert.Equal("completed", (await context.Appointments.FindAsync(appointment.Id))!.StatusCode);
+        Assert.Equal("in_progress", (await context.Appointments.FindAsync(appointment.Id))!.StatusCode);
 
-        var managerWithoutPurpose = await Assert.ThrowsAsync<MedicalRecordRuleException>(() => service.EntriesAsync(manager.Id,
-            ViverAppRoles.Manager, true, patient.Id, null, true, CancellationToken.None));
-        Assert.Equal((int)HttpStatusCode.Forbidden, managerWithoutPurpose.StatusCode);
+        var managerWithoutPurpose = await service.EntriesAsync(manager.Id,
+            ViverAppRoles.Manager, true, patient.Id, null, true, CancellationToken.None);
+        Assert.Single(managerWithoutPurpose);
         var administratorWithoutStepUp = await Assert.ThrowsAsync<MedicalRecordRuleException>(() => service.EntriesAsync(administrator.Id,
             ViverAppRoles.Administrator, false, patient.Id, "Auditoria clínica autorizada", true, CancellationToken.None));
         Assert.Equal((int)HttpStatusCode.Forbidden, administratorWithoutStepUp.StatusCode);
@@ -133,14 +133,30 @@ public sealed class MedicalRecordIntegrationTests
         var managerRead = await service.EntriesAsync(manager.Id, ViverAppRoles.Manager, true, patient.Id,
             "Continuidade do atendimento na clínica", true, CancellationToken.None);
         Assert.Single(managerRead);
+        await context.ApplicationSettings.Where(x => x.SettingKey == "manager.medical_records_write_enabled")
+            .ExecuteUpdateAsync(x => x.SetProperty(s => s.ValueJson, "false"));
+        var managerDisabled = await Assert.ThrowsAsync<MedicalRecordRuleException>(() => service.SaveDraftAsync(
+            manager.Id, ViverAppRoles.Manager, patient.Id, appointment.Id,
+            new MedicalRecordDraftWriteRequest(0, firstContent), CancellationToken.None));
+        Assert.Equal((int)HttpStatusCode.Forbidden, managerDisabled.StatusCode);
+        await context.ApplicationSettings.Where(x => x.SettingKey == "manager.medical_records_write_enabled")
+            .ExecuteUpdateAsync(x => x.SetProperty(s => s.ValueJson, "true"));
+        var managerContent = firstContent with { AdditionalNotes = "Registro complementar realizado pela gestão autorizada." };
+        var managerDraft = await service.SaveDraftAsync(manager.Id, ViverAppRoles.Manager, patient.Id, appointment.Id,
+            new MedicalRecordDraftWriteRequest(0, managerContent), CancellationToken.None);
+        var managerVersion = await service.FinalizeAsync(manager.Id, ViverAppRoles.Manager, patient.Id, appointment.Id,
+            new MedicalRecordFinalizeRequest(managerDraft.RowVersion), CancellationToken.None);
+        Assert.Equal(2U, managerVersion.VersionNumber);
+        Assert.Equal(manager.Id, managerVersion.AuthorDoctorAccountId);
+        Assert.Equal("Gestor da clínica", managerVersion.LicenseLabel);
         var secondContent = firstContent with { ClinicalEvolution = "Paciente sem sinais de alarme e com evolução estável." };
-        var rectified = await service.RectifyAsync(doctor.Id, patient.Id, managerRead[0].Id,
-            new MedicalRecordRectifyRequest(finalized.Id, "Correção de informação relatada pelo paciente.", secondContent),
+        var rectified = await service.RectifyAsync(doctor.Id, ViverAppRoles.Doctor, patient.Id, managerRead[0].Id,
+            new MedicalRecordRectifyRequest(managerVersion.Id, "Correção de informação relatada pelo paciente.", secondContent),
             CancellationToken.None);
-        Assert.Equal(2U, rectified.VersionNumber);
-        Assert.Equal(finalized.Id, rectified.SupersedesVersionId);
-        Assert.Equal(2, await context.MedicalRecordVersions.CountAsync(x => x.MedicalRecordEntryId == rectified.EntryId));
-        Assert.Equal(3, await context.ClinicalAccessEvents.CountAsync(x => x.PatientAccountId == patient.Id && x.OutcomeCode == "denied"));
+        Assert.Equal(3U, rectified.VersionNumber);
+        Assert.Equal(managerVersion.Id, rectified.SupersedesVersionId);
+        Assert.Equal(3, await context.MedicalRecordVersions.CountAsync(x => x.MedicalRecordEntryId == rectified.EntryId));
+        Assert.Equal(2, await context.ClinicalAccessEvents.CountAsync(x => x.PatientAccountId == patient.Id && x.OutcomeCode == "denied"));
 
         var mutation = await Assert.ThrowsAnyAsync<Exception>(() => context.Database.ExecuteSqlInterpolatedAsync(
             $"UPDATE medical_record_versions SET chief_complaint = 'alteracao proibida' WHERE id = {finalized.Id}"));

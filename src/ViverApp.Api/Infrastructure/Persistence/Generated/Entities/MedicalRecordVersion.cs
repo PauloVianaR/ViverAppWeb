@@ -13,7 +13,7 @@ public partial class MedicalRecordVersion
 
     public ulong? SupersedesVersionId { get; set; }
 
-    public ulong AuthorDoctorAccountId { get; set; }
+    public ulong AuthorAccountId { get; set; }
 
     public string? CorrectionReason { get; set; }
 
@@ -59,7 +59,7 @@ public partial class MedicalRecordVersion
 
     public DateTime FinalizedAtUtc { get; set; }
 
-    public virtual DoctorProfile AuthorDoctorAccount { get; set; } = null!;
+    public virtual Account AuthorAccount { get; set; } = null!;
 
     public virtual MedicalRecordVersion? InverseSupersedesVersion { get; set; }
 

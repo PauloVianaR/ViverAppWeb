@@ -12,6 +12,8 @@ public abstract class ManagerPageBase : ComponentBase, IAsyncDisposable
     [Inject] protected UiErrorNotifier ErrorNotifier { get; set; } = null!;
     protected IJSObjectReference? Module;
     protected bool Loading = true, Busy;
+    protected string AppointmentViewMode = "cards";
+    private bool appointmentViewLoaded;
     private string? notice;
     private bool noticeError;
     protected string? Notice { get => notice; set { notice = value; if (noticeError && value is not null) ErrorNotifier.Show(value); } }
@@ -23,7 +25,7 @@ public abstract class ManagerPageBase : ComponentBase, IAsyncDisposable
     {
         if (!firstRender) return; loadedUri = Navigation.Uri;
         Navigation.LocationChanged += OnLocationChanged;
-        await Run(async () => { Module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/manager-experience.js"); await Load(); });
+        await Run(async () => { Module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/manager-experience.js"); await LoadAppointmentViewAsync(); await Load(); });
         Loading = false; StateHasChanged();
     }
     private void OnLocationChanged(object? sender, LocationChangedEventArgs args)
@@ -46,6 +48,8 @@ public abstract class ManagerPageBase : ComponentBase, IAsyncDisposable
     }
     protected abstract Task Load();
     protected Task<T?> Get<T>(string path) => Request<T>(path, "GET", null);
+    protected async Task LoadAppointmentViewAsync() { if (appointmentViewLoaded) return; var preference = await Get<AppointmentViewPreference>("api/v1/me/preferences/appointment-view"); AppointmentViewMode = preference?.Mode == "compact" ? "compact" : "cards"; appointmentViewLoaded = true; }
+    protected Task ChangeAppointmentView(string mode) => Run(async () => { var preference = await Request<AppointmentViewPreference>("api/v1/me/preferences/appointment-view", "PUT", new { mode }); AppointmentViewMode = preference?.Mode == "compact" ? "compact" : "cards"; });
     protected async Task<T?> Request<T>(string path, string method, object? data, string? key = null)
     {
         var result = await Module!.InvokeAsync<PatientApiResult<T>>("request", Backend.BaseUrl.ToString(), path, method, data, key);

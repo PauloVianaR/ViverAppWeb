@@ -74,7 +74,7 @@ public sealed class ClinicalOperationsApiTests : IAsyncLifetime
         var audit = await provider.GetPolicyAsync(ViverAppPolicies.MedicalRecordAudit);
         Assert.Equal([ViverAppRoles.Doctor, ViverAppRoles.Manager, ViverAppRoles.Administrator],
             Assert.Single(read!.Requirements.OfType<RolesAuthorizationRequirement>()).AllowedRoles);
-        Assert.Equal([ViverAppRoles.Doctor], Assert.Single(write!.Requirements.OfType<RolesAuthorizationRequirement>()).AllowedRoles);
+        Assert.Equal([ViverAppRoles.Doctor, ViverAppRoles.Manager], Assert.Single(write!.Requirements.OfType<RolesAuthorizationRequirement>()).AllowedRoles);
         Assert.Equal([ViverAppRoles.Administrator], Assert.Single(audit!.Requirements.OfType<RolesAuthorizationRequirement>()).AllowedRoles);
         Assert.Contains(audit.Requirements.OfType<ClaimsAuthorizationRequirement>(), x =>
             x.ClaimType == ViverAppClaimTypes.MfaSatisfied && x.AllowedValues!.Contains(bool.TrueString));

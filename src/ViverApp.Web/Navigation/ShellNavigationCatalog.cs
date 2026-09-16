@@ -69,6 +69,7 @@ public static class ShellNavigationCatalog
             new("Pacientes", "/gestao/pacientes", "users"),
             new("Histórico", "/gestao/historico", "history"),
             new("Caixa", "/gestao/caixa", "card"),
+            new("Clínica", "/gestao/clinica", "clinic"),
             new("Perfil", "/gestao/perfil", "user"),
         ]);
 

@@ -214,7 +214,7 @@ public static class SecurityServiceCollectionExtensions
                 SecurityPolicyNames.SensitiveRateLimit,
                 context => RateLimitPartition.GetFixedWindowLimiter(
                     GetPartitionKey(context),
-                    _ => CreateFixedWindowOptions(5, TimeSpan.FromMinutes(5))));
+                    _ => CreateFixedWindowOptions(10, TimeSpan.FromMinutes(5))));
             options.AddPolicy(
                 SecurityPolicyNames.AuthenticatedOperationRateLimit,
                 context => RateLimitPartition.GetFixedWindowLimiter(

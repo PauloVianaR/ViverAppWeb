@@ -224,6 +224,8 @@ public sealed class CashManagementService(
         if (payment.RowVersion != request.RowVersion) throw Conflict("O pagamento foi alterado por outra sessão.");
         if (appointment.CurrentPaymentId != payment.Id || payment.StatusCode != "paid")
             throw Conflict("Somente o pagamento quitado atual pode ser cancelado.");
+        if (appointment.StatusCode is not ("confirmed" or "arrived"))
+            throw Conflict("O pagamento só pode ser cancelado enquanto o atendimento estiver confirmado ou com a chegada registrada.");
         var original = await database.CashMovements.SingleOrDefaultAsync(item => item.PaymentId == payment.Id && item.TypeCode == "payment_received", cancellationToken)
             ?? throw Conflict("O recebimento original não foi localizado no caixa.");
         var now = clock.GetUtcNow().UtcDateTime;

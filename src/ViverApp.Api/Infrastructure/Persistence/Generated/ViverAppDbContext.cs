@@ -26,6 +26,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<AccountRecoveryCode> AccountRecoveryCodes { get; set; }
 
+    public virtual DbSet<AccountUiPreference> AccountUiPreferences { get; set; }
+
     public virtual DbSet<AdministratorNotification> AdministratorNotifications { get; set; }
 
     public virtual DbSet<ApplicationSetting> ApplicationSettings { get; set; }
@@ -414,6 +416,29 @@ public partial class ViverAppDbContext : DbContext
             entity.HasOne(d => d.Account).WithMany(p => p.AccountRecoveryCodes)
                 .HasForeignKey(d => d.AccountId)
                 .HasConstraintName("fk_account_recovery_codes_account");
+        });
+
+        modelBuilder.Entity<AccountUiPreference>(entity =>
+        {
+            entity.HasKey(e => e.AccountId).HasName("PRIMARY");
+
+            entity.ToTable("account_ui_preferences");
+
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.AppointmentViewMode)
+                .HasMaxLength(16)
+                .HasDefaultValueSql("'cards'")
+                .HasColumnName("appointment_view_mode");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.Account).WithOne(p => p.AccountUiPreference)
+                .HasForeignKey<AccountUiPreference>(d => d.AccountId)
+                .HasConstraintName("fk_account_ui_preferences_account");
         });
 
         modelBuilder.Entity<AdministratorNotification>(entity =>
@@ -1808,11 +1833,11 @@ public partial class ViverAppDbContext : DbContext
 
             entity.ToTable("medical_record_drafts");
 
-            entity.HasIndex(e => e.AuthorDoctorAccountId, "fk_medical_record_drafts_author");
+            entity.HasIndex(e => e.AuthorAccountId, "fk_medical_record_drafts_author_account");
 
             entity.HasIndex(e => new { e.HealthRecordId, e.UpdatedAtUtc }, "ix_medical_record_drafts_record_updated");
 
-            entity.HasIndex(e => new { e.AppointmentId, e.AuthorDoctorAccountId }, "ux_medical_record_drafts_appointment_author").IsUnique();
+            entity.HasIndex(e => new { e.AppointmentId, e.AuthorAccountId }, "ux_medical_record_drafts_appointment_author").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.AdditionalNotes)
@@ -1822,7 +1847,7 @@ public partial class ViverAppDbContext : DbContext
                 .HasColumnType("text")
                 .HasColumnName("allergies");
             entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
-            entity.Property(e => e.AuthorDoctorAccountId).HasColumnName("author_doctor_account_id");
+            entity.Property(e => e.AuthorAccountId).HasColumnName("author_account_id");
             entity.Property(e => e.ChiefComplaint)
                 .HasColumnType("text")
                 .HasColumnName("chief_complaint");
@@ -1887,10 +1912,10 @@ public partial class ViverAppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_medical_record_drafts_appointment");
 
-            entity.HasOne(d => d.AuthorDoctorAccount).WithMany(p => p.MedicalRecordDrafts)
-                .HasForeignKey(d => d.AuthorDoctorAccountId)
+            entity.HasOne(d => d.AuthorAccount).WithMany(p => p.MedicalRecordDrafts)
+                .HasForeignKey(d => d.AuthorAccountId)
                 .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("fk_medical_record_drafts_author");
+                .HasConstraintName("fk_medical_record_drafts_author_account");
 
             entity.HasOne(d => d.HealthRecord).WithMany(p => p.MedicalRecordDrafts)
                 .HasForeignKey(d => d.HealthRecordId)
@@ -1906,7 +1931,7 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => e.CurrentVersionId, "fk_medical_record_entries_current_version");
 
-            entity.HasIndex(e => new { e.AuthorDoctorAccountId, e.CreatedAtUtc }, "ix_medical_record_entries_author_created");
+            entity.HasIndex(e => new { e.AuthorAccountId, e.CreatedAtUtc }, "ix_medical_record_entries_author_created");
 
             entity.HasIndex(e => new { e.HealthRecordId, e.CreatedAtUtc }, "ix_medical_record_entries_record_created");
 
@@ -1914,7 +1939,7 @@ public partial class ViverAppDbContext : DbContext
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
-            entity.Property(e => e.AuthorDoctorAccountId).HasColumnName("author_doctor_account_id");
+            entity.Property(e => e.AuthorAccountId).HasColumnName("author_account_id");
             entity.Property(e => e.CreatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("created_at_utc");
@@ -1926,10 +1951,10 @@ public partial class ViverAppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_medical_record_entries_appointment");
 
-            entity.HasOne(d => d.AuthorDoctorAccount).WithMany(p => p.MedicalRecordEntries)
-                .HasForeignKey(d => d.AuthorDoctorAccountId)
+            entity.HasOne(d => d.AuthorAccount).WithMany(p => p.MedicalRecordEntries)
+                .HasForeignKey(d => d.AuthorAccountId)
                 .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("fk_medical_record_entries_author");
+                .HasConstraintName("fk_medical_record_entries_author_account");
 
             entity.HasOne(d => d.CurrentVersion).WithMany(p => p.MedicalRecordEntries)
                 .HasForeignKey(d => d.CurrentVersionId)
@@ -1948,7 +1973,7 @@ public partial class ViverAppDbContext : DbContext
 
             entity.ToTable("medical_record_versions");
 
-            entity.HasIndex(e => new { e.AuthorDoctorAccountId, e.FinalizedAtUtc }, "ix_medical_record_versions_author_time");
+            entity.HasIndex(e => new { e.AuthorAccountId, e.FinalizedAtUtc }, "ix_medical_record_versions_author_time");
 
             entity.HasIndex(e => new { e.MedicalRecordEntryId, e.VersionNumber }, "ux_medical_record_versions_number").IsUnique();
 
@@ -1961,7 +1986,7 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.Allergies)
                 .HasColumnType("text")
                 .HasColumnName("allergies");
-            entity.Property(e => e.AuthorDoctorAccountId).HasColumnName("author_doctor_account_id");
+            entity.Property(e => e.AuthorAccountId).HasColumnName("author_account_id");
             entity.Property(e => e.ChiefComplaint)
                 .HasColumnType("text")
                 .HasColumnName("chief_complaint");
@@ -2021,10 +2046,10 @@ public partial class ViverAppDbContext : DbContext
                 .HasPrecision(6)
                 .HasColumnName("weight_kg");
 
-            entity.HasOne(d => d.AuthorDoctorAccount).WithMany(p => p.MedicalRecordVersions)
-                .HasForeignKey(d => d.AuthorDoctorAccountId)
+            entity.HasOne(d => d.AuthorAccount).WithMany(p => p.MedicalRecordVersions)
+                .HasForeignKey(d => d.AuthorAccountId)
                 .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName("fk_medical_record_versions_author");
+                .HasConstraintName("fk_medical_record_versions_author_account");
 
             entity.HasOne(d => d.MedicalRecordEntry).WithMany(p => p.MedicalRecordVersions)
                 .HasForeignKey(d => d.MedicalRecordEntryId)

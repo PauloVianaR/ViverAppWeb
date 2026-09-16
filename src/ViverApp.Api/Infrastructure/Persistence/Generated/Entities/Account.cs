@@ -59,6 +59,8 @@ public partial class Account
 
     public virtual ICollection<AccountRecoveryCode> AccountRecoveryCodes { get; set; } = new List<AccountRecoveryCode>();
 
+    public virtual AccountUiPreference? AccountUiPreference { get; set; }
+
     public virtual ICollection<AdministratorNotification> AdministratorNotifications { get; set; } = new List<AdministratorNotification>();
 
     public virtual ICollection<ApplicationSetting> ApplicationSettings { get; set; } = new List<ApplicationSetting>();
@@ -112,6 +114,12 @@ public partial class Account
     public virtual ICollection<MedicalRecordDocument> MedicalRecordDocumentDeletedByAccounts { get; set; } = new List<MedicalRecordDocument>();
 
     public virtual ICollection<MedicalRecordDocument> MedicalRecordDocumentUploadedByAccounts { get; set; } = new List<MedicalRecordDocument>();
+
+    public virtual ICollection<MedicalRecordDraft> MedicalRecordDrafts { get; set; } = new List<MedicalRecordDraft>();
+
+    public virtual ICollection<MedicalRecordEntry> MedicalRecordEntries { get; set; } = new List<MedicalRecordEntry>();
+
+    public virtual ICollection<MedicalRecordVersion> MedicalRecordVersions { get; set; } = new List<MedicalRecordVersion>();
 
     public virtual PatientPreference? PatientPreference { get; set; }
 

@@ -202,6 +202,7 @@ public sealed class CatalogController(
 
     [HttpPost("appointment-types")]
     [Authorize(Policy = ViverAppPolicies.Management)]
+    [ManagerFeatureGate("manager.appointment_types_enabled")]
     public async Task<ActionResult<AppointmentTypeResponse>> CreateAppointmentType(
         [FromBody] AppointmentTypeWriteRequest request,
         CancellationToken cancellationToken)
@@ -239,6 +240,7 @@ public sealed class CatalogController(
 
     [HttpPut("appointment-types/{id}")]
     [Authorize(Policy = ViverAppPolicies.Management)]
+    [ManagerFeatureGate("manager.appointment_types_enabled")]
     public async Task<ActionResult<AppointmentTypeResponse>> UpdateAppointmentType(
         uint id,
         [FromBody] AppointmentTypeWriteRequest request,
@@ -283,6 +285,7 @@ public sealed class CatalogController(
 
     [HttpDelete("appointment-types/{id}")]
     [Authorize(Policy = ViverAppPolicies.Management)]
+    [ManagerFeatureGate("manager.appointment_types_enabled")]
     public async Task<IActionResult> DeactivateAppointmentType(
         uint id,
         [FromQuery] ulong rowVersion,

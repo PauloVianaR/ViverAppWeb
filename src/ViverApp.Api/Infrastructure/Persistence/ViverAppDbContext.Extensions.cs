@@ -10,6 +10,9 @@ public partial class ViverAppDbContext
         modelBuilder.Entity<Account>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
+        modelBuilder.Entity<AccountUiPreference>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
         modelBuilder.Entity<Appointment>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();

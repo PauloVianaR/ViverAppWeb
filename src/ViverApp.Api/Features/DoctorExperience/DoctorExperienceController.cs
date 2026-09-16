@@ -47,6 +47,8 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
 
     [HttpGet("home")]
     public Task<DoctorHomeResponse> Home(CancellationToken ct) => service.HomeAsync(Actor, ct);
+    [HttpGet("capabilities")]
+    public Task<DoctorCapabilitiesResponse> Capabilities(CancellationToken ct) => service.CapabilitiesAsync(ct);
     [HttpGet("profile")]
     public Task<DoctorProfileResponse> Profile(CancellationToken ct) => service.ProfileAsync(Actor, ct);
     [HttpPut("profile"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
@@ -63,12 +65,17 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
     [HttpGet("appointments/{id:long}")]
     public Task<DoctorAppointmentDetailResponse> Appointment(ulong id, CancellationToken ct) => service.AppointmentAsync(Actor, id, ct);
     [HttpGet("booking/slots"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
-    public Task<IReadOnlyList<AvailableSlotResponse>> Slots(ulong patientAccountId, uint appointmentTypeId, string modality,
-        DateOnly from, int days = 14, CancellationToken ct = default) => scheduling.GetAvailableSlotsAsync(patientAccountId, Actor, appointmentTypeId, modality, from, days, ct);
+    public async Task<IReadOnlyList<AvailableSlotResponse>> Slots(ulong patientAccountId, uint appointmentTypeId, string modality,
+        DateOnly from, int days = 14, CancellationToken ct = default)
+    {
+        await service.EnsurePatientSchedulingEnabledAsync(ct);
+        return await scheduling.GetAvailableSlotsAsync(patientAccountId, Actor, appointmentTypeId, modality, from, days, ct);
+    }
     [HttpPost("appointments"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public async Task<ActionResult<AppointmentResponse>> Create([FromHeader(Name = "Idempotency-Key")] string key,
         DoctorAppointmentCreateRequest request, CancellationToken ct)
     {
+        await service.EnsurePatientSchedulingEnabledAsync(ct);
         var result = await scheduling.CreateForDoctorAsync(Actor, key, request, ct);
         if (result.Replayed) Response.Headers["Idempotent-Replayed"] = "true";
         return result.Replayed ? Ok(result.Response) : CreatedAtAction(nameof(Appointment), new { id = result.Response.Id }, result.Response);
@@ -89,6 +96,9 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
     public Task<ClinicalAppointmentResponse> Complete(ulong id, CompleteAppointmentRequest request, CancellationToken ct) => clinical.CompleteAsync(Actor, id, request, ct);
     [HttpPost("appointments/{id:long}/start"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public Task<ArrivalResponse> Start(ulong id, StartAppointmentRequest request, CancellationToken ct) => arrivals.StartAsync(Actor, id, request, ct);
+    [HttpPost("appointments/{id:long}/start/revert"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
+    public Task<ArrivalResponse> RevertStart(ulong id, AppointmentTransitionRequest request, CancellationToken ct) =>
+        arrivals.RevertStartAsync(Actor, id, request, ct);
     [HttpPost("appointments/{id:long}/no-show"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public Task<ClinicalAppointmentResponse> NoShow(ulong id, RecordNoShowRequest request, CancellationToken ct) => clinical.RecordNoShowAsync(Actor, ViverAppRoles.Doctor, id, request, ct);
     [HttpPost("appointments/{id:long}/report/rectify"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]

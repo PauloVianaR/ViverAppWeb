@@ -82,18 +82,20 @@ public sealed record MedicalReportWriteRequest(
 public sealed record CompleteAppointmentRequest(
     [param: Range(1, long.MaxValue)] ulong AppointmentRowVersion,
     [param: Range(0, long.MaxValue)] ulong ReportRowVersion,
-    [param: Required, StringLength(12000, MinimumLength = 20)] string ClinicalSummary,
+    [param: StringLength(12000)] string? ClinicalSummary,
     [param: StringLength(8000)] string? Recommendations) : IValidatableObject
 {
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        foreach (var validation in new MedicalReportWriteRequest(
-            ReportRowVersion,
-            ClinicalSummary,
-            Recommendations).Validate(validationContext))
-        {
-            yield return validation;
-        }
+        var summary = ClinicalSummary?.Trim();
+        if (summary is { Length: > 0 and < 20 })
+            yield return new ValidationResult(
+                "Quando informado, o resumo clínico deve ter pelo menos 20 caracteres.",
+                [nameof(ClinicalSummary)]);
+        if (string.IsNullOrEmpty(summary) && !string.IsNullOrWhiteSpace(Recommendations))
+            yield return new ValidationResult(
+                "Informe o resumo clínico antes das recomendações, ou conclua sem laudo.",
+                [nameof(ClinicalSummary), nameof(Recommendations)]);
     }
 }
 

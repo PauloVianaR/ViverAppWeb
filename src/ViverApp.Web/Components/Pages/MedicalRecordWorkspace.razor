@@ -73,7 +73,7 @@ else
                 <section class="surface clinical-purpose" aria-labelledby="purpose-title">
                     <div><h2 id="purpose-title">Acesso clínico justificado</h2><p>Informe a finalidade antes de abrir registros, documentos ou gerar PDF clínico. O acesso fica auditado.</p></div>
                     <div class="field"><label for="clinical-purpose">Finalidade do acesso</label><input id="clinical-purpose" @bind="Purpose" maxlength="500" placeholder="Ex.: suporte ao atendimento presencial de hoje" /></div>
-                    @if (Role == "administrator") { <p class="administrator-elevated">O Administrador também precisa estar em uma sessão elevada nos últimos 5 minutos.</p> }
+                    @if (Role == "administrator") { <p class="administrator-elevated">O Administrador também precisa estar em uma sessão elevada nos últimos 30 minutos.</p> }
                 </section>
             }
 
@@ -102,10 +102,10 @@ else
             }
             else if (ActiveTab == RecordTab.Clinical)
             {
-                @if (Role == "doctor")
+                @if (CanWriteClinical)
                 {
                     <section class="surface clinical-editor" @oninput="ScheduleAutosave">
-                        <div class="section-heading"><div><p class="eyebrow">Autoria médica</p><h2>@(RectifyingEntry is null ? "Anamnese e evolução" : $"Retificar atendimento #{RectifyingEntry.AppointmentNumber}")</h2></div><span class="autosave-state" aria-live="polite">@AutosaveState</span></div>
+                        <div class="section-heading"><div><p class="eyebrow">Registro clínico versionado</p><h2>@(RectifyingEntry is null ? "Anamnese e evolução" : $"Retificar atendimento #{RectifyingEntry.AppointmentNumber}")</h2></div><span class="autosave-state" aria-live="polite">@AutosaveState</span></div>
                         @if (RectifyingEntry is null)
                         {
                             <div class="field"><label for="record-appointment">Atendimento</label><select id="record-appointment" value="@SelectedAppointmentId" @onchange="AppointmentChangedAsync" disabled="@Busy"><option value="0">Selecione</option>@foreach(var appointment in EditableAppointments){<option value="@appointment.Id">#@appointment.AppointmentNumber · @Local(appointment.StartsAtUtc) · @StatusLabel(appointment.StatusCode)</option>}</select></div>
@@ -134,7 +134,7 @@ else
                             @if (RectifyingEntry is null)
                             {
                                 <button type="button" class="button button--secondary" @onclick="SaveDraftAsync" disabled="@(Busy || SelectedAppointmentId == 0)">Salvar rascunho</button>
-                                <button type="button" class="button" @onclick="FinalizeAsync" disabled="@(Busy || SelectedAppointmentId == 0 || SelectedAppointment?.StatusCode != "in_progress")">Revisar e finalizar</button>
+                                <button type="button" class="button" @onclick="FinalizeAsync" disabled="@(Busy || SelectedAppointmentId == 0)">Salvar versão</button>
                             }
                             else
                             {
@@ -142,7 +142,6 @@ else
                                 <button type="button" class="button" @onclick="RectifyAsync" disabled="@Busy">Criar nova versão</button>
                             }
                         </div>
-                        @if (SelectedAppointment is not null && SelectedAppointment.StatusCode != "in_progress" && RectifyingEntry is null) { <p class="muted">Para finalizar, o atendimento precisa estar iniciado. O rascunho pode ser salvo antes disso.</p> }
                     </section>
                 }
 
@@ -181,7 +180,7 @@ else
                                         </div>
                                     </details>
                                 }
-                                @if (Role == "doctor") { <button type="button" class="button button--secondary button--small" @onclick="() => StartRectification(entry)">Retificar sem apagar o original</button> }
+                                @if (CanWriteClinical) { <button type="button" class="button button--secondary button--small" @onclick="() => StartRectification(entry)">Retificar sem apagar o original</button> }
                             </article>
                         }
                     </div>
@@ -224,7 +223,7 @@ else
     private WebMedicalRecordFinancialSummary? Financial;
     private WebMedicalRecordDraft? Draft;
     private WebMedicalRecordEntry? RectifyingEntry;
-    private bool Loading = true, Busy, NoticeError, IsSavingDraft;
+    private bool Loading = true, Busy, NoticeError, IsSavingDraft, CanWriteClinical;
     private string? Notice;
     private string Purpose = "", TimelineType = "", TimelineOrder = "desc", AutosaveState = "Nenhuma alteração pendente";
     private DateTime FromDate = DateTime.Today.AddYears(-1), ToDate = DateTime.Today;
@@ -239,9 +238,9 @@ else
     private string Role { get { var path=Navigation.ToBaseRelativePath(Navigation.Uri);return path.StartsWith("medico/",StringComparison.OrdinalIgnoreCase)?"doctor":path.StartsWith("gestao/",StringComparison.OrdinalIgnoreCase)?"manager":"administrator"; } }
     private string AreaLabel => Role switch { "doctor"=>"Médico", "manager"=>"Gestor", _=>"Administrador" };
     private string PatientsPath => Role switch { "doctor"=>"/medico/pacientes", "manager"=>"/gestao/pacientes", _=>"/administracao/pacientes" };
-    private bool NeedsPurpose => Role is "manager" or "administrator";
+    private bool NeedsPurpose => Role == "administrator";
     private WebMedicalRecordAppointmentOption? SelectedAppointment => Appointments.FirstOrDefault(x=>x.Id==SelectedAppointmentId);
-    private IEnumerable<WebMedicalRecordAppointmentOption> EditableAppointments => Appointments.Where(x=>x.StatusCode is "confirmed" or "arrived" or "in_progress");
+    private IEnumerable<WebMedicalRecordAppointmentOption> EditableAppointments => Appointments.Where(x=>x.StatusCode is "confirmed" or "arrived" or "in_progress" or "completed");
     private IReadOnlyList<TabOption> Tabs => Role=="administrator"
         ? [new(RecordTab.Timeline,"Linha do tempo"),new(RecordTab.Clinical,"Prontuário"),new(RecordTab.Financial,"Financeiro"),new(RecordTab.Documents,"Documentos"),new(RecordTab.Access,"Auditoria")]
         : [new(RecordTab.Timeline,"Linha do tempo"),new(RecordTab.Clinical,"Prontuário"),new(RecordTab.Financial,"Financeiro"),new(RecordTab.Documents,"Documentos")];
@@ -249,7 +248,7 @@ else
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if(!firstRender)return;
-        try { Module=await JavaScript.InvokeAsync<IJSObjectReference>("import","/js/medical-records.js"); Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary"); Appointments.AddRange(await Get<IReadOnlyList<WebMedicalRecordAppointmentOption>>($"api/v1/medical-records/patients/{PatientId}/appointments")??[]); await LoadTimelineCoreAsync(); }
+        try { Module=await JavaScript.InvokeAsync<IJSObjectReference>("import","/js/medical-records.js"); CanWriteClinical=Role=="doctor"||(Role=="manager"&&(await Get<ManagerCapabilities>("api/v1/manager/capabilities"))?.MedicalRecordWriteEnabled==true); Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary"); Appointments.AddRange(await Get<IReadOnlyList<WebMedicalRecordAppointmentOption>>($"api/v1/medical-records/patients/{PatientId}/appointments")??[]); await LoadTimelineCoreAsync(); }
         catch(Exception e){ShowError(e);}
         finally{Loading=false;StateHasChanged();}
     }
@@ -294,9 +293,9 @@ else
         try{Draft=await Send<WebMedicalRecordDraft>($"api/v1/medical-records/patients/{PatientId}/appointments/{SelectedAppointmentId}/draft","PUT",new WebMedicalRecordDraftWriteRequest(Draft?.RowVersion??0,BuildContent()));EditorDirty=false;AutosaveState=$"Salvo às {DateTime.Now:HH:mm:ss}";if(!automatic)ShowSuccess("Rascunho salvo com segurança.");}
         finally{IsSavingDraft=false;}
     }
-    private Task ScheduleAutosave(ChangeEventArgs args){if(Role!="doctor"||SelectedAppointmentId==0||RectifyingEntry is not null)return Task.CompletedTask;EditorDirty=true;AutosaveCancellation?.Cancel();AutosaveCancellation?.Dispose();AutosaveCancellation=new();var token=AutosaveCancellation.Token;AutosaveState="Alterações pendentes";AutosaveTask=DebouncedAutosaveAsync(token);return Task.CompletedTask;}
+    private Task ScheduleAutosave(ChangeEventArgs args){if(!CanWriteClinical||SelectedAppointmentId==0||RectifyingEntry is not null)return Task.CompletedTask;EditorDirty=true;AutosaveCancellation?.Cancel();AutosaveCancellation?.Dispose();AutosaveCancellation=new();var token=AutosaveCancellation.Token;AutosaveState="Alterações pendentes";AutosaveTask=DebouncedAutosaveAsync(token);return Task.CompletedTask;}
     private async Task DebouncedAutosaveAsync(CancellationToken token){try{await Task.Delay(1500,token);await InvokeAsync(async()=>{try{await SaveDraftCoreAsync(true);StateHasChanged();}catch(Exception e){ShowError(e);StateHasChanged();}});}catch(OperationCanceledException){}}
-    private Task FinalizeAsync()=>RunAsync(async()=>{AutosaveCancellation?.Cancel();await AutosaveTask;if(EditorDirty||Draft is null)await SaveDraftCoreAsync(true);if(Draft is null)return;if(!await JavaScript.InvokeAsync<bool>("confirm","Após finalizar, esta versão não poderá ser alterada. Deseja continuar?"))return;await Send<WebMedicalRecordVersion>($"api/v1/medical-records/patients/{PatientId}/appointments/{SelectedAppointmentId}/finalize","POST",new WebMedicalRecordFinalizeRequest(Draft.RowVersion));Draft=null;ClearEditor();await LoadEntriesAsync();Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary");ShowSuccess("Registro finalizado e protegido contra alterações.");});
+    private Task FinalizeAsync()=>RunAsync(async()=>{AutosaveCancellation?.Cancel();await AutosaveTask;if(EditorDirty||Draft is null)await SaveDraftCoreAsync(true);if(Draft is null)return;if(!await JavaScript.InvokeAsync<bool>("confirm","Salvar uma nova versão auditada deste registro clínico?"))return;await Send<WebMedicalRecordVersion>($"api/v1/medical-records/patients/{PatientId}/appointments/{SelectedAppointmentId}/finalize","POST",new WebMedicalRecordFinalizeRequest(Draft.RowVersion));Draft=null;ClearEditor();await LoadEntriesAsync();Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary");ShowSuccess("Versão clínica salva. O histórico anterior foi preservado.");});
     private void StartRectification(WebMedicalRecordEntry entry){var current=entry.Versions?.FirstOrDefault(x=>x.IsCurrent);if(current is null)return;RectifyingEntry=entry;CorrectionReason="";LoadContent(current.Content);AutosaveState="Retificação cria uma nova versão";}
     private void CancelRectification(){RectifyingEntry=null;CorrectionReason="";ClearEditor();}
     private Task RectifyAsync()=>RunAsync(async()=>{var entry=RectifyingEntry??throw new InvalidOperationException();if(CorrectionReason.Trim().Length<5){ShowError("Informe o motivo da retificação com ao menos 5 caracteres.");return;}await Send<WebMedicalRecordVersion>($"api/v1/medical-records/patients/{PatientId}/entries/{entry.Id}/rectify","POST",new WebMedicalRecordRectifyRequest(entry.CurrentVersionId,CorrectionReason.Trim(),BuildContent()));RectifyingEntry=null;CorrectionReason="";ClearEditor();await LoadEntriesAsync();ShowSuccess("Nova versão criada. O registro original foi preservado.");});

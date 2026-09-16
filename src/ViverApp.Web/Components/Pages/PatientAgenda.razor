@@ -13,13 +13,13 @@
             <div class="field"><label for="agenda-from">De</label><input id="agenda-from" type="date" @bind="From" /></div>
             <div class="field"><label for="agenda-until">Até</label><input id="agenda-until" type="date" @bind="Until" /></div>
             <div class="field"><label for="agenda-status">Estado</label><select id="agenda-status" @bind="StatusFilter"><option value="">Todos</option>@foreach(var code in new[]{"pending","confirmed","completed","canceled","rescheduled","no_show"}){<option value="@(code)">@Status(code)</option>}</select></div>
-            <div class="field"><label for="agenda-category">Tipo</label><select id="agenda-category" @bind="CategoryFilter"><option value="">Todos</option><option value="consultation">Consulta</option><option value="examination">Exame</option><option value="surgery">Cirurgia</option></select></div>
+            <div class="field"><label for="agenda-category">Tipo</label><select id="agenda-category" @bind="CategoryFilter"><option value="">Todos</option><option value="consultation">Consulta</option><option value="examination">Exame</option><option value="surgery">Cirurgia</option><option value="procedure">Procedimento</option></select></div>
             <div class="field"><label for="agenda-modality">Modalidade</label><select id="agenda-modality" @bind="Modality"><option value="">Todas</option><option value="in_person">Presencial</option><option value="online">Online</option></select></div>
         </div><div class="patient-actions"><button class="button" disabled="@Busy">Aplicar filtros</button><button type="button" class="button button--secondary" @onclick="Clear" disabled="@Busy">Limpar filtros</button></div>
     </form>
 </MobileFilterPanel>
 @if (Loading) { <LoadingSkeleton Lines="5" /> }
-else if (PageData?.Items.Count > 0) { <p class="muted" role="status">@PageData.TotalCount atendimento(s) · horários no fuso da clínica</p><div class="patient-grid">@foreach(var item in PageData.Items){<PatientVisitCard Model="item" Clinic="Clinic" />}</div> }
+else if (PageData?.Items.Count > 0) { <div class="appointment-results-heading"><p class="muted" role="status">@PageData.TotalCount atendimento(s) · horários no fuso da clínica</p><AppointmentViewToggle Mode="AppointmentViewMode" Changed="ChangeAppointmentView" Disabled="Busy" /></div><div class="patient-grid appointment-results--@AppointmentViewMode">@foreach(var item in PageData.Items){<PatientVisitCard Model="item" Clinic="Clinic" />}</div> }
 else { <InterfaceState Title="Nenhum atendimento encontrado" Description="Altere os filtros ou escolha um novo horário." Icon="calendar" ActionHref="/paciente/agendar" ActionLabel="Agendar" /> }
 <nav class="patient-pagination" aria-label="Páginas da agenda"><button class="button button--secondary" @onclick="Previous" disabled="@(Busy || Page == 1)">Anterior</button><span>Página @Page</span><button class="button button--secondary" @onclick="Next" disabled="@(Busy || Page * 12 >= (PageData?.TotalCount ?? 0))">Próxima</button></nav>
 @code {
@@ -29,7 +29,7 @@ else { <InterfaceState Title="Nenhum atendimento encontrado" Description="Altere
     private DateTime? From, Until;
     private ulong? AppointmentNumber;
     private int Page = 1;
-    protected override async Task Load() { Clinic ??= await Get<PatientClinic>("api/v1/patient/experience/clinic"); PageData = await Get<WebPage<PatientAppointment>>($"api/v1/patient/experience/agenda?page={Page}&view={View}&search={Escape(Search)}&appointmentNumber={AppointmentNumber}&status={StatusFilter}&category={CategoryFilter}&modality={Modality}&from={From:yyyy-MM-dd}&until={Until:yyyy-MM-dd}"); }
+    protected override async Task Load() { await LoadAppointmentViewAsync(); Clinic ??= await Get<PatientClinic>("api/v1/patient/experience/clinic"); PageData = await Get<WebPage<PatientAppointment>>($"api/v1/patient/experience/agenda?page={Page}&view={View}&search={Escape(Search)}&appointmentNumber={AppointmentNumber}&status={StatusFilter}&category={CategoryFilter}&modality={Modality}&from={From:yyyy-MM-dd}&until={Until:yyyy-MM-dd}"); }
     private Task Apply() => Run(async () => { Page = 1; await Load(); });
     private Task ChangeView(string view) => Run(async () => { View = view; Page = 1; await Load(); });
     private Task Clear() => Run(async () => { Search = StatusFilter = CategoryFilter = Modality = ""; AppointmentNumber = null; From = Until = null; Page = 1; await Load(); });

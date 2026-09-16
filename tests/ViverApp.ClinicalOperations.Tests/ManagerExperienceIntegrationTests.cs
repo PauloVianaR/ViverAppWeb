@@ -204,6 +204,29 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         Assert.Contains("data agendada", error.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task DoctorCanStartConfirmedUndoAndManagementCanCompleteThenReopen()
+    {
+        await using var db = CreateContext();
+        await db.Appointments.Where(item => item.Id == appointmentId).ExecuteUpdateAsync(update => update
+            .SetProperty(item => item.StatusCode, "confirmed")
+            .SetProperty(item => item.RowVersion, 1UL));
+        var service = new ArrivalExperienceService(db, new FixedClock(now), new NoOpAuditWriter(),
+            new NullHubContext(), NullLogger<ArrivalExperienceService>.Instance);
+
+        var started = await service.StartAsync(doctorId, appointmentId, new StartAppointmentRequest(1), CancellationToken.None);
+        Assert.Equal("in_progress", started.StatusCode);
+        var restored = await service.RevertStartAsync(doctorId, appointmentId,
+            new AppointmentTransitionRequest(started.RowVersion), CancellationToken.None);
+        Assert.Equal("confirmed", restored.StatusCode);
+        var completed = await service.CompleteForManagementAsync(managerId, appointmentId,
+            new AppointmentTransitionRequest(restored.RowVersion), CancellationToken.None);
+        Assert.Equal("completed", completed.StatusCode);
+        var reopened = await service.ReopenAsync(managerId, appointmentId,
+            new AppointmentReopenRequest(completed.RowVersion, "Correção operacional autorizada"), CancellationToken.None);
+        Assert.Equal("confirmed", reopened.StatusCode);
+    }
+
     private ManagerExperienceService CreateService(ViverAppDbContext db) => new(db, null!, null!, new NoOpAuditWriter(), new FixedClock(now));
     private ViverAppDbContext CreateContext()
     {

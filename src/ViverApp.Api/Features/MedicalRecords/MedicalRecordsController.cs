@@ -59,22 +59,22 @@ public sealed class MedicalRecordsController(
     [HttpGet("patients/{patientId:long}/appointments/{appointmentId:long}/draft")]
     [Authorize(Policy = ViverAppPolicies.MedicalRecordWrite)]
     public Task<MedicalRecordDraftResponse?> Draft(ulong patientId, ulong appointmentId, CancellationToken ct) =>
-        records.DraftAsync(Actor, patientId, appointmentId, ct);
+        records.DraftAsync(Actor, Role, patientId, appointmentId, ct);
 
     [HttpPut("patients/{patientId:long}/appointments/{appointmentId:long}/draft")]
     [Authorize(Policy = ViverAppPolicies.MedicalRecordWrite), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<MedicalRecordDraftResponse> SaveDraft(ulong patientId, ulong appointmentId,
-        MedicalRecordDraftWriteRequest request, CancellationToken ct) => records.SaveDraftAsync(Actor, patientId, appointmentId, request, ct);
+        MedicalRecordDraftWriteRequest request, CancellationToken ct) => records.SaveDraftAsync(Actor, Role, patientId, appointmentId, request, ct);
 
     [HttpPost("patients/{patientId:long}/appointments/{appointmentId:long}/finalize")]
     [Authorize(Policy = ViverAppPolicies.MedicalRecordWrite), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<MedicalRecordVersionResponse> Finalize(ulong patientId, ulong appointmentId,
-        MedicalRecordFinalizeRequest request, CancellationToken ct) => records.FinalizeAsync(Actor, patientId, appointmentId, request, ct);
+        MedicalRecordFinalizeRequest request, CancellationToken ct) => records.FinalizeAsync(Actor, Role, patientId, appointmentId, request, ct);
 
     [HttpPost("patients/{patientId:long}/entries/{entryId:long}/rectify")]
     [Authorize(Policy = ViverAppPolicies.MedicalRecordWrite), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<MedicalRecordVersionResponse> Rectify(ulong patientId, ulong entryId,
-        MedicalRecordRectifyRequest request, CancellationToken ct) => records.RectifyAsync(Actor, patientId, entryId, request, ct);
+        MedicalRecordRectifyRequest request, CancellationToken ct) => records.RectifyAsync(Actor, Role, patientId, entryId, request, ct);
 
     [HttpGet("patients/{patientId:long}/documents")]
     [Authorize(Policy = ViverAppPolicies.MedicalRecordDocument)]

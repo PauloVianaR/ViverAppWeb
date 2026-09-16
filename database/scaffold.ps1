@@ -31,6 +31,7 @@ $tables = @(
     'accounts',
     'account_consents',
     'account_addresses',
+    'account_ui_preferences',
     'external_logins',
     'auth_sessions',
     'account_challenges',

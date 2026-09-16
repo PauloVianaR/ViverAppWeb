@@ -247,7 +247,7 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         var patient = ShellNavigationCatalog.ResolveRole("patient");
 
         Assert.Equal(new[] { "Início", "Agenda", "Pacientes", "Histórico" }, manager.MobilePrimaryItems.Select(x => x.Label));
-        Assert.Equal(new[] { "Caixa", "Perfil" }, manager.MobileOverflowItems.Select(x => x.Label));
+        Assert.Equal(new[] { "Caixa", "Clínica", "Perfil" }, manager.MobileOverflowItems.Select(x => x.Label));
         Assert.Equal(new[] { "Analytics", "Caixa", "Alertas", "Usuários" }, administrator.MobileOverflowItems.Select(x => x.Label));
         Assert.Equal(patient.Items, patient.MobilePrimaryItems);
         Assert.Empty(patient.MobileOverflowItems);

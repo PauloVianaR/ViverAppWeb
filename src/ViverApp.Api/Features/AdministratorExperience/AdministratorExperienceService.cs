@@ -19,6 +19,8 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         "appointments.booking_horizon_days", "appointments.minimum_lead_minutes", "appointments.cancellation_cutoff_hours",
         "appointments.reschedule_cutoff_hours", "appointments.slot_interval_minutes", "appointments.patient_daily_limit",
         "appointments.default_consultation_minutes", "appointments.default_examination_minutes", "appointments.default_surgery_minutes",
+        "appointments.default_procedure_minutes", "manager.appointment_types_enabled", "manager.doctor_schedules_enabled",
+        "doctor.patient_scheduling_enabled", "premium.manager_can_manage", "manager.medical_records_write_enabled",
         "appointments.interval_minutes", "communications.email_enabled", "communications.sms_enabled", "premium.manager_can_decide",
         "appointments.arrival_notifications_enabled", "appointments.arrival_popup_enabled", "appointments.arrival_sound_enabled",
         "appointments.arrival_sound_volume", "appointments.arrival_sound_key",
@@ -62,6 +64,10 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
     public Task<ManagerPatientResponse> PatientAsync(ulong id, CancellationToken ct) => manager.PatientAsync(id, ct);
     public Task<ManagerPatientResponse> UpdatePatientAsync(ulong actor, ulong id, ManagerPatientUpdateRequest request, CancellationToken ct) => manager.UpdatePatientAsync(actor, id, request, ct);
     public Task<ManagerPatientResponse> CreatePatientAsync(ulong actor, ManagerPatientCreateRequest request, CancellationToken ct) => manager.CreatePatientAsync(actor, request, ct);
+    public Task<ManagerPatientResponse> ActivatePatientPremiumAsync(ulong actor, ulong id, PrivateDocument proof, CancellationToken ct) =>
+        manager.ActivatePremiumAsync(actor, id, proof, true, ct);
+    public Task<ManagerPatientResponse> DeactivatePatientPremiumAsync(ulong actor, ulong id, ManagerPremiumCancelRequest request, CancellationToken ct) =>
+        manager.DeactivatePremiumAsync(actor, id, request, true, ct);
     public Task<ManagerPaymentResponse> ConfirmPaymentAsync(ulong actor, ulong id, string key, ManagerPaymentConfirmRequest request, CancellationToken ct) => manager.ConfirmPaymentAsync(actor, id, key, request, ct);
     public Task<IReadOnlyList<ManagerDoctorOption>> DoctorsAsync(CancellationToken ct) => manager.DoctorsAsync(ct);
     public async Task<IReadOnlyList<AdministratorDoctorAccessResponse>> DoctorAccessAsync(CancellationToken ct) => await database.DoctorPreferences.AsNoTracking()
@@ -299,6 +305,8 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
     private static void ValidateSetting(string key, JsonElement value)
     {
         if (key is "web.maintenance_mode" or "appointments.allow_clinic_payment" or "appointments.online_calls_enabled" or "communications.email_enabled" or "communications.sms_enabled" or "premium.manager_can_decide"
+            or "manager.appointment_types_enabled" or "manager.doctor_schedules_enabled" or "doctor.patient_scheduling_enabled"
+            or "premium.manager_can_manage" or "manager.medical_records_write_enabled"
             or "appointments.arrival_notifications_enabled" or "appointments.arrival_popup_enabled" or "appointments.arrival_sound_enabled" or "appointments.arrival_mark_read_on_open")
         { if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw new JsonException(); return; }
         if (key == "appointments.arrival_sound_key")
@@ -311,7 +319,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
             "appointments.cancellation_cutoff_hours" or "appointments.reschedule_cutoff_hours" => number is >= 0 and <= 720,
             "appointments.slot_interval_minutes" or "appointments.interval_minutes" => number is >= 0 and <= 240,
             "appointments.patient_daily_limit" => number is >= 1 and <= 20,
-            "appointments.default_consultation_minutes" or "appointments.default_examination_minutes" or "appointments.default_surgery_minutes" => number is >= 5 and <= 480,
+            "appointments.default_consultation_minutes" or "appointments.default_examination_minutes" or "appointments.default_surgery_minutes" or "appointments.default_procedure_minutes" => number is >= 5 and <= 480,
             "appointments.arrival_sound_volume" => number is >= 0 and <= 100,
             "appointments.arrival_notification_retention_days" => number is >= 1 and <= 365,
             _ => false
