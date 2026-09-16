@@ -74,6 +74,7 @@ $tables = @(
     'payment_reversal_events',
     'cash_movements',
     'cash_closures',
+    'cash_reopenings',
     'premium_plans',
     'premium_memberships',
     'outbox_messages',

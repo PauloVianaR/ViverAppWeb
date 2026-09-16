@@ -28,13 +28,17 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
             .Where(item => item.SettingKey == "manager.appointment_types_enabled"
                 || item.SettingKey == "manager.doctor_schedules_enabled"
                 || item.SettingKey == "premium.manager_can_manage"
-                || item.SettingKey == "manager.medical_records_write_enabled")
+                || item.SettingKey == "manager.medical_records_write_enabled"
+                || item.SettingKey == "cash.manager_can_reopen"
+                || item.SettingKey == "cash.manager_can_view_cumulative_totals")
             .ToDictionaryAsync(item => item.SettingKey, item => item.ValueJson, ct);
         return new(
             ReadManagerCapability(values, "manager.appointment_types_enabled"),
             ReadManagerCapability(values, "manager.doctor_schedules_enabled"),
             ReadManagerCapability(values, "premium.manager_can_manage"),
-            ReadManagerCapability(values, "manager.medical_records_write_enabled"));
+            ReadManagerCapability(values, "manager.medical_records_write_enabled"),
+            ReadManagerCapability(values, "cash.manager_can_reopen"),
+            ReadManagerCapability(values, "cash.manager_can_view_cumulative_totals"));
     }
 
     public async Task<ManagerHomeResponse> HomeAsync(ulong actor, CancellationToken ct)

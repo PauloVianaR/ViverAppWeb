@@ -436,7 +436,7 @@ public sealed class MedicalRecordService(
     }
 
     public async Task<IReadOnlyList<MedicalRecordAccessEventResponse>> AccessHistoryAsync(
-        ulong actorId, bool recentAuthentication, ulong patientId, string purpose, CancellationToken ct)
+        ulong actorId, bool recentAuthentication, ulong patientId, string? purpose, CancellationToken ct)
     {
         await AuthorizeAsync(actorId, ViverAppRoles.Administrator, recentAuthentication, patientId, "audit", purpose, ct);
         return await database.ClinicalAccessEvents.AsNoTracking()
@@ -523,15 +523,11 @@ public sealed class MedicalRecordService(
             ViverAppRoles.Administrator => !ClinicalScopes.Contains(scope, StringComparer.Ordinal) && scope != "audit" || recentAuthentication,
             _ => false,
         };
-        if (ClinicalScopes.Contains(scope, StringComparer.Ordinal) || scope == "audit")
-        {
-            if (roleCode == ViverAppRoles.Administrator)
-                allowed &= normalizedPurpose?.Length is >= 10 and <= 500;
-        }
         var storedPurpose = roleCode switch
         {
             ViverAppRoles.Doctor => null,
             ViverAppRoles.Manager => normalizedPurpose ?? "Acesso gerencial autorizado ao prontuário",
+            ViverAppRoles.Administrator => "Acesso administrativo ao prontuário",
             _ => normalizedPurpose ?? "Acesso operacional autorizado ao prontuário",
         };
         database.ClinicalAccessEvents.Add(new ClinicalAccessEvent
@@ -549,8 +545,6 @@ public sealed class MedicalRecordService(
         {
             if (roleCode == ViverAppRoles.Administrator && !recentAuthentication)
                 throw Forbidden("Confirme novamente sua identidade antes de acessar conteúdo clínico.");
-            if (roleCode == ViverAppRoles.Administrator && normalizedPurpose is (null or { Length: < 10 }))
-                throw Forbidden("Informe uma finalidade com ao menos 10 caracteres para acessar conteúdo clínico.");
             throw Missing();
         }
     }

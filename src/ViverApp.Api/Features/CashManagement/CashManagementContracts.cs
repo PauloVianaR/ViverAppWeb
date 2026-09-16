@@ -49,11 +49,22 @@ public sealed record CashClosureResponse(
     ulong? LastMovementId,
     CashSummaryResponse Snapshot);
 
+public sealed record CashReopeningResponse(
+    ulong Id,
+    ulong CashClosureId,
+    string ResponsibleName,
+    string Reason,
+    DateTime ReopenedAtUtc);
+
 public sealed record CashDayResponse(
     DateOnly OperationalDate,
     string TimezoneName,
     CashClosureResponse? Closure,
+    bool IsClosed,
+    bool CanClose,
+    bool CanReopen,
     CashSummaryResponse Summary,
+    CashSummaryResponse? CumulativeSummary,
     ulong? LastMovementId,
     SchedulingPage<CashMovementResponse> Page);
 
@@ -65,6 +76,7 @@ public sealed record CashPrintResponse(
     DateTime IssuedAtUtc,
     string FilterDescription,
     CashClosureResponse? Closure,
+    bool IsClosed,
     CashSummaryResponse Summary,
     IReadOnlyList<CashMovementResponse> Movements,
     bool TotalsOnly);
@@ -81,6 +93,10 @@ public sealed record CashManualMovementRequest(
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record CashCloseRequest(ulong? ExpectedLastMovementId);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record CashReopenRequest(
+    [param: Required, StringLength(500, MinimumLength = 5)] string Reason);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PaymentReversalRequest(

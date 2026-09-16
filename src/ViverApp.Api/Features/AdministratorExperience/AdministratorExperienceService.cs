@@ -21,6 +21,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         "appointments.default_consultation_minutes", "appointments.default_examination_minutes", "appointments.default_surgery_minutes",
         "appointments.default_procedure_minutes", "manager.appointment_types_enabled", "manager.doctor_schedules_enabled",
         "doctor.patient_scheduling_enabled", "premium.manager_can_manage", "manager.medical_records_write_enabled",
+        "cash.manager_can_reopen", "cash.manager_can_view_cumulative_totals",
         "appointments.interval_minutes", "communications.email_enabled", "communications.sms_enabled", "premium.manager_can_decide",
         "appointments.arrival_notifications_enabled", "appointments.arrival_popup_enabled", "appointments.arrival_sound_enabled",
         "appointments.arrival_sound_volume", "appointments.arrival_sound_key",
@@ -151,10 +152,21 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
             MonthLabel(g.Key.Year, g.Key.Month), g.Where(x => x.Location == "web").Sum(x => x.Count), g.Where(x => x.Location == "clinic").Sum(x => x.Count))).ToArray();
         var paymentLocations = paymentLocationRows.Select(x => new AdministratorMetricPoint(x.Label, x.Value, x.Count)).ToArray();
         var services = serviceRows.Select(x => new AdministratorMetricPoint(x.Label, x.Value, x.Count)).ToArray();
-        var categories = categoryRows.Select(x => new AdministratorMetricPoint(x.Label, x.Value, x.Count)).ToArray();
+        var categoryLookup = categoryRows.ToDictionary(x => x.Label, StringComparer.Ordinal);
+        var categories = new[]
+        {
+            CategoryPoint("consultation", "Consultas"),
+            CategoryPoint("examination", "Exames"),
+            CategoryPoint("surgery", "Cirurgias"),
+            CategoryPoint("procedure", "Procedimentos"),
+        };
         return new(from, to, revenue, count, count == 0 ? 0 : revenue / count, satisfaction is null ? null : (decimal)satisfaction.Value,
             previousRevenue, previousAppointments, months, statuses, methods, doctors, revenueByUserType, paymentEvolution,
             paymentLocationTrend, paymentLocations, services, categories);
+
+        AdministratorMetricPoint CategoryPoint(string code, string label) => categoryLookup.TryGetValue(code, out var row)
+            ? new AdministratorMetricPoint(label, row.Value, row.Count)
+            : new AdministratorMetricPoint(label, 0, 0);
     }
 
     private static string MonthLabel(int year, int month) => new DateTime(year, month, 1).ToString("MMM/yyyy", CultureInfo.GetCultureInfo("pt-BR"));
@@ -307,6 +319,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         if (key is "web.maintenance_mode" or "appointments.allow_clinic_payment" or "appointments.online_calls_enabled" or "communications.email_enabled" or "communications.sms_enabled" or "premium.manager_can_decide"
             or "manager.appointment_types_enabled" or "manager.doctor_schedules_enabled" or "doctor.patient_scheduling_enabled"
             or "premium.manager_can_manage" or "manager.medical_records_write_enabled"
+            or "cash.manager_can_reopen" or "cash.manager_can_view_cumulative_totals"
             or "appointments.arrival_notifications_enabled" or "appointments.arrival_popup_enabled" or "appointments.arrival_sound_enabled" or "appointments.arrival_mark_read_on_open")
         { if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw new JsonException(); return; }
         if (key == "appointments.arrival_sound_key")

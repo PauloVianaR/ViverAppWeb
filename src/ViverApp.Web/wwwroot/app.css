@@ -298,5 +298,6 @@ input:disabled, select:disabled, textarea:disabled { background: var(--color-sur
 .appointment-results--compact .patient-actions { justify-content:flex-end; }
 @media(max-width:68rem){.appointment-results--compact .patient-visit{display:block}}
 .premium-star{color:#d99a00;font-size:1.45rem;line-height:1;text-shadow:0 1px 0 #fff}
+.cash-cumulative>summary{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.5rem;cursor:pointer}.cash-cumulative>summary span{color:var(--muted);font-size:.9rem}
 @media(max-width:28rem){.appointment-results-heading{align-items:flex-start;flex-direction:column}}
 @media (max-width: 720px) { .notification-panel { position:fixed; left:1rem; right:1rem; top:4.75rem; width:auto; } .arrival-toast { left:1rem; right:1rem; bottom:5.5rem; width:auto; } }

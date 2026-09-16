@@ -19,6 +19,7 @@ else
     {
         <section class="patient-section">
             <div class="section-heading"><div><p class="eyebrow">Catálogo</p><h2>Tipos de atendimento e preços</h2></div><button class="button" @onclick="NewService">Adicionar tipo</button></div>
+            <MobileFilterPanel AriaLabel="Filtros dos tipos de atendimento"><form @onsubmit="FilterServices" @onsubmit:preventDefault><div class="manager-filter-grid"><div class="field"><label for="manager-service-search">Buscar por texto</label><input id="manager-service-search" @bind="ServiceSearch" maxlength="120" placeholder="Nome do serviço" /></div><div class="field"><label for="manager-service-filter-category">Tipo de atendimento</label><select id="manager-service-filter-category" @bind="ServiceCategoryFilter"><option value="">Todos</option><option value="consultation">Consulta</option><option value="examination">Exame</option><option value="surgery">Cirurgia</option><option value="procedure">Procedimento</option></select></div></div><div class="patient-actions"><button class="button">Filtrar</button><button type="button" class="button button--secondary" @onclick="ClearServiceFilters">Limpar</button></div></form></MobileFilterPanel>
             <div class="administrator-grid">@foreach(var item in Services){<article class="surface administrator-card"><span class="badge @(item.IsActive?"badge--success":"badge--warning")">@(item.IsActive?"Ativo":"Inativo")</span><h3>@item.Name</h3><p>@item.Description</p><p><strong>@Money(item.PriceAmount)</strong> · @item.DurationMinutes min · @Category(item.CategoryCode)</p><div class="administrator-actions"><button class="button button--secondary" @onclick="()=>EditService(item)">Editar</button><button class="button button--secondary" @onclick="()=>ToggleService(item)">@(item.IsActive?"Desativar":"Ativar")</button></div></article>}</div>
         </section>
     }
@@ -45,14 +46,16 @@ else
     private AdministratorService? EditingService;
     private ManagerDoctorWeeklyHour? EditingHour;
     private ulong DoctorId;
-    private string ServiceName="",ServiceDescription="",ServiceCategory="consultation",ServiceModality="in_person",HourModality="both";
+    private string ServiceName="",ServiceDescription="",ServiceCategory="consultation",ServiceModality="in_person",HourModality="both",ServiceSearch="",ServiceCategoryFilter="";
     private int ServiceDuration=30;
     private decimal ServicePrice;
     private byte HourDay=1;
     private TimeOnly HourStart=new(8,0),HourEnd=new(12,0);
     private bool HourActive=true;
 
-    protected override async Task Load(){Capabilities=await Get<ManagerCapabilities>("api/v1/manager/capabilities");if(Capabilities?.AppointmentTypesEnabled==true){var page=await Get<WebPage<AdministratorService>>("api/v1/catalog/appointment-types?page=1&pageSize=100&includeInactive=true");Services=page?.Items??[];}if(Capabilities?.DoctorSchedulesEnabled==true){Doctors=await Get<IReadOnlyList<ManagerDoctor>>("api/v1/manager/doctors")??[];if(DoctorId==0)DoctorId=Doctors.FirstOrDefault()?.AccountId??0;await LoadHours();}}
+    protected override async Task Load(){Capabilities=await Get<ManagerCapabilities>("api/v1/manager/capabilities");if(Capabilities?.AppointmentTypesEnabled==true)await LoadServices();if(Capabilities?.DoctorSchedulesEnabled==true){Doctors=await Get<IReadOnlyList<ManagerDoctor>>("api/v1/manager/doctors")??[];if(DoctorId==0)DoctorId=Doctors.FirstOrDefault()?.AccountId??0;await LoadHours();}}
+    private async Task LoadServices(){var page=await Get<WebPage<AdministratorService>>($"api/v1/catalog/appointment-types?page=1&pageSize=100&includeInactive=true&search={Escape(ServiceSearch)}&category={ServiceCategoryFilter}");Services=page?.Items??[];}
+    private Task FilterServices()=>Run(LoadServices);private Task ClearServiceFilters()=>Run(async()=>{ServiceSearch=ServiceCategoryFilter="";await LoadServices();});
     private async Task LoadHours(){Hours=DoctorId==0?[]:await Get<IReadOnlyList<ManagerDoctorWeeklyHour>>($"api/v1/professionals/{DoctorId}/weekly-hours")??[];}
     private Task DoctorChanged(ChangeEventArgs args)=>Run(async()=>{DoctorId=ulong.TryParse(args.Value?.ToString(),out var value)?value:0;await LoadHours();});
     private Task NewService(){EditingService=null;ServiceName=ServiceDescription="";ServiceCategory="consultation";ServiceModality="in_person";ServiceDuration=30;ServicePrice=0;return Open("manager-service-dialog");}

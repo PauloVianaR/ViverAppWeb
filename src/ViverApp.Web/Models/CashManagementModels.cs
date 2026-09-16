@@ -9,10 +9,12 @@ public sealed record CashMovement(ulong Id, DateOnly OperationalDate, string Dir
     string Description, string? Reason, DateTime OccurredAtUtc, bool AfterClosure);
 public sealed record CashClosure(ulong Id, DateOnly OperationalDate, string ResponsibleName, DateTime ClosedAtUtc,
     ulong? LastMovementId, CashSummary Snapshot);
-public sealed record CashDay(DateOnly OperationalDate, string TimezoneName, CashClosure? Closure, CashSummary Summary,
-    ulong? LastMovementId, WebPage<CashMovement> Page);
+public sealed record CashReopening(ulong Id, ulong CashClosureId, string ResponsibleName, string Reason, DateTime ReopenedAtUtc);
+public sealed record CashDay(DateOnly OperationalDate, string TimezoneName, CashClosure? Closure, bool IsClosed,
+    bool CanClose, bool CanReopen, CashSummary Summary, CashSummary? CumulativeSummary, ulong? LastMovementId,
+    WebPage<CashMovement> Page);
 public sealed record CashPrint(string ClinicName, DateOnly OperationalDate, string TimezoneName, string IssuedBy,
-    DateTime IssuedAtUtc, string FilterDescription, CashClosure? Closure, CashSummary Summary,
+    DateTime IssuedAtUtc, string FilterDescription, CashClosure? Closure, bool IsClosed, CashSummary Summary,
     IReadOnlyList<CashMovement> Movements, bool TotalsOnly);
 public sealed record PaymentReversalResult(ulong ReversalId, ulong PaymentId, ulong AppointmentId, string StatusCode,
     string PaymentStatusCode, DateTime RequestedAtUtc, DateTime? CompletedAtUtc, bool CanCreateReplacementPayment,

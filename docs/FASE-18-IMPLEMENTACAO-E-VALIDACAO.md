@@ -10,7 +10,7 @@ A migration `0031__electronic_health_record.sql` cria o prontuário, rascunhos, 
 
 ## API, autorização e privacidade
 
-As rotas `/api/v1/medical-records` possuem policies por capacidade e respostas sem cache. A API deriva o ator da sessão, valida o papel no banco, aplica vínculo Médico–Paciente e não usa entidades EF como contratos. Gestor possui acesso clínico direto e autoria condicionada à configuração administrativa; Administrador continua precisando justificar e ter sessão elevada recente. Tentativas negadas também são registradas sem guardar conteúdo clínico.
+As rotas `/api/v1/medical-records` possuem policies por capacidade e respostas sem cache. A API deriva o ator da sessão, valida o papel no banco, aplica vínculo Médico–Paciente e não usa entidades EF como contratos. Gestor possui acesso clínico direto e autoria condicionada à configuração administrativa; o Administrador não precisa informar uma justificativa manual, mas continua dependendo de sessão elevada recente. A finalidade administrativa é registrada automaticamente na auditoria, assim como tentativas negadas, sem guardar conteúdo clínico.
 
 Documentos passam pela validação de extensão, MIME real, assinatura, limite e malware já usada pelo produto. O objeto fica no R2 privado quando configurado, sem CDN. O PDF é montado no servidor a partir de um snapshot limitado por papel/período, sem HTML ativo, scripts, links ou recursos remotos.
 
@@ -25,7 +25,7 @@ Médico e Gestor autorizado selecionam um atendimento confirmado, iniciado ou fi
 - `dotnet build ViverApp.slnx --no-restore`: zero erros e avisos;
 - sete projetos de teste executados em sequência: 214 testes aprovados; a execução serial evita disputa entre suítes que compartilham o MySQL local;
 - `dotnet format ViverApp.slnx --no-restore --verify-no-changes`: exigido antes do encerramento;
-- `ViverApp.Database verify`: MySQL 8.0.41, `viverappweb` e migrations até `0034` aprovados;
+- `ViverApp.Database verify`: MySQL 8.0.41, `viverappweb` e migrations até `0035` aprovados;
 - teste clínico transacional deixa o banco inalterado e comprova versionamento, concorrência, autoria, finalidade, step-up e triggers append-only;
 - homologações manuais e externas remanescentes estão exclusivamente em `.local/PENDENCIAS.md`.
 
@@ -73,3 +73,15 @@ O produto não exibe selo nem afirma certificação SBIS, NGS2, assinatura ICP-B
 - a grade de horários do Gestor foi alinhada ao contrato DB-First baseado em `TimeSpan`, eliminando a conversão incorreta para `00:00`;
 - a especificidade do CSS da Lista compacta foi corrigida para impedir que a grade de cards permanecesse sobreposta no Histórico do Médico;
 - a migration `0034__clinical_authorship_and_operational_permissions.sql` foi aplicada integralmente no MySQL local 8.0.41 e o scaffold DB-First foi regenerado.
+
+## Ajustes financeiros e de agendamento na mesma branch
+
+- a migration `0035__cash_reopening_and_cumulative_visibility.sql` adiciona reaberturas append-only, remove a unicidade que impedia novo fechamento auditado e cria as permissões `cash.manager_can_reopen` (desligada) e `cash.manager_can_view_cumulative_totals` (ligada);
+- caixa fechado bloqueia pagamentos, cancelamentos de pagamento e lançamentos manuais para qualquer papel; dias passados são sempre apresentados e impressos como fechados;
+- Administrador pode reabrir somente o caixa de hoje; Gestor depende de configuração. Totalizadores gerais acumulados aparecem em um expander recolhido;
+- a distribuição administrativa passa a conter explicitamente Consultas, Exames, Cirurgias e Procedimentos, inclusive com zero no período;
+- o Administrador deixou de preencher finalidade clínica manual; a sessão elevada e a auditoria permanecem;
+- o agendamento de Gestor e Médico ganhou uma entrada única com seletor de paciente, preservando a pré-seleção originada no card;
+- profissionais são filtrados pelos serviços ativos vinculados antes de aparecerem na seleção, corrigindo combinações impossíveis como as da Dra. Helena com serviços antigos desativados;
+- preços Premium exibem valor original riscado e valor final tanto na escolha do serviço quanto na revisão;
+- Gestor e Administrador receberam filtros por texto e tipo no catálogo de atendimentos.

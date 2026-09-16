@@ -24,6 +24,7 @@ public sealed class CashManagementService(
 
     public async Task<CashDayResponse> DayAsync(
         DateOnly date,
+        string actorRole,
         string? method,
         string? type,
         ulong? appointmentNumber,
@@ -35,7 +36,8 @@ public sealed class CashManagementService(
         int pageSize,
         CancellationToken cancellationToken)
     {
-        ValidateQuery(date, method, type, page, pageSize);
+        var today = await OperationalDateAsync(clock.GetUtcNow().UtcDateTime, cancellationToken);
+        ValidateQuery(date, today, method, type, page, pageSize);
         var normalizedCardLastFour = NormalizeCardLastFour(cardLastFour);
         var normalizedAuthorization = NormalizeAuthorization(authorizationReference);
         var query = Filtered(date, method, type, appointmentNumber, patient, responsible,
@@ -48,7 +50,16 @@ public sealed class CashManagementService(
             .ToArrayAsync(cancellationToken);
         var summary = await SummaryAsync(query, cancellationToken);
         var closure = await ClosureAsync(date, cancellationToken);
-        return new(date, (await ClinicAsync(cancellationToken)).TimezoneName, closure, summary, lastMovementId,
+        var canViewCumulative = actorRole == ViverAppRoles.Administrator
+            || actorRole == ViverAppRoles.Manager && await SettingAsync("cash.manager_can_view_cumulative_totals", true, cancellationToken);
+        var cumulative = canViewCumulative
+            ? await SummaryAsync(database.CashMovements.AsNoTracking().Where(item => item.OperationalDate <= today.ToDateTime(TimeOnly.MinValue)), cancellationToken)
+            : null;
+        var isClosed = date < today || closure is not null;
+        var canReopen = date == today && closure is not null && (actorRole == ViverAppRoles.Administrator
+            || actorRole == ViverAppRoles.Manager && await SettingAsync("cash.manager_can_reopen", false, cancellationToken));
+        return new(date, (await ClinicAsync(cancellationToken)).TimezoneName, closure, isClosed,
+            date == today && closure is null, canReopen, summary, cumulative, lastMovementId,
             new(rows.Select(Map).ToArray(), page, pageSize, total));
     }
 
@@ -65,7 +76,8 @@ public sealed class CashManagementService(
         bool totalsOnly,
         CancellationToken cancellationToken)
     {
-        ValidateQuery(date, method, type, 1, 100);
+        var today = await OperationalDateAsync(clock.GetUtcNow().UtcDateTime, cancellationToken);
+        ValidateQuery(date, today, method, type, 1, 100);
         var normalizedCardLastFour = NormalizeCardLastFour(cardLastFour);
         var normalizedAuthorization = NormalizeAuthorization(authorizationReference);
         var query = Filtered(date, method, type, appointmentNumber, patient, responsible,
@@ -88,9 +100,11 @@ public sealed class CashManagementService(
         }.Where(item => item is not null));
         await audit.WriteAsync(totalsOnly ? "cash.totals_printed" : "cash.movements_printed", actor, "cash_day",
             date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), null, cancellationToken);
+        var closure = await ClosureAsync(date, cancellationToken);
         return new(clinic.LegalName, date, clinic.TimezoneName, actorName, clock.GetUtcNow().UtcDateTime,
             string.IsNullOrWhiteSpace(filters) ? "Sem filtros adicionais" : filters,
-            await ClosureAsync(date, cancellationToken), await SummaryAsync(query, cancellationToken), movements, totalsOnly);
+            closure, date < today || closure is not null,
+            await SummaryAsync(query, cancellationToken), movements, totalsOnly);
     }
 
     public async Task<CashMovementResponse> AddManualAsync(
@@ -123,9 +137,8 @@ public sealed class CashManagementService(
             return Map(replay);
         }
 
-        var afterClosure = await database.CashClosures.AnyAsync(item => item.OperationalDate == date.ToDateTime(TimeOnly.MinValue), cancellationToken);
-        if (afterClosure && actorRole != ViverAppRoles.Administrator)
-            throw Forbidden("Movimentações após o fechamento exigem sessão administrativa com MFA.");
+        if (await IsClosedAsync(date, cancellationToken))
+            throw Conflict("O caixa de hoje está fechado. Reabra-o antes de registrar uma nova movimentação.");
         if (request.RelatedMovementId is not null && !await database.CashMovements.AnyAsync(
                 item => item.Id == request.RelatedMovementId && item.OperationalDate == date.ToDateTime(TimeOnly.MinValue), cancellationToken))
             throw Missing("O movimento a compensar não existe neste caixa.");
@@ -143,7 +156,7 @@ public sealed class CashManagementService(
             RelatedMovementId = request.RelatedMovementId,
             IdempotencyKey = idempotencyKey,
             OccurredAtUtc = now,
-            AfterClosure = afterClosure,
+            AfterClosure = false,
         };
         database.CashMovements.Add(movement);
         await database.SaveChangesAsync(cancellationToken);
@@ -161,9 +174,10 @@ public sealed class CashManagementService(
         CashCloseRequest request,
         CancellationToken cancellationToken)
     {
+        var today = await OperationalDateAsync(clock.GetUtcNow().UtcDateTime, cancellationToken);
+        if (date != today) throw Conflict("Somente o caixa de hoje pode ser fechado manualmente.");
         await using var transaction = await BeginTransactionAsync(cancellationToken);
-        var existing = await database.CashClosures.AsNoTracking().Include(item => item.ClosedByAccount)
-            .SingleOrDefaultAsync(item => item.OperationalDate == date.ToDateTime(TimeOnly.MinValue), cancellationToken);
+        var existing = await ActiveClosureEntityAsync(date, cancellationToken);
         if (existing is not null)
         {
             if (transaction is not null) await transaction.CommitAsync(cancellationToken);
@@ -199,6 +213,35 @@ public sealed class CashManagementService(
         return await ClosureAsync(date, cancellationToken) ?? throw Conflict("O fechamento não pôde ser consultado.");
     }
 
+    public async Task<CashReopeningResponse> ReopenAsync(ulong actor, string actorRole, DateOnly date,
+        CashReopenRequest request, CancellationToken cancellationToken)
+    {
+        var today = await OperationalDateAsync(clock.GetUtcNow().UtcDateTime, cancellationToken);
+        if (date != today) throw Conflict("Somente o caixa de hoje pode ser reaberto.");
+        if (actorRole != ViverAppRoles.Administrator
+            && (actorRole != ViverAppRoles.Manager || !await SettingAsync("cash.manager_can_reopen", false, cancellationToken)))
+            throw Forbidden("Seu perfil não tem permissão para reabrir o caixa.");
+        var reason = Useful(request.Reason, 5, "Informe o motivo da reabertura com pelo menos 5 caracteres.");
+        await using var transaction = await BeginTransactionAsync(cancellationToken);
+        var closure = await ActiveClosureEntityAsync(date, cancellationToken)
+            ?? throw Conflict("O caixa de hoje já está aberto.");
+        var now = clock.GetUtcNow().UtcDateTime;
+        var reopening = new CashReopening
+        {
+            CashClosureId = closure.Id,
+            ReopenedByAccountId = actor,
+            Reason = reason,
+            ReopenedAtUtc = now,
+        };
+        database.CashReopenings.Add(reopening);
+        await database.SaveChangesAsync(cancellationToken);
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+        await audit.WriteAsync("cash.day.reopened", actor, "cash_closure", closure.Id.ToString(CultureInfo.InvariantCulture),
+            new Dictionary<string, string> { ["operationalDate"] = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), ["reason"] = reason }, cancellationToken);
+        var actorName = await database.Accounts.AsNoTracking().Where(item => item.Id == actor).Select(item => item.FullName).SingleAsync(cancellationToken);
+        return new(reopening.Id, closure.Id, actorName, reason, now);
+    }
+
     public async Task<PaymentReversalResponse> ReverseAsync(
         ulong actor,
         string idempotencyKey,
@@ -226,6 +269,9 @@ public sealed class CashManagementService(
             throw Conflict("Somente o pagamento quitado atual pode ser cancelado.");
         if (appointment.StatusCode is not ("confirmed" or "arrived"))
             throw Conflict("O pagamento só pode ser cancelado enquanto o atendimento estiver confirmado ou com a chegada registrada.");
+        var operationalDate = await OperationalDateAsync(clock.GetUtcNow().UtcDateTime, cancellationToken);
+        if (await IsClosedAsync(operationalDate, cancellationToken))
+            throw Conflict("O caixa de hoje está fechado. Reabra-o antes de cancelar um pagamento.");
         var original = await database.CashMovements.SingleOrDefaultAsync(item => item.PaymentId == payment.Id && item.TypeCode == "payment_received", cancellationToken)
             ?? throw Conflict("O recebimento original não foi localizado no caixa.");
         var now = clock.GetUtcNow().UtcDateTime;
@@ -299,7 +345,6 @@ public sealed class CashManagementService(
         }
 
         var date = await OperationalDateAsync(now, cancellationToken);
-        var afterClosure = await database.CashClosures.AnyAsync(item => item.OperationalDate == date.ToDateTime(TimeOnly.MinValue), cancellationToken);
         database.CashMovements.Add(new CashMovement
         {
             OperationalDate = date.ToDateTime(TimeOnly.MinValue),
@@ -316,7 +361,7 @@ public sealed class CashManagementService(
             Reason = reason,
             IdempotencyKey = $"payment-reversal-{reversal.Id}",
             OccurredAtUtc = now,
-            AfterClosure = afterClosure,
+            AfterClosure = false,
         });
         database.PaymentEvents.Add(new PaymentEvent
         {
@@ -348,7 +393,8 @@ public sealed class CashManagementService(
         var appointmentNumber = await database.Appointments.Where(item => item.Id == payment.AppointmentId)
             .Select(item => item.AppointmentNumber).SingleAsync(cancellationToken);
         var date = await OperationalDateAsync(occurredAtUtc, cancellationToken);
-        var afterClosure = await database.CashClosures.AnyAsync(item => item.OperationalDate == date.ToDateTime(TimeOnly.MinValue), cancellationToken);
+        if (await IsClosedAsync(date, cancellationToken))
+            throw Conflict("O caixa de hoje está fechado. Reabra-o antes de confirmar um pagamento.");
         database.CashMovements.Add(new CashMovement
         {
             OperationalDate = date.ToDateTime(TimeOnly.MinValue),
@@ -363,7 +409,7 @@ public sealed class CashManagementService(
             Description = $"Pagamento do atendimento {appointmentNumber}",
             IdempotencyKey = $"payment-received-{payment.Id}",
             OccurredAtUtc = occurredAtUtc,
-            AfterClosure = afterClosure,
+            AfterClosure = false,
         });
     }
 
@@ -407,9 +453,24 @@ public sealed class CashManagementService(
 
     private async Task<CashClosureResponse?> ClosureAsync(DateOnly date, CancellationToken cancellationToken)
     {
-        var closure = await database.CashClosures.AsNoTracking().Include(item => item.ClosedByAccount)
-            .SingleOrDefaultAsync(item => item.OperationalDate == date.ToDateTime(TimeOnly.MinValue), cancellationToken);
+        var closure = await ActiveClosureEntityAsync(date, cancellationToken);
         return closure is null ? null : await MapClosureAsync(closure, cancellationToken);
+    }
+
+    private Task<CashClosure?> ActiveClosureEntityAsync(DateOnly date, CancellationToken cancellationToken) =>
+        database.CashClosures.AsNoTracking().Include(item => item.ClosedByAccount)
+            .Where(item => item.OperationalDate == date.ToDateTime(TimeOnly.MinValue) && item.CashReopening == null)
+            .OrderByDescending(item => item.ClosedAtUtc).ThenByDescending(item => item.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    private async Task<bool> IsClosedAsync(DateOnly date, CancellationToken cancellationToken) =>
+        await ActiveClosureEntityAsync(date, cancellationToken) is not null;
+
+    private async Task<bool> SettingAsync(string key, bool defaultValue, CancellationToken cancellationToken)
+    {
+        var value = await database.ApplicationSettings.AsNoTracking().Where(item => item.SettingKey == key)
+            .Select(item => item.ValueJson).SingleOrDefaultAsync(cancellationToken);
+        return value is null ? defaultValue : bool.TryParse(value, out var parsed) ? parsed : defaultValue;
     }
 
     private static Task<CashClosureResponse> MapClosureAsync(CashClosure item, CancellationToken cancellationToken)
@@ -468,9 +529,10 @@ public sealed class CashManagementService(
         return normalized;
     }
     private static string Useful(string value, int minimum, string message) => string.IsNullOrWhiteSpace(value) || value.Trim().Length < minimum ? throw Invalid(message) : value.Trim();
-    private static void ValidateQuery(DateOnly date, string? method, string? type, int page, int pageSize)
+    private static void ValidateQuery(DateOnly date, DateOnly today, string? method, string? type, int page, int pageSize)
     {
         if (date.Year is < 2000 or > 2200) throw Invalid("Data operacional inválida.");
+        if (date > today) throw Invalid("A data do caixa não pode ser posterior a hoje.");
         if (method is not null && !Methods.Contains(method, StringComparer.Ordinal)) throw Invalid("Forma de pagamento inválida.");
         if (type is not null && !Types.Contains(type, StringComparer.Ordinal)) throw Invalid("Tipo de movimento inválido.");
         if (page < 1 || pageSize is < 1 or > 100) throw Invalid("Paginação inválida.");

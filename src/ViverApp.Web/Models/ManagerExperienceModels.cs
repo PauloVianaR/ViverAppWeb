@@ -10,7 +10,8 @@ public sealed record ManagerDoctor(ulong AccountId, string FullName, string Lice
 public sealed record ManagerDoctorWeeklyHour(ulong Id, byte DayOfWeek, TimeSpan StartTime, TimeSpan EndTime,
     DateOnly? ValidFrom, DateOnly? ValidUntil, bool IsActive, ulong RowVersion, string ModalityCode);
 public sealed record ManagerCapabilities(bool AppointmentTypesEnabled, bool DoctorSchedulesEnabled,
-    bool PremiumManagementEnabled, bool MedicalRecordWriteEnabled);
+    bool PremiumManagementEnabled, bool MedicalRecordWriteEnabled, bool CashReopeningEnabled,
+    bool CashCumulativeTotalsEnabled);
 public sealed record ManagerService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal BasePrice);
 public sealed record ManagerReportMetadata(bool Exists, string? StatusCode, uint VersionCount, DateTime? PublishedAtUtc);
 public sealed record ManagerPaymentMetadata(ulong? Id, string StatusCode, string? MethodCode, DateTime? PaidAtUtc,

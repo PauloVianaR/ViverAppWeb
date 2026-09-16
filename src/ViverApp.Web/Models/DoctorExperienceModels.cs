@@ -31,7 +31,7 @@ public sealed record DoctorAgendaSources(IReadOnlyList<ulong> Total, IReadOnlyLi
 public sealed record DoctorAgendaData(DoctorAgendaCounters Counters, DoctorAgendaSources Sources, WebPage<DoctorAppointment> Page);
 public sealed record DoctorAgendaCounters(int Total, int Online, int InPerson, int Rescheduled);
 public sealed record DoctorPatient(ulong AccountId, string FullName, string? PreferredName, string? Email, string? Phone,
-    DateOnly? BirthDate, string StatusCode, bool IsPremium, int AppointmentCount, DateTime? LastAppointmentAtUtc,
+    DateOnly? BirthDate, string StatusCode, bool IsPremium, decimal PremiumDiscountPercent, int AppointmentCount, DateTime? LastAppointmentAtUtc,
     DateTime? NextAppointmentAtUtc, ulong RowVersion);
 public sealed record DoctorPatientCounters(int Total, int Premium, int Active, int Blocked);
 public sealed record DoctorPatientSources(IReadOnlyList<string> Total, IReadOnlyList<string> Premium,

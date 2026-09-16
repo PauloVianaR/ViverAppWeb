@@ -14,7 +14,8 @@ public sealed record ManagerProfileResponse(ulong AccountId, string FullName, st
     bool EmailVerified, bool PhoneVerified, bool EmailEnabled, bool SmsEnabled, ulong AccountRowVersion, ulong PreferenceRowVersion);
 public sealed record ManagerDoctorOption(ulong AccountId, string FullName, string LicenseLabel);
 public sealed record ManagerCapabilitiesResponse(bool AppointmentTypesEnabled, bool DoctorSchedulesEnabled,
-    bool PremiumManagementEnabled, bool MedicalRecordWriteEnabled);
+    bool PremiumManagementEnabled, bool MedicalRecordWriteEnabled, bool CashReopeningEnabled,
+    bool CashCumulativeTotalsEnabled);
 public sealed record ManagerServiceOption(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode,
     ushort DurationMinutes, decimal BasePrice);
 public sealed record ManagerReportMetadata(bool Exists, string? StatusCode, uint VersionCount, DateTime? PublishedAtUtc);

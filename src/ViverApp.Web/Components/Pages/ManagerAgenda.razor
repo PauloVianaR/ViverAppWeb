@@ -3,7 +3,7 @@
 @inherits ManagerPageBase
 @using static ViverApp.Web.ManagerLabels
 <PageTitle>@(History?"Histórico":"Agenda") | ViverApp</PageTitle>
-<header class="workspace-heading"><div><p class="eyebrow">Gestor</p><h1 class="page-title">@(History?"Histórico dos atendimentos":"Agenda da clínica")</h1><p class="page-description">@(History?"Consulte estados, finanças e metadados clínicos sem abrir conteúdo reservado.":"Filtre e opere os atendimentos de toda a clínica.")</p></div><a class="button" href="/gestao/pacientes">Agendar para paciente</a></header>
+<header class="workspace-heading"><div><p class="eyebrow">Gestor</p><h1 class="page-title">@(History?"Histórico dos atendimentos":"Agenda da clínica")</h1><p class="page-description">@(History?"Consulte estados, finanças e metadados clínicos sem abrir conteúdo reservado.":"Filtre e opere os atendimentos de toda a clínica.")</p></div><a class="button" href="/gestao/agendar">Agendar para paciente</a></header>
 @if(Notice is not null){<p class="notice notice--error" role="alert">@Notice</p>}
 <MobileFilterPanel AriaLabel="Filtros da agenda da clínica"><form @onsubmit="Apply" @onsubmit:preventDefault><div class="manager-filter-grid">
 <div class="field"><label for="manager-search">Paciente, médico ou serviço</label><input id="manager-search" @bind="Search" maxlength="120" /></div>

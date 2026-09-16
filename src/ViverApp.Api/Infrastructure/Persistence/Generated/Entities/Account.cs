@@ -93,6 +93,8 @@ public partial class Account
 
     public virtual ICollection<CashMovement> CashMovements { get; set; } = new List<CashMovement>();
 
+    public virtual ICollection<CashReopening> CashReopenings { get; set; } = new List<CashReopening>();
+
     public virtual ICollection<ClinicalAccessEvent> ClinicalAccessEventActorAccounts { get; set; } = new List<ClinicalAccessEvent>();
 
     public virtual ICollection<ClinicalAccessEvent> ClinicalAccessEventPatientAccounts { get; set; } = new List<ClinicalAccessEvent>();

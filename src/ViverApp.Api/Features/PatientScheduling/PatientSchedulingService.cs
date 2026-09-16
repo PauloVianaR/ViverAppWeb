@@ -60,6 +60,13 @@ public sealed class PatientSchedulingService(
                 .Any(link => link.SpecialtyId == specialtyId && link.Specialty.IsActive));
         }
 
+        if (appointmentTypeId.HasValue)
+        {
+            var serviceId = appointmentTypeId.Value;
+            query = query.Where(account => !account.DoctorProfile!.DoctorServices.Any(link => link.IsActive && link.AppointmentType.IsActive)
+                || account.DoctorProfile.DoctorServices.Any(link => link.AppointmentTypeId == serviceId && link.IsActive));
+        }
+
         var total = await query.CountAsync(cancellationToken);
         var accounts = await query
             .Include(account => account.DoctorProfile!)
@@ -297,7 +304,7 @@ public sealed class PatientSchedulingService(
         await LockDoctorAsync(doctorId, cancellationToken);
         var type = await RequireAppointmentTypeAsync(request.AppointmentTypeId, request.ModalityCode, cancellationToken);
         var doctor = await RequireActiveDoctorAsync(doctorId, cancellationToken);
-        var hasConfiguredServices = await database.DoctorServices.AnyAsync(x => x.DoctorAccountId == doctorId, cancellationToken);
+        var hasConfiguredServices = await database.DoctorServices.AnyAsync(x => x.DoctorAccountId == doctorId && x.IsActive && x.AppointmentType.IsActive, cancellationToken);
         if (hasConfiguredServices && !await database.DoctorServices.AnyAsync(x => x.DoctorAccountId == doctorId
             && x.AppointmentTypeId == type.Id && x.IsActive, cancellationToken))
             throw Conflict("Este serviço não está ativo no seu perfil.");
@@ -358,7 +365,7 @@ public sealed class PatientSchedulingService(
         await LockDoctorAsync(request.DoctorAccountId, cancellationToken);
         var type = await RequireAppointmentTypeAsync(request.AppointmentTypeId, request.ModalityCode, cancellationToken);
         var doctor = await RequireActiveDoctorAsync(request.DoctorAccountId, cancellationToken);
-        var hasConfiguredServices = await database.DoctorServices.AnyAsync(x => x.DoctorAccountId == request.DoctorAccountId, cancellationToken);
+        var hasConfiguredServices = await database.DoctorServices.AnyAsync(x => x.DoctorAccountId == request.DoctorAccountId && x.IsActive && x.AppointmentType.IsActive, cancellationToken);
         if (hasConfiguredServices && !await database.DoctorServices.AnyAsync(x => x.DoctorAccountId == request.DoctorAccountId
             && x.AppointmentTypeId == type.Id && x.IsActive, cancellationToken)) throw Conflict("Este serviço não é oferecido pelo médico.");
         var (policy, timezoneName, timezone) = await LoadConfigurationAsync(cancellationToken);
@@ -718,7 +725,7 @@ public sealed class PatientSchedulingService(
         ulong? excludedAppointmentId,
         CancellationToken cancellationToken)
     {
-        var hasConfiguredServices = await database.DoctorServices.AsNoTracking().AnyAsync(x => x.DoctorAccountId == doctorId, cancellationToken);
+        var hasConfiguredServices = await database.DoctorServices.AsNoTracking().AnyAsync(x => x.DoctorAccountId == doctorId && x.IsActive && x.AppointmentType.IsActive, cancellationToken);
         if (hasConfiguredServices && !await database.DoctorServices.AsNoTracking().AnyAsync(x => x.DoctorAccountId == doctorId
             && x.AppointmentTypeId == type.Id && x.IsActive, cancellationToken))
             return [];

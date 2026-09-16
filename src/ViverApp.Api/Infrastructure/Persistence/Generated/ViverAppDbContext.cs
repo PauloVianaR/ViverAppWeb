@@ -56,6 +56,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<CashMovement> CashMovements { get; set; }
 
+    public virtual DbSet<CashReopening> CashReopenings { get; set; }
+
     public virtual DbSet<Clinic> Clinics { get; set; }
 
     public virtual DbSet<ClinicWeeklyHour> ClinicWeeklyHours { get; set; }
@@ -1033,7 +1035,7 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => new { e.ClosedByAccountId, e.ClosedAtUtc }, "ix_cash_closures_actor_time");
 
-            entity.HasIndex(e => e.OperationalDate, "ux_cash_closures_date").IsUnique();
+            entity.HasIndex(e => new { e.OperationalDate, e.ClosedAtUtc }, "ix_cash_closures_date_time");
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.AdjustmentsNet)
@@ -1156,6 +1158,37 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey(d => d.ResponsibleAccountId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_cash_movements_responsible");
+        });
+
+        modelBuilder.Entity<CashReopening>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("cash_reopenings");
+
+            entity.HasIndex(e => new { e.ReopenedByAccountId, e.ReopenedAtUtc }, "ix_cash_reopenings_actor_time");
+
+            entity.HasIndex(e => e.CashClosureId, "ux_cash_reopenings_closure").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CashClosureId).HasColumnName("cash_closure_id");
+            entity.Property(e => e.Reason)
+                .HasMaxLength(500)
+                .HasColumnName("reason");
+            entity.Property(e => e.ReopenedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("reopened_at_utc");
+            entity.Property(e => e.ReopenedByAccountId).HasColumnName("reopened_by_account_id");
+
+            entity.HasOne(d => d.CashClosure).WithOne(p => p.CashReopening)
+                .HasForeignKey<CashReopening>(d => d.CashClosureId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_cash_reopenings_closure");
+
+            entity.HasOne(d => d.ReopenedByAccount).WithMany(p => p.CashReopenings)
+                .HasForeignKey(d => d.ReopenedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_cash_reopenings_actor");
         });
 
         modelBuilder.Entity<Clinic>(entity =>

@@ -32,7 +32,7 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(60, applicationEntities.Length);
+        Assert.Equal(61, applicationEntities.Length);
         Assert.DoesNotContain(
             applicationEntities,
             entity => string.Equals(entity.GetTableName(), "__schema_migrations", StringComparison.Ordinal));
@@ -98,7 +98,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035", migrations);
 
         var portalAccessColumn = await ExecuteScalarAsync(connection,
             "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'viverappweb' AND table_name = 'accounts' AND column_name = 'portal_access_enabled' AND is_nullable = 'NO'");
@@ -109,8 +109,8 @@ public sealed class DatabaseContractTests
         Assert.Equal("6", optionalAddressColumns);
 
         var operationalSettings = await ExecuteScalarAsync(connection,
-            "SELECT GROUP_CONCAT(CONCAT(setting_key, '=', value_json) ORDER BY setting_key SEPARATOR ',') FROM application_settings WHERE setting_key IN ('doctor.patient_scheduling_enabled','manager.medical_records_write_enabled','premium.manager_can_manage')");
-        Assert.Equal("doctor.patient_scheduling_enabled=false,manager.medical_records_write_enabled=true,premium.manager_can_manage=true", operationalSettings);
+            "SELECT GROUP_CONCAT(CONCAT(setting_key, '=', value_json) ORDER BY setting_key SEPARATOR ',') FROM application_settings WHERE setting_key IN ('cash.manager_can_reopen','cash.manager_can_view_cumulative_totals','doctor.patient_scheduling_enabled','manager.medical_records_write_enabled','premium.manager_can_manage')");
+        Assert.Equal("cash.manager_can_reopen=false,cash.manager_can_view_cumulative_totals=true,doctor.patient_scheduling_enabled=false,manager.medical_records_write_enabled=true,premium.manager_can_manage=true", operationalSettings);
 
         var clinicalAuthors = await ExecuteScalarAsync(connection,
             "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'viverappweb' AND table_name IN ('medical_record_drafts','medical_record_entries','medical_record_versions') AND column_name = 'author_account_id' AND is_nullable = 'NO'");
@@ -382,13 +382,13 @@ public sealed class DatabaseContractTests
 
         var cashTables = await ExecuteScalarAsync(
             connection,
-            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'viverappweb' AND table_name IN ('cash_movements','cash_closures','payment_reversals','payment_reversal_events')");
-        Assert.Equal("4", cashTables);
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'viverappweb' AND table_name IN ('cash_movements','cash_closures','cash_reopenings','payment_reversals','payment_reversal_events')");
+        Assert.Equal("5", cashTables);
 
         var appendOnlyTriggers = await ExecuteScalarAsync(
             connection,
-            "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema = 'viverappweb' AND trigger_name IN ('trg_cash_movements_block_update','trg_cash_movements_block_delete','trg_cash_closures_block_update','trg_cash_closures_block_delete','trg_payment_reversal_events_block_update','trg_payment_reversal_events_block_delete')");
-        Assert.Equal("6", appendOnlyTriggers);
+            "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema = 'viverappweb' AND trigger_name IN ('trg_cash_movements_block_update','trg_cash_movements_block_delete','trg_cash_closures_block_update','trg_cash_closures_block_delete','trg_cash_reopenings_block_update','trg_cash_reopenings_block_delete','trg_payment_reversal_events_block_update','trg_payment_reversal_events_block_delete')");
+        Assert.Equal("8", appendOnlyTriggers);
 
         var medicalRecordTables = await ExecuteScalarAsync(
             connection,

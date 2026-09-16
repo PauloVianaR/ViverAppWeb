@@ -68,15 +68,6 @@ else
         </aside>
 
         <div class="medical-record-main">
-            @if (NeedsPurpose)
-            {
-                <section class="surface clinical-purpose" aria-labelledby="purpose-title">
-                    <div><h2 id="purpose-title">Acesso clínico justificado</h2><p>Informe a finalidade antes de abrir registros, documentos ou gerar PDF clínico. O acesso fica auditado.</p></div>
-                    <div class="field"><label for="clinical-purpose">Finalidade do acesso</label><input id="clinical-purpose" @bind="Purpose" maxlength="500" placeholder="Ex.: suporte ao atendimento presencial de hoje" /></div>
-                    @if (Role == "administrator") { <p class="administrator-elevated">O Administrador também precisa estar em uma sessão elevada nos últimos 30 minutos.</p> }
-                </section>
-            }
-
             <nav class="medical-record-tabs" aria-label="Seções do prontuário">
                 @foreach (var tab in Tabs)
                 {
@@ -225,7 +216,7 @@ else
     private WebMedicalRecordEntry? RectifyingEntry;
     private bool Loading = true, Busy, NoticeError, IsSavingDraft, CanWriteClinical;
     private string? Notice;
-    private string Purpose = "", TimelineType = "", TimelineOrder = "desc", AutosaveState = "Nenhuma alteração pendente";
+    private string TimelineType = "", TimelineOrder = "desc", AutosaveState = "Nenhuma alteração pendente";
     private DateTime FromDate = DateTime.Today.AddYears(-1), ToDate = DateTime.Today;
     private ulong SelectedAppointmentId, DocumentAppointmentId;
     private string DocumentCategory = "attachment", CorrectionReason = "";
@@ -238,7 +229,6 @@ else
     private string Role { get { var path=Navigation.ToBaseRelativePath(Navigation.Uri);return path.StartsWith("medico/",StringComparison.OrdinalIgnoreCase)?"doctor":path.StartsWith("gestao/",StringComparison.OrdinalIgnoreCase)?"manager":"administrator"; } }
     private string AreaLabel => Role switch { "doctor"=>"Médico", "manager"=>"Gestor", _=>"Administrador" };
     private string PatientsPath => Role switch { "doctor"=>"/medico/pacientes", "manager"=>"/gestao/pacientes", _=>"/administracao/pacientes" };
-    private bool NeedsPurpose => Role == "administrator";
     private WebMedicalRecordAppointmentOption? SelectedAppointment => Appointments.FirstOrDefault(x=>x.Id==SelectedAppointmentId);
     private IEnumerable<WebMedicalRecordAppointmentOption> EditableAppointments => Appointments.Where(x=>x.StatusCode is "confirmed" or "arrived" or "in_progress" or "completed");
     private IReadOnlyList<TabOption> Tabs => Role=="administrator"
@@ -255,16 +245,15 @@ else
     private async Task ActivateAsync(RecordTab tab)
     {
         if(Busy)return;
-        if(tab is RecordTab.Clinical or RecordTab.Documents or RecordTab.Access && NeedsPurpose && Purpose.Trim().Length<10){ShowError("Informe uma finalidade com ao menos 10 caracteres antes de abrir conteúdo clínico.");return;}
         ActiveTab=tab;
         await RunAsync(async()=>{switch(tab){case RecordTab.Timeline:await LoadTimelineCoreAsync();break;case RecordTab.Clinical:await LoadEntriesAsync();break;case RecordTab.Financial:await LoadFinancialAsync();break;case RecordTab.Documents:await LoadDocumentsAsync();break;case RecordTab.Access:await LoadAccessAsync();break;}});
     }
     private Task LoadTimelineAsync()=>RunAsync(LoadTimelineCoreAsync);
     private async Task LoadTimelineCoreAsync(){var data=await Get<WebMedicalRecordPage<WebMedicalRecordTimelineEvent>>($"api/v1/medical-records/patients/{PatientId}/timeline?from={FromDate:yyyy-MM-dd}&to={ToDate:yyyy-MM-dd}&type={Uri.EscapeDataString(TimelineType)}&order={TimelineOrder}&pageSize=200");Timeline.Clear();Timeline.AddRange(data?.Items??[]);}
-    private async Task LoadEntriesAsync(){var data=await Get<IReadOnlyList<WebMedicalRecordEntry>>($"api/v1/medical-records/patients/{PatientId}/entries?includeVersions=true",Purpose);Entries.Clear();Entries.AddRange(data??[]);}
+    private async Task LoadEntriesAsync(){var data=await Get<IReadOnlyList<WebMedicalRecordEntry>>($"api/v1/medical-records/patients/{PatientId}/entries?includeVersions=true");Entries.Clear();Entries.AddRange(data??[]);}
     private async Task LoadFinancialAsync()=>Financial=await Get<WebMedicalRecordFinancialSummary>($"api/v1/medical-records/patients/{PatientId}/financial?from={FromDate:yyyy-MM-dd}&to={ToDate:yyyy-MM-dd}");
-    private async Task LoadDocumentsAsync(){var data=await Get<IReadOnlyList<WebMedicalRecordDocument>>($"api/v1/medical-records/patients/{PatientId}/documents",Purpose);Documents.Clear();Documents.AddRange(data??[]);}
-    private async Task LoadAccessAsync(){var data=await Get<IReadOnlyList<WebMedicalRecordAccessEvent>>($"api/v1/medical-records/patients/{PatientId}/access-history",Purpose);AccessEvents.Clear();AccessEvents.AddRange(data??[]);}
+    private async Task LoadDocumentsAsync(){var data=await Get<IReadOnlyList<WebMedicalRecordDocument>>($"api/v1/medical-records/patients/{PatientId}/documents");Documents.Clear();Documents.AddRange(data??[]);}
+    private async Task LoadAccessAsync(){var data=await Get<IReadOnlyList<WebMedicalRecordAccessEvent>>($"api/v1/medical-records/patients/{PatientId}/access-history");AccessEvents.Clear();AccessEvents.AddRange(data??[]);}
     private async Task AppointmentChangedAsync(ChangeEventArgs e)
     {
         var nextId=ulong.TryParse(e.Value?.ToString(),out var id)?id:0;
@@ -300,9 +289,9 @@ else
     private void CancelRectification(){RectifyingEntry=null;CorrectionReason="";ClearEditor();}
     private Task RectifyAsync()=>RunAsync(async()=>{var entry=RectifyingEntry??throw new InvalidOperationException();if(CorrectionReason.Trim().Length<5){ShowError("Informe o motivo da retificação com ao menos 5 caracteres.");return;}await Send<WebMedicalRecordVersion>($"api/v1/medical-records/patients/{PatientId}/entries/{entry.Id}/rectify","POST",new WebMedicalRecordRectifyRequest(entry.CurrentVersionId,CorrectionReason.Trim(),BuildContent()));RectifyingEntry=null;CorrectionReason="";ClearEditor();await LoadEntriesAsync();ShowSuccess("Nova versão criada. O registro original foi preservado.");});
     private Task UploadDocumentAsync()=>RunAsync(async()=>{await Module!.InvokeAsync<WebMedicalRecordDocument>("upload",Backend.BaseUrl.ToString(),$"api/v1/medical-records/patients/{PatientId}/documents?appointmentId={DocumentAppointmentId}&categoryCode={DocumentCategory}","medical-record-file");await LoadDocumentsAsync();ShowSuccess("Documento armazenado de forma privada.");});
-    private Task DownloadDocumentAsync(WebMedicalRecordDocument document)=>RunAsync(()=>Module!.InvokeVoidAsync("download",Backend.BaseUrl.ToString(),$"api/v1/medical-records/patients/{PatientId}/documents/{document.Id}",Purpose,document.FileName).AsTask());
+    private Task DownloadDocumentAsync(WebMedicalRecordDocument document)=>RunAsync(()=>Module!.InvokeVoidAsync("download",Backend.BaseUrl.ToString(),$"api/v1/medical-records/patients/{PatientId}/documents/{document.Id}",(string?)null,document.FileName).AsTask());
     private Task DeleteDocumentAsync(WebMedicalRecordDocument document)=>RunAsync(async()=>{if(!await JavaScript.InvokeAsync<bool>("confirm",$"Remover {document.FileName} da visualização do prontuário?"))return;await Send<object?>($"api/v1/medical-records/patients/{PatientId}/documents/{document.Id}?rowVersion={document.RowVersion}","DELETE",null);await LoadDocumentsAsync();ShowSuccess("Documento removido logicamente; a trilha clínica foi preservada.");});
-    private Task DownloadPdfAsync()=>RunAsync(async()=>{if(NeedsPurpose&&Purpose.Trim().Length<10){ShowError("Informe uma finalidade com ao menos 10 caracteres antes de gerar o PDF.");return;}var includeClinical=ActiveTab==RecordTab.Clinical;await Module!.InvokeVoidAsync("downloadPdf",Backend.BaseUrl.ToString(),$"api/v1/medical-records/patients/{PatientId}/pdf",new WebMedicalRecordPdfRequest(DateOnly.FromDateTime(FromDate),DateOnly.FromDateTime(ToDate),true,includeClinical,true,NeedsPurpose?Purpose.Trim():null));ShowSuccess("PDF privado gerado conforme o recorte autorizado.");});
+    private Task DownloadPdfAsync()=>RunAsync(async()=>{var includeClinical=ActiveTab==RecordTab.Clinical;await Module!.InvokeVoidAsync("downloadPdf",Backend.BaseUrl.ToString(),$"api/v1/medical-records/patients/{PatientId}/pdf",new WebMedicalRecordPdfRequest(DateOnly.FromDateTime(FromDate),DateOnly.FromDateTime(ToDate),true,includeClinical,true,null));ShowSuccess("PDF privado gerado conforme o recorte autorizado.");});
     private async Task<T?> Get<T>(string path,string? purpose=null)=>Module is null?default:await Module.InvokeAsync<T?>("get",Backend.BaseUrl.ToString(),path,purpose);
     private async Task<T?> Send<T>(string path,string method,object? body)=>Module is null?default:await Module.InvokeAsync<T?>("send",Backend.BaseUrl.ToString(),path,method,body,(string?)null);
     private async Task RunAsync(Func<Task> action){if(Busy)return;Busy=true;Notice=null;NoticeError=false;try{await action();}catch(Exception e){ShowError(e);}finally{Busy=false;StateHasChanged();}}

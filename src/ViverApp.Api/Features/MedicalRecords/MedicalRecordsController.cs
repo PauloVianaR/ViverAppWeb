@@ -121,7 +121,7 @@ public sealed class MedicalRecordsController(
     [HttpGet("patients/{patientId:long}/access-history")]
     [Authorize(Policy = ViverAppPolicies.MedicalRecordAudit)]
     public async Task<IReadOnlyList<MedicalRecordAccessEventResponse>> AccessHistory(ulong patientId,
-        [FromHeader(Name = "X-Clinical-Purpose")] string purpose, CancellationToken ct) =>
+        [FromHeader(Name = "X-Clinical-Purpose")] string? purpose, CancellationToken ct) =>
         await records.AccessHistoryAsync(Actor, await IsRecentAsync(ct), patientId, purpose, ct);
 
     private Task<bool> IsRecentAsync(CancellationToken ct) => Role == ViverAppRoles.Administrator
