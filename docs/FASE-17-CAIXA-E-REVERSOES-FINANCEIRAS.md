@@ -8,7 +8,7 @@
 
 Implementar um livro-caixa diário, histórico e auditável para Gestor e Administrador, incluindo totais por forma de pagamento, impressão, cancelamento/estorno de pagamentos e novo pagamento para o mesmo atendimento sem apagar o histórico.
 
-Esta fase não implementa o prontuário eletrônico nem inicia os workers gerais da Fase 19.
+Esta fase não implementa o prontuário eletrônico nem inicia os workers gerais da Fase 20.
 
 ## Regras invariáveis
 
@@ -297,7 +297,7 @@ DTOs não expõem entidades EF. Totais e relatórios são calculados no servidor
 - pagamentos presenciais e PagBank respeitam seus fluxos próprios;
 - migration foi aplicada no MySQL local 8.0.41 e EF regenerado por DB-First;
 - build, suíte integral, testes financeiros/segurança e validação visual estão aprovados;
-- prontuário e Fase 19 não foram antecipados;
+- prontuário, Agenda/Psicólogo da Fase 19 e workers da Fase 20 não foram antecipados;
 - nenhuma pendência real foi ocultada.
 
 ## Implementação e evidências

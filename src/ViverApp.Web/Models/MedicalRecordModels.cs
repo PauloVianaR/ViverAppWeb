@@ -30,7 +30,7 @@ public sealed record WebMedicalRecordVersion(ulong Id, ulong EntryId, ulong Appo
     uint VersionNumber, ulong? SupersedesVersionId, string? CorrectionReason, ulong AuthorDoctorAccountId,
     string AuthorDoctorName, string LicenseLabel, WebMedicalRecordContent Content, DateTime FinalizedAtUtc, bool IsCurrent);
 public sealed record WebMedicalRecordEntry(ulong Id, ulong AppointmentId, ulong AppointmentNumber, DateTime AppointmentAtUtc,
-    ulong CurrentVersionId, uint CurrentVersionNumber, string DoctorName, string LicenseLabel, DateTime FinalizedAtUtc,
+    ulong CurrentVersionId, uint CurrentVersionNumber, string AuthorRoleCode, string DoctorName, string LicenseLabel, DateTime FinalizedAtUtc,
     IReadOnlyList<WebMedicalRecordVersion>? Versions);
 public sealed record WebMedicalRecordDocument(ulong Id, string FileName, string ContentType, ulong SizeBytes,
     string CategoryCode, ulong? AppointmentId, ulong? AppointmentNumber, ulong? MedicalRecordVersionId,

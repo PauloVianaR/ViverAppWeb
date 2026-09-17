@@ -38,14 +38,14 @@
 | DEC-008 | Premium é vitalício, assinatura ou revalidação periódica? | afeta schema, preço e PagBank | antes da Fase 11 |
 | DEC-009 | Base adotada: cancelamento e reagendamento pelo paciente com 24h de antecedência; valores configuráveis e sujeitos à validação do proprietário antes da produção. No-show permanece para a agenda operacional. | máquina de estados e financeiro | base implementada na Fase 7 |
 | DEC-010 | Base adotada: timezone singleton da clínica, inicialmente `America/Sao_Paulo`; datas persistidas em UTC e horários ambíguos/inexistentes recusados. Confirmar antes da produção se haverá atendimento em outro fuso. | slots, lembretes e auditoria | base implementada na Fase 7 |
-| DEC-011 | Haverá gravação de videochamada? | alto impacto LGPD/custo; recomendação inicial é não | antes da Fase 20 |
+| DEC-011 | Haverá gravação de videochamada? | alto impacto LGPD/custo; recomendação inicial é não | antes da Fase 21 |
 | DEC-012 | Quais provedores finais de hospedagem, MySQL, e-mail e TURN? | custo, resiliência e contratos | antes das fases correspondentes |
 | DEC-013 | Qual domínio/plano Cloudflare será adquirido? | WAF, R2 custom domain e DNS | antes da Fase 15/21 |
 | DEC-014 | Quais prazos de retenção para registros clínicos, anexos, financeiro, auditoria e contas? | schema, lifecycle e LGPD | antes da Fase 2/15 |
 | DEC-015 | Quem é controlador, operador e encarregado LGPD? | registro de tratamento/incidentes/direitos | antes de staging com dados reais |
 | DEC-016 | Qual política para contas cuja senha legada não puder ser migrada? | segurança e suporte | antes da Fase 4 |
-| DEC-017 | Quais KPIs administrativos continuam úteis? | evitar migrar analytics incorretos/excessivos | antes da Fase 22 |
-| DEC-018 | Qual provedor LLM, orçamento e escopo escrito serão autorizados para o Strix? | custo, privacidade do código e risco de exploração ativa | antes da Fase 26 |
+| DEC-017 | Quais KPIs administrativos continuam úteis? | evitar migrar analytics incorretos/excessivos | antes da Fase 23 |
+| DEC-018 | Qual provedor LLM, orçamento e escopo escrito serão autorizados para o Strix? | custo, privacidade do código e risco de exploração ativa | antes da Fase 27 |
 
 ## 3. Recomendações técnicas já adotadas
 

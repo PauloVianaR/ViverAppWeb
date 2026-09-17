@@ -143,7 +143,7 @@ else
                         @foreach (var entry in Entries)
                         {
                             <article class="surface record-entry">
-                                <header><div><p class="eyebrow">Atendimento #@entry.AppointmentNumber</p><h2>@entry.DoctorName</h2><span>@entry.LicenseLabel · @Local(entry.FinalizedAtUtc)</span></div><span class="badge badge--success">Versão @entry.CurrentVersionNumber</span></header>
+                                <header><div><p class="eyebrow">Atendimento #@entry.AppointmentNumber</p><h2>@AuthorRoleLabel(entry.AuthorRoleCode): @entry.DoctorName</h2><span>@entry.LicenseLabel · @Local(entry.FinalizedAtUtc)</span></div><span class="badge badge--success">Versão @entry.CurrentVersionNumber</span></header>
                                 @foreach (var version in entry.Versions ?? [])
                                 {
                                     <details open="@version.IsCurrent">
@@ -314,6 +314,7 @@ else
     private static string DocumentCategoryLabel(string x)=>x switch{"exam"=>"Exame","report"=>"Laudo","administrative"=>"Administrativo",_=>"Anexo"};
     private static string FileSize(ulong bytes)=>bytes>=1048576?$"{bytes/1048576d:0.0} MB":$"{bytes/1024d:0} KB";
     private static string RoleLabel(string x)=>x switch{"doctor"=>"Médico","manager"=>"Gestor","administrator"=>"Administrador",_=>x};
+    private static string AuthorRoleLabel(string x)=>x switch{"doctor"=>"Médico","manager"=>"Gestor","administrator"=>"Admin",_=>"Responsável"};
     private static string ScopeLabel(string x)=>x switch{"summary"=>"Resumo","timeline"=>"Linha do tempo","clinical"=>"Clínico","financial"=>"Financeiro","document"=>"Documento","pdf"=>"PDF","audit"=>"Auditoria",_=>x};
     public async ValueTask DisposeAsync(){AutosaveCancellation?.Cancel();AutosaveCancellation?.Dispose();if(Module is not null)try{await Module.DisposeAsync();}catch(JSDisconnectedException){}}
 }

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ViverApp.Api.Features.Identity;
+using ViverApp.Api.Features.ManagerExperience;
 using ViverApp.Api.Features.PatientScheduling;
 using Xunit;
 
@@ -95,5 +96,14 @@ public sealed class PatientSchedulingApiTests : IAsyncLifetime
         var invalid = new AppointmentCancelRequest("não", 1);
         var results = new List<ValidationResult>();
         Assert.False(Validator.TryValidateObject(invalid, new ValidationContext(invalid), results, true));
+    }
+
+    [Fact]
+    public void ManagerProfessionalSearch_DefaultPageSizeRespectsSchedulingLimit()
+    {
+        var method = typeof(ManagerExperienceController).GetMethod(nameof(ManagerExperienceController.Professionals));
+        var pageSize = Assert.Single(method!.GetParameters(), parameter => parameter.Name == "pageSize");
+
+        Assert.Equal(50, pageSize.DefaultValue);
     }
 }

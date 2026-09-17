@@ -187,6 +187,7 @@ public sealed class MedicalRecordService(
             }
             result.Add(new(entry.Id, entry.AppointmentId, entry.Appointment.AppointmentNumber,
                 entry.Appointment.StartsAtUtc, current.Id, current.VersionNumber,
+                current.AuthorAccount.RoleCode,
                 current.AuthorAccount.FullName, License(current.AuthorAccount),
                 current.FinalizedAtUtc, versions));
         }
@@ -503,6 +504,7 @@ public sealed class MedicalRecordService(
             .OrderByDescending(x => x.Appointment.StartsAtUtc).ToArrayAsync(ct);
         return entries.Select(x => new MedicalRecordEntryResponse(x.Id, x.AppointmentId, x.Appointment.AppointmentNumber,
             x.Appointment.StartsAtUtc, x.CurrentVersionId!.Value, x.CurrentVersion!.VersionNumber,
+            x.CurrentVersion.AuthorAccount.RoleCode,
             x.CurrentVersion.AuthorAccount.FullName, License(x.CurrentVersion.AuthorAccount), x.CurrentVersion.FinalizedAtUtc,
             new[] { MapVersionForLoadedEntry(x.CurrentVersion, x) })).ToArray();
     }

@@ -123,6 +123,7 @@ public sealed class MedicalRecordIntegrationTests
         var managerWithoutPurpose = await service.EntriesAsync(manager.Id,
             ViverAppRoles.Manager, true, patient.Id, null, true, CancellationToken.None);
         Assert.Single(managerWithoutPurpose);
+        Assert.Equal(ViverAppRoles.Doctor, managerWithoutPurpose[0].AuthorRoleCode);
         var administratorWithoutStepUp = await Assert.ThrowsAsync<MedicalRecordRuleException>(() => service.EntriesAsync(administrator.Id,
             ViverAppRoles.Administrator, false, patient.Id, "Auditoria clínica autorizada", true, CancellationToken.None));
         Assert.Equal((int)HttpStatusCode.Forbidden, administratorWithoutStepUp.StatusCode);
@@ -149,6 +150,9 @@ public sealed class MedicalRecordIntegrationTests
         Assert.Equal(2U, managerVersion.VersionNumber);
         Assert.Equal(manager.Id, managerVersion.AuthorDoctorAccountId);
         Assert.Equal("Gestor da clínica", managerVersion.LicenseLabel);
+        var entriesAfterManagerVersion = await service.EntriesAsync(manager.Id, ViverAppRoles.Manager, true, patient.Id,
+            null, true, CancellationToken.None);
+        Assert.Equal(ViverAppRoles.Manager, entriesAfterManagerVersion[0].AuthorRoleCode);
         var secondContent = firstContent with { ClinicalEvolution = "Paciente sem sinais de alarme e com evolução estável." };
         var rectified = await service.RectifyAsync(doctor.Id, ViverAppRoles.Doctor, patient.Id, managerRead[0].Id,
             new MedicalRecordRectifyRequest(managerVersion.Id, "Correção de informação relatada pelo paciente.", secondContent),

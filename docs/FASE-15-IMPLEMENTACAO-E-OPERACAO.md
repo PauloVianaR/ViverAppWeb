@@ -2,7 +2,7 @@
 
 ## Decisões de arquitetura
 
-- `viveralmenara.com` é a zona oficial. O apontamento do site e da API aguarda a origem da Fase 25; nenhum registro DNS fictício deve ser criado.
+- `viveralmenara.com` é a zona oficial. O apontamento do site e da API aguarda a origem da Fase 26; nenhum registro DNS fictício deve ser criado.
 - Documentos clínicos, laudos, anexos e comprovantes pertencem exclusivamente ao bucket privado. Eles nunca usam `r2.dev`, domínio público ou cache compartilhado.
 - A API continua sendo a fronteira de autorização. O download mediado valida sessão, papel, vínculo com o atendimento, estado do documento, tamanho e SHA-256.
 - URLs pré-assinadas R2 existem apenas como recurso interno, expiram em no máximo 300 segundos e usam o endpoint S3. O fluxo clínico padrão não as entrega diretamente ao navegador.
@@ -80,7 +80,7 @@ Quando o processo com acesso externo não compartilha a identidade DPAPI que cri
 
 Na origem B2, a ferramenta possui apenas operações de listagem e leitura. Cada nome de origem é convertido por SHA-256 em uma chave determinística sob `legacy-quarantine/development`, o que evita PII na chave e torna o retry idempotente. O conteúdo passa por limite de 20 MB e verificação de tamanho/SHA-256 antes e depois do envio; a saída informa somente contagens. O conteúdo descriptografado existe apenas em memória durante a cópia, sem arquivo temporário em disco.
 
-Os 12 objetos inventariados no B2 foram copiados para a quarentena privada e reconciliados por tamanho e SHA-256: 12 verificados, 0 pendentes. A verificação releu a origem e confirmou que os 12 originais continuam presentes. O B2 não foi desativado nem apagado. A remoção posterior depende da política de retenção/LGPD, da Fase 27 e de autorização específica.
+Os 12 objetos inventariados no B2 foram copiados para a quarentena privada e reconciliados por tamanho e SHA-256: 12 verificados, 0 pendentes. A verificação releu a origem e confirmou que os 12 originais continuam presentes. O B2 não foi desativado nem apagado. A remoção posterior depende da política de retenção/LGPD, da Fase 28 e de autorização específica.
 
 ## CDN e DNS
 
@@ -89,7 +89,7 @@ Os 12 objetos inventariados no B2 foram copiados para a quarentena privada e rec
 - Cache longo e imutável será aplicado apenas a ativos versionados. HTML, respostas autenticadas, uploads e qualquer conteúdo clínico usam `no-store`.
 - CORS do bucket público, quando necessário, aceitará `GET` e `HEAD` somente de `https://viveralmenara.com` e `https://www.viveralmenara.com`.
 - Hotlink protection/WAF deve restringir uso indevido sem bloquear navegadores legítimos do site.
-- DNSSEC, TLS estrito com a origem, registros do site/API e regras finais de WAF pertencem à Fase 25, quando existir uma origem publicada verificável.
+- DNSSEC, TLS estrito com a origem, registros do site/API e regras finais de WAF pertencem à Fase 26, quando existir uma origem publicada verificável.
 
 ## Critério de encerramento
 

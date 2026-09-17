@@ -1,10 +1,10 @@
-# Fase 24 — SEO, privacidade, cookies e conformidade Web
+# Fase 25 — SEO, privacidade, cookies e conformidade Web
 
 ## Estado e objetivo
 
 **Estado:** planejada para depois do hardening funcional e antes da publicação definitiva da infraestrutura.
 
-**Branch prevista:** `codex/fase-24-seo-privacidade-conformidade`.
+**Branch prevista:** `codex/fase-25-seo-privacidade-conformidade`.
 
 Preparar o ViverApp para presença pública responsável em `viveralmenara.com`: indexar somente conteúdo público útil, estabelecer um padrão técnico de SEO, obter preferências de cookies de forma transparente, publicar documentos jurídicos versionados e fechar lacunas essenciais de confiança, acessibilidade e operação de um software Web de saúde.
 
@@ -12,8 +12,8 @@ Esta fase não transforma `robots.txt` em controle de segurança, não indexa á
 
 ## Dependências e limites
 
-- executar depois da Fase 23, quando as superfícies funcionais e de segurança já estiverem estabilizadas;
-- concluir antes da Fase 25 de infraestrutura e da Fase 26 de pentest;
+- executar depois da Fase 24, quando as superfícies funcionais e de segurança já estiverem estabilizadas;
+- concluir antes da Fase 26 de infraestrutura e da Fase 27 de pentest;
 - mudanças externas em DNS, Search Console, serviços analíticos ou fornecedores continuam dependentes de autorização;
 - os conteúdos finais de Termos, Privacidade, Cookies e atendimento a titulares exigem dados reais da clínica e revisão jurídica; placeholders bloqueiam produção;
 - nenhum tracker de marketing é requisito desta fase; a escolha padrão será não instalar rastreamento desnecessário;
@@ -22,7 +22,7 @@ Esta fase não transforma `robots.txt` em controle de segurança, não indexa á
 ## Domínio canônico e ambientes
 
 - domínio canônico proposto: `https://viveralmenara.com`;
-- `www.viveralmenara.com` redirecionará permanentemente para o canônico na Fase 25;
+- `www.viveralmenara.com` redirecionará permanentemente para o canônico na Fase 26;
 - `api.viveralmenara.com`, páginas autenticadas e arquivos privados nunca serão indexáveis;
 - produção recebe configuração pública seletiva;
 - desenvolvimento, preview e staging respondem `X-Robots-Tag: noindex, nofollow, noarchive` e `robots.txt` com bloqueio geral;
@@ -256,7 +256,7 @@ A migration será aplicada integralmente em `viverappweb` no MySQL local 8.0.41 
 11. implementar acessibilidade, manifest, páginas de erro e `security.txt` quando os contatos existirem;
 12. medir SEO técnico, performance, acessibilidade, segurança e vazamento de dados;
 13. validar no monitor 3 e testar celular/tablet/desktop, crawler e impressão;
-14. registrar pendências jurídicas/externas reais e parar sem iniciar a Fase 25.
+14. registrar pendências jurídicas/externas reais e parar sem iniciar a Fase 26.
 
 ## Testes e evidências
 
@@ -286,4 +286,4 @@ A migration será aplicada integralmente em `viverappweb` no MySQL local 8.0.41 
 - páginas privadas e dados de saúde não aparecem em índice, cache compartilhado ou telemetria de terceiros;
 - performance, acessibilidade e metadados atendem aos gates documentados;
 - migrations eventualmente necessárias foram aplicadas e o EF regenerado;
-- pendências externas/jurídicas reais estão registradas e a Fase 25 não foi iniciada.
+- pendências externas/jurídicas reais estão registradas e a Fase 26 não foi iniciada.

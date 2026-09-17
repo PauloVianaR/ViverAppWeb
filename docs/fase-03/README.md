@@ -35,7 +35,7 @@ Não havia `.codegraph/` na raiz do repositório. A inspeção desta fase usou l
 - MFA, cookies de sessão, recuperação por e-mail/SMS e políticas por papel pertencem à Fase 4;
 - validações específicas contra SSRF, path traversal, upload malicioso e mass assignment serão anexadas aos contratos que criarem essas superfícies;
 - CAPTCHA adaptativo não foi adicionado sem evidência de abuso e sem um provedor aprovado; honeypot nunca é tratado como controle suficiente;
-- alertas externos, WAF, DNS e configuração de produção pertencem à infraestrutura da Fase 25.
+- alertas externos, WAF, DNS e configuração de produção pertencem à infraestrutura da Fase 26.
 
 Esses itens não foram antecipados para respeitar a execução de uma fase por vez.
 

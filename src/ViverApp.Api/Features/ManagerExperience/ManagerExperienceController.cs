@@ -63,7 +63,7 @@ public sealed class ManagerExperienceController(ManagerExperienceService service
         scheduling.GetAvailableSlotsAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct);
     [HttpGet("booking/professionals"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
     public Task<SchedulingPage<BookingProfessionalResponse>> Professionals(uint appointmentTypeId, string modality,
-        string? search = null, int page = 1, int pageSize = 100, CancellationToken ct = default) =>
+        string? search = null, int page = 1, int pageSize = 50, CancellationToken ct = default) =>
         scheduling.SearchProfessionalsAsync(page, pageSize, search, null, appointmentTypeId, modality, ct);
     [HttpPost("appointments"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public async Task<ActionResult<AppointmentResponse>> Create([FromHeader(Name = "Idempotency-Key")] string key,

@@ -117,6 +117,7 @@ public sealed record MedicalRecordEntryResponse(
     DateTime AppointmentAtUtc,
     ulong CurrentVersionId,
     uint CurrentVersionNumber,
+    string AuthorRoleCode,
     string DoctorName,
     string LicenseLabel,
     DateTime FinalizedAtUtc,

@@ -27,4 +27,4 @@ O script falha se encontrar segredo preenchido em `appsettings`, arquivo criptog
 
 ## Gate para produção
 
-Além do script local, produção exigirá certificado do key ring, origem CORS real, endpoint OTLP HTTPS, TLS válido, proxy confiável configurado explicitamente, backups criptografados, restauração testada, WAF/CDN e alertas externos. Esses itens dependem do ambiente e serão fechados na Fase 25; valores vazios fazem a aplicação falhar com segurança onde aplicável.
+Além do script local, produção exigirá certificado do key ring, origem CORS real, endpoint OTLP HTTPS, TLS válido, proxy confiável configurado explicitamente, backups criptografados, restauração testada, WAF/CDN e alertas externos. Esses itens dependem do ambiente e serão fechados na Fase 26; valores vazios fazem a aplicação falhar com segurança onde aplicável.
