@@ -59,3 +59,7 @@ O certificado HTTPS e o anel de chaves existentes foram preservados. A validaç�
 ## Homologações remanescentes
 
 O TOTP administrativo foi configurado e testado pelo proprietário. As dependências externas ou manuais ainda reais continuam registradas em `.local/PENDENCIAS.md`, incluindo documentos Premium não sensíveis e entrega por e-mail/SMS.
+
+## Decisão superveniente da Fase 18
+
+O Administrador ganhou o prontuário integrado por Paciente com timeline, financeiro, conteúdo clínico, documentos, PDF e histórico de acessos. Conteúdo sensível exige finalidade explícita, MFA e autenticação recente nos últimos cinco minutos; a autorização é revalidada a cada requisição e toda tentativa permitida ou negada é append-only. O Administrador não cria, finaliza nem retifica registros médicos.

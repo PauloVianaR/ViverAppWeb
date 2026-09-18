@@ -8,7 +8,7 @@
 
 Implementar um livro-caixa diário, histórico e auditável para Gestor e Administrador, incluindo totais por forma de pagamento, impressão, cancelamento/estorno de pagamentos e novo pagamento para o mesmo atendimento sem apagar o histórico.
 
-Esta fase não implementa o prontuário eletrônico nem inicia os workers gerais da Fase 19.
+Esta fase não implementa o prontuário eletrônico nem inicia os workers gerais da Fase 20.
 
 ## Regras invariáveis
 
@@ -101,8 +101,8 @@ Nova navegação **Caixa** nos perfis de Gestor e Administrador.
 - resumo imutável com data, totais, contagens, responsável e instante;
 - confirmação explícita e comparação com a versão corrente;
 - fechamento não impede movimentação legítima posterior;
-- correções pós-fechamento ficam destacadas e exigem motivo;
-- operação pós-fechamento de alto impacto exige step-up do Administrador;
+- um caixa fechado não aceita novas movimentações financeiras;
+- a reabertura do caixa atual é sempre auditada, é permitida ao Administrador e depende de configuração explícita para o Gestor;
 - reimpressão deixa claro se o relatório corresponde ao fechamento ou ao estado atualizado.
 
 ## Impressão
@@ -218,7 +218,7 @@ DTOs não expõem entidades EF. Totais e relatórios são calculados no servidor
 ## Segurança obrigatória
 
 - policies distintas para consultar caixa, movimentar, fechar, reverter e imprimir;
-- step-up MFA do Administrador para reversões e pós-fechamento;
+- step-up MFA do Administrador para operações financeiras críticas e reabertura;
 - confirmação/idempotência para toda mutação financeira;
 - antiforgery no BFF e rate limiting por ator/ação;
 - concorrência otimista e transações no nível correto;
@@ -285,7 +285,7 @@ DTOs não expõem entidades EF. Totais e relatórios são calculados no servidor
 4. O atendimento volta a permitir pagamento; um segundo método é registrado.
 5. O caixa preserva os três fatos e apresenta o total líquido correto.
 6. Administrador fecha o dia e executa Imprimir e Imprimir Totais.
-7. Uma correção pós-fechamento exige step-up e aparece destacada.
+7. Um caixa fechado bloqueia qualquer nova movimentação até uma reabertura autorizada e auditada.
 8. Cenário equivalente de PagBank em sandbox confirma estados, webhook e retries sem duplicidade.
 
 ## Critérios de saída
@@ -297,7 +297,7 @@ DTOs não expõem entidades EF. Totais e relatórios são calculados no servidor
 - pagamentos presenciais e PagBank respeitam seus fluxos próprios;
 - migration foi aplicada no MySQL local 8.0.41 e EF regenerado por DB-First;
 - build, suíte integral, testes financeiros/segurança e validação visual estão aprovados;
-- prontuário e Fase 19 não foram antecipados;
+- prontuário, Agenda/Psicólogo da Fase 19 e workers da Fase 20 não foram antecipados;
 - nenhuma pendência real foi ocultada.
 
 ## Implementação e evidências
@@ -307,7 +307,7 @@ DTOs não expõem entidades EF. Totais e relatórios são calculados no servidor
 - a API entrega consulta diária/histórica paginada, filtros, totais calculados no servidor, movimentos manuais compensatórios, fechamento, duas visões de impressão e reversão idempotente;
 - a interface de Gestor e Administrador possui a nova área **Caixa**, filtros, totais por método, movimentos, fechamento e as ações exatas **Imprimir** e **Imprimir Totais**; os detalhes de atendimento permitem cancelar o pagamento elegível e registrar outro depois da reversão confirmada;
 - o fluxo PagBank permanece restrito a ambiente não produtivo e só confirma a reversão local quando o estado retornado pelo provedor corresponde efetivamente a reembolso; produção continua bloqueada sem autorização operacional explícita;
-- o cenário de integração em MySQL comprova recebimento, reversão, novo pagamento, cadeia de duas tentativas com uma única ativa, três movimentos preservados, totais, ambos os modos de impressão, fechamento, restrição pós-fechamento do Gestor, operação elevada do Administrador e proteção append-only;
+- o cenário de integração em MySQL comprova recebimento, reversão, novo pagamento, cadeia de duas tentativas com uma única ativa, movimentos preservados, totais, ambos os modos de impressão, bloqueio integral após fechamento, reabertura auditável e proteção append-only;
 - o fallback de desenvolvimento por HTTP foi validado sem excluir ou reparar certificados: somente loopback em `Development` com `Security:AllowInsecureLocalHttp=true` pode dispensar redirecionamento HTTPS; produção continua exigindo HTTPS;
 - os ajustes complementares mantêm todo cancelamento financeiro como fato compensatório e também devolvem o atendimento a **Pendente**, permitindo novo pagamento; a chegada pode ser cancelada por Gestor/Admin somente com motivo e sua notificação médica pendente é encerrada;
 - pacientes cadastrados por Gestor/Admin agora podem existir somente no cadastro clínico, com nome, CPF único e nascimento obrigatórios, contatos/endereço opcionais e onboarding explicitamente opcional; `portal_access_enabled` distingue essas pessoas de contas capazes de entrar no portal;

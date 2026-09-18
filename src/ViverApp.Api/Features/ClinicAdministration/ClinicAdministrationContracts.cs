@@ -74,7 +74,7 @@ public sealed record AppointmentTypeWriteRequest(
     bool IsActive,
     ushort DisplayOrder,
     [param: Range(0, long.MaxValue)] ulong RowVersion = 0,
-    [param: Required, RegularExpression("^(consultation|examination|surgery)$")] string CategoryCode = "consultation");
+    [param: Required, RegularExpression("^(consultation|examination|surgery|procedure)$")] string CategoryCode = "consultation");
 
 public sealed record AppointmentTypeResponse(
     uint Id,

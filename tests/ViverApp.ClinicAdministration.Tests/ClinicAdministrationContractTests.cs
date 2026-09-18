@@ -208,7 +208,8 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
         Assert.Contains(analytics.PaymentsByLocationTrend, item => item.InClinic >= 1);
         Assert.Contains(analytics.PaymentsByLocation, item => item.Label == "clinic" && item.Count >= 1);
         Assert.Contains(analytics.AppointmentsByService, item => item.Label == appointmentType.Name && item.Count >= 1);
-        Assert.Contains(analytics.AppointmentsByCategory, item => item.Label == "consultation" && item.Count >= 1);
+        Assert.Contains(analytics.AppointmentsByCategory, item => item.Label == "Consultas" && item.Count >= 1);
+        Assert.Contains(analytics.AppointmentsByCategory, item => item.Label == "Procedimentos");
         Assert.Contains(analytics.DoctorPerformance, item => item.Label == doctor.FullName && item.Count >= 1);
         Assert.NotEmpty(settings);
         var blocked = await Assert.ThrowsAsync<AdministratorRuleException>(() => service.SetAccountStatusAsync(

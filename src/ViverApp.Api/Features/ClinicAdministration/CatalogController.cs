@@ -156,6 +156,7 @@ public sealed class CatalogController(
         [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null,
         [FromQuery] string? modality = null,
+        [FromQuery] string? category = null,
         [FromQuery] bool includeInactive = false,
         CancellationToken cancellationToken = default)
     {
@@ -163,6 +164,10 @@ public sealed class CatalogController(
         if (modality is not null && modality is not ("in_person" or "online" or "both"))
         {
             ModelState.AddModelError(nameof(modality), "Modalidade inválida.");
+        }
+        if (category is not null && category is not ("consultation" or "examination" or "surgery" or "procedure"))
+        {
+            ModelState.AddModelError(nameof(category), "Tipo de atendimento inválido.");
         }
 
         if (!ModelState.IsValid)
@@ -186,6 +191,10 @@ public sealed class CatalogController(
         {
             query = query.Where(item => item.ModalityCode == modality);
         }
+        if (category is not null)
+        {
+            query = query.Where(item => item.CategoryCode == category);
+        }
 
         var total = await query.CountAsync(cancellationToken);
         var entities = await query.OrderBy(item => item.DisplayOrder)
@@ -202,6 +211,7 @@ public sealed class CatalogController(
 
     [HttpPost("appointment-types")]
     [Authorize(Policy = ViverAppPolicies.Management)]
+    [ManagerFeatureGate("manager.appointment_types_enabled")]
     public async Task<ActionResult<AppointmentTypeResponse>> CreateAppointmentType(
         [FromBody] AppointmentTypeWriteRequest request,
         CancellationToken cancellationToken)
@@ -239,6 +249,7 @@ public sealed class CatalogController(
 
     [HttpPut("appointment-types/{id}")]
     [Authorize(Policy = ViverAppPolicies.Management)]
+    [ManagerFeatureGate("manager.appointment_types_enabled")]
     public async Task<ActionResult<AppointmentTypeResponse>> UpdateAppointmentType(
         uint id,
         [FromBody] AppointmentTypeWriteRequest request,
@@ -283,6 +294,7 @@ public sealed class CatalogController(
 
     [HttpDelete("appointment-types/{id}")]
     [Authorize(Policy = ViverAppPolicies.Management)]
+    [ManagerFeatureGate("manager.appointment_types_enabled")]
     public async Task<IActionResult> DeactivateAppointmentType(
         uint id,
         [FromQuery] ulong rowVersion,

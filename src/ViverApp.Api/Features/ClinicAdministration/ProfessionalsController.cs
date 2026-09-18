@@ -400,6 +400,7 @@ public sealed class ProfessionalsController(
     }
 
     [HttpGet("{accountId:long}/weekly-hours")]
+    [ManagerFeatureGate("manager.doctor_schedules_enabled")]
     public async Task<ActionResult<IReadOnlyList<DoctorWeeklyHourResponse>>> GetWeeklyHours(
         ulong accountId,
         CancellationToken cancellationToken)
@@ -418,6 +419,7 @@ public sealed class ProfessionalsController(
     }
 
     [HttpPost("{accountId:long}/weekly-hours")]
+    [ManagerFeatureGate("manager.doctor_schedules_enabled")]
     public async Task<ActionResult<DoctorWeeklyHourResponse>> CreateWeeklyHour(
         ulong accountId,
         [FromBody] DoctorWeeklyHourWriteRequest request,
@@ -473,6 +475,7 @@ public sealed class ProfessionalsController(
     }
 
     [HttpPut("{accountId:long}/weekly-hours/{id:long}")]
+    [ManagerFeatureGate("manager.doctor_schedules_enabled")]
     public async Task<ActionResult<DoctorWeeklyHourResponse>> UpdateWeeklyHour(
         ulong accountId,
         ulong id,
@@ -529,6 +532,7 @@ public sealed class ProfessionalsController(
     }
 
     [HttpDelete("{accountId:long}/weekly-hours/{id:long}")]
+    [ManagerFeatureGate("manager.doctor_schedules_enabled")]
     public async Task<IActionResult> DeleteWeeklyHour(
         ulong accountId,
         ulong id,

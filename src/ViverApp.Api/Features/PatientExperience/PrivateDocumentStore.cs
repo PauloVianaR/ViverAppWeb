@@ -205,12 +205,24 @@ public sealed class PrivateDocumentStore
         return (bytes, document.ContentType, document.OriginalFileName);
     }
 
+    public async Task<(byte[] Content, string Mime, string Name)> DownloadAuthorizedClinicalAsync(Guid id, CancellationToken ct)
+    {
+        var document = await database.PrivateDocuments.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == id && x.StatusCode == "available", ct)
+            ?? throw PatientExperienceService.Missing();
+        var bytes = await LoadContentAsync(document, ct);
+        if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(bytes), document.Sha256))
+            throw PatientExperienceService.Missing();
+        return (bytes, document.ContentType, document.OriginalFileName);
+    }
+
     public async Task<(byte[] Content, string Mime, string Name, Guid DocumentId)> DownloadPremiumForManagerAsync(
         ulong manager,
         ulong membershipId,
         CancellationToken ct)
     {
-        if (!await database.Accounts.AsNoTracking().AnyAsync(x => x.Id == manager && x.RoleCode == "manager" && x.StatusCode == "active", ct))
+        if (!await database.Accounts.AsNoTracking().AnyAsync(x => x.Id == manager
+            && (x.RoleCode == "manager" || x.RoleCode == "administrator") && x.StatusCode == "active", ct))
             throw PatientExperienceService.Missing();
         var document = await database.PremiumMemberships.AsNoTracking()
             .Where(x => x.Id == membershipId && x.ProofDocumentId != null && x.ProofDocument!.StatusCode == "available")

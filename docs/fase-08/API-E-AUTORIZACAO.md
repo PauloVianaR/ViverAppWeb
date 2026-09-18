@@ -23,3 +23,7 @@ Endpoints principais:
 - `GET /api/v1/patient/appointments/{id}/medical-report` para o próprio paciente após publicação.
 
 O filtro de ownership faz parte da consulta SQL, evitando o padrão inseguro de carregar primeiro e autorizar depois. Um médico não recebe confirmação sobre a existência de consultas atribuídas a outro profissional. Escritas usam `row_version`; disputas retornam `409` e exigem recarga.
+
+## Decisão superveniente da Fase 18
+
+A restrição antiga de Gestor/Administrador a metadados continua válida nos endpoints legados `/api/v1/clinical`. O novo prontuário em `/api/v1/medical-records` permite conteúdo clínico somente por ação explícita: Gestor informa finalidade e gera auditoria; Administrador informa finalidade, mantém MFA e comprova step-up recente. Nenhum desses papéis recebe autoria ou permissão de criar, finalizar ou retificar. O Médico continua sendo o único autor e acessa somente Paciente vinculado no banco.

@@ -57,6 +57,7 @@ public static class AdministratorLabels
         "consultation" => "Consulta",
         "examination" => "Exame",
         "surgery" => "Cirurgia",
+        "procedure" => "Procedimento",
         "not informed" => "Não informado",
         var label when label.Length > 0 => char.ToUpperInvariant(label[0]) + label[1..],
         _ => "Não informado",

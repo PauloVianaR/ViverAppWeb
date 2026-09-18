@@ -2,13 +2,13 @@
 
 ## Estado e objetivo
 
-**Estado:** planejada; depende das Fases 16 e 17 integradas à `main`.
+**Estado:** implementada em 14 de setembro de 2026 na branch `codex/fase-18-prontuario-eletronico`; validações manuais e externas remanescentes estão em `.local/PENDENCIAS.md`.
 
 **Branch prevista:** `codex/fase-18-prontuario-eletronico`, criada a partir da `main` atualizada após autorização de merge da Fase 17.
 
 Entregar um prontuário eletrônico centrado no Paciente para Médico, Gestor e Administrador, com visão geral, linha do tempo, informações clínicas, anamnese/evolução, financeiro, documentos e PDF privado, preservando autoria médica, sigilo, versionamento e auditoria.
 
-Esta fase não inicia e-mail/SMS/jobs da Fase 19 nem altera o legado.
+Esta fase não inicia a Agenda/Psicólogo da Fase 19, e-mail/SMS/jobs da Fase 20 nem altera o legado.
 
 ## Referência visual
 
@@ -35,7 +35,7 @@ A Web não copiará aparência, fotografia, dados ou textos do exemplo. Em deskt
 - PDF e documento obedecem exatamente ao recorte autorizado da tela;
 - nenhuma informação clínica entra em logs, telemetria, analytics, popup ou CDN pública;
 - acesso sensível usa autorização revalidada, justificativa quando aplicável, step-up, `no-store` e auditoria append-only;
-- nenhuma funcionalidade da Fase 19 será antecipada.
+- nenhuma funcionalidade da Fase 19 ou da Fase 20 será antecipada.
 
 ## Decisão de acesso por papel
 
@@ -297,7 +297,7 @@ Queries projetam apenas campos permitidos, limitam intervalo/página, evitam N+1
 12. atualizar decisões anteriores e matriz de paridade;
 13. executar build, suíte integral, MySQL, segurança e privacidade;
 14. validar exclusivamente no monitor 3 em celular, tablet e desktop;
-15. parar sem iniciar a Fase 19.
+15. parar sem implementar a Fase 19 nem iniciar a Fase 20.
 
 ## Testes mínimos
 
@@ -313,7 +313,7 @@ Queries projetam apenas campos permitidos, limitam intervalo/página, evitam N+1
 ### Autorização e privacidade
 
 - Médico A não acessa Paciente/registro/documento do Médico B sem vínculo permitido;
-- Gestor sem motivo e Admin sem step-up recebem recusa;
+- Gestor autenticado acessa o prontuário operacional sem finalidade obrigatória; Admin sem finalidade ou sem step-up recebe recusa;
 - URL, ID, filtro ou PDF não amplia escopo;
 - eventos restritos não revelam título/trecho/metadado clínico;
 - logs, erros, outbox e analytics não recebem conteúdo;
@@ -336,9 +336,9 @@ Queries projetam apenas campos permitidos, limitam intervalo/página, evitam N+1
 2. Cria rascunho, perde/reconecta a sessão e recupera a versão correta.
 3. Finaliza anamnese/evolução e gera PDF clínico autorizado.
 4. Retifica com motivo; original e nova versão permanecem consultáveis.
-5. Gestor abre o mesmo prontuário, vê agenda/financeiro e justifica acesso clínico.
+5. Gestor abre o mesmo prontuário e vê agenda, conteúdo clínico permitido e financeiro sem finalidade obrigatória, mantendo auditoria do acesso.
 6. Administrador usa MFA/step-up, justifica o acesso e gera seu recorte autorizado.
-7. Outro Médico, Gestor sem motivo e sessão Admin não elevada recebem recusa.
+7. Outro Médico e sessão Admin sem finalidade ou não elevada recebem recusa.
 8. Timeline mostra chegada da Fase 16 e pagamento/reversão/substituto da Fase 17 sem duplicar fontes.
 
 ## Critérios de saída
@@ -347,9 +347,36 @@ Queries projetam apenas campos permitidos, limitam intervalo/página, evitam N+1
 - visão geral, timeline, clínico, financeiro, documentos e PDF estão completos;
 - Médico é o único autor de conteúdo clínico;
 - versões finalizadas são imutáveis e retificações preservam histórico;
-- acessos de Gestor/Admin são justificados, elevados quando necessário e auditados;
+- acessos do Gestor são auditados sem finalidade obrigatória; acessos do Admin exigem finalidade, elevação recente e auditoria;
 - dados/documentos permanecem privados, sem vazamento por cache, log, URL ou CDN;
 - migration foi aplicada no MySQL local 8.0.41 e EF regenerado por DB-First;
 - build, suíte integral, segurança, privacidade e validação visual estão aprovados;
 - decisões das Fases 8/13/14 e matriz de paridade foram atualizadas;
-- Fase 19 não foi iniciada e nenhuma pendência real foi ocultada.
+- Fase 19 não foi implementada, Fase 20 não foi iniciada e nenhuma pendência real foi ocultada.
+
+## Implementação realizada
+
+- migrations `0031__electronic_health_record.sql` e `0032__optional_medical_record_content.sql` aplicadas integralmente em `viverappweb` no MySQL 8.0.41 antes das respectivas regenerações DB-First;
+- prontuário único por Paciente, rascunhos concorrentes por Médico/atendimento, registros finalizados e retificações encadeadas por versão;
+- versões clínicas e trilhas de acesso protegidas no próprio MySQL por bloqueio append-only de `UPDATE` e `DELETE`;
+- conteúdo tipado para anamnese, evolução, antecedentes, alergias, medicamentos, hábitos, exame, diagnóstico, conduta, plano, observações e sinais vitais;
+- endpoints separados para resumo, atendimentos, timeline, financeiro, registros/versões, rascunho, finalização, retificação, documentos, PDF e auditoria;
+- policies granulares para leitura, conteúdo clínico, autoria, documento, exportação e auditoria, além da revalidação de vínculo no banco;
+- Gestor acessa o conteúdo clínico permitido sem finalidade obrigatória; Administrador exige finalidade e sessão elevada recente; acessos e recusas entram na trilha;
+- documento privado reutiliza validação real de conteúdo/malware e o R2 privado da Fase 15, sem URL pública;
+- PDF é gerado no servidor a partir de snapshot autorizado, sem HTML, script ou recurso remoto, com `no-store`, paginação, versão e aviso de confidencialidade;
+- interface responsiva única para Médico, Gestor e Administrador, acessível a partir do card do Paciente, com visão geral no resumo recolhível, quatro abas operacionais e auditoria adicional para Administrador;
+- Médico possui autosave sinalizado, recuperação de rascunho, confirmação de finalização, retificação sem sobrescrita e anexos privados;
+- timeline agrega status dos atendimentos, chegada/início, movimentos do caixa, versões clínicas e documentos sem criar fontes paralelas.
+
+## Evidências automatizadas
+
+- build integral: zero erros e zero avisos;
+- suíte integral: 214 testes aprovados nos sete projetos, incluindo regressões do tipo de parâmetro da rota, contenção global de falhas, limpeza de stack trace, conteúdo clínico opcional, seleção de atendimentos elegíveis e os ajustes de ciclo de vida;
+- teste transacional no MySQL prova rascunho, rejeição de versão concorrente, finalização, retificação, preservação das duas versões, bloqueios por papel/finalidade/step-up e recusa de alteração direta da versão finalizada;
+- contratos verificam autenticação das rotas, policies por capacidade, CORS da finalidade clínica, proteção antes do prerender e PDF sem scripts/recursos remotos;
+- verificador confirma MySQL 8.0.41, banco `viverappweb`, migrations até `0033`, a preferência visual por conta, os controles temporários do Gestor, a categoria Procedimento, seis tabelas clínicas, ausência da restrição de conteúdo mínimo e quatro triggers append-only.
+
+## Revalidação normativa
+
+Em 14 de setembro de 2026 foram consultados o texto compilado da LGPD, a Lei nº 13.787/2018 e os documentos vigentes de certificação S-RES publicados pela SBIS. A implementação preserva integridade, confidencialidade, rastreabilidade e retenção configurável, mas não afirma certificação SBIS, NGS2, ICP-Brasil ou validade probatória. Certificação, assinatura digital qualificada, política final de retenção e textos jurídicos continuam dependentes de avaliação formal antes da produção.

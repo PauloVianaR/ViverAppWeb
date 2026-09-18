@@ -64,7 +64,7 @@ else if (Data is not null)
             Items="Data.PaymentsByLocation" />
         <AdministratorDonutChart Title="Distribuição de Serviços" Description="Participação dos serviços nos agendamentos do período."
             Items="Data.AppointmentsByService" />
-        <AdministratorDonutChart Title="Distribuição de Tipos de Atendimento" Description="Consultas, exames e cirurgias realizados no período."
+        <AdministratorDonutChart Title="Distribuição de Tipos de Atendimento" Description="Consultas, exames, cirurgias e procedimentos realizados no período."
             Items="Data.AppointmentsByCategory" />
         <AdministratorCartesianChart Title="Performance dos Médicos" Description="Volume de atendimentos, eficiência pela avaliação e nota média."
             Labels="Data.DoctorPerformance.Select(x => x.Label).ToArray()" Series="DoctorPerformanceSeries" />

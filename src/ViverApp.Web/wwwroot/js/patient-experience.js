@@ -66,6 +66,21 @@ export async function upload(base, inputId, planId, progressId) {
         xhr.onerror = xhr.ontimeout = () => resolve({ ok: false, error: "Não foi possível enviar. Confira a conexão e tente novamente." }); xhr.send(form);
     });
 }
+export async function uploadTo(base, path, inputId, progressId) {
+    const file = document.getElementById(inputId)?.files?.[0];
+    if (!file || file.size > 5242880) return { ok: false, error: "Escolha um PDF, PNG ou JPEG de até 5 MB." };
+    const token = await request(base, "api/v1/auth/antiforgery");
+    if (!token.ok) return token;
+    const form = new FormData(); form.append("file", file);
+    return await new Promise(resolve => {
+        const xhr = new XMLHttpRequest(); xhr.open("POST", url(base, path)); xhr.withCredentials = true;
+        xhr.setRequestHeader("X-CSRF-TOKEN", token.data.requestToken); xhr.timeout = 30000;
+        xhr.upload.onprogress = e => { const progress = document.getElementById(progressId); if (progress && e.lengthComputable) progress.value = Math.round(e.loaded * 100 / e.total); };
+        xhr.onload = () => { let data; try { data = JSON.parse(xhr.responseText); } catch { } resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, data, error: xhr.status < 500 ? data?.title : "Não foi possível enviar o documento." }); };
+        xhr.onerror = xhr.ontimeout = () => resolve({ ok: false, error: "Não foi possível enviar. Confira a conexão e tente novamente." });
+        xhr.send(form);
+    });
+}
 export async function download(base, path) {
     try {
         const response = await fetch(url(base, path), { credentials: "include", cache: "no-store" });

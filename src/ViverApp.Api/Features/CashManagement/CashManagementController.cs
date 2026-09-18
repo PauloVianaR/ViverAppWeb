@@ -38,7 +38,7 @@ public sealed class CashManagementController(CashManagementService service) : Co
         ulong? appointmentNumber = null, string? patient = null, string? responsible = null,
         string? cardLastFour = null, string? authorizationReference = null,
         int page = 1, int pageSize = 25, CancellationToken cancellationToken = default) =>
-        service.DayAsync(date, method, type, appointmentNumber, patient, responsible, cardLastFour,
+        service.DayAsync(date, Role, method, type, appointmentNumber, patient, responsible, cardLastFour,
             authorizationReference, page, pageSize, cancellationToken);
 
     [HttpGet("print"), Authorize(Policy = ViverAppPolicies.CashPrint), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
@@ -58,10 +58,15 @@ public sealed class CashManagementController(CashManagementService service) : Co
     public Task<CashClosureResponse> Close(DateOnly date, CashCloseRequest request, CancellationToken cancellationToken) =>
         service.CloseAsync(Actor, date, request, cancellationToken);
 
+    [HttpPost("{date}/reopening"), Authorize(Policy = ViverAppPolicies.CashClose), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
+    public Task<CashReopeningResponse> Reopen(DateOnly date, CashReopenRequest request, CancellationToken cancellationToken) =>
+        service.ReopenAsync(Actor, Role, date, request, cancellationToken);
+
     [HttpPost("payments/{paymentId:long}/reversal"), Authorize(Policy = ViverAppPolicies.PaymentReverse), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<PaymentReversalResponse> Reverse(ulong paymentId, [FromHeader(Name = "Idempotency-Key")] string key,
         PaymentReversalRequest request, CancellationToken cancellationToken) =>
         service.ReverseAsync(Actor, key, paymentId, request, cancellationToken);
 
     private ulong Actor => ulong.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!, CultureInfo.InvariantCulture);
+    private string Role => User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
 }

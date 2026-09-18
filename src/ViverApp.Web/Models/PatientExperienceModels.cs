@@ -44,7 +44,7 @@ public static class PatientLabels
         "none" => "Sem solicitação",
         _ => "Em processamento"
     };
-    public static string Category(string code) => code switch { "surgery" => "Cirurgia", "examination" => "Exame", _ => "Consulta" };
+    public static string Category(string code) => code switch { "surgery" => "Cirurgia", "examination" => "Exame", "procedure" => "Procedimento", _ => "Consulta" };
     public static string StatusFace(string code) => code switch { "pending" => "😞", "confirmed" => "😊", "arrived" => "🙋", "in_progress" => "🩺", "completed" => "😌", "canceled" => "✖", "no_show" => "😶", "rescheduled" => "🔄", _ => "•" };
     public static string StatusCss(string code) => code switch
     {

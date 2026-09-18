@@ -66,12 +66,13 @@ public static class SecurityServiceCollectionExtensions
                         "Accept",
                         "Content-Type",
                         "Idempotency-Key",
+                        "X-Clinical-Purpose",
                         "X-CSRF-TOKEN",
                         CorrelationIdMiddleware.HeaderName,
                         "traceparent",
                         "tracestate",
                         "baggage")
-                    .WithExposedHeaders(CorrelationIdMiddleware.HeaderName, "Retry-After", "Idempotent-Replayed")
+                    .WithExposedHeaders(CorrelationIdMiddleware.HeaderName, "Retry-After", "Idempotent-Replayed", "Content-Disposition")
                     .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
             });
         });
@@ -213,7 +214,7 @@ public static class SecurityServiceCollectionExtensions
                 SecurityPolicyNames.SensitiveRateLimit,
                 context => RateLimitPartition.GetFixedWindowLimiter(
                     GetPartitionKey(context),
-                    _ => CreateFixedWindowOptions(5, TimeSpan.FromMinutes(5))));
+                    _ => CreateFixedWindowOptions(10, TimeSpan.FromMinutes(5))));
             options.AddPolicy(
                 SecurityPolicyNames.AuthenticatedOperationRateLimit,
                 context => RateLimitPartition.GetFixedWindowLimiter(

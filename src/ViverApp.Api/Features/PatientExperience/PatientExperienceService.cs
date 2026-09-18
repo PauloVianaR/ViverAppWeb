@@ -78,7 +78,7 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
     public async Task<SchedulingPage<PatientServiceResponse>> ServicesAsync(ulong actor, int page, int pageSize, string? category, string? search, CancellationToken ct)
     {
         ValidatePage(page, pageSize);
-        if (category is not (null or "" or "consultation" or "examination" or "surgery")) throw Invalid("Tipo inválido.");
+        if (category is not (null or "" or "consultation" or "examination" or "surgery" or "procedure")) throw Invalid("Tipo inválido.");
         var query = database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive);
         if (!string.IsNullOrEmpty(category)) query = query.Where(x => x.CategoryCode == category);
         if (!string.IsNullOrWhiteSpace(search)) query = query.Where(x => x.Name.Contains(search.Trim()));

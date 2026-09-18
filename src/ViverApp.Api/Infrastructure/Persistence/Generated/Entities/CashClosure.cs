@@ -31,6 +31,8 @@ public partial class CashClosure
 
     public DateTime ClosedAtUtc { get; set; }
 
+    public virtual CashReopening? CashReopening { get; set; }
+
     public virtual Account ClosedByAccount { get; set; } = null!;
 
     public virtual CashMovement? LastMovement { get; set; }

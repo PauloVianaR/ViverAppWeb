@@ -1,1 +1,1 @@
-export { request, download, showDialog, closeDialog, focus } from "./patient-experience.js";
+export { request, download, uploadTo, showDialog, closeDialog, focus } from "./patient-experience.js";

@@ -217,7 +217,7 @@ public sealed class ClinicalOperationsService(
             .Include(item => item.MedicalReport)
             .SingleOrDefaultAsync(item => item.Id == appointmentId && item.DoctorAccountId == actorId, cancellationToken)
             ?? throw NotFound("Consulta não encontrada.");
-        if (appointment.StatusCode is not ("pending" or "confirmed"))
+        if (appointment.StatusCode is "pending" or "canceled")
         {
             throw Conflict("O relatório não pode ser alterado no estado atual da consulta.");
         }
@@ -235,31 +235,44 @@ public sealed class ClinicalOperationsService(
             {
                 AppointmentId = appointmentId,
                 AuthorDoctorAccountId = actorId,
-                StatusCode = "draft",
+                StatusCode = "published",
                 ClinicalSummary = summary,
                 Recommendations = recommendations,
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now,
+                PublishedAtUtc = now,
                 RowVersion = 1,
             };
             database.MedicalReports.Add(report);
+            await SaveAsync(cancellationToken);
         }
         else
         {
-            if (report.StatusCode == "published")
-            {
-                throw Conflict("Relatórios publicados são imutáveis.");
-            }
-
             SetConcurrency(report, request.RowVersion);
             report.ClinicalSummary = summary;
             report.Recommendations = recommendations;
             report.UpdatedAtUtc = now;
+            report.StatusCode = "published";
+            report.PublishedAtUtc ??= now;
         }
+
+        var nextVersion = await database.MedicalReportVersions
+            .Where(x => x.MedicalReportId == report.Id)
+            .MaxAsync(x => (uint?)x.VersionNumber, cancellationToken) ?? 0;
+        database.MedicalReportVersions.Add(new MedicalReportVersion
+        {
+            MedicalReportId = report.Id,
+            VersionNumber = nextVersion + 1,
+            AuthorDoctorAccountId = actorId,
+            ClinicalSummary = summary,
+            Recommendations = recommendations,
+            ChangeReason = nextVersion == 0 ? null : "Laudo atualizado pelo médico",
+            CreatedAtUtc = now,
+        });
 
         await SaveAsync(cancellationToken);
         await auditWriter.WriteAsync(
-            "medical_report.draft_saved",
+            "medical_report.version_saved",
             actorId,
             "medical_report",
             report.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
@@ -275,7 +288,8 @@ public sealed class ClinicalOperationsService(
         CompleteAppointmentRequest request,
         CancellationToken cancellationToken)
     {
-        var summary = ValidateSummary(request.ClinicalSummary);
+        var hasReport = !string.IsNullOrWhiteSpace(request.ClinicalSummary);
+        var summary = hasReport ? ValidateSummary(request.ClinicalSummary!) : null;
         var recommendations = ValidateRecommendations(request.Recommendations);
         await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var appointment = await AppointmentForUpdateAsync(appointmentId, cancellationToken);
@@ -290,19 +304,12 @@ public sealed class ClinicalOperationsService(
         }
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
-        if (appointment.StatusCode != "in_progress")
-        {
-            throw Conflict("Somente um atendimento iniciado pode ser concluído.");
-        }
-
-        if (appointment.StartsAtUtc > now)
-        {
-            throw Conflict("A consulta ainda não começou.");
-        }
+        if (appointment.StatusCode is not ("confirmed" or "arrived" or "in_progress"))
+            throw Conflict("Somente um atendimento confirmado, com chegada ou iniciado pode ser concluído.");
 
         SetAppointmentConcurrency(appointment, request.AppointmentRowVersion);
         var report = appointment.MedicalReport;
-        if (report is null)
+        if (hasReport && report is null)
         {
             if (request.ReportRowVersion != 0)
             {
@@ -318,30 +325,32 @@ public sealed class ClinicalOperationsService(
             };
             database.MedicalReports.Add(report);
         }
-        else
+        else if (hasReport && report is not null)
         {
-            if (report.StatusCode == "published")
-            {
-                throw Conflict("O relatório desta consulta já foi publicado.");
-            }
-
             SetConcurrency(report, request.ReportRowVersion);
         }
 
-        report.StatusCode = "published";
-        report.ClinicalSummary = summary;
-        report.Recommendations = recommendations;
-        report.UpdatedAtUtc = now;
-        report.PublishedAtUtc = now;
-        database.MedicalReportVersions.Add(new MedicalReportVersion
+        if (hasReport)
         {
-            MedicalReport = report,
-            VersionNumber = 1,
-            AuthorDoctorAccountId = actorId,
-            ClinicalSummary = summary,
-            Recommendations = recommendations,
-            CreatedAtUtc = now,
-        });
+            report!.StatusCode = "published";
+            report.ClinicalSummary = summary!;
+            report.Recommendations = recommendations;
+            report.UpdatedAtUtc = now;
+            report.PublishedAtUtc = now;
+            var nextVersion = await database.MedicalReportVersions.Where(x => x.MedicalReportId == report.Id)
+                .MaxAsync(x => (uint?)x.VersionNumber, cancellationToken) ?? 0;
+            database.MedicalReportVersions.Add(new MedicalReportVersion
+            {
+                MedicalReport = report,
+                VersionNumber = nextVersion + 1,
+                AuthorDoctorAccountId = actorId,
+                ClinicalSummary = summary!,
+                Recommendations = recommendations,
+                ChangeReason = nextVersion == 0 ? null : "Laudo atualizado na finalização do atendimento",
+                CreatedAtUtc = now,
+            });
+        }
+        var previousStatus = appointment.StatusCode;
         appointment.StatusCode = "completed";
         appointment.CompletedByAccountId = actorId;
         appointment.CompletedAtUtc = now;
@@ -349,7 +358,7 @@ public sealed class ClinicalOperationsService(
         database.AppointmentStatusHistories.Add(new AppointmentStatusHistory
         {
             AppointmentId = appointment.Id,
-            FromStatusCode = "in_progress",
+            FromStatusCode = previousStatus,
             ToStatusCode = "completed",
             ActorAccountId = actorId,
             StartsAtUtc = appointment.StartsAtUtc,
@@ -357,12 +366,19 @@ public sealed class ClinicalOperationsService(
             OccurredAtUtc = now,
         });
         await SaveAsync(cancellationToken);
+        var auditData = new Dictionary<string, string>
+        {
+            ["previousStatus"] = previousStatus,
+            ["reportPublished"] = hasReport.ToString(),
+        };
+        if (report is not null && hasReport)
+            auditData["reportId"] = report.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
         await auditWriter.WriteAsync(
             "appointment.completed",
             actorId,
             "appointment",
             appointment.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            new Dictionary<string, string> { ["reportId"] = report.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+            auditData,
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return MapAppointment(appointment, actorId, ViverAppRoles.Doctor, includeReportContent: true);
@@ -503,8 +519,8 @@ public sealed class ClinicalOperationsService(
             isAssignedDoctor ? appointment.PatientNotes : null,
             appointment.RowVersion,
             appointment.MedicalReport is null ? null : MapReport(appointment.MedicalReport, includeReportContent),
-            isAssignedDoctor && appointment.StatusCode == "in_progress" && appointment.StartsAtUtc <= now,
-            appointment.StatusCode is "confirmed" or "arrived" && appointment.StartsAtUtc <= now
+            isAssignedDoctor && appointment.StatusCode is ("confirmed" or "arrived" or "in_progress"),
+            appointment.StatusCode is ("confirmed" or "arrived") && appointment.StartsAtUtc <= now
                 && (isAssignedDoctor || roleCode is ViverAppRoles.Manager or ViverAppRoles.Administrator));
     }
 

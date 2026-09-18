@@ -17,7 +17,7 @@
 A partição do rate limit usa o claim `sub` quando autenticado e o endereço remoto nos demais casos. O endereço não é escrito nos logs. As políticas nomeadas são:
 
 - `public-form`: 8 requisições/minuto;
-- `sensitive`: 5 requisições/5 minutos;
+- `sensitive`: 10 requisições/5 minutos;
 - `write`: 30 requisições/minuto.
 
 Endpoints futuros devem escolher a política adequada e podem apertar os limites, nunca removê-los sem justificativa documentada.

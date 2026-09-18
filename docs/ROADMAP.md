@@ -291,17 +291,23 @@ Cada fase deve:
 
 ## Fase 17 — Caixa e reversões financeiras
 
-**Estado:** implementada em 10 de setembro de 2026 na branch `codex/fase-17-caixa-reversoes`; migrations DB-First aplicadas no MySQL local, build e validações automatizadas concluídas. Homologações manual e externa permanecem registradas localmente.
+**Estado:** concluída e integrada à `main` no merge `031b9d2` em 14 de setembro de 2026. Migrations DB-First aplicadas no MySQL local, build e validações automatizadas concluídas; homologações manuais e externas remanescentes estão registradas localmente.
 
 **Plano detalhado:** [Caixa e reversões financeiras](FASE-17-CAIXA-E-REVERSOES-FINANCEIRAS.md).
 
 ## Fase 18 — Prontuário eletrônico
 
-**Estado:** planejada; depende das Fases 16 e 17 integradas à `main`.
+**Estado:** implementada em 14 de setembro de 2026 na branch `codex/fase-18-prontuario-eletronico`; migration DB-First aplicada no MySQL local, suíte automatizada aprovada e homologações manuais registradas localmente.
 
 **Plano detalhado:** [Prontuário eletrônico](FASE-18-PRONTUARIO-ELETRONICO.md).
 
-## Fase 19 — E-mail, SMS e jobs dentro da API
+## Fase 19 — Agenda visual, Psicólogo e atendimentos sem cobrança
+
+**Estado:** planejada para a próxima branch, sem implementação antecipada na Fase 18.
+
+**Plano detalhado:** [Agenda visual, Psicólogo e atendimentos sem cobrança](FASE-19-AGENDA-PSICOLOGO-E-ATENDIMENTOS-SEM-COBRANCA.md).
+
+## Fase 20 — E-mail, SMS e jobs dentro da API
 
 **Objetivo:** ampliar os envios já visíveis na experiência Web e substituir definitivamente os workers separados por processamento durável e observável.
 
@@ -318,7 +324,7 @@ Cada fase deve:
 
 **Saída:** workers legados deixam de ser necessários somente após execução paralela controlada e reconciliação.
 
-## Fase 20 — Videochamada segura
+## Fase 21 — Videochamada segura
 
 **Objetivo:** levar as jornadas WebRTC funcionais das Fases 11 e 12 a uma sinalização distribuída, resiliente e pronta para produção.
 
@@ -335,7 +341,7 @@ Cada fase deve:
 
 **Saída:** somente participantes autorizados sinalizam na sala e a solução escala além de uma instância.
 
-## Fase 21 — Pagamentos internos, premium e documentos
+## Fase 22 — Pagamentos internos, premium e documentos
 
 **Objetivo:** consolidar, reconciliar e preparar para produção o histórico financeiro, o fluxo Premium e seus documentos implementados funcionalmente nas Fases 11 a 14.
 
@@ -350,7 +356,7 @@ Cada fase deve:
 
 **Saída:** invariantes financeiras e de premium cobertas por testes e relatórios de reconciliação.
 
-## Fase 22 — Administração, analytics e operação
+## Fase 23 — Administração, analytics e operação
 
 **Objetivo:** endurecer o backoffice e os analytics funcionais da Fase 14 com controles elevados e recursos de operação de produção.
 
@@ -365,7 +371,7 @@ Cada fase deve:
 
 **Saída:** trilha auditável e testes de elevação horizontal/vertical de privilégio.
 
-## Fase 23 — Robustez, desempenho e segurança ofensiva
+## Fase 24 — Robustez, desempenho e segurança ofensiva
 
 **Objetivo:** preparar o conjunto funcional para tráfego e ataques reais.
 
@@ -381,13 +387,13 @@ Cada fase deve:
 
 **Saída:** nenhum achado crítico/alto aberto e metas de desempenho/SLO atendidas.
 
-## Fase 24 — SEO, privacidade, cookies e conformidade Web
+## Fase 25 — SEO, privacidade, cookies e conformidade Web
 
 **Estado:** planejada para depois do hardening funcional e antes da publicação definitiva da infraestrutura.
 
-**Plano detalhado:** [SEO, privacidade, cookies e conformidade Web](FASE-24-SEO-PRIVACIDADE-E-CONFORMIDADE-WEB.md).
+**Plano detalhado:** [SEO, privacidade, cookies e conformidade Web](FASE-25-SEO-PRIVACIDADE-E-CONFORMIDADE-WEB.md).
 
-## Fase 25 — Infraestrutura, Cloudflare e CI/CD
+## Fase 26 — Infraestrutura, Cloudflare e CI/CD
 
 **Objetivo:** publicar sem Azure, com entrega repetível e origem protegida.
 
@@ -403,13 +409,13 @@ Cada fase deve:
 
 **Saída:** ensaio de deploy/rollback/restore aprovado. Compra e alterações externas exigem autorização do usuário.
 
-## Fase 26 — Pentest autorizado com Strix
+## Fase 27 — Pentest autorizado com Strix
 
 **Estado:** planejada para a release candidate, depois do staging endurecido e antes da migração final.
 
-**Plano detalhado:** [Pentest autorizado com Strix](FASE-26-PENTEST-COM-STRIX.md).
+**Plano detalhado:** [Pentest autorizado com Strix](FASE-27-PENTEST-COM-STRIX.md).
 
-## Fase 27 — Migração final e lançamento gradual
+## Fase 28 — Migração final e lançamento gradual
 
 **Objetivo:** migrar dados e usuários com risco controlado.
 
@@ -425,7 +431,7 @@ Cada fase deve:
 
 **Saída:** reconciliação assinada, métricas saudáveis e rollback ainda possível.
 
-## Fase 28 — Desativação controlada do legado
+## Fase 29 — Desativação controlada do legado
 
 **Objetivo:** encerrar componentes antigos somente depois da estabilidade comprovada.
 
@@ -444,9 +450,9 @@ Cada fase deve:
 - **Marco A — Base confiável:** Fases 0 a 4.
 - **Marco B — MVP clínico web:** Fases 5 a 8.
 - **Marco C — Paridade funcional por perfil:** Fases 9 a 14.
-- **Marco D — Ecossistema integrado:** Fases 15 a 22.
-- **Marco E — Produção endurecida e validada:** Fases 23 a 27.
-- **Encerramento:** Fase 28.
+- **Marco D — Ecossistema integrado:** Fases 15 a 23.
+- **Marco E — Produção endurecida e validada:** Fases 24 a 28.
+- **Encerramento:** Fase 29.
 
 ## Decisões que deverão ser confirmadas com o proprietário
 

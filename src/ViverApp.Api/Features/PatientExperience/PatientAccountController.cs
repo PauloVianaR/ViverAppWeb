@@ -22,7 +22,7 @@ public sealed class RecentAuthentication(ViverAppDbContext database)
         var id = session.ToByteArray();
         var now = DateTime.UtcNow;
         return await database.AuthSessions.AnyAsync(x => x.Id.SequenceEqual(id) && x.AccountId == account
-            && x.CreatedAtUtc >= now.AddMinutes(-5) && x.ExpiresAtUtc > now && x.RevokedAtUtc == null, ct);
+            && x.CreatedAtUtc >= now.AddMinutes(-30) && x.ExpiresAtUtc > now && x.RevokedAtUtc == null, ct);
     }
 }
 

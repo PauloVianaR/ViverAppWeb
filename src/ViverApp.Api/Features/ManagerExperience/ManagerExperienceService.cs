@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using ViverApp.Api.Features.ClinicAdministration;
 using ViverApp.Api.Features.ClinicalOperations;
 using ViverApp.Api.Features.CashManagement;
 using ViverApp.Api.Features.Identity;
@@ -20,6 +21,25 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
     private static readonly string[] AppointmentStatuses = ["pending", "confirmed", "arrived", "in_progress", "completed", "canceled", "rescheduled", "no_show"];
     private static readonly string[] PaymentFilters = ["paid", "pending"];
     private static readonly string[] Methods = ["credit_card", "debit_card", "pix", "cash"];
+
+    public async Task<ManagerCapabilitiesResponse> CapabilitiesAsync(CancellationToken ct)
+    {
+        var values = await database.ApplicationSettings.AsNoTracking()
+            .Where(item => item.SettingKey == "manager.appointment_types_enabled"
+                || item.SettingKey == "manager.doctor_schedules_enabled"
+                || item.SettingKey == "premium.manager_can_manage"
+                || item.SettingKey == "manager.medical_records_write_enabled"
+                || item.SettingKey == "cash.manager_can_reopen"
+                || item.SettingKey == "cash.manager_can_view_cumulative_totals")
+            .ToDictionaryAsync(item => item.SettingKey, item => item.ValueJson, ct);
+        return new(
+            ReadManagerCapability(values, "manager.appointment_types_enabled"),
+            ReadManagerCapability(values, "manager.doctor_schedules_enabled"),
+            ReadManagerCapability(values, "premium.manager_can_manage"),
+            ReadManagerCapability(values, "manager.medical_records_write_enabled"),
+            ReadManagerCapability(values, "cash.manager_can_reopen"),
+            ReadManagerCapability(values, "cash.manager_can_view_cumulative_totals"));
+    }
 
     public async Task<ManagerHomeResponse> HomeAsync(ulong actor, CancellationToken ct)
     {
@@ -71,7 +91,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
 
     public async Task<IReadOnlyList<ManagerServiceOption>> ServicesAsync(CancellationToken ct) =>
         await database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name)
-            .Select(x => new ManagerServiceOption(x.Id, x.Name, x.CategoryCode, x.ModalityCode, x.DurationMinutes, x.PriceAmount)).ToArrayAsync(ct);
+            .Select(x => new ManagerServiceOption(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode, x.DurationMinutes, x.PriceAmount)).ToArrayAsync(ct);
 
     public async Task<ManagerAgendaResponse> AgendaAsync(DateOnly from, DateOnly to, string? status, string? modality,
         string? category, ulong? doctor, ulong? appointmentNumber, string? payment, TimeOnly? startTime, TimeOnly? endTime, string? search,
@@ -80,7 +100,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         Page(page, pageSize); if (to < from || to.DayNumber - from.DayNumber > 366) throw Invalid("O período deve ter no máximo 367 dias.");
         if (status is not null && !AppointmentStatuses.Contains(status, StringComparer.Ordinal)) throw Invalid("Estado inválido.");
         if (modality is not null && modality is not ("online" or "in_person")) throw Invalid("Modalidade inválida.");
-        if (category is not null && category is not ("consultation" or "examination" or "surgery")) throw Invalid("Tipo inválido.");
+        if (category is not null && category is not ("consultation" or "examination" or "surgery" or "procedure")) throw Invalid("Tipo inválido.");
         if (payment is not null && !PaymentFilters.Contains(payment, StringComparer.Ordinal)) throw Invalid("Filtro de pagamento inválido.");
         if (startTime.HasValue != endTime.HasValue || startTime >= endTime) throw Invalid("O intervalo de horário é inválido.");
         var timezone = await TimezoneAsync(ct); var fromUtc = StartUtc(from, timezone); var toUtc = StartUtc(to.AddDays(1), timezone);
@@ -141,7 +161,10 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
     {
         Page(page, pageSize); if (status is not null && status is not ("active" or "blocked" or "pending_confirmation")) throw Invalid("Estado inválido.");
         var now = clock.GetUtcNow().UtcDateTime;
-        IQueryable<Account> query = database.Accounts.AsNoTracking().Where(x => x.RoleCode == ViverAppRoles.Patient).Include(x => x.PatientProfile).Include(x => x.AccountAddress).Include(x => x.PremiumMembershipAccounts);
+        IQueryable<Account> query = database.Accounts.AsNoTracking().Where(x => x.RoleCode == ViverAppRoles.Patient)
+            .Include(x => x.PatientProfile).Include(x => x.AccountAddress)
+            .Include(x => x.PremiumMembershipAccounts).ThenInclude(x => x.ProofDocument)
+            .Include(x => x.PremiumMembershipAccounts).ThenInclude(x => x.PremiumPlan);
         if (status is not null) query = query.Where(x => x.StatusCode == status);
         if (premium.HasValue) query = premium.Value ? query.Where(x => x.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now))) : query.Where(x => !x.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)));
         var term = Text(search); if (term is not null) { if (term.Length > 120) throw Invalid("A busca deve ter no máximo 120 caracteres."); var taxTerm = new string(term.Where(char.IsAsciiDigit).ToArray()); var hasTaxTerm = taxTerm.Length >= 3; query = query.Where(x => x.FullName.Contains(term) || x.Email != null && x.Email.Contains(term) || x.PhoneE164 != null && x.PhoneE164.Contains(term) || hasTaxTerm && x.TaxId != null && x.TaxId.Contains(taxTerm)); }
@@ -160,7 +183,11 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
 
     public async Task<ManagerPatientResponse> PatientAsync(ulong id, CancellationToken ct)
     {
-        var account = await database.Accounts.AsNoTracking().Where(x => x.Id == id && x.RoleCode == ViverAppRoles.Patient).Include(x => x.PatientProfile).Include(x => x.AccountAddress).Include(x => x.PremiumMembershipAccounts).SingleOrDefaultAsync(ct) ?? throw Missing();
+        var account = await database.Accounts.AsNoTracking().Where(x => x.Id == id && x.RoleCode == ViverAppRoles.Patient)
+            .Include(x => x.PatientProfile).Include(x => x.AccountAddress)
+            .Include(x => x.PremiumMembershipAccounts).ThenInclude(x => x.ProofDocument)
+            .Include(x => x.PremiumMembershipAccounts).ThenInclude(x => x.PremiumPlan)
+            .SingleOrDefaultAsync(ct) ?? throw Missing();
         var appointments = await database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == id && x.InverseRescheduledFromAppointment == null).Select(x => new PatientHistoryRow(x.PatientAccountId, x.StartsAtUtc, x.StatusCode)).ToArrayAsync(ct);
         return MapPatient(account, appointments, clock.GetUtcNow().UtcDateTime);
     }
@@ -289,6 +316,80 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         await transaction.CommitAsync(ct); return await PremiumRequestAsync(id, ct);
     }
 
+    public async Task<ManagerPatientResponse> ActivatePremiumAsync(ulong actor, ulong patientId,
+        PrivateDocument proof, bool administratorOverride, CancellationToken ct)
+    {
+        if (!administratorOverride && !await CapabilityEnabledAsync("premium.manager_can_manage", true, ct))
+            throw Forbidden("A gestão de pacientes Premium está desabilitada pelo Administrador.");
+        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var patient = await database.Accounts.FromSqlInterpolated($"SELECT * FROM accounts WHERE id={patientId} FOR UPDATE")
+            .SingleOrDefaultAsync(ct);
+        if (patient is null || patient.RoleCode != ViverAppRoles.Patient) throw Missing();
+        var now = clock.GetUtcNow().UtcDateTime;
+        var open = await database.PremiumMemberships.AnyAsync(x => x.AccountId == patientId
+            && (x.StatusCode == "pending" || x.StatusCode == "active" && (x.EndsAtUtc == null || x.EndsAtUtc > now)), ct);
+        if (open) throw Conflict("O paciente já possui uma solicitação ou benefício Premium ativo.");
+        var plan = await database.PremiumPlans.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Id).FirstOrDefaultAsync(ct)
+            ?? throw Conflict("Não existe plano Premium ativo configurado.");
+        proof.OwnerAccountId = patientId;
+        database.PrivateDocuments.Add(proof);
+        var membership = new PremiumMembership
+        {
+            AccountId = patientId,
+            PremiumPlanId = plan.Id,
+            StatusCode = "active",
+            StartsAtUtc = now,
+            EndsAtUtc = plan.ValidityDays.HasValue ? now.AddDays(plan.ValidityDays.Value) : null,
+            ProofDocumentId = proof.Id,
+            ReviewedAtUtc = now,
+            ReviewedByAccountId = actor,
+            ReviewNotes = administratorOverride ? "Ativado pelo Administrador" : "Ativado pelo Gestor",
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        };
+        database.PremiumMemberships.Add(membership);
+        await SaveAsync(ct);
+        await audit.WriteAsync(administratorOverride ? "administrator.patient.premium_activated" : "manager.patient.premium_activated",
+            actor, "premium_membership", membership.Id.ToString(CultureInfo.InvariantCulture),
+            new Dictionary<string, string> { ["patientId"] = patientId.ToString(CultureInfo.InvariantCulture), ["proofDocumentId"] = proof.Id.ToString("D") }, ct);
+        await transaction.CommitAsync(ct);
+        return await PatientAsync(patientId, ct);
+    }
+
+    public async Task<ManagerPatientResponse> DeactivatePremiumAsync(ulong actor, ulong patientId,
+        ManagerPremiumCancelRequest request, bool administratorOverride, CancellationToken ct)
+    {
+        if (!administratorOverride && !await CapabilityEnabledAsync("premium.manager_can_manage", true, ct))
+            throw Forbidden("A gestão de pacientes Premium está desabilitada pelo Administrador.");
+        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var membership = await database.PremiumMemberships.Include(x => x.ProofDocument)
+            .Where(x => x.AccountId == patientId && x.StatusCode == "active")
+            .OrderByDescending(x => x.CreatedAtUtc).FirstOrDefaultAsync(ct) ?? throw Missing();
+        RequireVersion(membership.RowVersion, request.RowVersion);
+        var now = clock.GetUtcNow().UtcDateTime;
+        var proofId = membership.ProofDocumentId;
+        if (membership.ProofDocument is not null)
+        {
+            membership.ProofDocument.StatusCode = "deleted";
+            membership.ProofDocument.RowVersion++;
+        }
+        membership.ProofDocumentId = null;
+        membership.StatusCode = "canceled";
+        membership.EndsAtUtc = now;
+        membership.RejectionReason = request.Reason.Trim();
+        membership.ReviewedAtUtc = now;
+        membership.ReviewedByAccountId = actor;
+        membership.UpdatedAtUtc = now;
+        membership.RowVersion++;
+        await SaveAsync(ct);
+        await audit.WriteAsync(administratorOverride ? "administrator.patient.premium_deactivated" : "manager.patient.premium_deactivated",
+            actor, "premium_membership", membership.Id.ToString(CultureInfo.InvariantCulture),
+            new Dictionary<string, string> { ["patientId"] = patientId.ToString(CultureInfo.InvariantCulture), ["reason"] = request.Reason.Trim(), ["proofDocumentId"] = proofId?.ToString("D") ?? "none" }, ct);
+        await transaction.CommitAsync(ct);
+        return await PatientAsync(patientId, ct);
+    }
+
     public async Task<ManagerPaymentResponse> ConfirmPaymentAsync(ulong actor, ulong appointmentId, string key,
         ManagerPaymentConfirmRequest request, CancellationToken ct)
     {
@@ -332,7 +433,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         .Include(x => x.AppointmentDocuments).Include(x => x.InverseRescheduledFromAppointment).Include(x => x.AppointmentRescheduleHistories);
     private static ManagerAppointmentResponse MapAppointment(Appointment x) => new(x.Id, x.AppointmentNumber, x.PatientAccountId, x.PatientAccount.FullName, x.PatientAccount.PhoneE164,
         x.DoctorAccountId, x.DoctorAccount.Account.FullName, x.AppointmentTypeId, x.AppointmentType.Name, x.AppointmentType.CategoryCode, x.StatusCode,
-        x.ModalityCode, x.StartsAtUtc, x.EndsAtUtc, x.PriceAmount, x.DiscountPercent, x.PaymentLocationCode, x.PatientNotes, x.CancellationReason,
+        x.ModalityCode, x.StartsAtUtc, x.EndsAtUtc, x.PriceAmount, x.BasePriceAmount ?? x.PriceAmount, x.DiscountPercent, x.PaymentLocationCode, x.PatientNotes, x.CancellationReason,
         x.RescheduledFromAppointmentId, x.InverseRescheduledFromAppointment?.Id, x.AppointmentReview?.Rating, x.AppointmentReview?.Comment,
         new(x.CurrentPayment?.Id, x.CurrentPayment?.StatusCode ?? "unpaid", x.CurrentPayment?.MethodCode, x.CurrentPayment?.PaidAtUtc,
             x.CurrentPayment?.CardLastFour, x.CurrentPayment?.AuthorizationReference, x.CurrentPayment?.RowVersion ?? 0),
@@ -342,17 +443,23 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         x.AppointmentRescheduleHistories.OrderBy(h => h.SequenceNumber).Select(h => new AppointmentRescheduleHistoryResponse(h.SequenceNumber,
             h.PreviousStartsAtUtc, h.PreviousEndsAtUtc, h.NewStartsAtUtc, h.NewEndsAtUtc, h.Reason, h.OccurredAtUtc)).ToArray(),
         x.ModalityCode == "in_person" && x.StatusCode == "confirmed", x.StatusCode == "arrived", x.StatusCode is "pending" or "confirmed", x.StatusCode is "pending" or "confirmed",
+        x.StatusCode is "confirmed" or "arrived" or "in_progress", x.StatusCode == "completed",
+        x.CurrentPayment?.StatusCode == "paid" && x.StatusCode is ("confirmed" or "arrived"),
         x.ModalityCode == "in_person" && x.PaymentLocationCode == "clinic" && x.StatusCode is "pending" or "confirmed" && x.CurrentPayment?.StatusCode is not ("paid" or "reversal_pending"), x.RowVersion);
     private static ManagerProfileResponse MapProfile(Account x) => new(x.Id, x.FullName, x.Email, x.PhoneE164, x.TaxId, x.EmailVerified, x.PhoneVerified,
         x.ManagerPreference?.EmailEnabled ?? true, x.ManagerPreference?.SmsEnabled ?? true, x.RowVersion, x.ManagerPreference?.RowVersion ?? 1);
     private static ManagerPatientResponse MapPatient(Account x, IEnumerable<PatientHistoryRow> history, DateTime now)
     {
         var appointments = history.ToArray(); var premium = x.PremiumMembershipAccounts.OrderByDescending(m => m.CreatedAtUtc).FirstOrDefault();
-        var active = x.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now));
+        var activeMembership = x.PremiumMembershipAccounts.Where(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now))
+            .OrderByDescending(m => m.CreatedAtUtc).FirstOrDefault();
+        var active = activeMembership is not null;
         var address = x.AccountAddress is null ? null : new ManagerPatientAddressResponse(x.AccountAddress.PostalCode, x.AccountAddress.Street, x.AccountAddress.Number, x.AccountAddress.Complement, x.AccountAddress.District, x.AccountAddress.City, x.AccountAddress.StateCode);
         return new(x.Id, x.FullName, x.PatientProfile?.PreferredName, x.TaxId ?? x.PatientProfile?.TaxId, x.Email, x.PhoneE164, x.EmailVerified, x.PhoneVerified,
             x.PatientProfile?.BirthDate is { } birth ? DateOnly.FromDateTime(birth) : null, address,
-            x.StatusCode, x.PortalAccessEnabled, active, premium?.StatusCode ?? "none", premium?.StatusCode == "pending" ? premium.Id : null, appointments.Length,
+            x.StatusCode, x.PortalAccessEnabled, active, premium?.StatusCode ?? "none", premium?.StatusCode == "pending" ? premium.Id : null,
+            activeMembership?.Id, activeMembership?.RowVersion, activeMembership?.ProofDocumentId, activeMembership?.ProofDocument?.OriginalFileName,
+            activeMembership?.PremiumPlan?.AppointmentDiscountPercent ?? 0, appointments.Length,
             appointments.Where(a => a.StartsAtUtc < now).Select(a => (DateTime?)a.StartsAtUtc).DefaultIfEmpty().Max(),
             appointments.Where(a => a.StartsAtUtc >= now && a.StatusCode is "pending" or "confirmed" or "arrived" or "in_progress").Select(a => (DateTime?)a.StartsAtUtc).DefaultIfEmpty().Min(), x.RowVersion);
     }
@@ -360,6 +467,14 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         x.PremiumPlan.AppointmentDiscountPercent, x.StatusCode, x.ProofDocumentId, x.ProofDocument?.OriginalFileName, x.ProofDocument?.SizeBytes,
         x.ReviewNotes, x.RejectionReason, x.CreatedAtUtc, x.ReviewedAtUtc, x.RowVersion);
     private async Task<TimeZoneInfo> TimezoneAsync(CancellationToken ct) { var name = await database.Clinics.AsNoTracking().Select(x => x.TimezoneName).SingleOrDefaultAsync(ct) ?? "America/Sao_Paulo"; try { return TimeZoneInfo.FindSystemTimeZoneById(name); } catch (TimeZoneNotFoundException) { throw new ManagerRuleException(503, "Fuso horário indisponível."); } }
+    private static bool ReadManagerCapability(IReadOnlyDictionary<string, string> values, string key) =>
+        values.TryGetValue(key, out var json) && ManagerFeatureGateFilter.TryReadBoolean(json, out var enabled) && enabled;
+    private async Task<bool> CapabilityEnabledAsync(string key, bool fallback, CancellationToken ct)
+    {
+        var json = await database.ApplicationSettings.AsNoTracking().Where(x => x.SettingKey == key)
+            .Select(x => x.ValueJson).SingleOrDefaultAsync(ct);
+        return json is null ? fallback : ManagerFeatureGateFilter.TryReadBoolean(json, out var enabled) && enabled;
+    }
     private static DateTime StartUtc(DateOnly date, TimeZoneInfo timezone) => TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(date.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified), timezone);
     private static bool IsInsideLocalTimeRange(DateTime startsAtUtc, TimeZoneInfo timezone, TimeOnly start, TimeOnly end)
     {

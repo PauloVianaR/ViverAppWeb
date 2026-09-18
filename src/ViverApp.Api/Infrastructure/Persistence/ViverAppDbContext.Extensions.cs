@@ -10,6 +10,9 @@ public partial class ViverAppDbContext
         modelBuilder.Entity<Account>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
+        modelBuilder.Entity<AccountUiPreference>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
         modelBuilder.Entity<Appointment>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
@@ -29,6 +32,15 @@ public partial class ViverAppDbContext
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
         modelBuilder.Entity<MedicalReport>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
+        modelBuilder.Entity<ElectronicHealthRecord>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
+        modelBuilder.Entity<MedicalRecordDraft>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
+        modelBuilder.Entity<MedicalRecordDocument>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
         modelBuilder.Entity<AppointmentType>()

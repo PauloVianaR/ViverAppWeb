@@ -115,7 +115,7 @@ A superfície mínima criada na Fase 10 será absorvida pela administração def
 - dispensar/remover da coleção quando permitido;
 - texto sem dado clínico sensível;
 - e-mail/SMS externos quando configurados, nunca Firebase/push;
-- operação durável completa será endurecida na Fase 19.
+- operação durável completa será endurecida na Fase 20.
 
 ## Usuários
 
@@ -140,7 +140,7 @@ A superfície mínima criada na Fase 10 será absorvida pela administração def
 - cancelar benefício;
 - respeitar cooldown e concorrência;
 - auditar acesso ao documento e decisão;
-- storage definitivo/reconciliação seguem nas Fases 15 e 21.
+- storage definitivo/reconciliação seguem nas Fases 15 e 22.
 
 ## Segurança administrativa
 

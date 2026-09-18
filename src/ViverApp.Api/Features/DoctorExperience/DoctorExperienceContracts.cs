@@ -6,6 +6,7 @@ namespace ViverApp.Api.Features.DoctorExperience;
 
 public sealed record DoctorHomeResponse(DoctorProfileResponse Profile, DoctorHomeCounters Counters,
     DoctorHomeSources Sources, IReadOnlyList<DoctorAppointmentResponse> Today);
+public sealed record DoctorCapabilitiesResponse(bool PatientSchedulingEnabled);
 public sealed record DoctorHomeCounters(int Today, int Week, int Online, int InPerson);
 public sealed record DoctorHomeSources(IReadOnlyList<ulong> Today, IReadOnlyList<ulong> Week,
     IReadOnlyList<ulong> Online, IReadOnlyList<ulong> InPerson);
@@ -19,11 +20,11 @@ public sealed record DoctorServiceResponse(uint Id, string Name, string? Descrip
     string ModalityCode, ushort DurationMinutes, decimal PriceAmount, bool IsActive, bool Offered, ulong RowVersion);
 public sealed record DoctorAppointmentResponse(ulong Id, ulong AppointmentNumber, ulong PatientAccountId, string PatientName, int? PatientAge,
     uint AppointmentTypeId, string Service, string CategoryCode, string StatusCode, string ModalityCode, DateTime StartsAtUtc, DateTime EndsAtUtc,
-    decimal PriceAmount, decimal DiscountPercent, string PaymentStatus, string PaymentLocation, string? PatientNotes,
+    decimal PriceAmount, decimal BasePriceAmount, decimal DiscountPercent, string PaymentStatus, string PaymentLocation, string? PatientNotes,
     string? CancellationReason, ulong? RescheduledFromAppointmentId, ulong? RescheduledToAppointmentId,
     byte? Rating, string? ReviewComment, DateTime? ArrivedAtUtc, uint? ArrivalQueueNumber,
     IReadOnlyList<AppointmentRescheduleHistoryResponse> RescheduleHistory,
-    bool CanJoinOnline, bool CanCancel, bool CanReschedule, bool CanStart, bool CanComplete,
+    bool CanJoinOnline, bool CanCancel, bool CanReschedule, bool CanStart, bool CanUndoStart, bool CanComplete,
     ulong RowVersion);
 public sealed record DoctorAgendaResponse(DoctorAgendaCounters Counters, DoctorAgendaSources Sources,
     SchedulingPage<DoctorAppointmentResponse> Page);
@@ -31,7 +32,7 @@ public sealed record DoctorAgendaCounters(int Total, int Online, int InPerson, i
 public sealed record DoctorAgendaSources(IReadOnlyList<ulong> Total, IReadOnlyList<ulong> Online,
     IReadOnlyList<ulong> InPerson, IReadOnlyList<ulong> Rescheduled);
 public sealed record DoctorPatientResponse(ulong AccountId, string FullName, string? PreferredName, string? Email,
-    string? Phone, DateOnly? BirthDate, string StatusCode, bool IsPremium, int AppointmentCount,
+    string? Phone, DateOnly? BirthDate, string StatusCode, bool IsPremium, decimal PremiumDiscountPercent, int AppointmentCount,
     DateTime? LastAppointmentAtUtc, DateTime? NextAppointmentAtUtc, ulong RowVersion);
 public sealed record DoctorPatientCounters(int Total, int Premium, int Active, int Blocked);
 public sealed record DoctorPatientSources(IReadOnlyList<string> Total, IReadOnlyList<string> Premium,

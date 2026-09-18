@@ -97,6 +97,12 @@ public partial class Appointment
 
     public virtual Appointment? InverseRescheduledFromAppointment { get; set; }
 
+    public virtual ICollection<MedicalRecordDocument> MedicalRecordDocuments { get; set; } = new List<MedicalRecordDocument>();
+
+    public virtual ICollection<MedicalRecordDraft> MedicalRecordDrafts { get; set; } = new List<MedicalRecordDraft>();
+
+    public virtual MedicalRecordEntry? MedicalRecordEntry { get; set; }
+
     public virtual MedicalReport? MedicalReport { get; set; }
 
     public virtual Account? NoShowRecordedByAccount { get; set; }

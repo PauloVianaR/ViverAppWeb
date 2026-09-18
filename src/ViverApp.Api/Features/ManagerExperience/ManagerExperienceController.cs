@@ -48,6 +48,7 @@ public sealed class ManagerExperienceController(ManagerExperienceService service
     public Task<ManagerProfileResponse> Profile(ManagerProfileUpdateRequest request, CancellationToken ct) => service.UpdateProfileAsync(Actor, request, ct);
     [HttpGet("doctors")] public Task<IReadOnlyList<ManagerDoctorOption>> Doctors(CancellationToken ct) => service.DoctorsAsync(ct);
     [HttpGet("services")] public Task<IReadOnlyList<ManagerServiceOption>> Services(CancellationToken ct) => service.ServicesAsync(ct);
+    [HttpGet("capabilities")] public Task<ManagerCapabilitiesResponse> Capabilities(CancellationToken ct) => service.CapabilitiesAsync(ct);
 
     [HttpGet("agenda")]
     public Task<ManagerAgendaResponse> Agenda(DateOnly from, DateOnly to, string? status = null, string? modality = null,
@@ -60,6 +61,10 @@ public sealed class ManagerExperienceController(ManagerExperienceService service
     public Task<IReadOnlyList<AvailableSlotResponse>> Slots(ulong patientAccountId, ulong doctorAccountId, uint appointmentTypeId,
         string modality, DateOnly from, int days = 14, CancellationToken ct = default) =>
         scheduling.GetAvailableSlotsAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct);
+    [HttpGet("booking/professionals"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
+    public Task<SchedulingPage<BookingProfessionalResponse>> Professionals(uint appointmentTypeId, string modality,
+        string? search = null, int page = 1, int pageSize = 50, CancellationToken ct = default) =>
+        scheduling.SearchProfessionalsAsync(page, pageSize, search, null, appointmentTypeId, modality, ct);
     [HttpPost("appointments"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public async Task<ActionResult<AppointmentResponse>> Create([FromHeader(Name = "Idempotency-Key")] string key,
         ManagerAppointmentCreateRequest request, CancellationToken ct)
@@ -85,6 +90,9 @@ public sealed class ManagerExperienceController(ManagerExperienceService service
     public Task<ArrivalResponse> RegisterArrival(ulong id, ArrivalRequest request, CancellationToken ct) => arrivals.RegisterAsync(Actor, id, request, ct);
     [HttpPost("appointments/{id:long}/arrival/cancel"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<ArrivalResponse> CancelArrival(ulong id, ArrivalCancellationRequest request, CancellationToken ct) => arrivals.CancelAsync(Actor, id, request, ct);
+    [HttpPost("appointments/{id:long}/complete"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
+    public Task<ArrivalResponse> Complete(ulong id, AppointmentTransitionRequest request, CancellationToken ct) =>
+        arrivals.CompleteForManagementAsync(Actor, id, request, ct);
 
     [HttpGet("patients")]
     public Task<ManagerPatientsResponse> Patients(string? search = null, string? status = null,
@@ -94,6 +102,13 @@ public sealed class ManagerExperienceController(ManagerExperienceService service
     public Task<ManagerPatientResponse> CreatePatient(ManagerPatientCreateRequest request, CancellationToken ct) => service.CreatePatientAsync(Actor, request, ct);
     [HttpPut("patients/{id:long}"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public Task<ManagerPatientResponse> UpdatePatient(ulong id, ManagerPatientUpdateRequest request, CancellationToken ct) => service.UpdatePatientAsync(Actor, id, request, ct);
+    [HttpPost("patients/{id:long}/premium"), EnableRateLimiting(SecurityPolicyNames.UploadRateLimit)]
+    [RequestSizeLimit(5_300_000), RequestFormLimits(MultipartBodyLengthLimit = 5_300_000)]
+    public async Task<ManagerPatientResponse> ActivatePremium(ulong id, IFormFile file, CancellationToken ct) =>
+        await service.ActivatePremiumAsync(Actor, id, await documents.PrepareAsync(id, file, ct), false, ct);
+    [HttpPost("patients/{id:long}/premium/cancel"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
+    public Task<ManagerPatientResponse> DeactivatePremium(ulong id, ManagerPremiumCancelRequest request, CancellationToken ct) =>
+        service.DeactivatePremiumAsync(Actor, id, request, false, ct);
 
     [HttpGet("premium")]
     public Task<SchedulingPage<ManagerPremiumRequestResponse>> Premium(string? status = null,

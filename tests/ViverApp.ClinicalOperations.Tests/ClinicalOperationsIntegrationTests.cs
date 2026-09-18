@@ -76,7 +76,7 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
             fixture.AppointmentId,
             new MedicalReportWriteRequest(0, "Paciente avaliado sem sinais de alarme no momento.", "Manter acompanhamento clínico."),
             CancellationToken.None);
-        Assert.Equal("draft", draft.StatusCode);
+        Assert.Equal("published", draft.StatusCode);
         Assert.True(draft.ContentVisible);
         await context.Appointments.Where(x => x.Id == fixture.AppointmentId)
             .ExecuteUpdateAsync(x => x.SetProperty(a => a.StatusCode, "in_progress").SetProperty(a => a.RowVersion, a => a.RowVersion + 1));
@@ -127,6 +127,26 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
         var nonClinicalRole = await Assert.ThrowsAsync<ClinicalRuleException>(() => service.GetContextAsync(
             fixture.PatientId, ViverAppRoles.Patient, CancellationToken.None));
         Assert.Equal((int)HttpStatusCode.Forbidden, nonClinicalRole.StatusCode);
+    }
+
+    [Fact]
+    public async Task AssignedDoctorCanCompleteConfirmedAppointmentWithoutReport()
+    {
+        await using var context = CreateContext(configuration);
+        var service = CreateService(context, fixture.NowUtc);
+
+        var completed = await service.CompleteAsync(
+            fixture.DoctorId,
+            fixture.AppointmentId,
+            new CompleteAppointmentRequest(1, 0, null, null),
+            CancellationToken.None);
+
+        Assert.Equal("completed", completed.StatusCode);
+        Assert.Null(completed.MedicalReport);
+        Assert.Equal(fixture.DoctorId, await context.Appointments
+            .Where(item => item.Id == fixture.AppointmentId)
+            .Select(item => item.CompletedByAccountId)
+            .SingleAsync());
     }
 
     [Fact]

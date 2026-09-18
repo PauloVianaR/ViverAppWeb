@@ -12,6 +12,8 @@ public abstract class AdministratorPageBase : ComponentBase, IAsyncDisposable
     [Inject] protected UiErrorNotifier ErrorNotifier { get; set; } = null!;
     protected IJSObjectReference? Module;
     protected bool Loading = true, Busy;
+    protected string AppointmentViewMode = "cards";
+    private bool appointmentViewLoaded;
     private string? notice;
     private bool noticeError;
     protected string? Notice { get => notice; set { notice = value; if (noticeError && value is not null) ErrorNotifier.Show(value); } }
@@ -19,7 +21,7 @@ public abstract class AdministratorPageBase : ComponentBase, IAsyncDisposable
     private string? loadedUri;
     private bool disposed;
     protected override Task OnParametersSetAsync() => ReloadForLocationAsync(Navigation.Uri);
-    protected override async Task OnAfterRenderAsync(bool firstRender) { if (!firstRender) return; loadedUri = Navigation.Uri; Navigation.LocationChanged += OnLocationChanged; await Run(async () => { Module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/administrator-experience.js"); await Load(); }); Loading = false; StateHasChanged(); }
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (!firstRender) return; loadedUri = Navigation.Uri; Navigation.LocationChanged += OnLocationChanged; await Run(async () => { Module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/administrator-experience.js"); await LoadAppointmentViewAsync(); await Load(); }); Loading = false; StateHasChanged(); }
     private void OnLocationChanged(object? sender, LocationChangedEventArgs args)
     {
         var currentPath = new Uri(loadedUri ?? Navigation.Uri).AbsolutePath;
@@ -40,6 +42,8 @@ public abstract class AdministratorPageBase : ComponentBase, IAsyncDisposable
     }
     protected abstract Task Load();
     protected Task<T?> Get<T>(string path) => Request<T>(path, "GET", null);
+    protected async Task LoadAppointmentViewAsync() { if (appointmentViewLoaded) return; var preference = await Get<AppointmentViewPreference>("api/v1/me/preferences/appointment-view"); AppointmentViewMode = preference?.Mode == "compact" ? "compact" : "cards"; appointmentViewLoaded = true; }
+    protected Task ChangeAppointmentView(string mode) => Run(async () => { var preference = await Request<AppointmentViewPreference>("api/v1/me/preferences/appointment-view", "PUT", new { mode }); AppointmentViewMode = preference?.Mode == "compact" ? "compact" : "cards"; });
     protected async Task<T?> Request<T>(string path, string method, object? data, string? key = null)
     {
         var result = await Module!.InvokeAsync<PatientApiResult<T>>("request", Backend.BaseUrl.ToString(), path, method, data, key);
@@ -51,5 +55,5 @@ public abstract class AdministratorPageBase : ComponentBase, IAsyncDisposable
     protected async Task Open(string id) => await Module!.InvokeVoidAsync("showDialog", id);
     protected async Task Close(string id) => await Module!.InvokeVoidAsync("closeDialog", id);
     public async ValueTask DisposeAsync() { disposed = true; Navigation.LocationChanged -= OnLocationChanged; if (Module is not null) try { await Module.DisposeAsync(); } catch (JSDisconnectedException) { } }
-    private sealed class AdministratorUiException(string message) : Exception(message);
+    protected sealed class AdministratorUiException(string message) : Exception(message);
 }

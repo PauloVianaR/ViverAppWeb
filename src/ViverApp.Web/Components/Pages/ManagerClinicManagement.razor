@@ -1,0 +1,71 @@
+@page "/gestao/clinica"
+@inherits ManagerPageBase
+@using static ViverApp.Web.ManagerLabels
+
+<PageTitle>Configuração da clínica | ViverApp</PageTitle>
+<header class="workspace-heading">
+    <div><p class="eyebrow">Gestor</p><h1 class="page-title">Serviços e horários médicos</h1><p class="page-description">Permissões temporárias controladas pelo Administrador para catálogo, preços e grade semanal.</p></div>
+    <a class="button button--secondary" href="/gestao">Voltar ao início</a>
+</header>
+@if(Notice is not null){<p class="notice @(NoticeError?"notice--error":"notice--success")" role="alert">@Notice</p>}
+@if(Loading){<LoadingSkeleton Lines="8"/>}
+else if(Capabilities is null || !Capabilities.AppointmentTypesEnabled && !Capabilities.DoctorSchedulesEnabled)
+{
+    <InterfaceState Title="Gestão temporariamente desabilitada" Description="O Administrador desabilitou o cadastro de atendimentos e a gestão de horários para o perfil Gestor." Icon="shield" />
+}
+else
+{
+    @if(Capabilities.AppointmentTypesEnabled)
+    {
+        <section class="patient-section">
+            <div class="section-heading"><div><p class="eyebrow">Catálogo</p><h2>Tipos de atendimento e preços</h2></div><button class="button" @onclick="NewService">Adicionar tipo</button></div>
+            <MobileFilterPanel AriaLabel="Filtros dos tipos de atendimento"><form @onsubmit="FilterServices" @onsubmit:preventDefault><div class="manager-filter-grid"><div class="field"><label for="manager-service-search">Buscar por texto</label><input id="manager-service-search" @bind="ServiceSearch" maxlength="120" placeholder="Nome do serviço" /></div><div class="field"><label for="manager-service-filter-category">Tipo de atendimento</label><select id="manager-service-filter-category" @bind="ServiceCategoryFilter"><option value="">Todos</option><option value="consultation">Consulta</option><option value="examination">Exame</option><option value="surgery">Cirurgia</option><option value="procedure">Procedimento</option></select></div></div><div class="patient-actions"><button class="button">Filtrar</button><button type="button" class="button button--secondary" @onclick="ClearServiceFilters">Limpar</button></div></form></MobileFilterPanel>
+            <div class="administrator-grid">@foreach(var item in Services){<article class="surface administrator-card"><span class="badge @(item.IsActive?"badge--success":"badge--warning")">@(item.IsActive?"Ativo":"Inativo")</span><h3>@item.Name</h3><p>@item.Description</p><p><strong>@Money(item.PriceAmount)</strong> · @item.DurationMinutes min · @Category(item.CategoryCode)</p><div class="administrator-actions"><button class="button button--secondary" @onclick="()=>EditService(item)">Editar</button><button class="button button--secondary" @onclick="()=>ToggleService(item)">@(item.IsActive?"Desativar":"Ativar")</button></div></article>}</div>
+        </section>
+    }
+    @if(Capabilities.DoctorSchedulesEnabled)
+    {
+        <section class="surface patient-panel patient-section">
+            <div class="section-heading"><div><p class="eyebrow">Disponibilidade</p><h2>Grade semanal dos médicos</h2></div><button class="button" @onclick="NewHour" disabled="@(DoctorId==0)">Adicionar horário</button></div>
+            <div class="field"><label for="schedule-doctor">Médico</label><select id="schedule-doctor" value="@DoctorId" @onchange="DoctorChanged"><option value="0">Selecione</option>@foreach(var doctor in Doctors){<option value="@doctor.AccountId">@doctor.FullName · @doctor.LicenseLabel</option>}</select></div>
+            @if(DoctorId!=0 && Hours.Count==0){<InterfaceState Title="Sem horários cadastrados" Description="Adicione a primeira faixa semanal para este médico." Icon="calendar" />}
+            <div class="administrator-grid">@foreach(var hour in Hours){<article class="surface administrator-card"><span class="badge @(hour.IsActive?"badge--success":"badge--warning")">@(hour.IsActive?"Ativo":"Inativo")</span><h3>@Day(hour.DayOfWeek)</h3><p>@TimeOnly.FromTimeSpan(hour.StartTime).ToString("HH:mm")–@TimeOnly.FromTimeSpan(hour.EndTime).ToString("HH:mm") · @Modality(hour.ModalityCode)</p><div class="administrator-actions"><button class="button button--secondary" @onclick="()=>EditHour(hour)">Editar</button><button class="button button--danger" @onclick="()=>DeleteHour(hour)">Remover</button></div></article>}</div>
+        </section>
+    }
+}
+
+<dialog id="manager-service-dialog" class="patient-dialog"><h2>@(EditingService is null?"Novo tipo de atendimento":"Editar tipo de atendimento")</h2><div class="field"><label for="manager-service-name">Nome</label><input id="manager-service-name" @bind="ServiceName" required maxlength="120" /></div><div class="field"><label for="manager-service-description">Descrição</label><textarea id="manager-service-description" @bind="ServiceDescription" maxlength="500"></textarea></div><div class="manager-filter-grid"><div class="field"><label for="manager-service-category">Tipo</label><select id="manager-service-category" @bind="ServiceCategory"><option value="consultation">Consulta</option><option value="examination">Exame</option><option value="surgery">Cirurgia</option><option value="procedure">Procedimento</option></select></div><div class="field"><label for="manager-service-modality">Modalidade</label><select id="manager-service-modality" @bind="ServiceModality"><option value="in_person">Presencial</option><option value="online">Online</option><option value="both">Ambas</option></select></div><div class="field"><label for="manager-service-duration">Duração em minutos</label><input id="manager-service-duration" type="number" min="5" max="480" @bind="ServiceDuration" /></div><div class="field"><label for="manager-service-price">Preço</label><input id="manager-service-price" type="number" min="0" step="0.01" @bind="ServicePrice" /></div></div><div class="patient-actions"><button class="button" @onclick="SaveService">Salvar</button><button class="button button--secondary" @onclick='()=>Close("manager-service-dialog")'>Voltar</button></div></dialog>
+
+<dialog id="manager-doctor-hour-dialog" class="patient-dialog"><h2>@(EditingHour is null?"Novo horário do médico":"Editar horário do médico")</h2><div class="manager-filter-grid"><div class="field"><label for="manager-hour-day">Dia</label><select id="manager-hour-day" @bind="HourDay">@for(byte day=0;day<7;day++){<option value="@day">@Day(day)</option>}</select></div><div class="field"><label for="manager-hour-start">Início</label><input id="manager-hour-start" type="time" @bind="HourStart" /></div><div class="field"><label for="manager-hour-end">Fim</label><input id="manager-hour-end" type="time" @bind="HourEnd" /></div><div class="field"><label for="manager-hour-modality">Modalidade</label><select id="manager-hour-modality" @bind="HourModality"><option value="both">Ambas</option><option value="in_person">Presencial</option><option value="online">Online</option></select></div></div><label class="patient-check"><input type="checkbox" @bind="HourActive" /> Horário ativo</label><div class="patient-actions"><button class="button" @onclick="SaveHour">Salvar</button><button class="button button--secondary" @onclick='()=>Close("manager-doctor-hour-dialog")'>Voltar</button></div></dialog>
+
+@code {
+    private ManagerCapabilities? Capabilities;
+    private IReadOnlyList<AdministratorService> Services=[];
+    private IReadOnlyList<ManagerDoctor> Doctors=[];
+    private IReadOnlyList<ManagerDoctorWeeklyHour> Hours=[];
+    private AdministratorService? EditingService;
+    private ManagerDoctorWeeklyHour? EditingHour;
+    private ulong DoctorId;
+    private string ServiceName="",ServiceDescription="",ServiceCategory="consultation",ServiceModality="in_person",HourModality="both",ServiceSearch="",ServiceCategoryFilter="";
+    private int ServiceDuration=30;
+    private decimal ServicePrice;
+    private byte HourDay=1;
+    private TimeOnly HourStart=new(8,0),HourEnd=new(12,0);
+    private bool HourActive=true;
+
+    protected override async Task Load(){Capabilities=await Get<ManagerCapabilities>("api/v1/manager/capabilities");if(Capabilities?.AppointmentTypesEnabled==true)await LoadServices();if(Capabilities?.DoctorSchedulesEnabled==true){Doctors=await Get<IReadOnlyList<ManagerDoctor>>("api/v1/manager/doctors")??[];if(DoctorId==0)DoctorId=Doctors.FirstOrDefault()?.AccountId??0;await LoadHours();}}
+    private async Task LoadServices(){var page=await Get<WebPage<AdministratorService>>($"api/v1/catalog/appointment-types?page=1&pageSize=100&includeInactive=true&search={Escape(ServiceSearch)}&category={ServiceCategoryFilter}");Services=page?.Items??[];}
+    private Task FilterServices()=>Run(LoadServices);private Task ClearServiceFilters()=>Run(async()=>{ServiceSearch=ServiceCategoryFilter="";await LoadServices();});
+    private async Task LoadHours(){Hours=DoctorId==0?[]:await Get<IReadOnlyList<ManagerDoctorWeeklyHour>>($"api/v1/professionals/{DoctorId}/weekly-hours")??[];}
+    private Task DoctorChanged(ChangeEventArgs args)=>Run(async()=>{DoctorId=ulong.TryParse(args.Value?.ToString(),out var value)?value:0;await LoadHours();});
+    private Task NewService(){EditingService=null;ServiceName=ServiceDescription="";ServiceCategory="consultation";ServiceModality="in_person";ServiceDuration=30;ServicePrice=0;return Open("manager-service-dialog");}
+    private Task EditService(AdministratorService item){EditingService=item;ServiceName=item.Name;ServiceDescription=item.Description??"";ServiceCategory=item.CategoryCode;ServiceModality=item.ModalityCode;ServiceDuration=item.DurationMinutes;ServicePrice=item.PriceAmount;return Open("manager-service-dialog");}
+    private Task SaveService()=>Run(async()=>{var item=EditingService;await Request<AdministratorService>(item is null?"api/v1/catalog/appointment-types":$"api/v1/catalog/appointment-types/{item.Id}",item is null?"POST":"PUT",new{name=ServiceName,description=Empty(ServiceDescription),categoryCode=ServiceCategory,modalityCode=ServiceModality,durationMinutes=ServiceDuration,priceAmount=ServicePrice,isActive=item?.IsActive??true,displayOrder=item?.DisplayOrder??Services.Count,rowVersion=item?.RowVersion??0});await Close("manager-service-dialog");await Load();Notice=item is null?"Tipo de atendimento cadastrado.":"Tipo de atendimento atualizado.";});
+    private Task ToggleService(AdministratorService item)=>Run(async()=>{await Request<AdministratorService>($"api/v1/catalog/appointment-types/{item.Id}","PUT",new{name=item.Name,description=item.Description,categoryCode=item.CategoryCode,modalityCode=item.ModalityCode,durationMinutes=item.DurationMinutes,priceAmount=item.PriceAmount,isActive=!item.IsActive,displayOrder=item.DisplayOrder,rowVersion=item.RowVersion});await Load();Notice="Estado do tipo de atendimento atualizado.";});
+    private Task NewHour(){EditingHour=null;HourDay=1;HourStart=new(8,0);HourEnd=new(12,0);HourModality="both";HourActive=true;return Open("manager-doctor-hour-dialog");}
+    private Task EditHour(ManagerDoctorWeeklyHour item){EditingHour=item;HourDay=item.DayOfWeek;HourStart=TimeOnly.FromTimeSpan(item.StartTime);HourEnd=TimeOnly.FromTimeSpan(item.EndTime);HourModality=item.ModalityCode;HourActive=item.IsActive;return Open("manager-doctor-hour-dialog");}
+    private Task SaveHour()=>Run(async()=>{var item=EditingHour;var path=$"api/v1/professionals/{DoctorId}/weekly-hours"+(item is null?"":$"/{item.Id}");await Request<ManagerDoctorWeeklyHour>(path,item is null?"POST":"PUT",new{dayOfWeek=HourDay,startTime=HourStart.ToTimeSpan(),endTime=HourEnd.ToTimeSpan(),validFrom=(DateOnly?)null,validUntil=(DateOnly?)null,isActive=HourActive,rowVersion=item?.RowVersion??0,modalityCode=HourModality});await Close("manager-doctor-hour-dialog");await LoadHours();Notice="Grade semanal atualizada.";});
+    private Task DeleteHour(ManagerDoctorWeeklyHour item)=>Run(async()=>{await Request<object>($"api/v1/professionals/{DoctorId}/weekly-hours/{item.Id}?rowVersion={item.RowVersion}","DELETE",null);await LoadHours();Notice="Horário removido.";});
+    private static string? Empty(string? value)=>string.IsNullOrWhiteSpace(value)?null:value.Trim();
+    private static string Day(byte day)=>day switch{0=>"Domingo",1=>"Segunda-feira",2=>"Terça-feira",3=>"Quarta-feira",4=>"Quinta-feira",5=>"Sexta-feira",_=>"Sábado"};
+}

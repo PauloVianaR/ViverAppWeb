@@ -144,7 +144,7 @@ public sealed class CashManagementIntegrationTests
         var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(now,
             TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo")));
 
-        var before = await cash.DayAsync(date, null, null, appointment.AppointmentNumber, null, null, null, null, 1, 25, CancellationToken.None);
+        var before = await cash.DayAsync(date, ViverAppRoles.Manager, null, null, appointment.AppointmentNumber, null, null, null, null, 1, 25, CancellationToken.None);
         Assert.Equal(180m, before.Summary.NetTotal);
         Assert.Single(before.Page.Items);
         Assert.Equal("4242", before.Page.Items[0].CardLastFour);
@@ -178,14 +178,14 @@ public sealed class CashManagementIntegrationTests
         Assert.Equal("Sangria manual", withdrawal.Description);
         Assert.Equal("Sangria operacional", withdrawal.Reason);
 
-        var day = await cash.DayAsync(date, null, null, appointment.AppointmentNumber, null, null, null, null, 1, 25, CancellationToken.None);
+        var day = await cash.DayAsync(date, ViverAppRoles.Manager, null, null, appointment.AppointmentNumber, null, null, null, null, 1, 25, CancellationToken.None);
         Assert.Equal(360m, day.Summary.GrossEntries);
         Assert.Equal(180m, day.Summary.PaymentReversals);
         Assert.Equal(180m, day.Summary.NetTotal);
         Assert.Equal(3, day.Summary.MovementCount);
         Assert.Contains(day.Page.Items, item => item.TypeCode == "payment_reversal" && item.RelatedMovementId.HasValue);
 
-        var unfilteredDay = await cash.DayAsync(date, null, null, null, null, null, null, null, 1, 25, CancellationToken.None);
+        var unfilteredDay = await cash.DayAsync(date, ViverAppRoles.Manager, null, null, null, null, null, null, null, 1, 25, CancellationToken.None);
         Assert.Equal(200m, unfilteredDay.Summary.Withdrawals);
         Assert.Equal(-20m, unfilteredDay.Summary.NetTotal);
         Assert.Equal(4, unfilteredDay.Summary.MovementCount);
@@ -193,7 +193,7 @@ public sealed class CashManagementIntegrationTests
         Assert.Equal(unfilteredDay.Page.Items.OrderBy(item => item.OccurredAtUtc).ThenBy(item => item.Id), unfilteredDay.Page.Items);
         Assert.Equal(unfilteredDay.Page.Items.Max(item => item.Id), unfilteredDay.LastMovementId);
 
-        var cardFiltered = await cash.DayAsync(date, null, null, null, null, null, "4242", "PHASE17", 1, 25, CancellationToken.None);
+        var cardFiltered = await cash.DayAsync(date, ViverAppRoles.Manager, null, null, null, null, null, "4242", "PHASE17", 1, 25, CancellationToken.None);
         Assert.Equal(2, cardFiltered.Page.Items.Count);
         Assert.All(cardFiltered.Page.Items, item => Assert.Equal(original.Id, item.PaymentId));
 
@@ -209,11 +209,18 @@ public sealed class CashManagementIntegrationTests
         var denied = await Assert.ThrowsAsync<CashRuleException>(() => cash.AddManualAsync(manager.Id, ViverAppRoles.Manager,
             Guid.NewGuid().ToString("N"), new CashManualMovementRequest("supply", "entry", "cash", 25m, null,
                 "Abertura complementar após fechamento"), CancellationToken.None));
-        Assert.Equal(403, denied.StatusCode);
+        Assert.Equal(409, denied.StatusCode);
+        var administratorDenied = await Assert.ThrowsAsync<CashRuleException>(() => cash.AddManualAsync(administrator.Id, ViverAppRoles.Administrator,
+            Guid.NewGuid().ToString("N"), new CashManualMovementRequest("supply", "entry", "cash", 25m, null,
+                "Abertura complementar após fechamento"), CancellationToken.None));
+        Assert.Equal(409, administratorDenied.StatusCode);
+        var reopening = await cash.ReopenAsync(administrator.Id, ViverAppRoles.Administrator, date,
+            new CashReopenRequest("Correção operacional autorizada"), CancellationToken.None);
+        Assert.Equal(closure.Id, reopening.CashClosureId);
         var postClose = await cash.AddManualAsync(administrator.Id, ViverAppRoles.Administrator, Guid.NewGuid().ToString("N"),
             new CashManualMovementRequest("supply", "entry", "cash", 25m, null,
                 "Abertura complementar após fechamento"), CancellationToken.None);
-        Assert.True(postClose.AfterClosure);
+        Assert.False(postClose.AfterClosure);
 
         await Assert.ThrowsAsync<MySqlException>(() => database.CashMovements
             .Where(item => item.Id == postClose.Id).ExecuteUpdateAsync(update => update.SetProperty(item => item.Amount, 30m)));

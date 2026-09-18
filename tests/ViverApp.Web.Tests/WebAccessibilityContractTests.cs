@@ -34,6 +34,8 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.Contains("Cadastro rápido com Google", html, StringComparison.Ordinal);
         Assert.Contains("Criar conta com Google", html, StringComparison.Ordinal);
         Assert.Contains("Escolha seu perfil", html, StringComparison.Ordinal);
+        Assert.Contains("Ocorreu um erro interno não classificado. Contate o administrador do sistema.", html, StringComparison.Ordinal);
+        Assert.Contains("role=\"alertdialog\"", html, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -122,6 +124,20 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("Validando acesso", html, StringComparison.Ordinal);
         Assert.DoesNotContain(heading, html, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("/medico/prontuario/1")]
+    [InlineData("/gestao/prontuario/1")]
+    [InlineData("/administracao/prontuario/1")]
+    public async Task MedicalRecordRoutes_RemainProtectedBeforeRenderingSensitiveContent(string path)
+    {
+        using var client = CreateClient();
+        using var response = await client.GetAsync(path);
+        var html = await ReadUtf8Async(response.Content);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Validando acesso", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("Registro longitudinal privado", html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -231,7 +247,7 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         var patient = ShellNavigationCatalog.ResolveRole("patient");
 
         Assert.Equal(new[] { "Início", "Agenda", "Pacientes", "Histórico" }, manager.MobilePrimaryItems.Select(x => x.Label));
-        Assert.Equal(new[] { "Caixa", "Perfil" }, manager.MobileOverflowItems.Select(x => x.Label));
+        Assert.Equal(new[] { "Caixa", "Clínica", "Perfil" }, manager.MobileOverflowItems.Select(x => x.Label));
         Assert.Equal(new[] { "Analytics", "Caixa", "Alertas", "Usuários" }, administrator.MobileOverflowItems.Select(x => x.Label));
         Assert.Equal(patient.Items, patient.MobilePrimaryItems);
         Assert.Empty(patient.MobileOverflowItems);
@@ -242,9 +258,36 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     [InlineData("")]
     [InlineData("One or more validation errors occurred.")]
     [InlineData("Internal Server Error")]
+    [InlineData("TypeError: Failed to fetch")]
+    [InlineData("Failed to complete negotiation with the server")]
+    [InlineData("There was an unhandled exception on the current circuit")]
     public void ErrorDialog_DoesNotExposeGenericOrEnglishInternalFailures(string? message)
     {
         Assert.Equal(UiErrorNotifier.UnexpectedMessage, UiErrorNotifier.Normalize(message));
+    }
+
+    [Fact]
+    public void ErrorDialog_RemovesClientStackFromCataloguedMessage()
+    {
+        const string message = "Revise os sinais vitais informados. Error: Revise os sinais vitais informados. at read (https://localhost/js/medical-records.js:15:11)";
+        Assert.Equal("Revise os sinais vitais informados.", UiErrorNotifier.Normalize(message));
+    }
+
+    [Fact]
+    public void MedicalRecordRoute_UsesAParameterCompatibleWithTheLongConstraint()
+    {
+        var parameter = typeof(ViverApp.Web.Components.Pages.MedicalRecordWorkspace)
+            .GetProperty("PatientId");
+
+        Assert.NotNull(parameter);
+        Assert.Equal(typeof(long), parameter.PropertyType);
+    }
+
+    [Fact]
+    public void ApplicationErrorBoundary_ContainsUnhandledComponentFailures()
+    {
+        Assert.True(typeof(Microsoft.AspNetCore.Components.Web.ErrorBoundary)
+            .IsAssignableFrom(typeof(ViverApp.Web.Components.DesignSystem.ApplicationErrorBoundary)));
     }
 
     [Fact]

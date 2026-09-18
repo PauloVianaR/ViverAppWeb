@@ -59,6 +59,8 @@ public partial class Account
 
     public virtual ICollection<AccountRecoveryCode> AccountRecoveryCodes { get; set; } = new List<AccountRecoveryCode>();
 
+    public virtual AccountUiPreference? AccountUiPreference { get; set; }
+
     public virtual ICollection<AdministratorNotification> AdministratorNotifications { get; set; } = new List<AdministratorNotification>();
 
     public virtual ICollection<ApplicationSetting> ApplicationSettings { get; set; } = new List<ApplicationSetting>();
@@ -91,6 +93,12 @@ public partial class Account
 
     public virtual ICollection<CashMovement> CashMovements { get; set; } = new List<CashMovement>();
 
+    public virtual ICollection<CashReopening> CashReopenings { get; set; } = new List<CashReopening>();
+
+    public virtual ICollection<ClinicalAccessEvent> ClinicalAccessEventActorAccounts { get; set; } = new List<ClinicalAccessEvent>();
+
+    public virtual ICollection<ClinicalAccessEvent> ClinicalAccessEventPatientAccounts { get; set; } = new List<ClinicalAccessEvent>();
+
     public virtual ICollection<ContactChangeRequest> ContactChangeRequests { get; set; } = new List<ContactChangeRequest>();
 
     public virtual ICollection<DoctorPatientLink> DoctorPatientLinkCreatedByAccounts { get; set; } = new List<DoctorPatientLink>();
@@ -99,9 +107,21 @@ public partial class Account
 
     public virtual DoctorProfile? DoctorProfile { get; set; }
 
+    public virtual ElectronicHealthRecord? ElectronicHealthRecord { get; set; }
+
     public virtual ICollection<ExternalLogin> ExternalLogins { get; set; } = new List<ExternalLogin>();
 
     public virtual ManagerPreference? ManagerPreference { get; set; }
+
+    public virtual ICollection<MedicalRecordDocument> MedicalRecordDocumentDeletedByAccounts { get; set; } = new List<MedicalRecordDocument>();
+
+    public virtual ICollection<MedicalRecordDocument> MedicalRecordDocumentUploadedByAccounts { get; set; } = new List<MedicalRecordDocument>();
+
+    public virtual ICollection<MedicalRecordDraft> MedicalRecordDrafts { get; set; } = new List<MedicalRecordDraft>();
+
+    public virtual ICollection<MedicalRecordEntry> MedicalRecordEntries { get; set; } = new List<MedicalRecordEntry>();
+
+    public virtual ICollection<MedicalRecordVersion> MedicalRecordVersions { get; set; } = new List<MedicalRecordVersion>();
 
     public virtual PatientPreference? PatientPreference { get; set; }
 
