@@ -1,0 +1,3 @@
+.public-document{max-width:52rem;margin:0 auto;padding:clamp(1rem,4vw,3rem);line-height:1.7}
+.public-document h1{font-size:clamp(2rem,5vw,3rem);line-height:1.15;margin:.3rem 0 1.5rem}.public-document h2{font-size:1.3rem;margin:1.5rem 0 .4rem}
+.public-document section{margin:1rem 0}.public-document__draft{padding:1rem;border:1px solid #aa6b19;border-radius:.7rem;background:#fff8e9;color:#573309}

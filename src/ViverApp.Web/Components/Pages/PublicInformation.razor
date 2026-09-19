@@ -1,0 +1,67 @@
+@page "/sobre"
+@page "/contato"
+@page "/perguntas-frequentes"
+@page "/termos"
+@page "/privacidade"
+@page "/cookies"
+@page "/acessibilidade"
+@inject NavigationManager Navigation
+
+<PublicSeo Title="@Title" Description="@Description" Path="@Path" />
+
+<article class="public-document">
+    <p class="eyebrow">Centro Médico Viver</p>
+    <h1>@Title</h1>
+    @if (IsLegalDraft)
+    {
+        <p class="public-document__draft" role="status"><strong>Documento em elaboração.</strong> Esta página ainda não é um texto jurídico vigente. Dados institucionais e revisão profissional são necessários antes da publicação definitiva.</p>
+        <p class="muted">Revisão técnica @PublicSitePolicy.LegalRevision · vigência não iniciada.</p>
+    }
+
+    @switch (Path)
+    {
+        case "/sobre":
+            <p>O Centro Médico Viver está preparando sua experiência Web para uma clínica única. Pacientes poderão acompanhar atendimentos, e profissionais autorizados usarão áreas próprias da plataforma.</p>
+            <p>Informações públicas sobre especialidades, equipe, localização e horários serão exibidas somente depois de confirmadas pela clínica.</p>
+            break;
+        case "/contato":
+            <p>O canal institucional público e o canal de privacidade ainda aguardam confirmação da clínica. Não envie informações de saúde por meios não confirmados.</p>
+            <p>Se você já possui acesso, utilize os canais informados diretamente pela clínica. Esta página será atualizada antes da abertura pública.</p>
+            break;
+        case "/perguntas-frequentes":
+            <section><h2>Como criar minha conta?</h2><p>Escolha o perfil no cadastro. A opção inicial usa sua conta Google; também há cadastro clássico por contato e senha.</p></section>
+            <section><h2>Profissionais entram imediatamente?</h2><p>O cadastro de Médico, Psicólogo ou Gestor depende de aprovação administrativa.</p></section>
+            <section><h2>Onde acompanho meus atendimentos?</h2><p>Após entrar, use sua área pessoal para consultar agenda, atendimentos e ações disponíveis ao seu perfil.</p></section>
+            break;
+        case "/termos":
+            <section><h2>Escopo em revisão</h2><p>Os termos definitivos descreverão uso da conta, agendamento, cancelamento, pagamentos, teleatendimento, responsabilidades e suporte. Não há aceite contratual desta minuta.</p></section>
+            <section><h2>Uso seguro</h2><p>A conta é individual. Não compartilhe credenciais nem acesse dados de outras pessoas sem autorização.</p></section>
+            break;
+        case "/privacidade":
+            <section><h2>Dados e finalidade</h2><p>A plataforma trata dados de cadastro, agendamento, pagamento e, em áreas restritas, informações de saúde. Os dados clínicos não são enviados para publicidade ou analytics de terceiros.</p></section>
+            <section><h2>Segurança e acesso</h2><p>As áreas de atendimento exigem autenticação e autorização conforme o perfil. O acesso a documentos privados é verificado no servidor.</p></section>
+            <section><h2>Direitos do titular</h2><p>O procedimento de solicitação, os prazos de retenção, as bases legais, os responsáveis e o canal de privacidade dependem de confirmação institucional e revisão jurídica. Não envie documentos pessoais a um canal não confirmado.</p></section>
+            break;
+        case "/cookies":
+            <section><h2>O que está em uso</h2><p>Itens necessários sustentam autenticação, antifalsificação e segurança. Uma escolha local guarda a preferência deste navegador; ela não contém nome, documento ou dado clínico.</p></section>
+            <section><h2>Itens opcionais</h2><p>Medição e marketing não estão instalados. A escolha de preferências não essenciais pode ser revista a qualquer momento pelo link “Preferências de cookies” no rodapé.</p></section>
+            <section><h2>Lista técnica</h2><p>Os nomes, durações e finalidades conhecidos estão descritos no inventário da fase; a lista pública definitiva dependerá da configuração de produção e revisão institucional.</p></section>
+            break;
+        case "/acessibilidade":
+            <p>A interface foi construída para navegação por teclado, foco visível, leitura semântica e adaptação a telas de tamanhos distintos. A validação completa com tecnologias assistivas e zoom ainda faz parte da homologação.</p>
+            <p>Um canal específico para comunicar barreiras de acessibilidade será divulgado após confirmação institucional. Esta declaração é preliminar e não afirma certificação.</p>
+            break;
+    }
+</article>
+
+@code {
+    private string Path => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant();
+    private string Title => Path switch
+    {
+        "/sobre" => "Sobre a clínica", "/contato" => "Contato", "/perguntas-frequentes" => "Perguntas frequentes",
+        "/termos" => "Termos de uso", "/privacidade" => "Privacidade", "/cookies" => "Política de cookies",
+        "/acessibilidade" => "Acessibilidade", _ => "Informações",
+    };
+    private string Description => $"Informações sobre {Title.ToLowerInvariant()} do Centro Médico Viver.";
+    private bool IsLegalDraft => Path is "/termos" or "/privacidade" or "/cookies";
+}

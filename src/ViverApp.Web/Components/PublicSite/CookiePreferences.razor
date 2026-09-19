@@ -1,0 +1,86 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JavaScript
+
+<button class="cookie-preferences-link" type="button" @onclick="OpenPreferences">Preferências de cookies</button>
+
+@if (Visible)
+{
+    <section class="cookie-panel" role="dialog" aria-modal="false" aria-labelledby="cookie-title" aria-describedby="cookie-description">
+        <div class="cookie-panel__copy">
+            <h2 id="cookie-title">Sua privacidade importa</h2>
+            <p id="cookie-description">Usamos armazenamento necessário para sessão e segurança. Não carregamos medição nem publicidade. Você pode registrar ou mudar sua escolha sem prejudicar o atendimento.</p>
+            <a href="/cookies">Entenda o uso de cookies e armazenamento</a>
+        </div>
+        @if (Customize)
+        {
+            <div class="cookie-panel__choices">
+                <label><input type="checkbox" checked disabled /> Necessários — sempre ativos</label>
+                <label><input type="checkbox" @bind="AllowPreferences" /> Preferências não essenciais</label>
+                <p>Medição e marketing estão desativados; nenhum fornecedor opcional foi instalado.</p>
+            </div>
+        }
+        <div class="cookie-panel__actions">
+            <button type="button" @onclick="AcceptAll">Aceitar todos</button>
+            <button type="button" @onclick="RejectOptional">Recusar não necessários</button>
+            @if (Customize)
+            {
+                <button type="button" @onclick="SaveCustom">Salvar escolhas</button>
+            }
+            else
+            {
+                <button type="button" @onclick="ShowCustomize">Personalizar</button>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    private IJSObjectReference? module;
+    private bool Visible, Customize, AllowPreferences;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/cookie-preferences.js");
+            var choice = await module.InvokeAsync<CookieChoice?>("read");
+            if (choice is not null) AllowPreferences = choice.Preferences;
+            Visible = choice is null;
+            StateHasChanged();
+        }
+        catch (JSException)
+        {
+            // No optional scripts are present; failure to store a preference never enables tracking.
+        }
+    }
+
+    private void OpenPreferences() { Customize = true; Visible = true; }
+    private void ShowCustomize() => Customize = true;
+    private Task AcceptAll() => SaveAsync(true, "accept_all");
+    private Task RejectOptional() => SaveAsync(false, "reject_optional");
+    private Task SaveCustom() => SaveAsync(AllowPreferences, "customize");
+
+    private async Task SaveAsync(bool preferences, string source)
+    {
+        if (module is null) return;
+        try
+        {
+            await module.InvokeVoidAsync("save", preferences, source);
+            AllowPreferences = preferences;
+            Visible = false;
+            Customize = false;
+        }
+        catch (JSException)
+        {
+            Visible = true;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (module is not null) try { await module.DisposeAsync(); } catch (JSDisconnectedException) { }
+    }
+
+    private sealed record CookieChoice(bool Preferences);
+}

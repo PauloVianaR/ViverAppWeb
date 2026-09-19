@@ -40,6 +40,7 @@ builder.Services.AddViverAppObservability(
     builder.Environment,
     "ViverApp.Web");
 builder.Services.AddSingleton(WebBackendOptions.Load(builder.Configuration, builder.Environment));
+builder.Services.AddSingleton<PublicSitePolicy>();
 builder.Services.AddScoped<UiErrorNotifier>();
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), ["live", "ready"]);
@@ -59,6 +60,11 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 if (!allowInsecureLocalHttp) app.UseHttpsRedirection();
 app.UseRouting();
+app.Use(async (context, next) =>
+{
+    PublicSitePolicy.ApplyHeaders(context, app.Services.GetRequiredService<PublicSitePolicy>().CanIndex);
+    await next();
+});
 app.UseRateLimiter();
 app.UseAntiforgery();
 
@@ -77,6 +83,12 @@ app.MapHealthChecks(
             Predicate = registration => registration.Tags.Contains("ready"),
             ResponseWriter = MinimalHealthResponseWriter.WriteAsync,
         })
+    .DisableRateLimiting();
+app.MapGet("/robots.txt", (PublicSitePolicy policy) => Results.Text(policy.RobotsText, "text/plain; charset=utf-8"))
+    .DisableRateLimiting();
+app.MapGet("/sitemap.xml", (PublicSitePolicy policy) => policy.CanIndex
+        ? Results.Text(policy.SitemapXml(), "application/xml; charset=utf-8")
+        : Results.NotFound())
     .DisableRateLimiting();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()

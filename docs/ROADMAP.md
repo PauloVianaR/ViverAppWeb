@@ -303,13 +303,21 @@ Cada fase deve:
 
 ## Fase 19 — Agenda visual, Psicólogo e atendimentos sem cobrança
 
-**Estado:** implementada na branch `codex/fase-19-agenda-psicologo-atendimentos-gratuitos`; validação visual física no monitor 3 pendente. Não integrada à `main`.
+**Estado:** implementada e integrada à `main`; validação visual física no monitor 3 permanece pendente.
 
 **Plano detalhado:** [Agenda visual, Psicólogo e atendimentos sem cobrança](FASE-19-AGENDA-PSICOLOGO-E-ATENDIMENTOS-SEM-COBRANCA.md).
 
 **Matriz de acesso:** [autorização e contratos da Fase 19](fase-19/AUTORIZACAO-E-CONTRATOS.md).
 
-## Fase 20 — E-mail, SMS e jobs dentro da API
+## Fase 20 — SEO, privacidade, cookies e conformidade Web
+
+**Estado:** antecipada da antiga Fase 25 por decisão do proprietário; controles técnicos implementados na branch `codex/fase-20-seo-privacidade-cookies`. Publicação jurídica definitiva, canal de titulares e indexação aguardam dados institucionais, revisão competente e homologação. O portão de indexação segue fechado.
+
+**Plano detalhado:** [SEO, privacidade, cookies e conformidade Web](FASE-20-SEO-PRIVACIDADE-E-CONFORMIDADE-WEB.md).
+
+**Inventário e bloqueios:** [publicação, cookies e dependências jurídicas](fase-20/PUBLICACAO-E-INVENTARIO.md).
+
+## Fase 21 — E-mail, SMS e jobs dentro da API
 
 **Objetivo:** ampliar os envios já visíveis na experiência Web e substituir definitivamente os workers separados por processamento durável e observável.
 
@@ -326,7 +334,7 @@ Cada fase deve:
 
 **Saída:** workers legados deixam de ser necessários somente após execução paralela controlada e reconciliação.
 
-## Fase 21 — Videochamada segura
+## Fase 22 — Videochamada segura
 
 **Objetivo:** levar as jornadas WebRTC funcionais das Fases 11 e 12 a uma sinalização distribuída, resiliente e pronta para produção.
 
@@ -343,7 +351,7 @@ Cada fase deve:
 
 **Saída:** somente participantes autorizados sinalizam na sala e a solução escala além de uma instância.
 
-## Fase 22 — Pagamentos internos, premium e documentos
+## Fase 23 — Pagamentos internos, premium e documentos
 
 **Objetivo:** consolidar, reconciliar e preparar para produção o histórico financeiro, o fluxo Premium e seus documentos implementados funcionalmente nas Fases 11 a 14.
 
@@ -358,7 +366,7 @@ Cada fase deve:
 
 **Saída:** invariantes financeiras e de premium cobertas por testes e relatórios de reconciliação.
 
-## Fase 23 — Administração, analytics e operação
+## Fase 24 — Administração, analytics e operação
 
 **Objetivo:** endurecer o backoffice e os analytics funcionais da Fase 14 com controles elevados e recursos de operação de produção.
 
@@ -373,7 +381,7 @@ Cada fase deve:
 
 **Saída:** trilha auditável e testes de elevação horizontal/vertical de privilégio.
 
-## Fase 24 — Robustez, desempenho e segurança ofensiva
+## Fase 25 — Robustez, desempenho e segurança ofensiva
 
 **Objetivo:** preparar o conjunto funcional para tráfego e ataques reais.
 
@@ -388,12 +396,6 @@ Cada fase deve:
 - SLOs, alertas acionáveis e runbooks.
 
 **Saída:** nenhum achado crítico/alto aberto e metas de desempenho/SLO atendidas.
-
-## Fase 25 — SEO, privacidade, cookies e conformidade Web
-
-**Estado:** planejada para depois do hardening funcional e antes da publicação definitiva da infraestrutura.
-
-**Plano detalhado:** [SEO, privacidade, cookies e conformidade Web](FASE-25-SEO-PRIVACIDADE-E-CONFORMIDADE-WEB.md).
 
 ## Fase 26 — Infraestrutura, Cloudflare e CI/CD
 
@@ -452,8 +454,8 @@ Cada fase deve:
 - **Marco A — Base confiável:** Fases 0 a 4.
 - **Marco B — MVP clínico web:** Fases 5 a 8.
 - **Marco C — Paridade funcional por perfil:** Fases 9 a 14.
-- **Marco D — Ecossistema integrado:** Fases 15 a 23.
-- **Marco E — Produção endurecida e validada:** Fases 24 a 28.
+- **Marco D — Ecossistema integrado:** Fases 15 a 24.
+- **Marco E — Produção endurecida e validada:** Fases 25 a 28.
 - **Encerramento:** Fase 29.
 
 ## Decisões que deverão ser confirmadas com o proprietário

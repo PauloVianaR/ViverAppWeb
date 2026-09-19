@@ -1,19 +1,21 @@
-# Fase 25 — SEO, privacidade, cookies e conformidade Web
+# Fase 20 — SEO, privacidade, cookies e conformidade Web
 
 ## Estado e objetivo
 
-**Estado:** planejada para depois do hardening funcional e antes da publicação definitiva da infraestrutura.
+**Estado:** antecipada por decisão do proprietário; controles técnicos implementados na branch `codex/fase-20-seo-privacidade-cookies`. A fase não atende ainda aos critérios jurídicos e de publicação: faltam dados institucionais, revisão profissional dos textos, canal de direitos e validação visual no monitor 3. O portão de indexação permanece fechado.
 
-**Branch prevista:** `codex/fase-25-seo-privacidade-conformidade`.
+**Branch:** `codex/fase-20-seo-privacidade-cookies`.
 
 Preparar o ViverApp para presença pública responsável em `viveralmenara.com`: indexar somente conteúdo público útil, estabelecer um padrão técnico de SEO, obter preferências de cookies de forma transparente, publicar documentos jurídicos versionados e fechar lacunas essenciais de confiança, acessibilidade e operação de um software Web de saúde.
 
 Esta fase não transforma `robots.txt` em controle de segurança, não indexa áreas autenticadas e não publica textos jurídicos fictícios como se tivessem revisão profissional.
 
+**Evidências e bloqueios:** [inventário de cookies e portão de publicação](fase-20/PUBLICACAO-E-INVENTARIO.md). Como a Fase 20 foi antecipada antes da antiga Fase 24 (agora 25), as medições de produção, hardening final e revisão jurídica são critérios de liberação, não premissas consideradas já realizadas.
+
 ## Dependências e limites
 
-- executar depois da Fase 24, quando as superfícies funcionais e de segurança já estiverem estabilizadas;
-- concluir antes da Fase 26 de infraestrutura e da Fase 27 de pentest;
+- executar agora, após a Fase 19, antecipando o fundamento público, de privacidade e cookies; o hardening da nova Fase 25 continua obrigatório antes de produção;
+- concluir os controles técnicos antes da Fase 26 de infraestrutura e da Fase 27 de pentest;
 - mudanças externas em DNS, Search Console, serviços analíticos ou fornecedores continuam dependentes de autorização;
 - os conteúdos finais de Termos, Privacidade, Cookies e atendimento a titulares exigem dados reais da clínica e revisão jurídica; placeholders bloqueiam produção;
 - nenhum tracker de marketing é requisito desta fase; a escolha padrão será não instalar rastreamento desnecessário;
@@ -256,7 +258,7 @@ A migration será aplicada integralmente em `viverappweb` no MySQL local 8.0.41 
 11. implementar acessibilidade, manifest, páginas de erro e `security.txt` quando os contatos existirem;
 12. medir SEO técnico, performance, acessibilidade, segurança e vazamento de dados;
 13. validar no monitor 3 e testar celular/tablet/desktop, crawler e impressão;
-14. registrar pendências jurídicas/externas reais e parar sem iniciar a Fase 26.
+14. registrar pendências jurídicas/externas reais e parar sem iniciar a Fase 21.
 
 ## Testes e evidências
 
@@ -286,4 +288,4 @@ A migration será aplicada integralmente em `viverappweb` no MySQL local 8.0.41 
 - páginas privadas e dados de saúde não aparecem em índice, cache compartilhado ou telemetria de terceiros;
 - performance, acessibilidade e metadados atendem aos gates documentados;
 - migrations eventualmente necessárias foram aplicadas e o EF regenerado;
-- pendências externas/jurídicas reais estão registradas e a Fase 26 não foi iniciada.
+- pendências externas/jurídicas reais estão registradas e a Fase 21 não foi iniciada.

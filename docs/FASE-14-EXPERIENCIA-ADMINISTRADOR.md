@@ -115,7 +115,7 @@ A superfície mínima criada na Fase 10 será absorvida pela administração def
 - dispensar/remover da coleção quando permitido;
 - texto sem dado clínico sensível;
 - e-mail/SMS externos quando configurados, nunca Firebase/push;
-- operação durável completa será endurecida na Fase 20.
+- operação durável completa será endurecida na Fase 21.
 
 ## Usuários
 

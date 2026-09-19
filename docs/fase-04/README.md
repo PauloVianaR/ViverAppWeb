@@ -16,7 +16,7 @@ Esta fase substitui o bloqueio temporário da Fase 3 por uma identidade real bas
 - policies deny-by-default, sessão limitada sem roles enquanto o MFA estiver pendente e auditoria dos eventos críticos;
 - migration SQL `0005` aplicada no MySQL 8.0.41 e novo scaffold feito somente depois da aplicação.
 
-O worker desta fase consome apenas templates `identity.*`. Templates gerais, notificações administrativas e operação completa da comunicação continuam reservados à Fase 20.
+O worker desta fase consome apenas templates `identity.*`. Templates gerais, notificações administrativas e operação completa da comunicação continuam reservados à Fase 21.
 
 ## Decisão sobre senhas legadas
 

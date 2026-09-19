@@ -1,7 +1,10 @@
 using System.Net;
 using System.Text;
+using System.Xml.Linq;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using ViverApp.Web;
 using ViverApp.Web.Navigation;
 using Xunit;
 
@@ -36,6 +39,57 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.Contains("Escolha seu perfil", html, StringComparison.Ordinal);
         Assert.Contains("Ocorreu um erro interno não classificado. Contate o administrador do sistema.", html, StringComparison.Ordinal);
         Assert.Contains("role=\"alertdialog\"", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UnapprovedPublicSite_RejectsIndexingAndDoesNotExposeSitemap()
+    {
+        using var client = CreateClient();
+        using var home = await client.GetAsync("/");
+        var html = await ReadUtf8Async(home.Content);
+        Assert.Equal("noindex, nofollow, noarchive", home.Headers.GetValues("X-Robots-Tag").Single());
+        Assert.Contains("rel=\"canonical\"", html, StringComparison.Ordinal);
+        Assert.Contains("https://viveralmenara.com/", html, StringComparison.Ordinal);
+        Assert.Contains("Preferências de cookies", html, StringComparison.Ordinal);
+        Assert.Contains("href=\"/privacidade\"", html, StringComparison.Ordinal);
+
+        using var robots = await client.GetAsync("/robots.txt");
+        Assert.Equal(HttpStatusCode.OK, robots.StatusCode);
+        Assert.Contains("text/plain", robots.Content.Headers.ContentType?.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Disallow: /", await robots.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        using var sitemap = await client.GetAsync("/sitemap.xml");
+        Assert.Equal(HttpStatusCode.NotFound, sitemap.StatusCode);
+    }
+
+    [Fact]
+    public async Task LegalDraftsRemainClearlyUnapprovedAndPrivateAreasAreNotCached()
+    {
+        using var client = CreateClient();
+        foreach (var path in new[] { "/termos", "/privacidade", "/cookies" })
+        {
+            using var response = await client.GetAsync(path);
+            var html = await ReadUtf8Async(response.Content);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Contains("Documento em elaboração", html, StringComparison.Ordinal);
+            Assert.Contains("vigência não iniciada", html, StringComparison.Ordinal);
+            Assert.Equal("noindex, nofollow, noarchive", response.Headers.GetValues("X-Robots-Tag").Single());
+        }
+
+        using var protectedResponse = await client.GetAsync("/paciente");
+        Assert.True(protectedResponse.Headers.CacheControl?.NoStore);
+        Assert.Equal("noindex, nofollow, noarchive", protectedResponse.Headers.GetValues("X-Robots-Tag").Single());
+    }
+
+    [Fact]
+    public void SitemapCatalog_ContainsOnlyApprovedPublicRouteShapes()
+    {
+        var policy = factory.Services.GetRequiredService<PublicSitePolicy>();
+        var xml = XDocument.Parse(policy.SitemapXml());
+        XNamespace ns = "http://www.sitemaps.org/schemas/sitemap/0.9";
+        var locations = xml.Descendants(ns + "loc").Select(node => node.Value).ToArray();
+        Assert.Equal(8, locations.Length);
+        Assert.All(locations, url => Assert.StartsWith("https://viveralmenara.com/", url, StringComparison.Ordinal));
+        Assert.DoesNotContain(locations, url => url.Contains("/acesso", StringComparison.Ordinal) || url.Contains("/paciente", StringComparison.Ordinal));
     }
 
     [Theory]

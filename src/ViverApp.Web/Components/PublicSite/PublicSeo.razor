@@ -1,0 +1,21 @@
+@inject PublicSitePolicy Policy
+
+<PageTitle>@Title | Centro Médico Viver</PageTitle>
+<HeadContent>
+    <meta name="description" content="@Description" />
+    <meta name="robots" content="@(Policy.CanIndex ? "index, follow" : "noindex, nofollow, noarchive")" />
+    <link rel="canonical" href="@Policy.Canonical(Path)" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:site_name" content="Centro Médico Viver" />
+    <meta property="og:title" content="@Title" />
+    <meta property="og:description" content="@Description" />
+    <meta property="og:url" content="@Policy.Canonical(Path)" />
+    <meta property="og:image" content="@Policy.Canonical("/images/logo.png")" />
+</HeadContent>
+
+@code {
+    [Parameter, EditorRequired] public required string Title { get; set; }
+    [Parameter, EditorRequired] public required string Description { get; set; }
+    [Parameter, EditorRequired] public required string Path { get; set; }
+}
