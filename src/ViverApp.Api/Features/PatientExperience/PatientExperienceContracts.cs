@@ -7,7 +7,7 @@ namespace ViverApp.Api.Features.PatientExperience;
 
 public sealed record PatientClinicResponse(string Name, string Address, string? Phone, string? RouteUrl, string Timezone);
 public sealed record PatientServiceResponse(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode,
-    ushort DurationMinutes, decimal BasePrice, decimal DiscountPercent, decimal PriceAmount);
+    ushort DurationMinutes, decimal BasePrice, decimal DiscountPercent, decimal PriceAmount, bool RequiresPayment);
 public sealed record PatientPromotionResponse(string Title, string Description, string? Url);
 public sealed record PatientHomeResponse(string FullName, bool IsPremium, PatientClinicResponse Clinic,
     PatientAppointmentResponse? NextAppointment, IReadOnlyList<PatientPromotionResponse> Promotions);

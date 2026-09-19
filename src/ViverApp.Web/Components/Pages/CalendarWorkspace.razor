@@ -1,0 +1,80 @@
+@page "/paciente/agenda"
+@page "/medico/agenda"
+@page "/psicologo/agenda"
+@page "/gestao/agenda"
+@page "/administracao/agenda"
+@inherits PatientPageBase
+@using System.Globalization
+@using static ViverApp.Web.PatientLabels
+
+<PageTitle>Agenda | ViverApp</PageTitle>
+<header class="workspace-heading"><div><p class="eyebrow">@AreaLabel</p><h1 class="page-title">Agenda</h1><p class="page-description">Visualize os atendimentos por dia, semana, mês ou ano.</p></div>@if(Role=="patient"){<a class="button" href="/paciente/agendar">Novo agendamento</a>}</header>
+@if(Notice is not null){<p class="notice notice--error" role="alert">@Notice</p>}
+
+<section class="surface calendar-toolbar" aria-label="Controles da agenda">
+    <div class="calendar-toolbar__navigation"><button class="button button--secondary" @onclick="Previous" aria-label="Período anterior">‹</button><button class="button button--secondary" @onclick="Today">Hoje</button><button class="button button--secondary" @onclick="Next" aria-label="Próximo período">›</button><strong>@PeriodLabel</strong></div>
+    <div class="calendar-view-switch" role="group" aria-label="Visualização">@foreach(var option in Views){<button class="button @(View==option.Code?null:"button--secondary")" aria-pressed="@(View==option.Code)" @onclick="()=>ChangeView(option.Code)">@option.Label</button>}</div>
+    <div class="field"><label for="calendar-anchor">Data de referência</label><input id="calendar-anchor" type="date" value="@Anchor.ToString("yyyy-MM-dd")" @onchange="AnchorChanged" /></div>
+    @if(CanChooseProfessional){<div class="field"><label for="calendar-professional">Profissional</label><select id="calendar-professional" value="@ProfessionalId" @onchange="ProfessionalChanged"><option value="0">Todos</option>@foreach(var item in Professionals){<option value="@item.AccountId">@item.FullName · @item.LicenseLabel</option>}</select></div>}
+</section>
+
+@if(Loading){<LoadingSkeleton Lines="8"/>}
+else if(Data is null){<InterfaceState Title="Agenda indisponível" Description="Atualize a página para tentar novamente." Icon="calendar"/>}
+else if(View=="year")
+{
+    <section class="calendar-year" aria-label="Agenda anual">
+        @for(var month=1;month<=12;month++){var current=month;<article class="surface calendar-mini-month"><h2>@CultureInfo.GetCultureInfo("pt-BR").DateTimeFormat.GetMonthName(current)</h2><div class="calendar-mini-grid">@foreach(var label in WeekLabels){<span class="calendar-week-label">@label[..1]</span>}@foreach(var day in MonthCells(Anchor.Year,current)){if(day is null){<span></span>}else{var aggregate=Day(day.Value);<button type="button" class="calendar-mini-day @(aggregate is null?null:"calendar-mini-day--busy")" title="@(aggregate is null?$"{day:dd/MM}: sem atendimentos":$"{day:dd/MM}: {aggregate.Count} atendimento(s)")" @onclick="()=>OpenDay(day.Value)"><span>@day.Value.Day</span>@if(aggregate is not null){<i aria-hidden="true"></i><span class="sr-only">@aggregate.Count atendimento(s)</span>}</button>}}</div></article>}
+    </section>
+}
+else if(View=="month")
+{
+    <section class="surface calendar-month" aria-label="Agenda mensal"><div class="calendar-month-grid">@foreach(var label in WeekLabels){<strong class="calendar-week-label">@label</strong>}@foreach(var day in MonthCells(Anchor.Year,Anchor.Month)){if(day is null){<div class="calendar-month-day calendar-month-day--outside"></div>}else{<div class="calendar-month-day"><button class="calendar-day-number" @onclick="()=>OpenDay(day.Value)">@day.Value.Day</button>@foreach(var item in ItemsFor(day.Value)){<a class="calendar-event appointment-card--@PatientLabels.StatusCss(item.StatusCode)" href="@Details(item.Id)"><strong>#@item.AppointmentNumber @item.PatientName</strong><span>@Local(item.StartsAtUtc).ToString("HH:mm") · @Status(item.StatusCode)</span></a>}</div>}}</div></section>
+}
+else
+{
+    var days=VisibleDays();
+    <section class="calendar-timeline calendar-timeline--@View" aria-label="Agenda por @View">
+        @foreach(var day in days){var placed=PlaceEvents(day);<article class="surface calendar-day-column"><header><button @onclick="()=>OpenDay(day)"><strong>@day.ToString("ddd",CultureInfo.GetCultureInfo("pt-BR"))</strong><span>@day.ToString("dd/MM")</span></button></header><div class="calendar-day-events"><div class="calendar-slot-area" style="height:@TimelineHeight.ToString(CultureInfo.InvariantCulture)px">@for(var hour=TimelineStartHour;hour<=TimelineEndHour;hour++){<span class="calendar-hour-marker" style="top:@((hour-TimelineStartHour)*108)px"><span>@hour.ToString("00"):00</span></span>}@foreach(var entry in placed){var item=entry.Item;<a class="calendar-event appointment-card--@PatientLabels.StatusCss(item.StatusCode)" style="@EventStyle(entry)" href="@Details(item.Id)" title="@($"#{item.AppointmentNumber} {item.PatientName} · {Local(item.StartsAtUtc):HH:mm}–{Local(item.EndsAtUtc):HH:mm} · {Status(item.StatusCode)}")"><time>@Local(item.StartsAtUtc).ToString("HH:mm")–@Local(item.EndsAtUtc).ToString("HH:mm")</time><strong>#@item.AppointmentNumber @item.PatientName</strong><span>@item.AppointmentTypeName · @Status(item.StatusCode)</span>@if(CanChooseProfessional){<small>@item.ProfessionalName</small>}</a>}</div>@if(placed.Count==0){<p class="muted calendar-empty">Sem atendimentos</p>}</div></article>}
+    </section>
+}
+
+@code {
+    private WebCalendar? Data;
+    private IReadOnlyList<WebCalendarProfessional> Professionals=[];
+    private string View="month";
+    private DateOnly Anchor=DateOnly.FromDateTime(DateTime.Today);
+    private ulong ProfessionalId;private bool PreferenceLoaded;
+    private static readonly (string Code,string Label)[] Views=[("day","Dia"),("week","Semana"),("month","Mês"),("year","Ano")];
+    private static readonly string[] WeekLabels=["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"];
+    private string Role { get { var path=Navigation.ToBaseRelativePath(Navigation.Uri);return path.StartsWith("paciente",StringComparison.OrdinalIgnoreCase)?"patient":path.StartsWith("medico",StringComparison.OrdinalIgnoreCase)?"doctor":path.StartsWith("psicologo",StringComparison.OrdinalIgnoreCase)?"psychologist":path.StartsWith("gestao",StringComparison.OrdinalIgnoreCase)?"manager":"administrator"; } }
+    private string AreaLabel=>Role switch{"patient"=>"Paciente","doctor"=>"Médico","psychologist"=>"Psicólogo","manager"=>"Gestor",_=>"Administrador"};
+    private bool CanChooseProfessional=>Role is "manager" or "administrator";
+    protected override async Task Load(){if(!PreferenceLoaded){var preference=await Get<WebCalendarViewPreference>("api/v1/me/preferences/calendar-view");View=preference?.Mode??"month";PreferenceLoaded=true;}if(CanChooseProfessional&&Professionals.Count==0)Professionals=await Get<IReadOnlyList<WebCalendarProfessional>>("api/v1/calendar/professionals")??[];var selected=ProfessionalId==0?"":$"&professionalAccountId={ProfessionalId}";Data=await Get<WebCalendar>($"api/v1/calendar?view={View}&anchor={Anchor:yyyy-MM-dd}{selected}");}
+    private DateTime Local(DateTime value){try{return TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(value,DateTimeKind.Utc),TimeZoneInfo.FindSystemTimeZoneById(Data?.TimezoneName??"America/Sao_Paulo"));}catch{return value.ToLocalTime();}}
+    private string PeriodLabel=>View switch{"day"=>Anchor.ToString("dd 'de' MMMM 'de' yyyy",CultureInfo.GetCultureInfo("pt-BR")),"week"=>$"{Data?.RangeStart:dd/MM}–{Data?.RangeEnd:dd/MM/yyyy}","month"=>Anchor.ToString("MMMM 'de' yyyy",CultureInfo.GetCultureInfo("pt-BR")),_=>Anchor.Year.ToString(CultureInfo.InvariantCulture)};
+    private IEnumerable<DateOnly> VisibleDays(){var start=Data?.RangeStart??Anchor;var end=Data?.RangeEnd??Anchor;for(var day=start;day<=end;day=day.AddDays(1))yield return day;}
+    private IEnumerable<WebCalendarItem> ItemsFor(DateOnly day){var start=day.ToDateTime(TimeOnly.MinValue);var end=start.AddDays(1);return Data?.Items.Where(item=>Local(item.StartsAtUtc)<end&&Local(item.EndsAtUtc)>start)??[];}
+    private int TimelineStartHour=>Math.Min(7,Data?.Items.Count>0?Data.Items.Min(item=>Local(item.StartsAtUtc).Hour):7);
+    private int TimelineEndHour=>Math.Max(20,Data?.Items.Count>0?Data.Items.Max(item=>Math.Min(24,Math.Max(Local(item.StartsAtUtc).Hour+2,Local(item.EndsAtUtc).Hour+1))):20);
+    private int TimelineHeight=>(TimelineEndHour-TimelineStartHour)*108;
+    private sealed record PlacedEvent(WebCalendarItem Item,double StartMinute,double DurationMinute,int Lane,int Columns);
+    private IReadOnlyList<PlacedEvent> PlaceEvents(DateOnly day)
+    {
+        var dayStart=day.ToDateTime(TimeOnly.MinValue);var dayEnd=dayStart.AddDays(1);
+        var intervals=ItemsFor(day).Select(item=>new{Item=item,Start=Math.Max(0,(Local(item.StartsAtUtc)-dayStart).TotalMinutes),End=Math.Min(1440,(Local(item.EndsAtUtc)-dayStart).TotalMinutes)})
+            .Where(item=>item.End>item.Start).OrderBy(item=>item.Start).ThenBy(item=>item.Item.AppointmentNumber).ToArray();
+        var active=new List<(double End,int Lane)>();var placed=new List<PlacedEvent>();var maxColumns=1;
+        foreach(var interval in intervals){active.RemoveAll(item=>item.End<=interval.Start);var lane=0;while(active.Any(item=>item.Lane==lane))lane++;active.Add((interval.End,lane));maxColumns=Math.Max(maxColumns,active.Count);placed.Add(new(interval.Item,interval.Start,interval.End-interval.Start,lane,0));}
+        return placed.Select(item=>item with{Columns=maxColumns}).ToArray();
+    }
+    private string EventStyle(PlacedEvent entry){var top=(entry.StartMinute-TimelineStartHour*60)*1.8;var height=Math.Max(27,entry.DurationMinute*1.8-3);var left=entry.Lane*100d/entry.Columns;var width=100d/entry.Columns;return FormattableString.Invariant($"top:{top:0.##}px;height:{height:0.##}px;left:calc({left:0.##}% + 2px);width:calc({width:0.##}% - 4px)");}
+    private WebCalendarDay? Day(DateOnly day)=>Data?.Days.FirstOrDefault(item=>item.Date==day);
+    private static IEnumerable<DateOnly?> MonthCells(int year,int month){var first=new DateOnly(year,month,1);var offset=((int)first.DayOfWeek+6)%7;for(var i=0;i<offset;i++)yield return null;for(var day=1;day<=DateTime.DaysInMonth(year,month);day++)yield return new DateOnly(year,month,day);}
+    private string Details(ulong id)=>Role switch{"patient"=>$"/paciente/atendimentos/{id}","doctor"=>$"/medico/atendimentos/{id}","psychologist"=>$"/psicologo/atendimentos/{id}","manager"=>$"/gestao/atendimentos/{id}",_=>$"/administracao/atendimentos/{id}"};
+    private Task ChangeView(string value)=>Run(async()=>{var preference=await Request<WebCalendarViewPreference>("api/v1/me/preferences/calendar-view","PUT",new{mode=value});View=preference?.Mode??value;await Load();});
+    private Task Previous()=>Move(-1);private Task Next()=>Move(1);private Task Today()=>Run(async()=>{Anchor=DateOnly.FromDateTime(DateTime.Today);await Load();});
+    private Task Move(int direction)=>Run(async()=>{Anchor=View switch{"day"=>Anchor.AddDays(direction),"week"=>Anchor.AddDays(direction*7),"month"=>Anchor.AddMonths(direction),_=>Anchor.AddYears(direction)};await Load();});
+    private Task OpenDay(DateOnly day)=>Run(async()=>{Anchor=day;View="day";await Load();});
+    private Task AnchorChanged(ChangeEventArgs args)=>Run(async()=>{if(DateOnly.TryParse(args.Value?.ToString(),out var value))Anchor=value;await Load();});
+    private Task ProfessionalChanged(ChangeEventArgs args)=>Run(async()=>{ProfessionalId=ulong.TryParse(args.Value?.ToString(),out var value)?value:0;await Load();});
+}

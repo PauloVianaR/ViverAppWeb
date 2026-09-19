@@ -3,11 +3,11 @@ using System.Collections.Generic;
 
 namespace ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 
-public partial class DoctorNotification
+public partial class ProfessionalNotification
 {
     public ulong Id { get; set; }
 
-    public ulong DoctorAccountId { get; set; }
+    public ulong ProfessionalAccountId { get; set; }
 
     public ulong AppointmentId { get; set; }
 
@@ -23,5 +23,5 @@ public partial class DoctorNotification
 
     public virtual Appointment Appointment { get; set; } = null!;
 
-    public virtual DoctorProfile DoctorAccount { get; set; } = null!;
+    public virtual ProfessionalProfile ProfessionalAccount { get; set; } = null!;
 }

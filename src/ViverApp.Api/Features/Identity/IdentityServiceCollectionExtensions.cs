@@ -152,6 +152,7 @@ public static class IdentityServiceCollectionExtensions
             .Build());
         authorization.AddPolicy(ViverAppPolicies.Patient, policy => policy.RequireRole(ViverAppRoles.Patient));
         authorization.AddPolicy(ViverAppPolicies.Doctor, policy => policy.RequireRole(ViverAppRoles.Doctor));
+        authorization.AddPolicy(ViverAppPolicies.ClinicalProfessional, policy => policy.RequireRole(ViverAppRoles.Doctor, ViverAppRoles.Psychologist));
         authorization.AddPolicy(ViverAppPolicies.Manager, policy => policy.RequireRole(ViverAppRoles.Manager));
         authorization.AddPolicy(
             ViverAppPolicies.Administrator,
@@ -162,6 +163,7 @@ public static class IdentityServiceCollectionExtensions
             ViverAppPolicies.ClinicalStaff,
             policy => policy.RequireRole(
                 ViverAppRoles.Doctor,
+                ViverAppRoles.Psychologist,
                 ViverAppRoles.Manager,
                 ViverAppRoles.Administrator));
         authorization.AddPolicy(
@@ -178,9 +180,9 @@ public static class IdentityServiceCollectionExtensions
         })
         {
             authorization.AddPolicy(policyName, policy => policy.RequireRole(
-                ViverAppRoles.Doctor, ViverAppRoles.Manager, ViverAppRoles.Administrator));
+                ViverAppRoles.Doctor, ViverAppRoles.Psychologist, ViverAppRoles.Manager, ViverAppRoles.Administrator));
         }
-        authorization.AddPolicy(ViverAppPolicies.MedicalRecordWrite, policy => policy.RequireRole(ViverAppRoles.Doctor, ViverAppRoles.Manager));
+        authorization.AddPolicy(ViverAppPolicies.MedicalRecordWrite, policy => policy.RequireRole(ViverAppRoles.Doctor, ViverAppRoles.Psychologist, ViverAppRoles.Manager));
         authorization.AddPolicy(ViverAppPolicies.MedicalRecordAudit, policy => policy
             .RequireRole(ViverAppRoles.Administrator)
             .RequireClaim(ViverAppClaimTypes.MfaSatisfied, bool.TrueString));

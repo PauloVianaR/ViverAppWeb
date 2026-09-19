@@ -19,5 +19,5 @@ public partial class Specialty
 
     public ulong RowVersion { get; set; }
 
-    public virtual ICollection<DoctorSpecialty> DoctorSpecialties { get; set; } = new List<DoctorSpecialty>();
+    public virtual ICollection<ProfessionalSpecialty> ProfessionalSpecialties { get; set; } = new List<ProfessionalSpecialty>();
 }

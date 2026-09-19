@@ -22,10 +22,10 @@ public partial class ViverAppDbContext
         modelBuilder.Entity<ClinicWeeklyHour>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
-        modelBuilder.Entity<DoctorProfile>()
+        modelBuilder.Entity<ProfessionalProfile>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
-        modelBuilder.Entity<DoctorWeeklyHour>()
+        modelBuilder.Entity<ProfessionalWeeklyHour>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
         modelBuilder.Entity<Holiday>()
@@ -69,7 +69,7 @@ public partial class ViverAppDbContext
         modelBuilder.Entity<AdministratorNotification>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
-        modelBuilder.Entity<DoctorNotification>()
+        modelBuilder.Entity<ProfessionalNotification>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
         modelBuilder.Entity<ApplicationSetting>()

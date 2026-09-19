@@ -1,7 +1,7 @@
 namespace ViverApp.Web;
 
 public sealed record PatientClinic(string Name, string Address, string? Phone, string? RouteUrl, string Timezone);
-public sealed record PatientService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal BasePrice, decimal DiscountPercent, decimal PriceAmount);
+public sealed record PatientService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal BasePrice, decimal DiscountPercent, decimal PriceAmount, bool RequiresPayment);
 public sealed record PatientPromotion(string Title, string Description, string? Url);
 public sealed record PatientHomeData(string FullName, bool IsPremium, PatientClinic Clinic, PatientAppointment? NextAppointment, IReadOnlyList<PatientPromotion> Promotions);
 public sealed record PatientAppointment(WebAppointment Appointment, string CategoryCode, string Specialties, string PaymentStatus,

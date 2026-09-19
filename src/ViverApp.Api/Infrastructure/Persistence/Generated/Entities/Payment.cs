@@ -9,6 +9,8 @@ public partial class Payment
 
     public ulong AppointmentId { get; set; }
 
+    public bool AppointmentRequiresPayment { get; set; }
+
     public ulong? SupersedesPaymentId { get; set; }
 
     public string ProviderCode { get; set; } = null!;
@@ -72,6 +74,8 @@ public partial class Payment
     public string? AuthorizationReference { get; set; }
 
     public virtual Appointment? Appointment { get; set; }
+
+    public virtual Appointment Appointment1 { get; set; } = null!;
 
     public virtual Appointment AppointmentNavigation { get; set; } = null!;
 

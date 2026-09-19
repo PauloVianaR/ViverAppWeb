@@ -1,10 +1,9 @@
-@page "/paciente/agenda"
+@page "/paciente/atendimentos"
 @inherits PatientPageBase
 @using static ViverApp.Web.PatientLabels
-<PageTitle>Minha agenda | ViverApp</PageTitle>
-<header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Minha agenda</h1><p class="page-description">Próximos atendimentos, histórico e documentos do seu cuidado.</p></div><a class="button" href="/paciente/agendar">Novo agendamento</a></header>
+<PageTitle>Atendimentos | ViverApp</PageTitle>
+<header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Atendimentos</h1><p class="page-description">Consulte seus atendimentos e documentos do cuidado.</p></div><a class="button" href="/paciente/agendar">Novo agendamento</a></header>
 @if (Notice is not null) { <p class="notice notice--error" role="alert">@Notice</p> }
-<div class="patient-tabs" aria-label="Visualização da agenda"><button class="button @(View == "future" ? null : "button--secondary")" aria-pressed="@(View == "future")" disabled="@Busy" @onclick='() => ChangeView("future")'>Próximos</button><button class="button @(View == "history" ? null : "button--secondary")" aria-pressed="@(View == "history")" disabled="@Busy" @onclick='() => ChangeView("history")'>Histórico</button></div>
 <MobileFilterPanel AriaLabel="Filtros da agenda">
     <form @onsubmit="Apply" @onsubmit:preventDefault>
         <div class="patient-filter-grid">
@@ -25,14 +24,13 @@ else { <InterfaceState Title="Nenhum atendimento encontrado" Description="Altere
 @code {
     private WebPage<PatientAppointment>? PageData;
     private PatientClinic? Clinic;
-    private string View = "future", Search = "", StatusFilter = "", CategoryFilter = "", Modality = "";
-    private DateTime? From, Until;
+    private string View = "all", Search = "", StatusFilter = "", CategoryFilter = "", Modality = "";
+    private DateTime? From=DateTime.Today, Until=DateTime.Today;
     private ulong? AppointmentNumber;
     private int Page = 1;
     protected override async Task Load() { await LoadAppointmentViewAsync(); Clinic ??= await Get<PatientClinic>("api/v1/patient/experience/clinic"); PageData = await Get<WebPage<PatientAppointment>>($"api/v1/patient/experience/agenda?page={Page}&view={View}&search={Escape(Search)}&appointmentNumber={AppointmentNumber}&status={StatusFilter}&category={CategoryFilter}&modality={Modality}&from={From:yyyy-MM-dd}&until={Until:yyyy-MM-dd}"); }
     private Task Apply() => Run(async () => { Page = 1; await Load(); });
-    private Task ChangeView(string view) => Run(async () => { View = view; Page = 1; await Load(); });
-    private Task Clear() => Run(async () => { Search = StatusFilter = CategoryFilter = Modality = ""; AppointmentNumber = null; From = Until = null; Page = 1; await Load(); });
+    private Task Clear() => Run(async () => { Search = StatusFilter = CategoryFilter = Modality = ""; AppointmentNumber = null; From = Until = DateTime.Today; Page = 1; await Load(); });
     private Task Previous() => Run(async () => { Page--; await Load(); });
     private Task Next() => Run(async () => { Page++; await Load(); });
 }

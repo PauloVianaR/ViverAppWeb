@@ -26,7 +26,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
     {
         var values = await database.ApplicationSettings.AsNoTracking()
             .Where(item => item.SettingKey == "manager.appointment_types_enabled"
-                || item.SettingKey == "manager.doctor_schedules_enabled"
+                || item.SettingKey == "manager.professional_schedules_enabled"
                 || item.SettingKey == "premium.manager_can_manage"
                 || item.SettingKey == "manager.medical_records_write_enabled"
                 || item.SettingKey == "cash.manager_can_reopen"
@@ -34,7 +34,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
             .ToDictionaryAsync(item => item.SettingKey, item => item.ValueJson, ct);
         return new(
             ReadManagerCapability(values, "manager.appointment_types_enabled"),
-            ReadManagerCapability(values, "manager.doctor_schedules_enabled"),
+            ReadManagerCapability(values, "manager.professional_schedules_enabled"),
             ReadManagerCapability(values, "premium.manager_can_manage"),
             ReadManagerCapability(values, "manager.medical_records_write_enabled"),
             ReadManagerCapability(values, "cash.manager_can_reopen"),
@@ -51,14 +51,14 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
             .OrderBy(x => x.StartsAtUtc).ToArrayAsync(ct);
         var mapped = rows.Select(MapAppointment).ToArray();
         var sources = new ManagerHomeSources(rows.Select(x => x.AppointmentNumber).ToArray(),
-            rows.GroupBy(x => x.DoctorAccountId).Select(x => x.First().DoctorAccount.Account.FullName).OrderBy(x => x).ToArray(),
+            rows.GroupBy(x => x.ProfessionalAccountId).Select(x => x.First().ProfessionalAccount.Account.FullName).OrderBy(x => x).ToArray(),
             rows.Where(x => x.CurrentPayment?.StatusCode == "paid").Select(x => x.AppointmentNumber).ToArray(),
-            rows.Where(x => x.CurrentPayment?.StatusCode != "paid").Select(x => x.AppointmentNumber).ToArray(),
+            rows.Where(x => x.RequiresPayment && x.CurrentPayment?.StatusCode != "paid").Select(x => x.AppointmentNumber).ToArray(),
             rows.Where(x => x.ModalityCode == "online").Select(x => x.AppointmentNumber).ToArray(),
             rows.Where(x => x.ModalityCode == "in_person").Select(x => x.AppointmentNumber).ToArray());
-        return new(profile, new(rows.Length, rows.Select(x => x.DoctorAccountId).Distinct().Count(),
+        return new(profile, new(rows.Length, rows.Select(x => x.ProfessionalAccountId).Distinct().Count(),
             rows.Count(x => x.CurrentPayment != null && x.CurrentPayment.StatusCode == "paid"),
-            rows.Count(x => x.CurrentPayment == null || x.CurrentPayment.StatusCode != "paid"),
+            rows.Count(x => x.RequiresPayment && (x.CurrentPayment == null || x.CurrentPayment.StatusCode != "paid")),
             rows.Count(x => x.ModalityCode == "online"), rows.Count(x => x.ModalityCode == "in_person")), sources, mapped);
     }
 
@@ -85,13 +85,13 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
     }
 
     public async Task<IReadOnlyList<ManagerDoctorOption>> DoctorsAsync(CancellationToken ct) =>
-        await database.DoctorProfiles.AsNoTracking().Where(x => x.Account.StatusCode == "active")
+        await database.ProfessionalProfiles.AsNoTracking().Where(x => x.Account.StatusCode == "active")
             .OrderBy(x => x.Account.FullName).Select(x => new ManagerDoctorOption(x.AccountId, x.Account.FullName,
-                "CRM " + x.LicenseStateCode + " " + x.LicenseNumber)).ToArrayAsync(ct);
+                x.LicenseTypeCode + " " + x.LicenseStateCode + " " + x.LicenseNumber)).ToArrayAsync(ct);
 
     public async Task<IReadOnlyList<ManagerServiceOption>> ServicesAsync(CancellationToken ct) =>
         await database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name)
-            .Select(x => new ManagerServiceOption(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode, x.DurationMinutes, x.PriceAmount)).ToArrayAsync(ct);
+            .Select(x => new ManagerServiceOption(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode, x.DurationMinutes, x.PriceAmount, x.RequiresPayment)).ToArrayAsync(ct);
 
     public async Task<ManagerAgendaResponse> AgendaAsync(DateOnly from, DateOnly to, string? status, string? modality,
         string? category, ulong? doctor, ulong? appointmentNumber, string? payment, TimeOnly? startTime, TimeOnly? endTime, string? search,
@@ -109,12 +109,12 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         else if (status is not null) query = query.Where(x => x.StatusCode == status);
         if (modality is not null) query = query.Where(x => x.ModalityCode == modality);
         if (category is not null) query = query.Where(x => x.AppointmentType.CategoryCode == category);
-        if (doctor.HasValue) query = query.Where(x => x.DoctorAccountId == doctor);
+        if (doctor.HasValue) query = query.Where(x => x.ProfessionalAccountId == doctor);
         if (appointmentNumber.HasValue) query = query.Where(x => x.AppointmentNumber == appointmentNumber);
         if (payment == "paid") query = query.Where(x => x.CurrentPayment != null && x.CurrentPayment.StatusCode == "paid");
-        if (payment == "pending") query = query.Where(x => x.CurrentPayment == null || x.CurrentPayment.StatusCode != "paid");
-        var term = Text(search); if (term is not null) { if (term.Length > 120) throw Invalid("A busca deve ter no máximo 120 caracteres."); var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.PatientAccount.FullName.Contains(term) || x.DoctorAccount.Account.FullName.Contains(term) || x.AppointmentType.Name.Contains(term) || isNumber && x.AppointmentNumber == number); }
-        query = sort switch { "date_desc" => query.OrderByDescending(x => x.StartsAtUtc), "patient" => query.OrderBy(x => x.PatientAccount.FullName).ThenBy(x => x.StartsAtUtc), "doctor" => query.OrderBy(x => x.DoctorAccount.Account.FullName).ThenBy(x => x.StartsAtUtc), _ => query.OrderBy(x => x.StartsAtUtc) };
+        if (payment == "pending") query = query.Where(x => x.RequiresPayment && (x.CurrentPayment == null || x.CurrentPayment.StatusCode != "paid"));
+        var term = Text(search); if (term is not null) { if (term.Length > 120) throw Invalid("A busca deve ter no máximo 120 caracteres."); var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.PatientAccount.FullName.Contains(term) || x.ProfessionalAccount.Account.FullName.Contains(term) || x.AppointmentType.Name.Contains(term) || isNumber && x.AppointmentNumber == number); }
+        query = sort switch { "date_desc" => query.OrderByDescending(x => x.StartsAtUtc), "patient" => query.OrderBy(x => x.PatientAccount.FullName).ThenBy(x => x.StartsAtUtc), "doctor" => query.OrderBy(x => x.ProfessionalAccount.Account.FullName).ThenBy(x => x.StartsAtUtc), _ => query.OrderBy(x => x.StartsAtUtc) };
         int total;
         Appointment[] rows;
         ulong[] filteredNumbers;
@@ -144,12 +144,12 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
             rows = await query.Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(ct);
         }
         var filteredNumberSet = filteredNumbers.ToHashSet();
-        var all = (await query.Select(x => new { x.AppointmentNumber, x.ModalityCode, Rescheduled = x.AppointmentRescheduleHistories.Any() || x.RescheduledFromAppointmentId != null, Paid = x.CurrentPayment != null && x.CurrentPayment.StatusCode == "paid" }).ToArrayAsync(ct))
+        var all = (await query.Select(x => new { x.AppointmentNumber, x.ModalityCode, x.RequiresPayment, Rescheduled = x.AppointmentRescheduleHistories.Any() || x.RescheduledFromAppointmentId != null, Paid = x.CurrentPayment != null && x.CurrentPayment.StatusCode == "paid" }).ToArrayAsync(ct))
             .Where(x => filteredNumberSet.Contains(x.AppointmentNumber))
             .ToArray();
         var sources = new ManagerAgendaSources(filteredNumbers, all.Where(x => x.ModalityCode == "online").Select(x => x.AppointmentNumber).ToArray(),
             all.Where(x => x.ModalityCode == "in_person").Select(x => x.AppointmentNumber).ToArray(), all.Where(x => x.Rescheduled).Select(x => x.AppointmentNumber).ToArray(),
-            all.Where(x => x.Paid).Select(x => x.AppointmentNumber).ToArray(), all.Where(x => !x.Paid).Select(x => x.AppointmentNumber).ToArray());
+            all.Where(x => x.Paid).Select(x => x.AppointmentNumber).ToArray(), all.Where(x => x.RequiresPayment && !x.Paid).Select(x => x.AppointmentNumber).ToArray());
         var counters = new ManagerAgendaCounters(total, sources.Online.Count, sources.InPerson.Count, sources.Rescheduled.Count, sources.Paid.Count, sources.PendingPayment.Count);
         return new(counters, sources, new(rows.Select(MapAppointment).ToArray(), page, pageSize, total));
     }
@@ -409,10 +409,11 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         if (appointment.RowVersion != request.AppointmentRowVersion) throw Conflict("O atendimento foi alterado por outra sessão.");
         if (appointment.ModalityCode != "in_person" || appointment.PaymentLocationCode != "clinic") throw Conflict("Somente pagamentos presenciais escolhidos para a clínica podem ser confirmados manualmente.");
         if (appointment.StatusCode is not ("pending" or "confirmed")) throw Conflict("O atendimento não aceita confirmação de pagamento.");
+        if (!appointment.RequiresPayment) throw Conflict("Este atendimento não possui cobrança.");
         var payment = await database.Payments.FromSqlInterpolated($"SELECT * FROM payments WHERE appointment_id={appointmentId} AND active_appointment_id IS NOT NULL ORDER BY id DESC LIMIT 1 FOR UPDATE").SingleOrDefaultAsync(ct);
         if (payment is not null && payment.StatusCode == "paid") throw Conflict("O pagamento já foi reconciliado.");
         if (payment is not null && payment.ProviderCode != "internal") throw Conflict("Existe uma cobrança online vinculada; faça a reconciliação pelo provedor.");
-        payment ??= new Payment { AppointmentId = appointmentId, SupersedesPaymentId = appointment.CurrentPaymentId, ProviderCode = "internal", StatusCode = "pending", Amount = appointment.PriceAmount, CurrencyCode = "BRL", IdempotencyKey = GuidFromKey(key), CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1, ProviderReferenceAppointmentId = appointmentId };
+        payment ??= new Payment { AppointmentId = appointmentId, AppointmentRequiresPayment = true, SupersedesPaymentId = appointment.CurrentPaymentId, ProviderCode = "internal", StatusCode = "pending", Amount = appointment.PriceAmount, CurrencyCode = "BRL", IdempotencyKey = GuidFromKey(key), CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1, ProviderReferenceAppointmentId = appointmentId };
         if (payment.Id == 0) database.Payments.Add(payment);
         payment.StatusCode = "paid"; payment.Amount = appointment.PriceAmount; payment.MethodCode = request.MethodCode; payment.PaidAtUtc = paidAt; payment.ConfirmedByAccountId = actor; payment.CardLastFour = request.CardLastFour; payment.AuthorizationReference = Text(request.AuthorizationReference); payment.UpdatedAtUtc = now; if (payment.Id != 0) payment.RowVersion++;
         var previous = appointment.StatusCode; if (appointment.StatusCode == "pending") { appointment.StatusCode = "confirmed"; appointment.UpdatedAtUtc = now; appointment.RowVersion++; database.AppointmentStatusHistories.Add(new AppointmentStatusHistory { AppointmentId = appointment.Id, ActorAccountId = actor, FromStatusCode = previous, ToStatusCode = "confirmed", Reason = "Pagamento presencial confirmado", StartsAtUtc = appointment.StartsAtUtc, EndsAtUtc = appointment.EndsAtUtc, OccurredAtUtc = now }); }
@@ -428,12 +429,12 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
 
     private IQueryable<Appointment> AppointmentQuery() => database.Appointments.AsNoTracking()
         .Where(x => x.InverseRescheduledFromAppointment == null)
-        .Include(x => x.PatientAccount).Include(x => x.DoctorAccount).ThenInclude(x => x.Account).Include(x => x.AppointmentType)
+        .Include(x => x.PatientAccount).Include(x => x.ProfessionalAccount).ThenInclude(x => x.Account).Include(x => x.AppointmentType)
         .Include(x => x.CurrentPayment).Include(x => x.AppointmentReview).Include(x => x.MedicalReport).ThenInclude(x => x!.MedicalReportVersions)
         .Include(x => x.AppointmentDocuments).Include(x => x.InverseRescheduledFromAppointment).Include(x => x.AppointmentRescheduleHistories);
     private static ManagerAppointmentResponse MapAppointment(Appointment x) => new(x.Id, x.AppointmentNumber, x.PatientAccountId, x.PatientAccount.FullName, x.PatientAccount.PhoneE164,
-        x.DoctorAccountId, x.DoctorAccount.Account.FullName, x.AppointmentTypeId, x.AppointmentType.Name, x.AppointmentType.CategoryCode, x.StatusCode,
-        x.ModalityCode, x.StartsAtUtc, x.EndsAtUtc, x.PriceAmount, x.BasePriceAmount ?? x.PriceAmount, x.DiscountPercent, x.PaymentLocationCode, x.PatientNotes, x.CancellationReason,
+        x.ProfessionalAccountId, x.ProfessionalAccount.Account.FullName, x.AppointmentTypeId, x.AppointmentType.Name, x.AppointmentType.CategoryCode, x.StatusCode,
+        x.ModalityCode, x.StartsAtUtc, x.EndsAtUtc, x.PriceAmount, x.BasePriceAmount ?? x.PriceAmount, x.DiscountPercent, x.RequiresPayment, x.PaymentLocationCode, x.PatientNotes, x.CancellationReason,
         x.RescheduledFromAppointmentId, x.InverseRescheduledFromAppointment?.Id, x.AppointmentReview?.Rating, x.AppointmentReview?.Comment,
         new(x.CurrentPayment?.Id, x.CurrentPayment?.StatusCode ?? "unpaid", x.CurrentPayment?.MethodCode, x.CurrentPayment?.PaidAtUtc,
             x.CurrentPayment?.CardLastFour, x.CurrentPayment?.AuthorizationReference, x.CurrentPayment?.RowVersion ?? 0),
@@ -444,8 +445,8 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
             h.PreviousStartsAtUtc, h.PreviousEndsAtUtc, h.NewStartsAtUtc, h.NewEndsAtUtc, h.Reason, h.OccurredAtUtc)).ToArray(),
         x.ModalityCode == "in_person" && x.StatusCode == "confirmed", x.StatusCode == "arrived", x.StatusCode is "pending" or "confirmed", x.StatusCode is "pending" or "confirmed",
         x.StatusCode is "confirmed" or "arrived" or "in_progress", x.StatusCode == "completed",
-        x.CurrentPayment?.StatusCode == "paid" && x.StatusCode is ("confirmed" or "arrived"),
-        x.ModalityCode == "in_person" && x.PaymentLocationCode == "clinic" && x.StatusCode is "pending" or "confirmed" && x.CurrentPayment?.StatusCode is not ("paid" or "reversal_pending"), x.RowVersion);
+        x.RequiresPayment && x.CurrentPayment?.StatusCode == "paid" && x.StatusCode is ("confirmed" or "arrived"),
+        x.RequiresPayment && x.ModalityCode == "in_person" && x.PaymentLocationCode == "clinic" && x.StatusCode is "pending" or "confirmed" && x.CurrentPayment?.StatusCode is not ("paid" or "reversal_pending"), x.RowVersion);
     private static ManagerProfileResponse MapProfile(Account x) => new(x.Id, x.FullName, x.Email, x.PhoneE164, x.TaxId, x.EmailVerified, x.PhoneVerified,
         x.ManagerPreference?.EmailEnabled ?? true, x.ManagerPreference?.SmsEnabled ?? true, x.RowVersion, x.ManagerPreference?.RowVersion ?? 1);
     private static ManagerPatientResponse MapPatient(Account x, IEnumerable<PatientHistoryRow> history, DateTime now)

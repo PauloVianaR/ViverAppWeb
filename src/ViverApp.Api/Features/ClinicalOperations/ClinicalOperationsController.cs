@@ -45,7 +45,7 @@ public sealed class ClinicalOperationsController(ClinicalOperationsService opera
         ExecuteAsync(() => operations.GetPatientsAsync(ActorId, RoleCode, search, page, pageSize, cancellationToken));
 
     [HttpPut("appointments/{id:long}/medical-report")]
-    [Authorize(Policy = ViverAppPolicies.Doctor)]
+    [Authorize(Policy = ViverAppPolicies.ClinicalProfessional)]
     [EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public Task<ActionResult<ClinicalReportResponse>> SaveDraft(
         ulong id,
@@ -54,7 +54,7 @@ public sealed class ClinicalOperationsController(ClinicalOperationsService opera
         ExecuteAsync(() => operations.SaveDraftAsync(ActorId, id, request, cancellationToken));
 
     [HttpPost("appointments/{id:long}/complete")]
-    [Authorize(Policy = ViverAppPolicies.Doctor)]
+    [Authorize(Policy = ViverAppPolicies.ClinicalProfessional)]
     [EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public Task<ActionResult<ClinicalAppointmentResponse>> Complete(
         ulong id,

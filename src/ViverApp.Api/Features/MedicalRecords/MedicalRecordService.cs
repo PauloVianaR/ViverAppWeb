@@ -47,10 +47,10 @@ public sealed class MedicalRecordService(
             patient.PatientProfile?.PreferredName,
             birth,
             birth is null ? null : CalculateAge(birth.Value, DateOnly.FromDateTime(now)),
-            roleCode == ViverAppRoles.Doctor ? null : patient.TaxId,
-            roleCode == ViverAppRoles.Doctor ? null : patient.Email,
-            roleCode == ViverAppRoles.Doctor ? null : patient.PhoneE164,
-            roleCode == ViverAppRoles.Doctor ? null : FormatAddress(patient.AccountAddress),
+            IsClinicalProfessional(roleCode) ? null : patient.TaxId,
+            IsClinicalProfessional(roleCode) ? null : patient.Email,
+            IsClinicalProfessional(roleCode) ? null : patient.PhoneE164,
+            IsClinicalProfessional(roleCode) ? null : FormatAddress(patient.AccountAddress),
             patient.StatusCode,
             patient.PortalAccessEnabled,
             premium,
@@ -96,23 +96,23 @@ public sealed class MedicalRecordService(
                 && x.FinalizedAtUtc >= start && x.FinalizedAtUtc < end)
             .Select(x => new MedicalRecordTimelineEvent(
                 "clinical", x.VersionNumber == 1 ? "finalized" : "rectified",
-                roleCode == ViverAppRoles.Doctor ? (x.VersionNumber == 1 ? "Registro clínico finalizado" : "Registro clínico retificado") : "Registro restrito",
+                IsClinicalProfessional(roleCode) ? (x.VersionNumber == 1 ? "Registro clínico finalizado" : "Registro clínico retificado") : "Registro restrito",
                 null, x.FinalizedAtUtc, x.MedicalRecordEntry.AppointmentId,
                 x.MedicalRecordEntry.Appointment.AppointmentNumber,
-                roleCode == ViverAppRoles.Doctor ? x.AuthorAccount.FullName : null,
-                roleCode == ViverAppRoles.Doctor ? ViverAppRoles.Doctor : null,
-                roleCode != ViverAppRoles.Doctor))
+                IsClinicalProfessional(roleCode) ? x.AuthorAccount.FullName : null,
+                IsClinicalProfessional(roleCode) ? x.AuthorAccount.RoleCode : null,
+                !IsClinicalProfessional(roleCode)))
             .ToArrayAsync(ct);
         var documents = await database.MedicalRecordDocuments.AsNoTracking()
             .Where(x => x.HealthRecord.PatientAccountId == patientId && x.StatusCode == "available"
                 && x.CreatedAtUtc >= start && x.CreatedAtUtc < end)
             .Select(x => new MedicalRecordTimelineEvent(
-                "document", x.CategoryCode, roleCode == ViverAppRoles.Doctor ? "Documento clínico adicionado" : "Registro restrito",
+                "document", x.CategoryCode, IsClinicalProfessional(roleCode) ? "Documento clínico adicionado" : "Registro restrito",
                 null, x.CreatedAtUtc, x.AppointmentId,
                 x.Appointment == null ? null : x.Appointment.AppointmentNumber,
-                roleCode == ViverAppRoles.Doctor ? x.UploadedByAccount.FullName : null,
-                roleCode == ViverAppRoles.Doctor ? x.UploadedByAccount.RoleCode : null,
-                roleCode != ViverAppRoles.Doctor))
+                IsClinicalProfessional(roleCode) ? x.UploadedByAccount.FullName : null,
+                IsClinicalProfessional(roleCode) ? x.UploadedByAccount.RoleCode : null,
+                !IsClinicalProfessional(roleCode)))
             .ToArrayAsync(ct);
         IEnumerable<MedicalRecordTimelineEvent> merged = operational.Concat(financial).Concat(clinical).Concat(documents);
         if (!string.IsNullOrWhiteSpace(type)) merged = merged.Where(x => x.EventType.Equals(type, StringComparison.OrdinalIgnoreCase));
@@ -138,7 +138,7 @@ public sealed class MedicalRecordService(
             .Select(x => new MedicalRecordFinancialItem(
                 x.AppointmentId, x.AppointmentNavigation.AppointmentNumber, x.AppointmentNavigation.StartsAtUtc,
                 x.Amount, x.StatusCode,
-                roleCode == ViverAppRoles.Doctor ? "Informação financeira restrita" : PaymentMethod(x.MethodCode, x.ProviderCode),
+                IsClinicalProfessional(roleCode) ? "Informação financeira restrita" : PaymentMethod(x.MethodCode, x.ProviderCode),
                 x.Id, x.SupersedesPaymentId))
             .ToArrayAsync(ct);
         var received = items.Where(x => x.StatusCode == "paid").Sum(x => x.Amount);
@@ -152,8 +152,8 @@ public sealed class MedicalRecordService(
         await AuthorizeAsync(actorId, roleCode, recentAuthentication, patientId, "summary", null, ct);
         var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == patientId
             && (x.StatusCode == "confirmed" || x.StatusCode == "arrived" || x.StatusCode == "in_progress" || x.StatusCode == "completed"));
-        if (roleCode == ViverAppRoles.Doctor)
-            query = query.Where(x => x.DoctorAccountId == actorId);
+        if (IsClinicalProfessional(roleCode))
+            query = query.Where(x => x.ProfessionalAccountId == actorId);
         return await query.OrderByDescending(x => x.StartsAtUtc).Take(100)
             .Select(x => new MedicalRecordAppointmentOption(x.Id, x.AppointmentNumber, x.StartsAtUtc,
                 x.StatusCode, x.AppointmentType.Name)).ToArrayAsync(ct);
@@ -166,10 +166,10 @@ public sealed class MedicalRecordService(
         await AuthorizeAsync(actorId, roleCode, recentAuthentication, patientId, "clinical", purpose, ct);
         var query = database.MedicalRecordEntries.AsNoTracking()
             .Include(x => x.Appointment)
-            .Include(x => x.AuthorAccount).ThenInclude(x => x.DoctorProfile)
-            .Include(x => x.CurrentVersion)!.ThenInclude(x => x!.AuthorAccount).ThenInclude(x => x.DoctorProfile)
+            .Include(x => x.AuthorAccount).ThenInclude(x => x.ProfessionalProfile)
+            .Include(x => x.CurrentVersion)!.ThenInclude(x => x!.AuthorAccount).ThenInclude(x => x.ProfessionalProfile)
             .Where(x => x.HealthRecord.PatientAccountId == patientId);
-        if (roleCode == ViverAppRoles.Doctor) query = query.Where(x => x.Appointment.DoctorAccountId == actorId);
+        if (IsClinicalProfessional(roleCode)) query = query.Where(x => x.Appointment.ProfessionalAccountId == actorId);
         var entries = await query.OrderByDescending(x => x.Appointment.StartsAtUtc).ToArrayAsync(ct);
         var result = new List<MedicalRecordEntryResponse>(entries.Length);
         foreach (var entry in entries)
@@ -179,7 +179,7 @@ public sealed class MedicalRecordService(
             if (includeVersions)
             {
                 var loaded = await database.MedicalRecordVersions.AsNoTracking()
-                    .Include(x => x.AuthorAccount).ThenInclude(x => x.DoctorProfile)
+                    .Include(x => x.AuthorAccount).ThenInclude(x => x.ProfessionalProfile)
                     .Include(x => x.MedicalRecordEntry).ThenInclude(x => x.Appointment)
                     .Where(x => x.MedicalRecordEntryId == entry.Id)
                     .OrderByDescending(x => x.VersionNumber).ToArrayAsync(ct);
@@ -200,7 +200,7 @@ public sealed class MedicalRecordService(
         await AuthorizeWriteAsync(actorId, roleCode, patientId, ct);
         var draft = await database.MedicalRecordDrafts.AsNoTracking()
             .Include(x => x.Appointment)
-            .Include(x => x.AuthorAccount).ThenInclude(x => x.DoctorProfile)
+            .Include(x => x.AuthorAccount).ThenInclude(x => x.ProfessionalProfile)
             .SingleOrDefaultAsync(x => x.AppointmentId == appointmentId && x.AuthorAccountId == actorId
                 && x.HealthRecord.PatientAccountId == patientId, ct);
         return draft is null ? null : MapDraft(draft);
@@ -213,7 +213,7 @@ public sealed class MedicalRecordService(
         await AuthorizeWriteAsync(actorId, roleCode, patientId, ct);
         var appointment = await database.Appointments
             .SingleOrDefaultAsync(x => x.Id == appointmentId && x.PatientAccountId == patientId
-                && (roleCode != ViverAppRoles.Doctor || x.DoctorAccountId == actorId), ct)
+                && (!IsClinicalProfessional(roleCode) || x.ProfessionalAccountId == actorId), ct)
             ?? throw Missing();
         if (appointment.StatusCode is not ("confirmed" or "arrived" or "in_progress" or "completed"))
             throw Conflict("O registro clínico só pode ser escrito em um atendimento confirmado, com chegada, iniciado ou finalizado.");
@@ -265,7 +265,7 @@ public sealed class MedicalRecordService(
             : null;
         var draft = await database.MedicalRecordDrafts
             .Include(x => x.Appointment)
-            .Include(x => x.AuthorAccount).ThenInclude(x => x.DoctorProfile)
+            .Include(x => x.AuthorAccount).ThenInclude(x => x.ProfessionalProfile)
             .SingleOrDefaultAsync(x => x.AppointmentId == appointmentId && x.AuthorAccountId == actorId
                 && x.HealthRecord.PatientAccountId == patientId, ct) ?? throw Missing("Rascunho clínico não encontrado.");
         if (draft.RowVersion != request.DraftRowVersion) throw Conflict("Existe uma versão mais nova do rascunho. Revise antes de finalizar.");
@@ -279,7 +279,7 @@ public sealed class MedicalRecordService(
         {
             if (ownsTransaction) await transaction!.RollbackAsync(ct);
             await database.Entry(current).Reference(x => x.AuthorAccount).LoadAsync(ct);
-            await database.Entry(current.AuthorAccount).Reference(x => x.DoctorProfile).LoadAsync(ct);
+            await database.Entry(current.AuthorAccount).Reference(x => x.ProfessionalProfile).LoadAsync(ct);
             await database.Entry(current).Reference(x => x.MedicalRecordEntry).LoadAsync(ct);
             await database.Entry(current.MedicalRecordEntry).Reference(x => x.Appointment).LoadAsync(ct);
             return MapVersion(current, true);
@@ -339,10 +339,10 @@ public sealed class MedicalRecordService(
             : null;
         var entry = await database.MedicalRecordEntries
             .Include(x => x.Appointment)
-            .Include(x => x.AuthorAccount).ThenInclude(x => x.DoctorProfile)
+            .Include(x => x.AuthorAccount).ThenInclude(x => x.ProfessionalProfile)
             .Include(x => x.CurrentVersion)
             .SingleOrDefaultAsync(x => x.Id == entryId && x.HealthRecord.PatientAccountId == patientId
-                && (roleCode != ViverAppRoles.Doctor || x.Appointment.DoctorAccountId == actorId), ct)
+                && (!IsClinicalProfessional(roleCode) || x.Appointment.ProfessionalAccountId == actorId), ct)
             ?? throw Missing();
         if (entry.CurrentVersionId != request.CurrentVersionId || entry.CurrentVersion is null)
             throw Conflict("O registro foi retificado em outra sessão. Recarregue antes de continuar.");
@@ -368,8 +368,8 @@ public sealed class MedicalRecordService(
         var query = database.MedicalRecordDocuments.AsNoTracking()
             .Include(x => x.PrivateDocument).Include(x => x.UploadedByAccount).Include(x => x.Appointment)
             .Where(x => x.HealthRecord.PatientAccountId == patientId && x.StatusCode == "available");
-        if (roleCode == ViverAppRoles.Doctor) query = query.Where(x => x.HealthRecord.MedicalRecordEntries.Any(e => e.AuthorAccountId == actorId)
-            || x.Appointment != null && x.Appointment.DoctorAccountId == actorId);
+        if (IsClinicalProfessional(roleCode)) query = query.Where(x => x.HealthRecord.MedicalRecordEntries.Any(e => e.AuthorAccountId == actorId)
+            || x.Appointment != null && x.Appointment.ProfessionalAccountId == actorId);
         return await query.OrderByDescending(x => x.CreatedAtUtc)
             .Select(x => new MedicalRecordDocumentResponse(x.Id, x.PrivateDocument.OriginalFileName,
                 x.PrivateDocument.ContentType, x.PrivateDocument.SizeBytes, x.CategoryCode, x.AppointmentId,
@@ -378,12 +378,13 @@ public sealed class MedicalRecordService(
     }
 
     public async Task<MedicalRecordDocumentResponse> UploadAsync(
-        ulong doctorId, ulong patientId, ulong appointmentId, string categoryCode, IFormFile file, CancellationToken ct)
+        ulong actorId, string roleCode, ulong patientId, ulong appointmentId, string categoryCode, IFormFile file, CancellationToken ct)
     {
-        await AuthorizeAsync(doctorId, ViverAppRoles.Doctor, true, patientId, "document", null, ct);
+        await AuthorizeWriteAsync(actorId, roleCode, patientId, ct);
         if (categoryCode is not ("attachment" or "report" or "exam")) throw Invalid("Selecione uma categoria de documento válida.");
         var appointment = await database.Appointments.AsNoTracking()
-            .SingleOrDefaultAsync(x => x.Id == appointmentId && x.PatientAccountId == patientId && x.DoctorAccountId == doctorId, ct)
+            .SingleOrDefaultAsync(x => x.Id == appointmentId && x.PatientAccountId == patientId
+                && (roleCode == ViverAppRoles.Manager || x.ProfessionalAccountId == actorId), ct)
             ?? throw Missing();
         var record = await GetOrCreateRecordAsync(patientId, ct);
         var document = await documentStore.PrepareClinicalAsync(patientId, file, ct);
@@ -394,7 +395,7 @@ public sealed class MedicalRecordService(
             HealthRecordId = record.Id,
             AppointmentId = appointmentId,
             PrivateDocument = document,
-            UploadedByAccountId = doctorId,
+            UploadedByAccountId = actorId,
             CategoryCode = categoryCode,
             StatusCode = "available",
             CreatedAtUtc = UtcNow,
@@ -402,7 +403,7 @@ public sealed class MedicalRecordService(
         };
         database.MedicalRecordDocuments.Add(link);
         await SaveAsync(ct);
-        await audit.WriteAsync("medical_record.document_uploaded", doctorId, "medical_record_document", link.Id.ToString(CultureInfo.InvariantCulture),
+        await audit.WriteAsync("medical_record.document_uploaded", actorId, "medical_record_document", link.Id.ToString(CultureInfo.InvariantCulture),
             new Dictionary<string, string> { ["appointmentId"] = appointmentId.ToString(CultureInfo.InvariantCulture), ["sizeBytes"] = document.SizeBytes.ToString(CultureInfo.InvariantCulture) }, ct);
         await transaction.CommitAsync(ct);
         return new(link.Id, document.OriginalFileName, document.ContentType, document.SizeBytes,
@@ -416,24 +417,24 @@ public sealed class MedicalRecordService(
         var item = await database.MedicalRecordDocuments.AsNoTracking()
             .SingleOrDefaultAsync(x => x.Id == documentId && x.HealthRecord.PatientAccountId == patientId && x.StatusCode == "available", ct)
             ?? throw Missing();
-        if (roleCode == ViverAppRoles.Doctor && !await database.Appointments.AnyAsync(x => x.PatientAccountId == patientId && x.DoctorAccountId == actorId, ct))
+        if (IsClinicalProfessional(roleCode) && !await database.Appointments.AnyAsync(x => x.PatientAccountId == patientId && x.ProfessionalAccountId == actorId, ct))
             throw Missing();
         var result = await documentStore.DownloadAuthorizedClinicalAsync(item.PrivateDocumentId, ct);
         await audit.WriteAsync("medical_record.document_downloaded", actorId, "medical_record_document", documentId.ToString(CultureInfo.InvariantCulture), null, ct);
         return result;
     }
 
-    public async Task DeleteDocumentAsync(ulong doctorId, ulong patientId, ulong documentId, ulong rowVersion, CancellationToken ct)
+    public async Task DeleteDocumentAsync(ulong actorId, string roleCode, ulong patientId, ulong documentId, ulong rowVersion, CancellationToken ct)
     {
-        await AuthorizeAsync(doctorId, ViverAppRoles.Doctor, true, patientId, "document", null, ct);
+        await AuthorizeWriteAsync(actorId, roleCode, patientId, ct);
         var item = await database.MedicalRecordDocuments.Include(x => x.PrivateDocument)
             .SingleOrDefaultAsync(x => x.Id == documentId && x.HealthRecord.PatientAccountId == patientId
-                && x.UploadedByAccountId == doctorId && x.StatusCode == "available", ct) ?? throw Missing();
+                && x.UploadedByAccountId == actorId && x.StatusCode == "available", ct) ?? throw Missing();
         if (item.RowVersion != rowVersion) throw Conflict("O documento foi alterado em outra sessão.");
-        item.StatusCode = "deleted"; item.DeletedAtUtc = UtcNow; item.DeletedByAccountId = doctorId; item.RowVersion++;
+        item.StatusCode = "deleted"; item.DeletedAtUtc = UtcNow; item.DeletedByAccountId = actorId; item.RowVersion++;
         item.PrivateDocument.StatusCode = "deleted"; item.PrivateDocument.RowVersion++;
         await SaveAsync(ct);
-        await audit.WriteAsync("medical_record.document_deleted", doctorId, "medical_record_document", documentId.ToString(CultureInfo.InvariantCulture), null, ct);
+        await audit.WriteAsync("medical_record.document_deleted", actorId, "medical_record_document", documentId.ToString(CultureInfo.InvariantCulture), null, ct);
     }
 
     public async Task<IReadOnlyList<MedicalRecordAccessEventResponse>> AccessHistoryAsync(
@@ -480,10 +481,10 @@ public sealed class MedicalRecordService(
         var birth = patient.PatientProfile?.BirthDate is { } value ? DateOnly.FromDateTime(value) : (DateOnly?)null;
         return new(patient.Id, patient.FullName, patient.PatientProfile?.PreferredName, birth,
             birth is null ? null : CalculateAge(birth.Value, DateOnly.FromDateTime(now)),
-            roleCode == ViverAppRoles.Doctor ? null : patient.TaxId,
-            roleCode == ViverAppRoles.Doctor ? null : patient.Email,
-            roleCode == ViverAppRoles.Doctor ? null : patient.PhoneE164,
-            roleCode == ViverAppRoles.Doctor ? null : FormatAddress(patient.AccountAddress),
+            IsClinicalProfessional(roleCode) ? null : patient.TaxId,
+            IsClinicalProfessional(roleCode) ? null : patient.Email,
+            IsClinicalProfessional(roleCode) ? null : patient.PhoneE164,
+            IsClinicalProfessional(roleCode) ? null : FormatAddress(patient.AccountAddress),
             patient.StatusCode, patient.PortalAccessEnabled,
             await database.PremiumMemberships.AnyAsync(x => x.AccountId == patientId && x.StatusCode == "active"
                 && (x.EndsAtUtc == null || x.EndsAtUtc > now), ct),
@@ -498,9 +499,9 @@ public sealed class MedicalRecordService(
     private async Task<IReadOnlyList<MedicalRecordEntryResponse>> EntriesWithoutAuditAsync(ulong actorId, string roleCode, ulong patientId, CancellationToken ct)
     {
         var entries = await database.MedicalRecordEntries.AsNoTracking().Include(x => x.Appointment)
-            .Include(x => x.AuthorAccount).ThenInclude(x => x.DoctorProfile)
-            .Include(x => x.CurrentVersion)!.ThenInclude(x => x!.AuthorAccount).ThenInclude(x => x.DoctorProfile)
-            .Where(x => x.HealthRecord.PatientAccountId == patientId && (roleCode != ViverAppRoles.Doctor || x.Appointment.DoctorAccountId == actorId))
+            .Include(x => x.AuthorAccount).ThenInclude(x => x.ProfessionalProfile)
+            .Include(x => x.CurrentVersion)!.ThenInclude(x => x!.AuthorAccount).ThenInclude(x => x.ProfessionalProfile)
+            .Where(x => x.HealthRecord.PatientAccountId == patientId && (!IsClinicalProfessional(roleCode) || x.Appointment.ProfessionalAccountId == actorId))
             .OrderByDescending(x => x.Appointment.StartsAtUtc).ToArrayAsync(ct);
         return entries.Select(x => new MedicalRecordEntryResponse(x.Id, x.AppointmentId, x.Appointment.AppointmentNumber,
             x.Appointment.StartsAtUtc, x.CurrentVersionId!.Value, x.CurrentVersion!.VersionNumber,
@@ -518,16 +519,16 @@ public sealed class MedicalRecordService(
         var normalizedPurpose = string.IsNullOrWhiteSpace(purpose) ? null : purpose.Trim();
         var allowed = roleCode switch
         {
-            ViverAppRoles.Doctor => await database.DoctorPatientLinks.AsNoTracking().AnyAsync(x => x.DoctorAccountId == actorId
+            ViverAppRoles.Doctor or ViverAppRoles.Psychologist => await database.ProfessionalPatientLinks.AsNoTracking().AnyAsync(x => x.ProfessionalAccountId == actorId
                     && x.PatientAccountId == patientId && x.StatusCode == "active", ct)
-                || await database.Appointments.AsNoTracking().AnyAsync(x => x.DoctorAccountId == actorId && x.PatientAccountId == patientId, ct),
+                || await database.Appointments.AsNoTracking().AnyAsync(x => x.ProfessionalAccountId == actorId && x.PatientAccountId == patientId, ct),
             ViverAppRoles.Manager => true,
             ViverAppRoles.Administrator => !ClinicalScopes.Contains(scope, StringComparer.Ordinal) && scope != "audit" || recentAuthentication,
             _ => false,
         };
         var storedPurpose = roleCode switch
         {
-            ViverAppRoles.Doctor => null,
+            ViverAppRoles.Doctor or ViverAppRoles.Psychologist => null,
             ViverAppRoles.Manager => normalizedPurpose ?? "Acesso gerencial autorizado ao prontuário",
             ViverAppRoles.Administrator => "Acesso administrativo ao prontuário",
             _ => normalizedPurpose ?? "Acesso operacional autorizado ao prontuário",
@@ -553,7 +554,7 @@ public sealed class MedicalRecordService(
 
     private async Task AuthorizeWriteAsync(ulong actorId, string roleCode, ulong patientId, CancellationToken ct)
     {
-        if (roleCode is not (ViverAppRoles.Doctor or ViverAppRoles.Manager)) throw Missing();
+        if (roleCode is not (ViverAppRoles.Doctor or ViverAppRoles.Psychologist or ViverAppRoles.Manager)) throw Missing();
         if (roleCode == ViverAppRoles.Manager)
         {
             var enabled = await database.ApplicationSettings.AsNoTracking()
@@ -703,9 +704,10 @@ public sealed class MedicalRecordService(
     }
 
     private DateTime UtcNow => timeProvider.GetUtcNow().UtcDateTime;
+    private static bool IsClinicalProfessional(string roleCode) => roleCode is ViverAppRoles.Doctor or ViverAppRoles.Psychologist;
     private static int CalculateAge(DateOnly birth, DateOnly today) { var age = today.Year - birth.Year; return birth > today.AddYears(-age) ? age - 1 : age; }
-    private static string License(Account author) => author.DoctorProfile is { } doctor
-        ? $"CRM {doctor.LicenseStateCode} {doctor.LicenseNumber}"
+    private static string License(Account author) => author.ProfessionalProfile is { } doctor
+        ? $"{doctor.LicenseTypeCode} {doctor.LicenseStateCode} {doctor.LicenseNumber}"
         : author.RoleCode == ViverAppRoles.Manager ? "Gestor da clínica" : "Administrador";
     private static string? FormatAddress(AccountAddress? x) => x is null ? null : string.Join(" · ", new[]
     {

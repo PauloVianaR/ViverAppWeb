@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using MySql.Data.MySqlClient;
 using ViverApp.Api.Features.Identity;
+using ViverApp.Api.Features.Calendar;
 using ViverApp.Api.Features.PatientScheduling;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
@@ -15,6 +16,42 @@ namespace ViverApp.PatientScheduling.Tests;
 
 public sealed class PatientSchedulingConcurrencyTests
 {
+    [Fact]
+    public async Task PsychologistFreeAppointment_IsConfirmedWithoutPaymentAndCalendarRespectsOwnership()
+    {
+        var configuration = LoadConfiguration();
+        var fixture = await CreateFixtureAsync(configuration, free: true, professionalRole: ViverAppRoles.Psychologist);
+        try
+        {
+            var request = new AppointmentCreateRequest(fixture.DoctorId, fixture.AppointmentTypeId,
+                "online", fixture.LocalDate, new TimeOnly(10, 0), null);
+            var result = await AttemptCreateAsync(configuration, fixture.PatientId,
+                $"schedule-{Guid.NewGuid():N}", request, fixture.UtcNow, CancellationToken.None);
+            var created = Assert.IsType<AppointmentResponse>(result.Response);
+            Assert.Equal("confirmed", created.StatusCode);
+            Assert.False(created.RequiresPayment);
+            Assert.Equal(0, created.PriceAmount);
+
+            await using var database = CreateContext(configuration);
+            Assert.False(await database.Payments.AnyAsync(item => item.AppointmentId == created.Id));
+            var calendar = new CalendarService(database);
+            var patientDay = await calendar.GetAsync(fixture.PatientId, ViverAppRoles.Patient,
+                "day", fixture.LocalDate, null, CancellationToken.None);
+            Assert.Contains(patientDay.Items, item => item.Id == created.Id);
+            var professionalYear = await calendar.GetAsync(fixture.DoctorId, ViverAppRoles.Psychologist,
+                "year", fixture.LocalDate, null, CancellationToken.None);
+            Assert.Contains(professionalYear.Days, item => item.Date == fixture.LocalDate && item.Count >= 1);
+            var crossProfessional = await Assert.ThrowsAsync<CalendarRuleException>(() =>
+                calendar.GetAsync(fixture.DoctorId, ViverAppRoles.Psychologist, "day",
+                    fixture.LocalDate, fixture.PatientId, CancellationToken.None));
+            Assert.Equal(403, crossProfessional.StatusCode);
+        }
+        finally
+        {
+            await DeleteFixtureAsync(configuration, fixture);
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -43,7 +80,7 @@ public sealed class PatientSchedulingConcurrencyTests
             if (paid)
             {
                 await using var db = CreateContext(configuration);
-                db.Payments.Add(new() { AppointmentId = created.Id, ProviderReferenceAppointmentId = created.Id, ProviderCode = "pagbank", StatusCode = "paid", Amount = created.PriceAmount, CurrencyCode = "BRL", CreatedAtUtc = fixture.UtcNow.UtcDateTime, UpdatedAtUtc = fixture.UtcNow.UtcDateTime, RowVersion = 1 });
+                db.Payments.Add(new() { AppointmentId = created.Id, AppointmentRequiresPayment = true, ProviderReferenceAppointmentId = created.Id, ProviderCode = "pagbank", StatusCode = "paid", Amount = created.PriceAmount, CurrencyCode = "BRL", CreatedAtUtc = fixture.UtcNow.UtcDateTime, UpdatedAtUtc = fixture.UtcNow.UtcDateTime, RowVersion = 1 });
                 var appointment = await db.Appointments.SingleAsync(x => x.Id == created.Id);
                 appointment.StatusCode = "confirmed";
                 appointment.RowVersion++;
@@ -140,7 +177,7 @@ public sealed class PatientSchedulingConcurrencyTests
             await using var verification = CreateContext(configuration);
             Assert.Equal(1, await verification.Appointments.CountAsync(
                 item => item.PatientAccountId == fixture.PatientId
-                    && item.DoctorAccountId == fixture.DoctorId
+                    && item.ProfessionalAccountId == fixture.DoctorId
                     && item.StartsAtUtc == success.Response.StartsAtUtc,
                 timeout.Token));
             Assert.Equal(1, await verification.AppointmentStatusHistories.CountAsync(
@@ -205,7 +242,8 @@ public sealed class PatientSchedulingConcurrencyTests
             CancellationToken.None);
     }
 
-    private static async Task<Fixture> CreateFixtureAsync(IConfiguration configuration)
+    private static async Task<Fixture> CreateFixtureAsync(IConfiguration configuration, bool free = false,
+        string professionalRole = ViverAppRoles.Doctor)
     {
         await using var database = CreateContext(configuration);
         var utcNow = new DateTimeOffset(2026, 9, 3, 12, 0, 0, TimeSpan.Zero);
@@ -213,13 +251,14 @@ public sealed class PatientSchedulingConcurrencyTests
         var now = utcNow.UtcDateTime;
         var marker = Guid.NewGuid().ToString("N");
         var patient = NewAccount(ViverAppRoles.Patient, $"Paciente {marker}", $"patient-{marker}@example.test", now);
-        var doctor = NewAccount(ViverAppRoles.Doctor, $"Médico {marker}", $"doctor-{marker}@example.test", now);
+        var doctor = NewAccount(professionalRole, $"Médico {marker}", $"doctor-{marker}@example.test", now);
         database.Accounts.AddRange(patient, doctor);
         await database.SaveChangesAsync();
-        doctor.DoctorProfile = new DoctorProfile
+        doctor.ProfessionalProfile = new ProfessionalProfile
         {
             AccountId = doctor.Id,
             LicenseStateCode = "SP",
+            LicenseTypeCode = professionalRole == ViverAppRoles.Psychologist ? "CRP" : "CRM",
             LicenseNumber = marker[..12],
             DefaultAppointmentDurationMinutes = 30,
             CreatedAtUtc = now,
@@ -232,7 +271,8 @@ public sealed class PatientSchedulingConcurrencyTests
             Description = "Tipo de atendimento exclusivo do teste.",
             ModalityCode = "online",
             DurationMinutes = 30,
-            PriceAmount = 100,
+            PriceAmount = free ? 0 : 100,
+            RequiresPayment = !free,
             IsActive = true,
             DisplayOrder = 0,
             CreatedAtUtc = now,
@@ -240,9 +280,9 @@ public sealed class PatientSchedulingConcurrencyTests
             RowVersion = 1,
         };
         database.AppointmentTypes.Add(appointmentType);
-        database.DoctorWeeklyHours.Add(new DoctorWeeklyHour
+        database.ProfessionalWeeklyHours.Add(new ProfessionalWeeklyHour
         {
-            DoctorAccountId = doctor.Id,
+            ProfessionalAccountId = doctor.Id,
             DayOfWeek = (byte)localDate.DayOfWeek,
             StartTime = TimeSpan.FromHours(8),
             EndTime = TimeSpan.FromHours(12),
@@ -277,7 +317,7 @@ public sealed class PatientSchedulingConcurrencyTests
     {
         await using var database = CreateContext(configuration);
         var appointmentIds = await database.Appointments
-            .Where(item => item.PatientAccountId == fixture.PatientId || item.DoctorAccountId == fixture.DoctorId)
+            .Where(item => item.PatientAccountId == fixture.PatientId || item.ProfessionalAccountId == fixture.DoctorId)
             .Select(item => item.Id)
             .ToArrayAsync();
         await database.IdempotencyRecords.Where(item => item.ScopeCode.EndsWith($":{fixture.PatientId}"))
@@ -290,8 +330,8 @@ public sealed class PatientSchedulingConcurrencyTests
             .Where(item => appointmentIds.Contains(item.Id) && item.RescheduledFromAppointmentId != null)
             .ExecuteUpdateAsync(update => update.SetProperty(item => item.RescheduledFromAppointmentId, (ulong?)null));
         await database.Appointments.Where(item => appointmentIds.Contains(item.Id)).ExecuteDeleteAsync();
-        await database.DoctorWeeklyHours.Where(item => item.DoctorAccountId == fixture.DoctorId).ExecuteDeleteAsync();
-        await database.DoctorProfiles.Where(item => item.AccountId == fixture.DoctorId).ExecuteDeleteAsync();
+        await database.ProfessionalWeeklyHours.Where(item => item.ProfessionalAccountId == fixture.DoctorId).ExecuteDeleteAsync();
+        await database.ProfessionalProfiles.Where(item => item.AccountId == fixture.DoctorId).ExecuteDeleteAsync();
         await database.AppointmentTypes.Where(item => item.Id == fixture.AppointmentTypeId).ExecuteDeleteAsync();
         await database.Accounts.Where(item => item.Id == fixture.PatientId || item.Id == fixture.DoctorId).ExecuteDeleteAsync();
     }
@@ -312,7 +352,7 @@ public sealed class PatientSchedulingConcurrencyTests
         }
 
         var appointmentIds = await database.Appointments
-            .Where(item => accountIds.Contains(item.PatientAccountId) || accountIds.Contains(item.DoctorAccountId))
+            .Where(item => accountIds.Contains(item.PatientAccountId) || accountIds.Contains(item.ProfessionalAccountId))
             .Select(item => item.Id)
             .ToArrayAsync();
         var scopes = accountIds
@@ -327,8 +367,8 @@ public sealed class PatientSchedulingConcurrencyTests
             .Where(item => appointmentIds.Contains(item.Id) && item.RescheduledFromAppointmentId != null)
             .ExecuteUpdateAsync(update => update.SetProperty(item => item.RescheduledFromAppointmentId, (ulong?)null));
         await database.Appointments.Where(item => appointmentIds.Contains(item.Id)).ExecuteDeleteAsync();
-        await database.DoctorWeeklyHours.Where(item => accountIds.Contains(item.DoctorAccountId)).ExecuteDeleteAsync();
-        await database.DoctorProfiles.Where(item => accountIds.Contains(item.AccountId)).ExecuteDeleteAsync();
+        await database.ProfessionalWeeklyHours.Where(item => accountIds.Contains(item.ProfessionalAccountId)).ExecuteDeleteAsync();
+        await database.ProfessionalProfiles.Where(item => accountIds.Contains(item.AccountId)).ExecuteDeleteAsync();
         await database.AppointmentTypes
             .Where(item => item.Description == "Tipo de atendimento exclusivo do teste.")
             .ExecuteDeleteAsync();

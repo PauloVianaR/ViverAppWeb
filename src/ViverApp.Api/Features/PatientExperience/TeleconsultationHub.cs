@@ -30,16 +30,17 @@ public sealed class TeleconsultationAccess(ViverAppDbContext database, TimeProvi
         var session = sessionId.ToByteArray(); var now = clock.GetUtcNow().UtcDateTime;
         if (!await database.AuthSessions.AnyAsync(x => x.Id.SequenceEqual(session) && x.AccountId == actor && x.RevokedAtUtc == null
             && x.ExpiresAtUtc > now && x.Account.StatusCode == "active" && x.MfaSatisfied, ct)) throw new HubException("Sua sessão expirou. Entre novamente.");
-        var appointment = await database.Appointments.AsNoTracking().Include(x => x.CurrentPayment).SingleOrDefaultAsync(x => x.Id == id && (x.PatientAccountId == actor || x.DoctorAccountId == actor), ct);
-        if (appointment is null || appointment.ModalityCode != "online" || appointment.StatusCode != "confirmed" || appointment.CurrentPayment?.StatusCode != "paid"
-            || appointment.StartsAtUtc > now.AddMinutes(15) || appointment.EndsAtUtc < now) throw new HubException("A sala não está disponível. A entrada é permitida 15 minutos antes e durante o atendimento confirmado e pago.");
+        var appointment = await database.Appointments.AsNoTracking().Include(x => x.CurrentPayment).SingleOrDefaultAsync(x => x.Id == id && (x.PatientAccountId == actor || x.ProfessionalAccountId == actor), ct);
+        if (appointment is null || appointment.ModalityCode != "online" || appointment.StatusCode != "confirmed"
+            || appointment.RequiresPayment && appointment.CurrentPayment?.StatusCode != "paid"
+            || appointment.StartsAtUtc > now.AddMinutes(15) || appointment.EndsAtUtc < now) throw new HubException("A sala não está disponível. A entrada é permitida 15 minutos antes e durante o atendimento confirmado.");
         if (appointment.PatientAccountId == actor && !user.IsInRole(ViverAppRoles.Patient)
-            || appointment.DoctorAccountId == actor && !user.IsInRole(ViverAppRoles.Doctor)) throw new HubException("Atendimento indisponível.");
+            || appointment.ProfessionalAccountId == actor && !(user.IsInRole(ViverAppRoles.Doctor) || user.IsInRole(ViverAppRoles.Psychologist))) throw new HubException("Atendimento indisponível.");
         return appointment;
     }
 }
 
-[Authorize(Roles = "patient,doctor")]
+[Authorize(Roles = "patient,doctor,psychologist")]
 public sealed class TeleconsultationHub(ViverAppDbContext database, TeleconsultationAccess access,
     IAntiforgery antiforgery, SecurityBaselineOptions options, VideoInvocationLimiter limiter,
     IdentityAuditWriter audit) : Hub
@@ -68,7 +69,7 @@ public sealed class TeleconsultationHub(ViverAppDbContext database, Teleconsulta
         var peer = await OtherPeer(appointment, Context.ConnectionAborted);
         if (peer is not null) await Clients.Client(peer).SendAsync("PeerReady", Context.ConnectionAborted);
         await audit.WriteAsync("teleconsultation.joined", Actor, "appointment", appointmentId.ToString(CultureInfo.InvariantCulture), null, Context.ConnectionAborted);
-        return new { initiator = Actor == appointment.DoctorAccountId, peerPresent = peer is not null, endsAtUtc = DateTime.SpecifyKind(appointment.EndsAtUtc, DateTimeKind.Utc) };
+        return new { initiator = Actor == appointment.ProfessionalAccountId, peerPresent = peer is not null, endsAtUtc = DateTime.SpecifyKind(appointment.EndsAtUtc, DateTimeKind.Utc) };
     }
 
     public async Task Heartbeat()
@@ -110,6 +111,6 @@ public sealed class TeleconsultationHub(ViverAppDbContext database, Teleconsulta
         return appointment;
     }
     private Task<string?> OtherPeer(Appointment appointment, CancellationToken ct) => database.TeleconsultationPeers.AsNoTracking()
-        .Where(x => x.AppointmentId == appointment.Id && x.AccountId == (Actor == appointment.PatientAccountId ? appointment.DoctorAccountId : appointment.PatientAccountId) && x.ExpiresAtUtc > DateTime.UtcNow)
+        .Where(x => x.AppointmentId == appointment.Id && x.AccountId == (Actor == appointment.PatientAccountId ? appointment.ProfessionalAccountId : appointment.PatientAccountId) && x.ExpiresAtUtc > DateTime.UtcNow)
         .Select(x => x.ConnectionId).SingleOrDefaultAsync(ct);
 }

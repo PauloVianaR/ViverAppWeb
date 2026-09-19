@@ -2,9 +2,11 @@
 
 ## Estado e objetivo
 
-**Estado:** planejada; nenhuma entrega desta fase foi implementada na Fase 18.
+**Estado:** implementada na branch da Fase 19; falta a inspeção visual autenticada exclusivamente no monitor físico 3.
 
 **Branch prevista:** `codex/fase-19-agenda-psicologo-atendimentos-gratuitos`.
+
+**Evidências técnicas (19/09/2026):** migrations `0036` e `0037` aplicadas integralmente em `viverappweb`, MySQL 8.0.41; scaffold DB-First regenerado; build sem avisos; suíte integral aprovada em execução sequencial. Há testes transacionais novos para Psicólogo/agendamento sem cobrança, recorte de calendário e rejeição do checkout gratuito. A validação visual física permanece registrada em `.local/PENDENCIAS.md`, pois a automação desta sessão não identifica nem seleciona o monitor 3.
 
 Reorganizar a operação diária em torno de uma agenda visual responsiva, transformar o histórico atual em uma consulta única de atendimentos, acrescentar o papel Psicólogo com a mesma experiência clínica do Médico e permitir tipos de atendimento que não exigem cobrança.
 

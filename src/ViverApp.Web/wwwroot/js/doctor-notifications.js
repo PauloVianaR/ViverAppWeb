@@ -5,9 +5,10 @@ function endpoint(baseUrl, path) {
     return new URL(path.replace(/^\//, ""), baseUrl).toString();
 }
 
-export async function connect(baseUrl, dotnet) {
+export async function connect(baseUrl, role, dotnet) {
     await import("/vendor/signalr/signalr.min.js");
-    const response = await fetch(endpoint(baseUrl, "api/v1/doctor/notifications?page=1&pageSize=20"), {
+    const area = role === "psychologist" ? "psychologist" : "doctor";
+    const response = await fetch(endpoint(baseUrl, `api/v1/${area}/notifications?page=1&pageSize=20`), {
         credentials: "include", headers: { "Accept": "application/json" }, cache: "no-store"
     });
     if (!response.ok) throw new Error("Não foi possível carregar as notificações.");

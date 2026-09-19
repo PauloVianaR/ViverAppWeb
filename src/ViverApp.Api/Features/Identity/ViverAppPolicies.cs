@@ -4,6 +4,7 @@ public static class ViverAppPolicies
 {
     public const string Patient = "role:patient";
     public const string Doctor = "role:doctor";
+    public const string ClinicalProfessional = "role:clinical-professional";
     public const string Manager = "role:manager";
     public const string Administrator = "role:administrator";
     public const string ClinicalStaff = "role:clinical-staff";

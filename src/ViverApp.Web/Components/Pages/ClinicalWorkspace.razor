@@ -212,7 +212,7 @@ else
     private WebClinicalContext? Context;
     private readonly List<WebClinicalAppointment> Appointments = [];
     private readonly List<WebClinicalPatient> Patients = [];
-    private readonly List<WebDoctorWeeklyHour> WeeklyHours = [];
+    private readonly List<WebProfessionalWeeklyHour> WeeklyHours = [];
     private WebClinicalAppointment? SelectedAppointment;
     private bool IsLoading = true;
     private bool IsBusy;
@@ -327,7 +327,7 @@ else
     {
         if (module is null || SelectedDoctorId == 0) return;
         IsBusy = true; ClearNotice();
-        try { var items = await GetAsync<IReadOnlyList<WebDoctorWeeklyHour>>($"api/v1/professionals/{SelectedDoctorId}/weekly-hours"); WeeklyHours.Clear(); WeeklyHours.AddRange(items); ResetAvailabilityForm(); }
+        try { var items = await GetAsync<IReadOnlyList<WebProfessionalWeeklyHour>>($"api/v1/professionals/{SelectedDoctorId}/weekly-hours"); WeeklyHours.Clear(); WeeklyHours.AddRange(items); ResetAvailabilityForm(); }
         catch (Exception exception) { ShowError(exception is JSException ? exception.Message : UiErrorNotifier.UnexpectedMessage); }
         finally { IsBusy = false; }
     }
@@ -335,12 +335,12 @@ else
     private async Task SaveAvailabilityAsync()
     {
         IsBusy = true; ClearNotice();
-        try { var request = new WebDoctorWeeklyHourWriteRequest(Weekday, StartTime.ToTimeSpan(), EndTime.ToTimeSpan(), ValidFromDate.HasValue ? DateOnly.FromDateTime(ValidFromDate.Value) : null, ValidUntilDate.HasValue ? DateOnly.FromDateTime(ValidUntilDate.Value) : null, HourActive, EditingHourVersion); if (EditingHourId == 0) await SendAsync<WebDoctorWeeklyHour>($"api/v1/professionals/{SelectedDoctorId}/weekly-hours", "POST", request); else await SendAsync<WebDoctorWeeklyHour>($"api/v1/professionals/{SelectedDoctorId}/weekly-hours/{EditingHourId}", "PUT", request); ShowSuccess("Disponibilidade atualizada."); await LoadAvailabilityAsync(); }
+        try { var request = new WebProfessionalWeeklyHourWriteRequest(Weekday, StartTime.ToTimeSpan(), EndTime.ToTimeSpan(), ValidFromDate.HasValue ? DateOnly.FromDateTime(ValidFromDate.Value) : null, ValidUntilDate.HasValue ? DateOnly.FromDateTime(ValidUntilDate.Value) : null, HourActive, EditingHourVersion); if (EditingHourId == 0) await SendAsync<WebProfessionalWeeklyHour>($"api/v1/professionals/{SelectedDoctorId}/weekly-hours", "POST", request); else await SendAsync<WebProfessionalWeeklyHour>($"api/v1/professionals/{SelectedDoctorId}/weekly-hours/{EditingHourId}", "PUT", request); ShowSuccess("Disponibilidade atualizada."); await LoadAvailabilityAsync(); }
         catch (Exception exception) { ShowError(exception is JSException ? exception.Message : UiErrorNotifier.UnexpectedMessage); }
         finally { IsBusy = false; }
     }
 
-    private async Task DeleteAvailabilityAsync(WebDoctorWeeklyHour hour)
+    private async Task DeleteAvailabilityAsync(WebProfessionalWeeklyHour hour)
     {
         IsBusy = true; ClearNotice();
         try { await SendAsync<object?>($"api/v1/professionals/{SelectedDoctorId}/weekly-hours/{hour.Id}?rowVersion={hour.RowVersion}", "DELETE", null); ShowSuccess("Período removido."); await LoadAvailabilityAsync(); }
@@ -348,7 +348,7 @@ else
         finally { IsBusy = false; }
     }
 
-    private void EditAvailability(WebDoctorWeeklyHour hour) { EditingHourId = hour.Id; EditingHourVersion = hour.RowVersion; Weekday = hour.DayOfWeek; StartTime = TimeOnly.FromTimeSpan(hour.StartTime); EndTime = TimeOnly.FromTimeSpan(hour.EndTime); ValidFromDate = hour.ValidFrom?.ToDateTime(TimeOnly.MinValue); ValidUntilDate = hour.ValidUntil?.ToDateTime(TimeOnly.MinValue); HourActive = hour.IsActive; }
+    private void EditAvailability(WebProfessionalWeeklyHour hour) { EditingHourId = hour.Id; EditingHourVersion = hour.RowVersion; Weekday = hour.DayOfWeek; StartTime = TimeOnly.FromTimeSpan(hour.StartTime); EndTime = TimeOnly.FromTimeSpan(hour.EndTime); ValidFromDate = hour.ValidFrom?.ToDateTime(TimeOnly.MinValue); ValidUntilDate = hour.ValidUntil?.ToDateTime(TimeOnly.MinValue); HourActive = hour.IsActive; }
     private void ResetAvailabilityForm() { EditingHourId = 0; EditingHourVersion = 0; Weekday = 1; StartTime = new TimeOnly(8, 0); EndTime = new TimeOnly(12, 0); ValidFromDate = null; ValidUntilDate = null; HourActive = true; }
 
     private async ValueTask<T> GetAsync<T>(string path) => module is null ? throw new InvalidOperationException("clinical_module_missing") : await module.InvokeAsync<T>("get", Backend.BaseUrl, path);
@@ -367,6 +367,6 @@ else
     private static string StatusLabel(string value) => value switch { "pending" => "Pendente", "confirmed" => "Confirmada", "completed" => "Concluída", "canceled" => "Cancelada", "rescheduled" => "Remarcada", "no_show" => "Falta", _ => value };
     private static string StatusClass(string value) => value switch { "confirmed" or "completed" => "badge--success", "pending" => "badge--warning", "canceled" or "no_show" => "badge--danger", _ => string.Empty };
     private static string DayLabel(byte day) => day switch { 0 => "Domingo", 1 => "Segunda-feira", 2 => "Terça-feira", 3 => "Quarta-feira", 4 => "Quinta-feira", 5 => "Sexta-feira", 6 => "Sábado", _ => "Dia inválido" };
-    private static string ValidityLabel(WebDoctorWeeklyHour hour) => hour.ValidFrom is null && hour.ValidUntil is null ? "Sem período de validade" : $"{hour.ValidFrom?.ToString("dd/MM/yyyy") ?? "início"} a {hour.ValidUntil?.ToString("dd/MM/yyyy") ?? "sem fim"}";
+    private static string ValidityLabel(WebProfessionalWeeklyHour hour) => hour.ValidFrom is null && hour.ValidUntil is null ? "Sem período de validade" : $"{hour.ValidFrom?.ToString("dd/MM/yyyy") ?? "início"} a {hour.ValidUntil?.ToString("dd/MM/yyyy") ?? "sem fim"}";
     public async ValueTask DisposeAsync() { if (module is not null) { try { await module.DisposeAsync(); } catch (JSDisconnectedException) { } } }
 }

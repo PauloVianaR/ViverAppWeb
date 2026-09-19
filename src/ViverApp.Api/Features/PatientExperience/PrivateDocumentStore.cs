@@ -196,7 +196,7 @@ public sealed class PrivateDocumentStore
     public async Task<(byte[] Content, string Mime, string Name)> DownloadForDoctorAsync(ulong doctor, ulong documentId, CancellationToken ct)
     {
         var link = await database.AppointmentDocuments.AsNoTracking().SingleOrDefaultAsync(x => x.Id == documentId
-            && x.StatusCode == "available" && x.Appointment.DoctorAccountId == doctor, ct) ?? throw PatientExperienceService.Missing();
+            && x.StatusCode == "available" && x.Appointment.ProfessionalAccountId == doctor, ct) ?? throw PatientExperienceService.Missing();
         if (!Guid.TryParse(link.ObjectKey, out var privateId)) throw PatientExperienceService.Missing();
         var document = await database.PrivateDocuments.AsNoTracking().SingleOrDefaultAsync(x => x.Id == privateId && x.StatusCode == "available", ct)
             ?? throw PatientExperienceService.Missing();

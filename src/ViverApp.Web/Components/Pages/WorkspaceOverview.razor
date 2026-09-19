@@ -82,12 +82,22 @@
         ShellProfile.Doctor => new(
             "Rotina profissional",
             "Área médica",
-            "Agenda, pacientes e histórico organizados com densidade adequada para a prática clínica.",
+            "Agenda, pacientes e atendimentos organizados para a prática clínica.",
             [
                 new("Agenda", "Visualize e conduza os atendimentos do dia.", "/medico/agenda", "agenda", "calendar"),
                 new("Pacientes", "Acesse somente pacientes vinculados ao seu cuidado.", "/medico/pacientes", "pacientes", "users"),
-                new("Histórico", "Consulte atendimentos concluídos autorizados.", "/medico/historico", "historico", "history"),
+                new("Atendimentos", "Consulte seus atendimentos autorizados.", "/medico/atendimentos", "atendimentos", "history"),
                 new("Disponibilidade", "Gerencie seus períodos de atendimento.", "/medico/disponibilidade", "disponibilidade", "settings"),
+            ]),
+        ShellProfile.Psychologist => new(
+            "Rotina profissional",
+            "Área de Psicologia",
+            "Agenda, pacientes e atendimentos organizados para a prática clínica.",
+            [
+                new("Agenda", "Visualize os atendimentos do dia.", "/psicologo/agenda", "agenda", "calendar"),
+                new("Pacientes", "Acesse somente pacientes vinculados ao seu cuidado.", "/psicologo/pacientes", "pacientes", "users"),
+                new("Atendimentos", "Consulte seus atendimentos autorizados.", "/psicologo/atendimentos", "atendimentos", "history"),
+                new("Disponibilidade", "Gerencie seus períodos de atendimento.", "/psicologo/disponibilidade", "disponibilidade", "settings"),
             ]),
         ShellProfile.Administrator => new(
             "Administração segura",
@@ -95,7 +105,7 @@
             "Governança da clínica, usuários e indicadores com MFA e auditoria obrigatórios.",
             [
                 new("Clínica", "Configurações institucionais e operacionais.", "/administracao#clinica", "clinica", "clinic"),
-                new("Consultas", "Visão administrativa dos atendimentos.", "/administracao#consultas", "consultas", "calendar"),
+                new("Atendimentos", "Visão administrativa dos atendimentos.", "/administracao/atendimentos", "atendimentos", "calendar"),
                 new("Indicadores", "Leitura consolidada da operação.", "/administracao#indicadores", "indicadores", "chart"),
                 new("Usuários", "Gestão de acessos e papéis únicos.", "/administracao#usuarios", "usuarios", "users"),
             ]),

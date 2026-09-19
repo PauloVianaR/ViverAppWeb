@@ -4,23 +4,24 @@ using ViverApp.Api.Features.PatientScheduling;
 
 namespace ViverApp.Api.Features.DoctorExperience;
 
-public sealed record DoctorHomeResponse(DoctorProfileResponse Profile, DoctorHomeCounters Counters,
+public sealed record DoctorHomeResponse(ProfessionalProfileResponse Profile, DoctorHomeCounters Counters,
     DoctorHomeSources Sources, IReadOnlyList<DoctorAppointmentResponse> Today);
 public sealed record DoctorCapabilitiesResponse(bool PatientSchedulingEnabled);
 public sealed record DoctorHomeCounters(int Today, int Week, int Online, int InPerson);
 public sealed record DoctorHomeSources(IReadOnlyList<ulong> Today, IReadOnlyList<ulong> Week,
     IReadOnlyList<ulong> Online, IReadOnlyList<ulong> InPerson);
-public sealed record DoctorSpecialtyResponse(uint Id, string Name, bool IsPrimary);
-public sealed record DoctorProfileResponse(ulong AccountId, string FullName, string? Email, string? Phone,
+public sealed record ProfessionalSpecialtyResponse(uint Id, string Name, bool IsPrimary);
+public sealed record ProfessionalProfileResponse(ulong AccountId, string FullName, string? Email, string? Phone,
     string? TaxId, string ProfessionalTitle, string LicenseStateCode, string LicenseNumber, string? Biography,
-    ushort YearsExperience, ushort DefaultAppointmentDurationMinutes, IReadOnlyList<DoctorSpecialtyResponse> Specialties,
+    ushort YearsExperience, ushort DefaultAppointmentDurationMinutes, IReadOnlyList<ProfessionalSpecialtyResponse> Specialties,
     bool EmailEnabled, bool SmsEnabled, bool OnlineEnabled, ushort MaxOnlineDaily, ushort MaxInPersonDaily,
-    double? AverageRating, int ReviewCount, ulong AccountRowVersion, ulong ProfileRowVersion, ulong PreferenceRowVersion);
-public sealed record DoctorServiceResponse(uint Id, string Name, string? Description, string CategoryCode,
-    string ModalityCode, ushort DurationMinutes, decimal PriceAmount, bool IsActive, bool Offered, ulong RowVersion);
+    double? AverageRating, int ReviewCount, ulong AccountRowVersion, ulong ProfileRowVersion, ulong PreferenceRowVersion,
+    string LicenseTypeCode = "CRM");
+public sealed record ProfessionalServiceResponse(uint Id, string Name, string? Description, string CategoryCode,
+    string ModalityCode, ushort DurationMinutes, decimal PriceAmount, bool RequiresPayment, bool IsActive, bool Offered, ulong RowVersion);
 public sealed record DoctorAppointmentResponse(ulong Id, ulong AppointmentNumber, ulong PatientAccountId, string PatientName, int? PatientAge,
     uint AppointmentTypeId, string Service, string CategoryCode, string StatusCode, string ModalityCode, DateTime StartsAtUtc, DateTime EndsAtUtc,
-    decimal PriceAmount, decimal BasePriceAmount, decimal DiscountPercent, string PaymentStatus, string PaymentLocation, string? PatientNotes,
+    decimal PriceAmount, decimal BasePriceAmount, decimal DiscountPercent, bool RequiresPayment, string PaymentStatus, string PaymentLocation, string? PatientNotes,
     string? CancellationReason, ulong? RescheduledFromAppointmentId, ulong? RescheduledToAppointmentId,
     byte? Rating, string? ReviewComment, DateTime? ArrivedAtUtc, uint? ArrivalQueueNumber,
     IReadOnlyList<AppointmentRescheduleHistoryResponse> RescheduleHistory,
@@ -40,32 +41,32 @@ public sealed record DoctorPatientSources(IReadOnlyList<string> Total, IReadOnly
 public sealed record DoctorPatientsResponse(DoctorPatientCounters Counters, DoctorPatientSources Sources,
     SchedulingPage<DoctorPatientResponse> Page);
 public sealed record DoctorReportVersionResponse(uint VersionNumber, string ClinicalSummary, string? Recommendations,
-    string? ChangeReason, DateTime CreatedAtUtc, ulong AuthorDoctorAccountId);
+    string? ChangeReason, DateTime CreatedAtUtc, ulong AuthorProfessionalAccountId);
 public sealed record DoctorDocumentResponse(ulong Id, string Name, string ContentType, ulong SizeBytes,
     DateTime CreatedAtUtc, ulong RowVersion);
 public sealed record DoctorAppointmentDetailResponse(DoctorAppointmentResponse Appointment,
     IReadOnlyList<DoctorReportVersionResponse> ReportVersions, IReadOnlyList<DoctorDocumentResponse> Documents);
-public sealed record DoctorWeeklyHourResponse(ulong Id, byte DayOfWeek, TimeOnly StartsAt, TimeOnly EndsAt,
+public sealed record ProfessionalWeeklyHourResponse(ulong Id, byte DayOfWeek, TimeOnly StartsAt, TimeOnly EndsAt,
     DateOnly? ValidFrom, DateOnly? ValidUntil, bool IsActive, ulong RowVersion, string ModalityCode);
-public sealed record DoctorAvailabilityExceptionResponse(ulong Id, DateOnly Date, string ModalityCode,
+public sealed record ProfessionalAvailabilityExceptionResponse(ulong Id, DateOnly Date, string ModalityCode,
     bool IsAvailable, TimeOnly? StartsAt, TimeOnly? EndsAt, ulong RowVersion);
 public sealed record DoctorAvailabilityResponse(bool OnlineEnabled, ushort MaxOnlineDaily, ushort MaxInPersonDaily,
-    ulong PreferenceRowVersion, IReadOnlyList<DoctorWeeklyHourResponse> WeeklyHours,
-    IReadOnlyList<DoctorAvailabilityExceptionResponse> Exceptions);
+    ulong PreferenceRowVersion, IReadOnlyList<ProfessionalWeeklyHourResponse> WeeklyHours,
+    IReadOnlyList<ProfessionalAvailabilityExceptionResponse> Exceptions);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record DoctorProfileUpdateRequest([param: Required, StringLength(200, MinimumLength = 3)] string FullName,
+public sealed record ProfessionalProfileUpdateRequest([param: Required, StringLength(200, MinimumLength = 3)] string FullName,
     [param: Required, StringLength(30)] string ProfessionalTitle, [param: StringLength(4000)] string? Biography,
     [param: Range(0, 80)] ushort YearsExperience, [param: Range(10, 480)] ushort DefaultAppointmentDurationMinutes,
     [param: MinLength(1), MaxLength(20)] IReadOnlyList<uint> SpecialtyIds, [param: Range(1, int.MaxValue)] uint PrimarySpecialtyId,
     bool EmailEnabled, bool SmsEnabled, ulong AccountRowVersion, ulong ProfileRowVersion, ulong PreferenceRowVersion);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record DoctorServicesUpdateRequest([param: MaxLength(200)] IReadOnlyList<uint> AppointmentTypeIds);
+public sealed record ProfessionalServicesUpdateRequest([param: MaxLength(200)] IReadOnlyList<uint> AppointmentTypeIds);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record DoctorAvailabilitySettingsRequest(bool OnlineEnabled, [param: Range(0, 100)] ushort MaxOnlineDaily,
     [param: Range(0, 100)] ushort MaxInPersonDaily, [param: Range(1, long.MaxValue)] ulong RowVersion);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record DoctorAvailabilityExceptionRequest(DateOnly Date,
+public sealed record ProfessionalAvailabilityExceptionRequest(DateOnly Date,
     [param: Required, RegularExpression("^(in_person|online|both)$")] string ModalityCode, bool IsAvailable,
     TimeOnly? StartsAt, TimeOnly? EndsAt, [param: Range(0, long.MaxValue)] ulong RowVersion) : IValidatableObject
 {
@@ -77,7 +78,7 @@ public sealed record DoctorAvailabilityExceptionRequest(DateOnly Date,
     }
 }
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record DoctorPatientLinkRequest([param: Required, StringLength(254)] string Identifier);
+public sealed record ProfessionalPatientLinkRequest([param: Required, StringLength(254)] string Identifier);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record DoctorPatientInviteRequest([param: Required, StringLength(200, MinimumLength = 3)] string FullName,
     [param: EmailAddress, StringLength(254)] string? Email, [param: StringLength(20)] string? PhoneE164,

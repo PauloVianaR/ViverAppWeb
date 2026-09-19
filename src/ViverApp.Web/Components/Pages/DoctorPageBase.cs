@@ -11,6 +11,9 @@ public abstract class DoctorPageBase : ComponentBase, IAsyncDisposable
     [Inject] protected NavigationManager Navigation { get; set; } = null!;
     [Inject] protected UiErrorNotifier ErrorNotifier { get; set; } = null!;
     protected IJSObjectReference? Module;
+    protected bool IsPsychologist => Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("psicologo", StringComparison.OrdinalIgnoreCase);
+    protected string ProfessionalRoot => IsPsychologist ? "/psicologo" : "/medico";
+    protected string ProfessionalLabel => IsPsychologist ? "Psicólogo" : "Médico";
     protected bool Loading = true, Busy;
     protected string AppointmentViewMode = "cards";
     protected DoctorCapabilities Capabilities { get; private set; } = new(false);
@@ -45,9 +48,13 @@ public abstract class DoctorPageBase : ComponentBase, IAsyncDisposable
     protected virtual bool HandlesLocation(string currentPath, string nextPath)
     {
         return InSameRouteGroup(currentPath, nextPath,
-                "/medico/agenda", "/medico/historico")
+                "/medico/agenda", "/medico/atendimentos")
             || InSameRouteGroup(currentPath, nextPath,
-                "/medico/perfil", "/medico/disponibilidade");
+                "/medico/perfil", "/medico/disponibilidade")
+            || InSameRouteGroup(currentPath, nextPath,
+                "/psicologo/agenda", "/psicologo/atendimentos")
+            || InSameRouteGroup(currentPath, nextPath,
+                "/psicologo/perfil", "/psicologo/disponibilidade");
     }
     private static bool InSameRouteGroup(string currentPath, string nextPath, string first, string second) =>
         (currentPath == first || currentPath == second) && (nextPath == first || nextPath == second);

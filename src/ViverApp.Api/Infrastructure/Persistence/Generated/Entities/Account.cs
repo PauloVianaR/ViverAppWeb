@@ -101,12 +101,6 @@ public partial class Account
 
     public virtual ICollection<ContactChangeRequest> ContactChangeRequests { get; set; } = new List<ContactChangeRequest>();
 
-    public virtual ICollection<DoctorPatientLink> DoctorPatientLinkCreatedByAccounts { get; set; } = new List<DoctorPatientLink>();
-
-    public virtual ICollection<DoctorPatientLink> DoctorPatientLinkPatientAccounts { get; set; } = new List<DoctorPatientLink>();
-
-    public virtual DoctorProfile? DoctorProfile { get; set; }
-
     public virtual ElectronicHealthRecord? ElectronicHealthRecord { get; set; }
 
     public virtual ICollection<ExternalLogin> ExternalLogins { get; set; } = new List<ExternalLogin>();
@@ -138,6 +132,12 @@ public partial class Account
     public virtual ICollection<PremiumMembership> PremiumMembershipReviewedByAccounts { get; set; } = new List<PremiumMembership>();
 
     public virtual ICollection<PrivateDocument> PrivateDocuments { get; set; } = new List<PrivateDocument>();
+
+    public virtual ICollection<ProfessionalPatientLink> ProfessionalPatientLinkCreatedByAccounts { get; set; } = new List<ProfessionalPatientLink>();
+
+    public virtual ICollection<ProfessionalPatientLink> ProfessionalPatientLinkPatientAccounts { get; set; } = new List<ProfessionalPatientLink>();
+
+    public virtual ProfessionalProfile? ProfessionalProfile { get; set; }
 
     public virtual ICollection<ProfessionalReview> ProfessionalReviewProfessionalAccounts { get; set; } = new List<ProfessionalReview>();
 

@@ -216,6 +216,12 @@ public sealed class CatalogController(
         [FromBody] AppointmentTypeWriteRequest request,
         CancellationToken cancellationToken)
     {
+        if (request.RequiresPayment && request.PriceAmount <= 0)
+        {
+            ModelState.AddModelError(nameof(request.PriceAmount), "Informe um preço maior que zero para um atendimento cobrado.");
+            return ValidationProblem(ModelState);
+        }
+
         if (request.RowVersion != 0)
         {
             ModelState.AddModelError(nameof(request.RowVersion), "A versão deve ser zero em novos registros.");
@@ -230,7 +236,8 @@ public sealed class CatalogController(
             CategoryCode = request.CategoryCode,
             ModalityCode = request.ModalityCode,
             DurationMinutes = request.DurationMinutes,
-            PriceAmount = request.PriceAmount,
+            PriceAmount = request.RequiresPayment ? request.PriceAmount : 0,
+            RequiresPayment = request.RequiresPayment,
             IsActive = request.IsActive,
             DisplayOrder = request.DisplayOrder,
             CreatedAtUtc = now,
@@ -255,6 +262,12 @@ public sealed class CatalogController(
         [FromBody] AppointmentTypeWriteRequest request,
         CancellationToken cancellationToken)
     {
+        if (request.RequiresPayment && request.PriceAmount <= 0)
+        {
+            ModelState.AddModelError(nameof(request.PriceAmount), "Informe um preço maior que zero para um atendimento cobrado.");
+            return ValidationProblem(ModelState);
+        }
+
         if (request.RowVersion == 0)
         {
             ModelState.AddModelError(nameof(request.RowVersion), "A versão atual é obrigatória.");
@@ -273,7 +286,8 @@ public sealed class CatalogController(
         entity.CategoryCode = request.CategoryCode;
         entity.ModalityCode = request.ModalityCode;
         entity.DurationMinutes = request.DurationMinutes;
-        entity.PriceAmount = request.PriceAmount;
+        entity.PriceAmount = request.RequiresPayment ? request.PriceAmount : 0;
+        entity.RequiresPayment = request.RequiresPayment;
         entity.IsActive = request.IsActive;
         entity.DisplayOrder = request.DisplayOrder;
         entity.UpdatedAtUtc = DateTime.UtcNow;
@@ -383,6 +397,7 @@ public sealed class CatalogController(
         item.ModalityCode,
         item.DurationMinutes,
         item.PriceAmount,
+        item.RequiresPayment,
         item.IsActive,
         item.DisplayOrder,
         item.RowVersion);

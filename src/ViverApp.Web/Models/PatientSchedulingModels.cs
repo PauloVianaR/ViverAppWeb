@@ -28,7 +28,8 @@ public sealed record WebBookingProfessional(
     ushort YearsExperience = 0,
     double? AverageRating = null,
     int ReviewCount = 0,
-    bool SupportsOnline = true);
+    bool SupportsOnline = true,
+    string LicenseTypeCode = "CRM");
 
 public sealed record WebAvailableSlot(
     DateOnly Date,
@@ -50,7 +51,7 @@ public sealed record WebAppointmentRescheduleHistory(
 public sealed record WebAppointment(
     ulong Id,
     ulong AppointmentNumber,
-    ulong DoctorAccountId,
+    ulong ProfessionalAccountId,
     string DoctorName,
     uint AppointmentTypeId,
     string AppointmentTypeName,
@@ -72,10 +73,11 @@ public sealed record WebAppointment(
     DateOnly? ArrivalBusinessDate,
     uint? ArrivalQueueNumber,
     IReadOnlyList<WebAppointmentRescheduleHistory> RescheduleHistory,
+    bool RequiresPayment,
     ulong RowVersion);
 
 public sealed record WebAppointmentCreateRequest(
-    ulong DoctorAccountId,
+    ulong ProfessionalAccountId,
     uint AppointmentTypeId,
     string ModalityCode,
     DateOnly LocalDate,

@@ -27,7 +27,7 @@ public sealed record WebClinicalAppointment(
     string PatientName,
     string? PatientEmail,
     string? PatientPhone,
-    ulong DoctorAccountId,
+    ulong ProfessionalAccountId,
     string DoctorName,
     string AppointmentTypeName,
     string StatusCode,
@@ -51,7 +51,7 @@ public sealed record WebClinicalPatient(
     DateTime? LastAppointmentAtUtc,
     DateTime? NextAppointmentAtUtc);
 
-public sealed record WebDoctorWeeklyHour(
+public sealed record WebProfessionalWeeklyHour(
     ulong Id,
     byte DayOfWeek,
     TimeSpan StartTime,
@@ -71,7 +71,7 @@ public sealed record WebCompleteAppointmentRequest(
 
 public sealed record WebRecordNoShowRequest(ulong AppointmentRowVersion);
 
-public sealed record WebDoctorWeeklyHourWriteRequest(
+public sealed record WebProfessionalWeeklyHourWriteRequest(
     byte DayOfWeek,
     TimeSpan StartTime,
     TimeSpan EndTime,

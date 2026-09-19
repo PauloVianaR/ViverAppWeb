@@ -1,4 +1,5 @@
 @page "/medico/prontuario/{PatientId:long}"
+@page "/psicologo/prontuario/{PatientId:long}"
 @page "/gestao/prontuario/{PatientId:long}"
 @page "/administracao/prontuario/{PatientId:long}"
 @implements IAsyncDisposable
@@ -226,9 +227,9 @@ else
     private Task AutosaveTask = Task.CompletedTask;
     private bool EditorDirty;
     private RecordTab ActiveTab = RecordTab.Timeline;
-    private string Role { get { var path=Navigation.ToBaseRelativePath(Navigation.Uri);return path.StartsWith("medico/",StringComparison.OrdinalIgnoreCase)?"doctor":path.StartsWith("gestao/",StringComparison.OrdinalIgnoreCase)?"manager":"administrator"; } }
-    private string AreaLabel => Role switch { "doctor"=>"Médico", "manager"=>"Gestor", _=>"Administrador" };
-    private string PatientsPath => Role switch { "doctor"=>"/medico/pacientes", "manager"=>"/gestao/pacientes", _=>"/administracao/pacientes" };
+    private string Role { get { var path=Navigation.ToBaseRelativePath(Navigation.Uri);return path.StartsWith("medico/",StringComparison.OrdinalIgnoreCase)?"doctor":path.StartsWith("psicologo/",StringComparison.OrdinalIgnoreCase)?"psychologist":path.StartsWith("gestao/",StringComparison.OrdinalIgnoreCase)?"manager":"administrator"; } }
+    private string AreaLabel => Role switch { "doctor"=>"Médico", "psychologist"=>"Psicólogo", "manager"=>"Gestor", _=>"Administrador" };
+    private string PatientsPath => Role switch { "doctor"=>"/medico/pacientes", "psychologist"=>"/psicologo/pacientes", "manager"=>"/gestao/pacientes", _=>"/administracao/pacientes" };
     private WebMedicalRecordAppointmentOption? SelectedAppointment => Appointments.FirstOrDefault(x=>x.Id==SelectedAppointmentId);
     private IEnumerable<WebMedicalRecordAppointmentOption> EditableAppointments => Appointments.Where(x=>x.StatusCode is "confirmed" or "arrived" or "in_progress" or "completed");
     private IReadOnlyList<TabOption> Tabs => Role=="administrator"
@@ -238,7 +239,7 @@ else
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if(!firstRender)return;
-        try { Module=await JavaScript.InvokeAsync<IJSObjectReference>("import","/js/medical-records.js"); CanWriteClinical=Role=="doctor"||(Role=="manager"&&(await Get<ManagerCapabilities>("api/v1/manager/capabilities"))?.MedicalRecordWriteEnabled==true); Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary"); Appointments.AddRange(await Get<IReadOnlyList<WebMedicalRecordAppointmentOption>>($"api/v1/medical-records/patients/{PatientId}/appointments")??[]); await LoadTimelineCoreAsync(); }
+        try { Module=await JavaScript.InvokeAsync<IJSObjectReference>("import","/js/medical-records.js"); CanWriteClinical=Role is "doctor" or "psychologist"||(Role=="manager"&&(await Get<ManagerCapabilities>("api/v1/manager/capabilities"))?.MedicalRecordWriteEnabled==true); Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary"); Appointments.AddRange(await Get<IReadOnlyList<WebMedicalRecordAppointmentOption>>($"api/v1/medical-records/patients/{PatientId}/appointments")??[]); await LoadTimelineCoreAsync(); }
         catch(Exception e){ShowError(e);}
         finally{Loading=false;StateHasChanged();}
     }
@@ -313,8 +314,8 @@ else
     private static string PaymentStatus(string x)=>x switch{"paid"=>"Pago","reversed" or "refunded"=>"Cancelado","reversal_pending"=>"Cancelamento pendente","pending"=>"Pendente","failed"=>"Falhou",_=>x};
     private static string DocumentCategoryLabel(string x)=>x switch{"exam"=>"Exame","report"=>"Laudo","administrative"=>"Administrativo",_=>"Anexo"};
     private static string FileSize(ulong bytes)=>bytes>=1048576?$"{bytes/1048576d:0.0} MB":$"{bytes/1024d:0} KB";
-    private static string RoleLabel(string x)=>x switch{"doctor"=>"Médico","manager"=>"Gestor","administrator"=>"Administrador",_=>x};
-    private static string AuthorRoleLabel(string x)=>x switch{"doctor"=>"Médico","manager"=>"Gestor","administrator"=>"Admin",_=>"Responsável"};
+    private static string RoleLabel(string x)=>x switch{"doctor"=>"Médico","psychologist"=>"Psicólogo","manager"=>"Gestor","administrator"=>"Administrador",_=>x};
+    private static string AuthorRoleLabel(string x)=>x switch{"doctor"=>"Médico","psychologist"=>"Psicólogo","manager"=>"Gestor","administrator"=>"Admin",_=>"Responsável"};
     private static string ScopeLabel(string x)=>x switch{"summary"=>"Resumo","timeline"=>"Linha do tempo","clinical"=>"Clínico","financial"=>"Financeiro","document"=>"Documento","pdf"=>"PDF","audit"=>"Auditoria",_=>x};
     public async ValueTask DisposeAsync(){AutosaveCancellation?.Cancel();AutosaveCancellation?.Dispose();if(Module is not null)try{await Module.DisposeAsync();}catch(JSDisconnectedException){}}
 }

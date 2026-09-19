@@ -9,7 +9,7 @@ public partial class MedicalReport
 
     public ulong AppointmentId { get; set; }
 
-    public ulong AuthorDoctorAccountId { get; set; }
+    public ulong AuthorProfessionalAccountId { get; set; }
 
     public string StatusCode { get; set; } = null!;
 
@@ -27,7 +27,7 @@ public partial class MedicalReport
 
     public virtual Appointment Appointment { get; set; } = null!;
 
-    public virtual DoctorProfile AuthorDoctorAccount { get; set; } = null!;
+    public virtual ProfessionalProfile AuthorProfessionalAccount { get; set; } = null!;
 
     public virtual ICollection<MedicalReportVersion> MedicalReportVersions { get; set; } = new List<MedicalReportVersion>();
 }

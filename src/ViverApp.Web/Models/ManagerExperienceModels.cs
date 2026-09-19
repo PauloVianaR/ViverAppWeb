@@ -7,18 +7,18 @@ public sealed record ManagerHomeSources(IReadOnlyList<ulong> Today, IReadOnlyLis
 public sealed record ManagerProfileData(ulong AccountId, string FullName, string? Email, string? Phone, string? TaxId,
     bool EmailVerified, bool PhoneVerified, bool EmailEnabled, bool SmsEnabled, ulong AccountRowVersion, ulong PreferenceRowVersion);
 public sealed record ManagerDoctor(ulong AccountId, string FullName, string LicenseLabel);
-public sealed record ManagerDoctorWeeklyHour(ulong Id, byte DayOfWeek, TimeSpan StartTime, TimeSpan EndTime,
+public sealed record ManagerProfessionalWeeklyHour(ulong Id, byte DayOfWeek, TimeSpan StartTime, TimeSpan EndTime,
     DateOnly? ValidFrom, DateOnly? ValidUntil, bool IsActive, ulong RowVersion, string ModalityCode);
 public sealed record ManagerCapabilities(bool AppointmentTypesEnabled, bool DoctorSchedulesEnabled,
     bool PremiumManagementEnabled, bool MedicalRecordWriteEnabled, bool CashReopeningEnabled,
     bool CashCumulativeTotalsEnabled);
-public sealed record ManagerService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal BasePrice);
+public sealed record ManagerService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal BasePrice, bool RequiresPayment);
 public sealed record ManagerReportMetadata(bool Exists, string? StatusCode, uint VersionCount, DateTime? PublishedAtUtc);
 public sealed record ManagerPaymentMetadata(ulong? Id, string StatusCode, string? MethodCode, DateTime? PaidAtUtc,
     string? CardLastFour, string? AuthorizationReference, ulong RowVersion);
 public sealed record ManagerAppointment(ulong Id, ulong AppointmentNumber, ulong PatientAccountId, string PatientName, string? PatientPhone,
-    ulong DoctorAccountId, string DoctorName, uint AppointmentTypeId, string Service, string CategoryCode, string StatusCode,
-    string ModalityCode, DateTime StartsAtUtc, DateTime EndsAtUtc, decimal PriceAmount, decimal BasePriceAmount, decimal DiscountPercent,
+    ulong ProfessionalAccountId, string DoctorName, uint AppointmentTypeId, string Service, string CategoryCode, string StatusCode,
+    string ModalityCode, DateTime StartsAtUtc, DateTime EndsAtUtc, decimal PriceAmount, decimal BasePriceAmount, decimal DiscountPercent, bool RequiresPayment,
     string PaymentLocation, string? PatientNotes, string? CancellationReason, ulong? RescheduledFromAppointmentId,
     ulong? RescheduledToAppointmentId, byte? Rating, string? ReviewComment, ManagerPaymentMetadata Payment,
     ManagerReportMetadata Report, int AttachmentCount, DateTime? ArrivedAtUtc, DateOnly? ArrivalBusinessDate,

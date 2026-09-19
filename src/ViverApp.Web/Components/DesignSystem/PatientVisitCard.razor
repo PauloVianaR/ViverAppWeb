@@ -5,7 +5,7 @@
         <div><dt>Quando</dt><dd>@Model.Appointment.LocalDate.ToString("dd/MM/yyyy") às @Model.Appointment.LocalStartsAt.ToString("HH:mm")</dd></div>
         <div><dt>Duração</dt><dd>@((int)(Model.Appointment.EndsAtUtc - Model.Appointment.StartsAtUtc).TotalMinutes) minutos</dd></div>
         <div><dt>Modalidade</dt><dd>@(Model.Appointment.ModalityCode == "online" ? "Online" : "Presencial")</dd></div>
-        <div><dt>Pagamento</dt><dd>@Status(Model.PaymentStatus) · @if(Model.DiscountPercent>0){<s>@Money(Model.BasePrice)</s> <strong>@Money(Model.Appointment.PriceAmount)</strong>}else{@Money(Model.Appointment.PriceAmount)} @(Model.PaymentLocation == "clinic" ? "(na clínica)" : null)</dd></div>
+        <div><dt>Pagamento</dt><dd>@if(!Model.Appointment.RequiresPayment){<strong>Sem cobrança</strong>}else{@Status(Model.PaymentStatus)<text> · </text>@if(Model.DiscountPercent>0){<s>@Money(Model.BasePrice)</s> <strong>@Money(Model.Appointment.PriceAmount)</strong>}else{@Money(Model.Appointment.PriceAmount)} @(Model.PaymentLocation == "clinic" ? "(na clínica)" : null)}</dd></div>
         @if (Model.DiscountPercent > 0) { <div><dt>Premium</dt><dd><span class="premium-star" aria-hidden="true">★</span> @Model.DiscountPercent% de desconto</dd></div> }
         @if (Model.Appointment.ArrivalQueueNumber.HasValue) { <div><dt>Senha de chegada</dt><dd class="arrival-number">@Model.Appointment.ArrivalQueueNumber</dd></div> }
         @if (Clinic is not null && Model.Appointment.ModalityCode == "in_person") { <div class="patient-facts__wide"><dt>Local</dt><dd>@Clinic.Name · @Clinic.Address</dd></div> }

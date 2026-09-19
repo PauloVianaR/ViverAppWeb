@@ -27,7 +27,7 @@ public sealed class GoogleOnboardingProtector(IDataProtectionProvider provider)
             return identity is not null
                 && !string.IsNullOrWhiteSpace(identity.ProviderSubject)
                 && IdentifierNormalizer.NormalizeEmail(identity.Email) is not null
-                && identity.RoleCode is ViverAppRoles.Patient or ViverAppRoles.Doctor or ViverAppRoles.Manager;
+                && identity.RoleCode is ViverAppRoles.Patient or ViverAppRoles.Doctor or ViverAppRoles.Psychologist or ViverAppRoles.Manager;
         }
         catch (Exception exception) when (exception is CryptographicException or JsonException)
         {

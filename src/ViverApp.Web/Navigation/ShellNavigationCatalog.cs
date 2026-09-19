@@ -5,6 +5,7 @@ public enum ShellProfile
     Public,
     Patient,
     Doctor,
+    Psychologist,
     Manager,
     Administrator,
 }
@@ -43,6 +44,7 @@ public static class ShellNavigationCatalog
             new("Início", "/paciente", "home"),
             new("Agendar", "/paciente/agendar", "plus"),
             new("Agenda", "/paciente/agenda", "calendar"),
+            new("Atendimentos", "/paciente/atendimentos", "history"),
             new("Pagamentos", "/paciente/pagamentos", "card"),
             new("Perfil", "/paciente/perfil", "user"),
         ]);
@@ -55,8 +57,20 @@ public static class ShellNavigationCatalog
             new("Início", "/medico", "home"),
             new("Agenda", "/medico/agenda", "calendar"),
             new("Pacientes", "/medico/pacientes", "users"),
-            new("Histórico", "/medico/historico", "history"),
+            new("Atendimentos", "/medico/atendimentos", "history"),
             new("Perfil", "/medico/perfil", "user"),
+        ]);
+
+    private static readonly ShellDefinition Psychologist = new(
+        ShellProfile.Psychologist,
+        "Psicólogo",
+        "Área profissional",
+        [
+            new("Início", "/psicologo", "home"),
+            new("Agenda", "/psicologo/agenda", "calendar"),
+            new("Pacientes", "/psicologo/pacientes", "users"),
+            new("Atendimentos", "/psicologo/atendimentos", "history"),
+            new("Perfil", "/psicologo/perfil", "user"),
         ]);
 
     private static readonly ShellDefinition Manager = new(
@@ -67,7 +81,7 @@ public static class ShellNavigationCatalog
             new("Início", "/gestao", "home"),
             new("Agenda", "/gestao/agenda", "calendar"),
             new("Pacientes", "/gestao/pacientes", "users"),
-            new("Histórico", "/gestao/historico", "history"),
+            new("Atendimentos", "/gestao/atendimentos", "history"),
             new("Caixa", "/gestao/caixa", "card"),
             new("Clínica", "/gestao/clinica", "clinic"),
             new("Perfil", "/gestao/perfil", "user"),
@@ -80,7 +94,8 @@ public static class ShellNavigationCatalog
         [
             new("Início", "/administracao", "home"),
             new("Clínica", "/administracao/clinica", "clinic"),
-            new("Consultas", "/administracao/consultas", "calendar"),
+            new("Agenda", "/administracao/agenda", "calendar"),
+            new("Atendimentos", "/administracao/atendimentos", "history"),
             new("Pacientes", "/administracao/pacientes", "users"),
             new("Analytics", "/administracao/analytics", "chart"),
             new("Caixa", "/administracao/caixa", "card"),
@@ -106,6 +121,11 @@ public static class ShellNavigationCatalog
             return Doctor;
         }
 
+        if (MatchesArea(path, "/psicologo"))
+        {
+            return Psychologist;
+        }
+
         if (MatchesArea(path, "/paciente"))
         {
             return Patient;
@@ -118,6 +138,7 @@ public static class ShellNavigationCatalog
     {
         "patient" => Patient,
         "doctor" => Doctor,
+        "psychologist" => Psychologist,
         "manager" => Manager,
         "administrator" => Administrator,
         _ => Public,
@@ -139,5 +160,5 @@ public static class ShellNavigationCatalog
         || path.StartsWith($"{area}/", StringComparison.OrdinalIgnoreCase);
 
     public static IReadOnlyList<ShellDefinition> AllProfiles { get; } =
-        [Patient, Doctor, Manager, Administrator];
+        [Patient, Doctor, Psychologist, Manager, Administrator];
 }
