@@ -3,9 +3,9 @@ using System.Collections.Generic;
 
 namespace ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 
-public partial class DoctorPatientLink
+public partial class ProfessionalPatientLink
 {
-    public ulong DoctorAccountId { get; set; }
+    public ulong ProfessionalAccountId { get; set; }
 
     public ulong PatientAccountId { get; set; }
 
@@ -21,7 +21,7 @@ public partial class DoctorPatientLink
 
     public virtual Account CreatedByAccount { get; set; } = null!;
 
-    public virtual DoctorProfile DoctorAccount { get; set; } = null!;
-
     public virtual Account PatientAccount { get; set; } = null!;
+
+    public virtual ProfessionalProfile ProfessionalAccount { get; set; } = null!;
 }

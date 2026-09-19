@@ -17,13 +17,13 @@ public sealed record ManagerCapabilitiesResponse(bool AppointmentTypesEnabled, b
     bool PremiumManagementEnabled, bool MedicalRecordWriteEnabled, bool CashReopeningEnabled,
     bool CashCumulativeTotalsEnabled);
 public sealed record ManagerServiceOption(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode,
-    ushort DurationMinutes, decimal BasePrice);
+    ushort DurationMinutes, decimal BasePrice, bool RequiresPayment);
 public sealed record ManagerReportMetadata(bool Exists, string? StatusCode, uint VersionCount, DateTime? PublishedAtUtc);
 public sealed record ManagerPaymentMetadata(ulong? Id, string StatusCode, string? MethodCode, DateTime? PaidAtUtc,
     string? CardLastFour, string? AuthorizationReference, ulong RowVersion);
 public sealed record ManagerAppointmentResponse(ulong Id, ulong AppointmentNumber, ulong PatientAccountId, string PatientName, string? PatientPhone,
-    ulong DoctorAccountId, string DoctorName, uint AppointmentTypeId, string Service, string CategoryCode, string StatusCode,
-    string ModalityCode, DateTime StartsAtUtc, DateTime EndsAtUtc, decimal PriceAmount, decimal BasePriceAmount, decimal DiscountPercent,
+    ulong ProfessionalAccountId, string DoctorName, uint AppointmentTypeId, string Service, string CategoryCode, string StatusCode,
+    string ModalityCode, DateTime StartsAtUtc, DateTime EndsAtUtc, decimal PriceAmount, decimal BasePriceAmount, decimal DiscountPercent, bool RequiresPayment,
     string PaymentLocation, string? PatientNotes, string? CancellationReason, ulong? RescheduledFromAppointmentId,
     ulong? RescheduledToAppointmentId, byte? Rating, string? ReviewComment, ManagerPaymentMetadata Payment,
     ManagerReportMetadata Report, int AttachmentCount, DateTime? ArrivedAtUtc, DateOnly? ArrivalBusinessDate,
@@ -102,7 +102,7 @@ public sealed record ManagerPatientAddressRequest(
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ManagerAppointmentCreateRequest([param: Range(1, long.MaxValue)] ulong PatientAccountId,
-    [param: Range(1, long.MaxValue)] ulong DoctorAccountId, [param: Range(1, int.MaxValue)] uint AppointmentTypeId,
+    [param: Range(1, long.MaxValue)] ulong ProfessionalAccountId, [param: Range(1, int.MaxValue)] uint AppointmentTypeId,
     [param: Required, RegularExpression("^(in_person|online)$")] string ModalityCode, DateOnly LocalDate,
     TimeOnly LocalStartsAt, [param: StringLength(1000)] string? PatientNotes);
 

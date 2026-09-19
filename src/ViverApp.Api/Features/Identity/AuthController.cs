@@ -213,7 +213,7 @@ public sealed class AuthController(
             user.PhoneNumberConfirmed = true;
         }
 
-        user.StatusCode = user.RoleCode is ViverAppRoles.Doctor or ViverAppRoles.Manager
+        user.StatusCode = user.RoleCode is ViverAppRoles.Doctor or ViverAppRoles.Psychologist or ViverAppRoles.Manager
             ? "pending_approval"
             : "active";
         var updated = await userManager.UpdateAsync(user);
@@ -627,7 +627,7 @@ public sealed class AuthController(
         }
 
         await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
-        var status = identity.RoleCode is ViverAppRoles.Doctor or ViverAppRoles.Manager
+        var status = identity.RoleCode is ViverAppRoles.Doctor or ViverAppRoles.Psychologist or ViverAppRoles.Manager
             ? "pending_approval"
             : "active";
         var user = new ViverAppUser
@@ -724,7 +724,7 @@ public sealed class AuthController(
         }
 
         if (role is not null
-            && role is not ViverAppRoles.Patient and not ViverAppRoles.Doctor and not ViverAppRoles.Manager)
+            && role is not ViverAppRoles.Patient and not ViverAppRoles.Doctor and not ViverAppRoles.Psychologist and not ViverAppRoles.Manager)
         {
             return BadRequest(new ProblemDetails
             {
@@ -765,6 +765,7 @@ public sealed class AuthController(
                     : null;
             if (registrationRole is not ViverAppRoles.Patient
                 and not ViverAppRoles.Doctor
+                and not ViverAppRoles.Psychologist
                 and not ViverAppRoles.Manager)
             {
                 await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
@@ -1096,7 +1097,7 @@ public sealed class AuthController(
         DoctorRegistrationRequest? doctor,
         CancellationToken cancellationToken)
     {
-        if (roleCode is not (ViverAppRoles.Patient or ViverAppRoles.Doctor or ViverAppRoles.Manager))
+        if (roleCode is not (ViverAppRoles.Patient or ViverAppRoles.Doctor or ViverAppRoles.Psychologist or ViverAppRoles.Manager))
         {
             ModelState.AddModelError(nameof(roleCode), "O papel escolhido não permite cadastro público.");
         }
@@ -1111,10 +1112,10 @@ public sealed class AuthController(
         {
             ModelState.AddModelError(nameof(birthDate), "Informe uma data de nascimento válida.");
         }
-        else if (roleCode is ViverAppRoles.Doctor or ViverAppRoles.Manager
+        else if (roleCode is ViverAppRoles.Doctor or ViverAppRoles.Psychologist or ViverAppRoles.Manager
             && birthDate > today.AddYears(-18))
         {
-            ModelState.AddModelError(nameof(birthDate), "Médicos e gestores devem ser maiores de 18 anos.");
+            ModelState.AddModelError(nameof(birthDate), "Profissionais clínicos e gestores devem ser maiores de 18 anos.");
         }
 
         if (!termsAccepted)
@@ -1139,11 +1140,16 @@ public sealed class AuthController(
             ModelState.AddModelError(nameof(address), "Endereço residencial não é aceito neste cadastro profissional.");
         }
 
-        if (roleCode == ViverAppRoles.Doctor)
+        if (roleCode is ViverAppRoles.Doctor or ViverAppRoles.Psychologist)
         {
             if (doctor is null)
             {
-                ModelState.AddModelError(nameof(doctor), "Os dados profissionais são obrigatórios para médicos.");
+                ModelState.AddModelError(nameof(doctor), "Os dados profissionais são obrigatórios.");
+            }
+            else if (roleCode == ViverAppRoles.Doctor && doctor.ProfessionalTitle is not ("Dr." or "Dra.")
+                || roleCode == ViverAppRoles.Psychologist && doctor.ProfessionalTitle is not ("Psic." or "Psicóloga"))
+            {
+                ModelState.AddModelError(nameof(doctor.ProfessionalTitle), "O título profissional deve corresponder ao papel selecionado.");
             }
             else if (!await database.Specialties.AsNoTracking().AnyAsync(
                 item => item.Id == doctor.PrimarySpecialtyId && item.IsActive,
@@ -1154,7 +1160,7 @@ public sealed class AuthController(
         }
         else if (doctor is not null)
         {
-            ModelState.AddModelError(nameof(doctor), "Dados médicos são aceitos somente no cadastro de Médico.");
+            ModelState.AddModelError(nameof(doctor), "Dados profissionais são aceitos somente no cadastro de Médico ou Psicólogo.");
         }
 
         return ModelState.IsValid;
@@ -1203,11 +1209,12 @@ public sealed class AuthController(
                 UpdatedAtUtc = now,
             });
         }
-        else if (roleCode == ViverAppRoles.Doctor)
+        else if (roleCode is ViverAppRoles.Doctor or ViverAppRoles.Psychologist)
         {
-            database.DoctorProfiles.Add(new DoctorProfile
+            database.ProfessionalProfiles.Add(new ProfessionalProfile
             {
                 AccountId = accountId,
+                LicenseTypeCode = roleCode == ViverAppRoles.Psychologist ? "CRP" : "CRM",
                 ProfessionalTitle = doctor!.ProfessionalTitle,
                 LicenseStateCode = doctor.LicenseStateCode,
                 LicenseNumber = doctor.LicenseNumber.Trim(),
@@ -1217,15 +1224,15 @@ public sealed class AuthController(
                 UpdatedAtUtc = now,
                 RowVersion = 1,
             });
-            database.DoctorSpecialties.Add(new DoctorSpecialty
+            database.ProfessionalSpecialties.Add(new ProfessionalSpecialty
             {
-                DoctorAccountId = accountId,
+                ProfessionalAccountId = accountId,
                 SpecialtyId = doctor.PrimarySpecialtyId,
                 IsPrimary = true,
             });
-            database.DoctorPreferences.Add(new DoctorPreference
+            database.ProfessionalPreferences.Add(new ProfessionalPreference
             {
-                DoctorAccountId = accountId,
+                ProfessionalAccountId = accountId,
                 EmailEnabled = true,
                 SmsEnabled = true,
                 OnlineEnabled = true,
@@ -1235,9 +1242,9 @@ public sealed class AuthController(
                 RowVersion = 1,
             });
             var activeServices = await database.AppointmentTypes.AsNoTracking().Where(item => item.IsActive).Select(item => item.Id).ToArrayAsync(cancellationToken);
-            database.DoctorServices.AddRange(activeServices.Select(id => new DoctorService
+            database.ProfessionalServices.AddRange(activeServices.Select(id => new ProfessionalService
             {
-                DoctorAccountId = accountId,
+                ProfessionalAccountId = accountId,
                 AppointmentTypeId = id,
                 IsActive = true,
                 CreatedAtUtc = now,
@@ -1253,6 +1260,7 @@ public sealed class AuthController(
     {
         ViverAppRoles.Patient => "/paciente",
         ViverAppRoles.Doctor => "/medico",
+        ViverAppRoles.Psychologist => "/psicologo",
         ViverAppRoles.Manager => "/gestao",
         ViverAppRoles.Administrator => "/administracao",
         _ => "/acesso",

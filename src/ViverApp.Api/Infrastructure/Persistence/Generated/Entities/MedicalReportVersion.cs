@@ -11,7 +11,7 @@ public partial class MedicalReportVersion
 
     public uint VersionNumber { get; set; }
 
-    public ulong AuthorDoctorAccountId { get; set; }
+    public ulong AuthorProfessionalAccountId { get; set; }
 
     public string ClinicalSummary { get; set; } = null!;
 
@@ -21,7 +21,7 @@ public partial class MedicalReportVersion
 
     public DateTime CreatedAtUtc { get; set; }
 
-    public virtual DoctorProfile AuthorDoctorAccount { get; set; } = null!;
+    public virtual ProfessionalProfile AuthorProfessionalAccount { get; set; } = null!;
 
     public virtual MedicalReport MedicalReport { get; set; } = null!;
 }

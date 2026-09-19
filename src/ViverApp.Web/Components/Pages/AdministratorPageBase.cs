@@ -37,8 +37,8 @@ public abstract class AdministratorPageBase : ComponentBase, IAsyncDisposable
     }
     protected virtual bool HandlesLocation(string currentPath, string nextPath)
     {
-        return currentPath is "/administracao/consultas" or "/administracao/consultas/historico"
-            && nextPath is "/administracao/consultas" or "/administracao/consultas/historico";
+        return currentPath is "/administracao/agenda" or "/administracao/atendimentos"
+            && nextPath is "/administracao/agenda" or "/administracao/atendimentos";
     }
     protected abstract Task Load();
     protected Task<T?> Get<T>(string path) => Request<T>(path, "GET", null);

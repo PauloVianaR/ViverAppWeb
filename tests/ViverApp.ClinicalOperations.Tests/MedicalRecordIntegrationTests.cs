@@ -29,7 +29,7 @@ public sealed class MedicalRecordIntegrationTests
         var patient = Account($"record-patient-{marker}@example.test", ViverAppRoles.Patient, "Paciente Registro");
         context.Accounts.AddRange(doctor, otherDoctor, manager, administrator, patient);
         await context.SaveChangesAsync();
-        context.DoctorProfiles.AddRange(Doctor(doctor.Id, "18001"), Doctor(otherDoctor.Id, "18002"));
+        context.ProfessionalProfiles.AddRange(Doctor(doctor.Id, "18001"), Doctor(otherDoctor.Id, "18002"));
         context.PatientProfiles.Add(new PatientProfile { AccountId = patient.Id, PreferredName = "Paciente", CreatedAtUtc = now, UpdatedAtUtc = now });
         var type = new AppointmentType
         {
@@ -38,6 +38,7 @@ public sealed class MedicalRecordIntegrationTests
             ModalityCode = "both",
             DurationMinutes = 30,
             PriceAmount = 200,
+            RequiresPayment = true,
             IsActive = true,
             DisplayOrder = 980,
             CreatedAtUtc = now,
@@ -50,7 +51,7 @@ public sealed class MedicalRecordIntegrationTests
         {
             AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
             PatientAccountId = patient.Id,
-            DoctorAccountId = doctor.Id,
+            ProfessionalAccountId = doctor.Id,
             AppointmentTypeId = type.Id,
             CreatedByAccountId = manager.Id,
             StatusCode = "in_progress",
@@ -58,6 +59,7 @@ public sealed class MedicalRecordIntegrationTests
             StartsAtUtc = now.AddMinutes(-30),
             EndsAtUtc = now,
             PriceAmount = 200,
+            RequiresPayment = true,
             CurrencyCode = "BRL",
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
@@ -68,7 +70,7 @@ public sealed class MedicalRecordIntegrationTests
         {
             AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
             PatientAccountId = patient.Id,
-            DoctorAccountId = doctor.Id,
+            ProfessionalAccountId = doctor.Id,
             AppointmentTypeId = type.Id,
             CreatedByAccountId = manager.Id,
             StatusCode = "pending",
@@ -76,6 +78,7 @@ public sealed class MedicalRecordIntegrationTests
             StartsAtUtc = now.AddDays(1),
             EndsAtUtc = now.AddDays(1).AddMinutes(30),
             PriceAmount = 200,
+            RequiresPayment = true,
             CurrencyCode = "BRL",
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
@@ -83,9 +86,9 @@ public sealed class MedicalRecordIntegrationTests
             PaymentLocationCode = "clinic",
         };
         context.Appointments.AddRange(appointment, pendingAppointment);
-        context.DoctorPatientLinks.Add(new DoctorPatientLink
+        context.ProfessionalPatientLinks.Add(new ProfessionalPatientLink
         {
-            DoctorAccountId = doctor.Id,
+            ProfessionalAccountId = doctor.Id,
             PatientAccountId = patient.Id,
             CreatedByAccountId = manager.Id,
             StatusCode = "active",
@@ -148,7 +151,7 @@ public sealed class MedicalRecordIntegrationTests
         var managerVersion = await service.FinalizeAsync(manager.Id, ViverAppRoles.Manager, patient.Id, appointment.Id,
             new MedicalRecordFinalizeRequest(managerDraft.RowVersion), CancellationToken.None);
         Assert.Equal(2U, managerVersion.VersionNumber);
-        Assert.Equal(manager.Id, managerVersion.AuthorDoctorAccountId);
+        Assert.Equal(manager.Id, managerVersion.AuthorProfessionalAccountId);
         Assert.Equal("Gestor da clínica", managerVersion.LicenseLabel);
         var entriesAfterManagerVersion = await service.EntriesAsync(manager.Id, ViverAppRoles.Manager, true, patient.Id,
             null, true, CancellationToken.None);
@@ -187,11 +190,12 @@ public sealed class MedicalRecordIntegrationTests
         RowVersion = 1,
     };
 
-    private static DoctorProfile Doctor(ulong id, string license) => new()
+    private static ProfessionalProfile Doctor(ulong id, string license) => new()
     {
         AccountId = id,
         ProfessionalTitle = "Dr.",
         LicenseStateCode = "MG",
+        LicenseTypeCode = "CRM",
         LicenseNumber = license,
         DefaultAppointmentDurationMinutes = 30,
         CreatedAtUtc = DateTime.UtcNow,

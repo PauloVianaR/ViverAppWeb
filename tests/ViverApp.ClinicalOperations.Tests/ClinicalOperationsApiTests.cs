@@ -72,9 +72,9 @@ public sealed class ClinicalOperationsApiTests : IAsyncLifetime
         var read = await provider.GetPolicyAsync(ViverAppPolicies.MedicalRecordRead);
         var write = await provider.GetPolicyAsync(ViverAppPolicies.MedicalRecordWrite);
         var audit = await provider.GetPolicyAsync(ViverAppPolicies.MedicalRecordAudit);
-        Assert.Equal([ViverAppRoles.Doctor, ViverAppRoles.Manager, ViverAppRoles.Administrator],
+        Assert.Equal([ViverAppRoles.Doctor, ViverAppRoles.Psychologist, ViverAppRoles.Manager, ViverAppRoles.Administrator],
             Assert.Single(read!.Requirements.OfType<RolesAuthorizationRequirement>()).AllowedRoles);
-        Assert.Equal([ViverAppRoles.Doctor, ViverAppRoles.Manager], Assert.Single(write!.Requirements.OfType<RolesAuthorizationRequirement>()).AllowedRoles);
+        Assert.Equal([ViverAppRoles.Doctor, ViverAppRoles.Psychologist, ViverAppRoles.Manager], Assert.Single(write!.Requirements.OfType<RolesAuthorizationRequirement>()).AllowedRoles);
         Assert.Equal([ViverAppRoles.Administrator], Assert.Single(audit!.Requirements.OfType<RolesAuthorizationRequirement>()).AllowedRoles);
         Assert.Contains(audit.Requirements.OfType<ClaimsAuthorizationRequirement>(), x =>
             x.ClaimType == ViverAppClaimTypes.MfaSatisfied && x.AllowedValues!.Contains(bool.TrueString));
@@ -103,7 +103,7 @@ public sealed class ClinicalOperationsApiTests : IAsyncLifetime
         var provider = scope.ServiceProvider.GetRequiredService<IAuthorizationPolicyProvider>();
         var policy = await provider.GetPolicyAsync(ViverAppPolicies.ClinicalStaff);
         var roles = Assert.Single(policy!.Requirements.OfType<RolesAuthorizationRequirement>()).AllowedRoles;
-        Assert.Equal([ViverAppRoles.Doctor, ViverAppRoles.Manager, ViverAppRoles.Administrator], roles);
+        Assert.Equal([ViverAppRoles.Doctor, ViverAppRoles.Psychologist, ViverAppRoles.Manager, ViverAppRoles.Administrator], roles);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public sealed class ClinicalOperationsApiTests : IAsyncLifetime
     [Fact]
     public void DoctorContracts_RejectInvalidAvailabilityAndRectification()
     {
-        var exception = new DoctorAvailabilityExceptionRequest(DateOnly.FromDateTime(DateTime.Today), "online", true, null, null, 0);
+        var exception = new ProfessionalAvailabilityExceptionRequest(DateOnly.FromDateTime(DateTime.Today), "online", true, null, null, 0);
         var exceptionResults = new List<ValidationResult>();
         Assert.False(Validator.TryValidateObject(exception, new ValidationContext(exception), exceptionResults, true));
 

@@ -70,6 +70,11 @@ public sealed class PaymentService(
             throw Conflict("Este agendamento não aceita um novo checkout.");
         }
 
+        if (!appointment.RequiresPayment)
+        {
+            throw Conflict("Este atendimento não possui cobrança.");
+        }
+
         var now = timeProvider.GetUtcNow().UtcDateTime;
         if (appointment.StartsAtUtc <= now || appointment.PriceAmount <= 0 || appointment.CurrencyCode != "BRL")
         {
@@ -93,6 +98,7 @@ public sealed class PaymentService(
             payment = new Payment
             {
                 AppointmentId = appointmentId,
+                AppointmentRequiresPayment = true,
                 SupersedesPaymentId = appointment.CurrentPaymentId,
                 ProviderReferenceAppointmentId = appointmentId,
                 ProviderCode = "pagbank",

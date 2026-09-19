@@ -9,6 +9,8 @@ public partial class AccountUiPreference
 
     public string AppointmentViewMode { get; set; } = null!;
 
+    public string CalendarViewMode { get; set; } = null!;
+
     public DateTime UpdatedAtUtc { get; set; }
 
     public ulong RowVersion { get; set; }

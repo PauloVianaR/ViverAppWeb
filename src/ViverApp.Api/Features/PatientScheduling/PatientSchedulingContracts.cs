@@ -22,7 +22,8 @@ public sealed record BookingProfessionalResponse(
     ushort YearsExperience = 0,
     double? AverageRating = null,
     int ReviewCount = 0,
-    bool SupportsOnline = true);
+    bool SupportsOnline = true,
+    string LicenseTypeCode = "CRM");
 
 public sealed record AvailableSlotResponse(
     DateOnly Date,
@@ -44,7 +45,7 @@ public sealed record AppointmentRescheduleHistoryResponse(
 public sealed record AppointmentResponse(
     ulong Id,
     ulong AppointmentNumber,
-    ulong DoctorAccountId,
+    ulong ProfessionalAccountId,
     string DoctorName,
     uint AppointmentTypeId,
     string AppointmentTypeName,
@@ -66,11 +67,12 @@ public sealed record AppointmentResponse(
     DateOnly? ArrivalBusinessDate,
     uint? ArrivalQueueNumber,
     IReadOnlyList<AppointmentRescheduleHistoryResponse> RescheduleHistory,
+    bool RequiresPayment,
     ulong RowVersion);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AppointmentCreateRequest(
-    [param: Range(1, long.MaxValue)] ulong DoctorAccountId,
+    [param: Range(1, long.MaxValue)] ulong ProfessionalAccountId,
     [param: Range(1, int.MaxValue)] uint AppointmentTypeId,
     [param: Required, RegularExpression("^(in_person|online)$")] string ModalityCode,
     DateOnly LocalDate,

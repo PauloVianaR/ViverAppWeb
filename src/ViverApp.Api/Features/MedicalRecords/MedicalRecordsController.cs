@@ -86,7 +86,7 @@ public sealed class MedicalRecordsController(
     [Authorize(Policy = ViverAppPolicies.MedicalRecordWrite), EnableRateLimiting(SecurityPolicyNames.UploadRateLimit)]
     [RequestSizeLimit(10_600_000), RequestFormLimits(MultipartBodyLengthLimit = 10_600_000)]
     public Task<MedicalRecordDocumentResponse> Upload(ulong patientId, ulong appointmentId, string categoryCode,
-        IFormFile file, CancellationToken ct) => records.UploadAsync(Actor, patientId, appointmentId, categoryCode, file, ct);
+        IFormFile file, CancellationToken ct) => records.UploadAsync(Actor, Role, patientId, appointmentId, categoryCode, file, ct);
 
     [HttpGet("patients/{patientId:long}/documents/{documentId:long}")]
     [Authorize(Policy = ViverAppPolicies.MedicalRecordDocument)]
@@ -103,7 +103,7 @@ public sealed class MedicalRecordsController(
     [Authorize(Policy = ViverAppPolicies.MedicalRecordWrite), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public async Task<IActionResult> Delete(ulong patientId, ulong documentId, ulong rowVersion, CancellationToken ct)
     {
-        await records.DeleteDocumentAsync(Actor, patientId, documentId, rowVersion, ct);
+        await records.DeleteDocumentAsync(Actor, Role, patientId, documentId, rowVersion, ct);
         return NoContent();
     }
 

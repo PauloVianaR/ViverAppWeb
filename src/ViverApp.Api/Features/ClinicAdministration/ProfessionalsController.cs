@@ -110,7 +110,7 @@ public sealed class ProfessionalsController(
             return ValidationProblem(ModelState);
         }
 
-        var specialties = request.RoleCode == ViverAppRoles.Doctor
+        var specialties = request.RoleCode is ViverAppRoles.Doctor or ViverAppRoles.Psychologist
             ? await LoadSpecialties(request.SpecialtyIds, request.PrimarySpecialtyId, cancellationToken)
             : [];
         if (!ModelState.IsValid)
@@ -137,13 +137,14 @@ public sealed class ProfessionalsController(
             return ConflictProblem("Não foi possível criar o profissional.");
         }
 
-        if (request.RoleCode == ViverAppRoles.Doctor)
+        if (request.RoleCode is ViverAppRoles.Doctor or ViverAppRoles.Psychologist)
         {
             var now = DateTime.UtcNow;
-            var profile = new DoctorProfile
+            var profile = new ProfessionalProfile
             {
                 AccountId = user.Id,
-                ProfessionalTitle = "Dr.",
+                LicenseTypeCode = request.RoleCode == ViverAppRoles.Psychologist ? "CRP" : "CRM",
+                ProfessionalTitle = request.RoleCode == ViverAppRoles.Psychologist ? "Psic." : "Dr.",
                 LicenseStateCode = request.LicenseStateCode!.Trim().ToUpperInvariant(),
                 LicenseNumber = request.LicenseNumber!.Trim().ToUpperInvariant(),
                 Biography = ClinicAdministrationSupport.OptionalText(request.Biography),
@@ -153,11 +154,11 @@ public sealed class ProfessionalsController(
                 UpdatedAtUtc = now,
                 RowVersion = 1,
             };
-            database.DoctorProfiles.Add(profile);
+            database.ProfessionalProfiles.Add(profile);
             AddSpecialtyLinks(user.Id, specialties, request.PrimarySpecialtyId);
-            database.DoctorPreferences.Add(new DoctorPreference
+            database.ProfessionalPreferences.Add(new ProfessionalPreference
             {
-                DoctorAccountId = user.Id,
+                ProfessionalAccountId = user.Id,
                 EmailEnabled = true,
                 SmsEnabled = true,
                 OnlineEnabled = true,
@@ -167,9 +168,9 @@ public sealed class ProfessionalsController(
                 RowVersion = 1,
             });
             var activeServices = await database.AppointmentTypes.AsNoTracking().Where(item => item.IsActive).Select(item => item.Id).ToArrayAsync(cancellationToken);
-            database.DoctorServices.AddRange(activeServices.Select(id => new DoctorService
+            database.ProfessionalServices.AddRange(activeServices.Select(id => new ProfessionalService
             {
-                DoctorAccountId = user.Id,
+                ProfessionalAccountId = user.Id,
                 AppointmentTypeId = id,
                 IsActive = true,
                 CreatedAtUtc = now,
@@ -219,11 +220,11 @@ public sealed class ProfessionalsController(
         CancellationToken cancellationToken)
     {
         var account = await database.Accounts
-            .Include(item => item.DoctorProfile)
-            .ThenInclude(profile => profile!.DoctorSpecialties)
+            .Include(item => item.ProfessionalProfile)
+            .ThenInclude(profile => profile!.ProfessionalSpecialties)
             .SingleOrDefaultAsync(
                 item => item.Id == accountId
-                    && (item.RoleCode == ViverAppRoles.Doctor || item.RoleCode == ViverAppRoles.Manager),
+                    && (item.RoleCode == ViverAppRoles.Doctor || item.RoleCode == ViverAppRoles.Psychologist || item.RoleCode == ViverAppRoles.Manager),
                 cancellationToken);
         if (account is null)
         {
@@ -236,9 +237,9 @@ public sealed class ProfessionalsController(
         }
 
         IReadOnlyList<Specialty> specialties = [];
-        if (account.RoleCode == ViverAppRoles.Doctor)
+        if (account.RoleCode is ViverAppRoles.Doctor or ViverAppRoles.Psychologist)
         {
-            if (account.DoctorProfile is null
+            if (account.ProfessionalProfile is null
                 || !request.ProfileRowVersion.HasValue
                 || !request.DefaultAppointmentDurationMinutes.HasValue)
             {
@@ -266,17 +267,17 @@ public sealed class ProfessionalsController(
         account.FullName = request.FullName.Trim();
         account.UpdatedAtUtc = DateTime.UtcNow;
 
-        if (account.DoctorProfile is not null)
+        if (account.ProfessionalProfile is not null)
         {
             ClinicAdministrationSupport.SetConcurrency(
                 database,
-                account.DoctorProfile,
-                nameof(DoctorProfile.RowVersion),
+                account.ProfessionalProfile,
+                nameof(ProfessionalProfile.RowVersion),
                 request.ProfileRowVersion!.Value);
-            account.DoctorProfile.Biography = ClinicAdministrationSupport.OptionalText(request.Biography);
-            account.DoctorProfile.DefaultAppointmentDurationMinutes = request.DefaultAppointmentDurationMinutes!.Value;
-            account.DoctorProfile.UpdatedAtUtc = DateTime.UtcNow;
-            database.DoctorSpecialties.RemoveRange(account.DoctorProfile.DoctorSpecialties);
+            account.ProfessionalProfile.Biography = ClinicAdministrationSupport.OptionalText(request.Biography);
+            account.ProfessionalProfile.DefaultAppointmentDurationMinutes = request.DefaultAppointmentDurationMinutes!.Value;
+            account.ProfessionalProfile.UpdatedAtUtc = DateTime.UtcNow;
+            database.ProfessionalSpecialties.RemoveRange(account.ProfessionalProfile.ProfessionalSpecialties);
             AddSpecialtyLinks(accountId, specialties, request.PrimarySpecialtyId);
         }
 
@@ -314,7 +315,7 @@ public sealed class ProfessionalsController(
 
         var account = await database.Accounts.SingleOrDefaultAsync(
             item => item.Id == accountId
-                && (item.RoleCode == ViverAppRoles.Doctor || item.RoleCode == ViverAppRoles.Manager),
+                    && (item.RoleCode == ViverAppRoles.Doctor || item.RoleCode == ViverAppRoles.Psychologist || item.RoleCode == ViverAppRoles.Manager),
             cancellationToken);
         if (account is null)
         {
@@ -400,8 +401,8 @@ public sealed class ProfessionalsController(
     }
 
     [HttpGet("{accountId:long}/weekly-hours")]
-    [ManagerFeatureGate("manager.doctor_schedules_enabled")]
-    public async Task<ActionResult<IReadOnlyList<DoctorWeeklyHourResponse>>> GetWeeklyHours(
+    [ManagerFeatureGate("manager.professional_schedules_enabled")]
+    public async Task<ActionResult<IReadOnlyList<ProfessionalWeeklyHourResponse>>> GetWeeklyHours(
         ulong accountId,
         CancellationToken cancellationToken)
     {
@@ -410,8 +411,8 @@ public sealed class ProfessionalsController(
             return Forbid();
         }
 
-        var items = await database.DoctorWeeklyHours.AsNoTracking()
-            .Where(item => item.DoctorAccountId == accountId)
+        var items = await database.ProfessionalWeeklyHours.AsNoTracking()
+            .Where(item => item.ProfessionalAccountId == accountId)
             .OrderBy(item => item.DayOfWeek)
             .ThenBy(item => item.StartTime)
             .ToListAsync(cancellationToken);
@@ -419,10 +420,10 @@ public sealed class ProfessionalsController(
     }
 
     [HttpPost("{accountId:long}/weekly-hours")]
-    [ManagerFeatureGate("manager.doctor_schedules_enabled")]
-    public async Task<ActionResult<DoctorWeeklyHourResponse>> CreateWeeklyHour(
+    [ManagerFeatureGate("manager.professional_schedules_enabled")]
+    public async Task<ActionResult<ProfessionalWeeklyHourResponse>> CreateWeeklyHour(
         ulong accountId,
-        [FromBody] DoctorWeeklyHourWriteRequest request,
+        [FromBody] ProfessionalWeeklyHourWriteRequest request,
         CancellationToken cancellationToken)
     {
         if (!CanAccessProfessional(accountId))
@@ -435,7 +436,7 @@ public sealed class ProfessionalsController(
             return ValidationProblem(ModelState);
         }
 
-        if (!await database.DoctorProfiles.AsNoTracking().AnyAsync(item => item.AccountId == accountId, cancellationToken))
+        if (!await database.ProfessionalProfiles.AsNoTracking().AnyAsync(item => item.AccountId == accountId, cancellationToken))
         {
             return NotFound();
         }
@@ -446,9 +447,9 @@ public sealed class ProfessionalsController(
         }
 
         var now = DateTime.UtcNow;
-        var entity = new DoctorWeeklyHour
+        var entity = new ProfessionalWeeklyHour
         {
-            DoctorAccountId = accountId,
+            ProfessionalAccountId = accountId,
             DayOfWeek = request.DayOfWeek,
             ModalityCode = request.ModalityCode,
             StartTime = request.StartTime,
@@ -460,7 +461,7 @@ public sealed class ProfessionalsController(
             UpdatedAtUtc = now,
             RowVersion = 1,
         };
-        database.DoctorWeeklyHours.Add(entity);
+        database.ProfessionalWeeklyHours.Add(entity);
         try
         {
             await database.SaveChangesAsync(cancellationToken);
@@ -470,16 +471,16 @@ public sealed class ProfessionalsController(
             return ConflictProblem("Não foi possível cadastrar o horário.");
         }
 
-        await Audit("professional.weekly_hour.created", "doctor_weekly_hour", entity.Id.ToString(), cancellationToken);
+        await Audit("professional.weekly_hour.created", "professional_weekly_hour", entity.Id.ToString(), cancellationToken);
         return CreatedAtAction(nameof(GetWeeklyHours), new { accountId }, ToResponse(entity));
     }
 
     [HttpPut("{accountId:long}/weekly-hours/{id:long}")]
-    [ManagerFeatureGate("manager.doctor_schedules_enabled")]
-    public async Task<ActionResult<DoctorWeeklyHourResponse>> UpdateWeeklyHour(
+    [ManagerFeatureGate("manager.professional_schedules_enabled")]
+    public async Task<ActionResult<ProfessionalWeeklyHourResponse>> UpdateWeeklyHour(
         ulong accountId,
         ulong id,
-        [FromBody] DoctorWeeklyHourWriteRequest request,
+        [FromBody] ProfessionalWeeklyHourWriteRequest request,
         CancellationToken cancellationToken)
     {
         if (!CanAccessProfessional(accountId))
@@ -492,8 +493,8 @@ public sealed class ProfessionalsController(
             return ValidationProblem(ModelState);
         }
 
-        var entity = await database.DoctorWeeklyHours.SingleOrDefaultAsync(
-            item => item.Id == id && item.DoctorAccountId == accountId,
+        var entity = await database.ProfessionalWeeklyHours.SingleOrDefaultAsync(
+            item => item.Id == id && item.ProfessionalAccountId == accountId,
             cancellationToken);
         if (entity is null)
         {
@@ -505,7 +506,7 @@ public sealed class ProfessionalsController(
             return ConflictProblem("O horário conflita com outro período ativo do médico.");
         }
 
-        ClinicAdministrationSupport.SetConcurrency(database, entity, nameof(DoctorWeeklyHour.RowVersion), request.RowVersion);
+        ClinicAdministrationSupport.SetConcurrency(database, entity, nameof(ProfessionalWeeklyHour.RowVersion), request.RowVersion);
         entity.DayOfWeek = request.DayOfWeek;
         entity.ModalityCode = request.ModalityCode;
         entity.StartTime = request.StartTime;
@@ -527,12 +528,12 @@ public sealed class ProfessionalsController(
             return ConflictProblem("Não foi possível atualizar o horário.");
         }
 
-        await Audit("professional.weekly_hour.updated", "doctor_weekly_hour", id.ToString(), cancellationToken);
+        await Audit("professional.weekly_hour.updated", "professional_weekly_hour", id.ToString(), cancellationToken);
         return Ok(ToResponse(entity));
     }
 
     [HttpDelete("{accountId:long}/weekly-hours/{id:long}")]
-    [ManagerFeatureGate("manager.doctor_schedules_enabled")]
+    [ManagerFeatureGate("manager.professional_schedules_enabled")]
     public async Task<IActionResult> DeleteWeeklyHour(
         ulong accountId,
         ulong id,
@@ -544,16 +545,16 @@ public sealed class ProfessionalsController(
             return Forbid();
         }
 
-        var entity = await database.DoctorWeeklyHours.SingleOrDefaultAsync(
-            item => item.Id == id && item.DoctorAccountId == accountId,
+        var entity = await database.ProfessionalWeeklyHours.SingleOrDefaultAsync(
+            item => item.Id == id && item.ProfessionalAccountId == accountId,
             cancellationToken);
         if (entity is null)
         {
             return NotFound();
         }
 
-        ClinicAdministrationSupport.SetConcurrency(database, entity, nameof(DoctorWeeklyHour.RowVersion), rowVersion);
-        database.DoctorWeeklyHours.Remove(entity);
+        ClinicAdministrationSupport.SetConcurrency(database, entity, nameof(ProfessionalWeeklyHour.RowVersion), rowVersion);
+        database.ProfessionalWeeklyHours.Remove(entity);
         try
         {
             await database.SaveChangesAsync(cancellationToken);
@@ -563,34 +564,34 @@ public sealed class ProfessionalsController(
             return ClinicAdministrationSupport.ConcurrencyProblem(this);
         }
 
-        await Audit("professional.weekly_hour.deleted", "doctor_weekly_hour", id.ToString(), cancellationToken);
+        await Audit("professional.weekly_hour.deleted", "professional_weekly_hour", id.ToString(), cancellationToken);
         return NoContent();
     }
 
     private ulong ActorId => ClinicAdministrationSupport.RequireActorId(User);
 
     private IQueryable<Account> ProfessionalQuery() => database.Accounts.AsNoTracking()
-        .Where(item => item.RoleCode == ViverAppRoles.Doctor || item.RoleCode == ViverAppRoles.Manager)
-        .Include(item => item.DoctorProfile)
-        .ThenInclude(profile => profile!.DoctorSpecialties)
+        .Where(item => item.RoleCode == ViverAppRoles.Doctor || item.RoleCode == ViverAppRoles.Psychologist || item.RoleCode == ViverAppRoles.Manager)
+        .Include(item => item.ProfessionalProfile)
+        .ThenInclude(profile => profile!.ProfessionalSpecialties)
         .ThenInclude(link => link.Specialty);
 
     private bool CanAccessProfessional(ulong accountId) =>
         User.IsInRole(ViverAppRoles.Manager)
         || User.IsInRole(ViverAppRoles.Administrator)
-        || User.IsInRole(ViverAppRoles.Doctor) && ActorId == accountId;
+        || (User.IsInRole(ViverAppRoles.Doctor) || User.IsInRole(ViverAppRoles.Psychologist)) && ActorId == accountId;
 
     private bool CanAccessProfessional(Account account) =>
         User.IsInRole(ViverAppRoles.Administrator)
         || ActorId == account.Id
-        || User.IsInRole(ViverAppRoles.Manager) && account.RoleCode == ViverAppRoles.Doctor;
+        || User.IsInRole(ViverAppRoles.Manager) && account.RoleCode is ViverAppRoles.Doctor or ViverAppRoles.Psychologist;
 
     private bool ValidateFilters(int page, int pageSize, string? search, string? role, string? status)
     {
         var valid = page >= 1
             && pageSize is >= 1 and <= 100
             && (search?.Length ?? 0) <= 200
-            && (role is null || role is ViverAppRoles.Doctor or ViverAppRoles.Manager)
+            && (role is null || role is ViverAppRoles.Doctor or ViverAppRoles.Psychologist or ViverAppRoles.Manager)
             && (status is null || status is "pending_confirmation" or "pending_approval" or "active" or "rejected" or "blocked");
         if (!valid)
         {
@@ -602,14 +603,14 @@ public sealed class ProfessionalsController(
 
     private bool ValidateProfessionalFields(ProfessionalCreateRequest request)
     {
-        if (request.RoleCode == ViverAppRoles.Doctor)
+        if (request.RoleCode is ViverAppRoles.Doctor or ViverAppRoles.Psychologist)
         {
             var valid = !string.IsNullOrWhiteSpace(request.LicenseStateCode)
                 && !string.IsNullOrWhiteSpace(request.LicenseNumber)
                 && request.DefaultAppointmentDurationMinutes.HasValue;
             if (!valid)
             {
-                ModelState.AddModelError("profile", "CRM, estado e duração padrão são obrigatórios para médicos.");
+                ModelState.AddModelError("profile", "Registro profissional, região e duração padrão são obrigatórios.");
             }
 
             return valid;
@@ -662,16 +663,16 @@ public sealed class ProfessionalsController(
     {
         foreach (var specialty in specialties)
         {
-            database.DoctorSpecialties.Add(new DoctorSpecialty
+            database.ProfessionalSpecialties.Add(new ProfessionalSpecialty
             {
-                DoctorAccountId = doctorAccountId,
+                ProfessionalAccountId = doctorAccountId,
                 SpecialtyId = specialty.Id,
                 IsPrimary = specialty.Id == primarySpecialtyId,
             });
         }
     }
 
-    private bool ValidateDoctorHour(DoctorWeeklyHourWriteRequest request)
+    private bool ValidateDoctorHour(ProfessionalWeeklyHourWriteRequest request)
     {
         var valid = ClinicAdministrationSupport.HasValidRange(request.StartTime, request.EndTime)
             && request.ModalityCode is "in_person" or "online" or "both"
@@ -688,14 +689,14 @@ public sealed class ProfessionalsController(
 
     private async Task<bool> HasDoctorOverlap(
         ulong accountId,
-        DoctorWeeklyHourWriteRequest request,
+        ProfessionalWeeklyHourWriteRequest request,
         ulong? excludedId,
         CancellationToken cancellationToken)
     {
         var validFrom = request.ValidFrom?.ToDateTime(TimeOnly.MinValue);
         var validUntil = request.ValidUntil?.ToDateTime(TimeOnly.MinValue);
-        return await database.DoctorWeeklyHours.AsNoTracking().AnyAsync(
-            item => item.DoctorAccountId == accountId
+        return await database.ProfessionalWeeklyHours.AsNoTracking().AnyAsync(
+            item => item.ProfessionalAccountId == accountId
                 && item.IsActive
                 && item.DayOfWeek == request.DayOfWeek
                 && (item.ModalityCode == request.ModalityCode || item.ModalityCode == "both" || request.ModalityCode == "both")
@@ -715,7 +716,7 @@ public sealed class ProfessionalsController(
 
     private static ProfessionalResponse ToResponse(Account account)
     {
-        var links = account.DoctorProfile?.DoctorSpecialties.OrderBy(item => item.Specialty.Name).ToArray() ?? [];
+        var links = account.ProfessionalProfile?.ProfessionalSpecialties.OrderBy(item => item.Specialty.Name).ToArray() ?? [];
         return new ProfessionalResponse(
             account.Id,
             account.FullName,
@@ -725,12 +726,12 @@ public sealed class ProfessionalsController(
             account.PhoneE164,
             account.TaxId,
             account.BirthDate.HasValue ? DateOnly.FromDateTime(account.BirthDate.Value) : null,
-            account.DoctorProfile?.ProfessionalTitle,
-            account.DoctorProfile?.LicenseStateCode,
-            account.DoctorProfile?.LicenseNumber,
-            account.DoctorProfile?.Biography,
-            account.DoctorProfile?.YearsExperience,
-            account.DoctorProfile?.DefaultAppointmentDurationMinutes,
+            account.ProfessionalProfile?.ProfessionalTitle,
+            account.ProfessionalProfile?.LicenseStateCode,
+            account.ProfessionalProfile?.LicenseNumber,
+            account.ProfessionalProfile?.Biography,
+            account.ProfessionalProfile?.YearsExperience,
+            account.ProfessionalProfile?.DefaultAppointmentDurationMinutes,
             links.Select(link => new SpecialtyResponse(
                 link.Specialty.Id,
                 link.Specialty.Name,
@@ -738,10 +739,10 @@ public sealed class ProfessionalsController(
                 link.Specialty.RowVersion)).ToArray(),
             links.SingleOrDefault(link => link.IsPrimary)?.SpecialtyId,
             account.RowVersion,
-            account.DoctorProfile?.RowVersion);
+            account.ProfessionalProfile?.RowVersion);
     }
 
-    private static DoctorWeeklyHourResponse ToResponse(DoctorWeeklyHour item) => new(
+    private static ProfessionalWeeklyHourResponse ToResponse(ProfessionalWeeklyHour item) => new(
         item.Id,
         item.DayOfWeek,
         item.StartTime,

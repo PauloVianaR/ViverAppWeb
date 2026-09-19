@@ -14,6 +14,28 @@ namespace ViverApp.Payments.Tests;
 public sealed class PaymentIntegrationTests
 {
     [Fact]
+    public async Task Checkout_rejects_an_appointment_without_charge()
+    {
+        var configuration = LoadConfiguration();
+        var fixture = await CreateFixtureAsync(configuration, free: true);
+        try
+        {
+            await using var database = CreateContext(configuration);
+            var client = new RecordingPagBankClient(fixture.UtcNow.UtcDateTime);
+            var service = CreateService(database, client, fixture.UtcNow);
+            var error = await Assert.ThrowsAsync<PaymentRuleException>(() => service.CreateCheckoutAsync(
+                fixture.PatientId, fixture.AppointmentId, $"free-{Guid.NewGuid():N}", CancellationToken.None));
+            Assert.Equal(409, error.StatusCode);
+            Assert.Null(client.LastCheckout);
+            Assert.False(await database.Payments.AnyAsync(item => item.AppointmentId == fixture.AppointmentId));
+        }
+        finally
+        {
+            await DeleteFixtureAsync(configuration, fixture);
+        }
+    }
+
+    [Fact]
     public async Task Checkout_uses_database_amount_and_webhooks_are_idempotent_and_ordered()
     {
         var configuration = LoadConfiguration();
@@ -114,7 +136,7 @@ public sealed class PaymentIntegrationTests
     private static string Sign(byte[] payload) => Convert.ToHexString(SHA256.HashData(
         Encoding.UTF8.GetBytes($"integration-test-token-{Encoding.UTF8.GetString(payload)}"))).ToLowerInvariant();
 
-    private static async Task<Fixture> CreateFixtureAsync(IConfiguration configuration)
+    private static async Task<Fixture> CreateFixtureAsync(IConfiguration configuration, bool free = false)
     {
         await using var database = CreateContext(configuration);
         var utcNow = new DateTimeOffset(2026, 9, 3, 12, 0, 0, TimeSpan.Zero);
@@ -124,10 +146,11 @@ public sealed class PaymentIntegrationTests
         var doctor = NewAccount(ViverAppRoles.Doctor, $"Pagamento Médico {marker}", $"payment-doctor-{marker}@example.test", now);
         database.Accounts.AddRange(patient, doctor);
         await database.SaveChangesAsync();
-        database.DoctorProfiles.Add(new DoctorProfile
+        database.ProfessionalProfiles.Add(new ProfessionalProfile
         {
             AccountId = doctor.Id,
             LicenseStateCode = "SP",
+            LicenseTypeCode = "CRM",
             LicenseNumber = marker,
             DefaultAppointmentDurationMinutes = 30,
             CreatedAtUtc = now,
@@ -140,7 +163,8 @@ public sealed class PaymentIntegrationTests
             Description = "Fixture exclusiva da fase 9.",
             ModalityCode = "online",
             DurationMinutes = 30,
-            PriceAmount = 123.45m,
+            PriceAmount = free ? 0 : 123.45m,
+            RequiresPayment = !free,
             IsActive = true,
             DisplayOrder = 0,
             CreatedAtUtc = now,
@@ -153,14 +177,15 @@ public sealed class PaymentIntegrationTests
         {
             AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
             PatientAccountId = patient.Id,
-            DoctorAccountId = doctor.Id,
+            ProfessionalAccountId = doctor.Id,
             AppointmentTypeId = type.Id,
             CreatedByAccountId = patient.Id,
-            StatusCode = "pending",
+            StatusCode = free ? "confirmed" : "pending",
             ModalityCode = "online",
             StartsAtUtc = now.AddDays(7),
             EndsAtUtc = now.AddDays(7).AddMinutes(30),
-            PriceAmount = 123.45m,
+            PriceAmount = free ? 0 : 123.45m,
+            RequiresPayment = !free,
             CurrencyCode = "BRL",
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
@@ -200,7 +225,7 @@ public sealed class PaymentIntegrationTests
         await database.IdempotencyRecords.Where(item => item.ScopeCode == $"payment.checkout:{fixture.PatientId}").ExecuteDeleteAsync();
         await database.AppointmentStatusHistories.Where(item => item.AppointmentId == fixture.AppointmentId).ExecuteDeleteAsync();
         await database.Appointments.Where(item => item.Id == fixture.AppointmentId).ExecuteDeleteAsync();
-        await database.DoctorProfiles.Where(item => item.AccountId == fixture.DoctorId).ExecuteDeleteAsync();
+        await database.ProfessionalProfiles.Where(item => item.AccountId == fixture.DoctorId).ExecuteDeleteAsync();
         await database.AppointmentTypes.Where(item => item.Id == fixture.AppointmentTypeId).ExecuteDeleteAsync();
         await database.Accounts.Where(item => item.Id == fixture.PatientId || item.Id == fixture.DoctorId).ExecuteDeleteAsync();
     }
@@ -217,7 +242,7 @@ public sealed class PaymentIntegrationTests
         }
 
         var appointments = await database.Appointments
-            .Where(item => accountIds.Contains(item.PatientAccountId) || accountIds.Contains(item.DoctorAccountId))
+            .Where(item => accountIds.Contains(item.PatientAccountId) || accountIds.Contains(item.ProfessionalAccountId))
             .Select(item => new { item.Id, item.PatientAccountId }).ToArrayAsync();
         var appointmentIds = appointments.Select(item => item.Id).ToArray();
         var paymentIds = await database.Payments.Where(item => appointmentIds.Contains(item.AppointmentId)).Select(item => item.Id).ToArrayAsync();
@@ -231,7 +256,7 @@ public sealed class PaymentIntegrationTests
         await database.IdempotencyRecords.Where(item => scopes.Contains(item.ScopeCode)).ExecuteDeleteAsync();
         await database.AppointmentStatusHistories.Where(item => appointmentIds.Contains(item.AppointmentId)).ExecuteDeleteAsync();
         await database.Appointments.Where(item => appointmentIds.Contains(item.Id)).ExecuteDeleteAsync();
-        await database.DoctorProfiles.Where(item => accountIds.Contains(item.AccountId)).ExecuteDeleteAsync();
+        await database.ProfessionalProfiles.Where(item => accountIds.Contains(item.AccountId)).ExecuteDeleteAsync();
         await database.AppointmentTypes.Where(item => item.Description == "Fixture exclusiva da fase 9.").ExecuteDeleteAsync();
         await database.Accounts.Where(item => accountIds.Contains(item.Id)).ExecuteDeleteAsync();
     }

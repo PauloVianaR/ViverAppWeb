@@ -303,9 +303,11 @@ Cada fase deve:
 
 ## Fase 19 — Agenda visual, Psicólogo e atendimentos sem cobrança
 
-**Estado:** planejada para a próxima branch, sem implementação antecipada na Fase 18.
+**Estado:** implementada na branch `codex/fase-19-agenda-psicologo-atendimentos-gratuitos`; validação visual física no monitor 3 pendente. Não integrada à `main`.
 
 **Plano detalhado:** [Agenda visual, Psicólogo e atendimentos sem cobrança](FASE-19-AGENDA-PSICOLOGO-E-ATENDIMENTOS-SEM-COBRANCA.md).
+
+**Matriz de acesso:** [autorização e contratos da Fase 19](fase-19/AUTORIZACAO-E-CONTRATOS.md).
 
 ## Fase 20 — E-mail, SMS e jobs dentro da API
 

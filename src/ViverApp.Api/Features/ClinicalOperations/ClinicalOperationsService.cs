@@ -24,9 +24,9 @@ public sealed class ClinicalOperationsService(
         var actor = await database.Accounts.AsNoTracking()
             .SingleOrDefaultAsync(item => item.Id == actorId, cancellationToken)
             ?? throw NotFound("Conta autenticada não encontrada.");
-        var doctorsQuery = database.DoctorProfiles.AsNoTracking()
+        var doctorsQuery = database.ProfessionalProfiles.AsNoTracking()
             .Where(item => item.Account.StatusCode == "active");
-        if (roleCode == ViverAppRoles.Doctor)
+        if (IsClinicalProfessional(roleCode))
         {
             doctorsQuery = doctorsQuery.Where(item => item.AccountId == actorId);
         }
@@ -77,12 +77,12 @@ public sealed class ClinicalOperationsService(
 
         if (doctorAccountId.HasValue)
         {
-            if (roleCode == ViverAppRoles.Doctor && doctorAccountId.Value != actorId)
+            if (IsClinicalProfessional(roleCode) && doctorAccountId.Value != actorId)
             {
                 throw Forbidden();
             }
 
-            query = query.Where(item => item.DoctorAccountId == doctorAccountId.Value);
+            query = query.Where(item => item.ProfessionalAccountId == doctorAccountId.Value);
         }
 
         var term = search?.Trim();
@@ -95,14 +95,14 @@ public sealed class ClinicalOperationsService(
 
             query = query.Where(item =>
                 item.PatientAccount.FullName.Contains(term)
-                || item.DoctorAccount.Account.FullName.Contains(term)
+                || item.ProfessionalAccount.Account.FullName.Contains(term)
                 || item.AppointmentType.Name.Contains(term));
         }
 
         var total = await query.CountAsync(cancellationToken);
         var appointments = await query.AsNoTracking()
             .Include(item => item.PatientAccount)
-            .Include(item => item.DoctorAccount).ThenInclude(item => item.Account)
+            .Include(item => item.ProfessionalAccount).ThenInclude(item => item.Account)
             .Include(item => item.AppointmentType)
             .Include(item => item.MedicalReport)
             .OrderBy(item => item.StartsAtUtc)
@@ -126,12 +126,12 @@ public sealed class ClinicalOperationsService(
         EnsureClinicalRole(roleCode);
         var appointment = await VisibleAppointments(actorId, roleCode).AsNoTracking()
             .Include(item => item.PatientAccount)
-            .Include(item => item.DoctorAccount).ThenInclude(item => item.Account)
+            .Include(item => item.ProfessionalAccount).ThenInclude(item => item.Account)
             .Include(item => item.AppointmentType)
             .Include(item => item.MedicalReport)
             .SingleOrDefaultAsync(item => item.Id == appointmentId, cancellationToken)
             ?? throw NotFound("Consulta não encontrada.");
-        var includeReportContent = roleCode == ViverAppRoles.Doctor && appointment.DoctorAccountId == actorId;
+        var includeReportContent = IsClinicalProfessional(roleCode) && appointment.ProfessionalAccountId == actorId;
         if (includeReportContent && appointment.MedicalReport is not null)
         {
             await auditWriter.WriteAsync(
@@ -215,7 +215,7 @@ public sealed class ClinicalOperationsService(
         await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
         var appointment = await database.Appointments
             .Include(item => item.MedicalReport)
-            .SingleOrDefaultAsync(item => item.Id == appointmentId && item.DoctorAccountId == actorId, cancellationToken)
+            .SingleOrDefaultAsync(item => item.Id == appointmentId && item.ProfessionalAccountId == actorId, cancellationToken)
             ?? throw NotFound("Consulta não encontrada.");
         if (appointment.StatusCode is "pending" or "canceled")
         {
@@ -234,7 +234,7 @@ public sealed class ClinicalOperationsService(
             report = new MedicalReport
             {
                 AppointmentId = appointmentId,
-                AuthorDoctorAccountId = actorId,
+                AuthorProfessionalAccountId = actorId,
                 StatusCode = "published",
                 ClinicalSummary = summary,
                 Recommendations = recommendations,
@@ -263,7 +263,7 @@ public sealed class ClinicalOperationsService(
         {
             MedicalReportId = report.Id,
             VersionNumber = nextVersion + 1,
-            AuthorDoctorAccountId = actorId,
+            AuthorProfessionalAccountId = actorId,
             ClinicalSummary = summary,
             Recommendations = recommendations,
             ChangeReason = nextVersion == 0 ? null : "Laudo atualizado pelo médico",
@@ -294,11 +294,11 @@ public sealed class ClinicalOperationsService(
         await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var appointment = await AppointmentForUpdateAsync(appointmentId, cancellationToken);
         await database.Entry(appointment).Reference(item => item.PatientAccount).LoadAsync(cancellationToken);
-        await database.Entry(appointment).Reference(item => item.DoctorAccount).LoadAsync(cancellationToken);
-        await database.Entry(appointment.DoctorAccount).Reference(item => item.Account).LoadAsync(cancellationToken);
+        await database.Entry(appointment).Reference(item => item.ProfessionalAccount).LoadAsync(cancellationToken);
+        await database.Entry(appointment.ProfessionalAccount).Reference(item => item.Account).LoadAsync(cancellationToken);
         await database.Entry(appointment).Reference(item => item.AppointmentType).LoadAsync(cancellationToken);
         await database.Entry(appointment).Reference(item => item.MedicalReport).LoadAsync(cancellationToken);
-        if (appointment.DoctorAccountId != actorId)
+        if (appointment.ProfessionalAccountId != actorId)
         {
             throw Forbidden();
         }
@@ -319,7 +319,7 @@ public sealed class ClinicalOperationsService(
             report = new MedicalReport
             {
                 AppointmentId = appointmentId,
-                AuthorDoctorAccountId = actorId,
+                AuthorProfessionalAccountId = actorId,
                 CreatedAtUtc = now,
                 RowVersion = 1,
             };
@@ -343,7 +343,7 @@ public sealed class ClinicalOperationsService(
             {
                 MedicalReport = report,
                 VersionNumber = nextVersion + 1,
-                AuthorDoctorAccountId = actorId,
+                AuthorProfessionalAccountId = actorId,
                 ClinicalSummary = summary!,
                 Recommendations = recommendations,
                 ChangeReason = nextVersion == 0 ? null : "Laudo atualizado na finalização do atendimento",
@@ -395,10 +395,10 @@ public sealed class ClinicalOperationsService(
         await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var appointment = await AppointmentForUpdateAsync(appointmentId, cancellationToken);
         await database.Entry(appointment).Reference(item => item.PatientAccount).LoadAsync(cancellationToken);
-        await database.Entry(appointment).Reference(item => item.DoctorAccount).LoadAsync(cancellationToken);
-        await database.Entry(appointment.DoctorAccount).Reference(item => item.Account).LoadAsync(cancellationToken);
+        await database.Entry(appointment).Reference(item => item.ProfessionalAccount).LoadAsync(cancellationToken);
+        await database.Entry(appointment.ProfessionalAccount).Reference(item => item.Account).LoadAsync(cancellationToken);
         await database.Entry(appointment).Reference(item => item.AppointmentType).LoadAsync(cancellationToken);
-        if (roleCode == ViverAppRoles.Doctor && appointment.DoctorAccountId != actorId)
+        if (IsClinicalProfessional(roleCode) && appointment.ProfessionalAccountId != actorId)
         {
             throw NotFound("Consulta não encontrada.");
         }
@@ -448,7 +448,7 @@ public sealed class ClinicalOperationsService(
         CancellationToken cancellationToken)
     {
         var appointment = await database.Appointments.AsNoTracking()
-            .Include(item => item.DoctorAccount).ThenInclude(item => item.Account)
+            .Include(item => item.ProfessionalAccount).ThenInclude(item => item.Account)
             .Include(item => item.AppointmentType)
             .Include(item => item.MedicalReport)
             .SingleOrDefaultAsync(item => item.Id == appointmentId
@@ -467,7 +467,7 @@ public sealed class ClinicalOperationsService(
             cancellationToken);
         return new PatientMedicalReportResponse(
             appointment.Id,
-            appointment.DoctorAccount.Account.FullName,
+            appointment.ProfessionalAccount.Account.FullName,
             appointment.AppointmentType.Name,
             appointment.StartsAtUtc,
             report.ClinicalSummary,
@@ -480,7 +480,7 @@ public sealed class ClinicalOperationsService(
         var query = database.Appointments.AsQueryable();
         return roleCode switch
         {
-            ViverAppRoles.Doctor => query.Where(item => item.DoctorAccountId == actorId),
+            ViverAppRoles.Doctor or ViverAppRoles.Psychologist => query.Where(item => item.ProfessionalAccountId == actorId),
             ViverAppRoles.Manager or ViverAppRoles.Administrator => query,
             _ => throw Forbidden(),
         };
@@ -500,7 +500,7 @@ public sealed class ClinicalOperationsService(
         string roleCode,
         bool includeReportContent)
     {
-        var isAssignedDoctor = roleCode == ViverAppRoles.Doctor && appointment.DoctorAccountId == actorId;
+        var isAssignedDoctor = IsClinicalProfessional(roleCode) && appointment.ProfessionalAccountId == actorId;
         var now = timeProvider.GetUtcNow().UtcDateTime;
         return new ClinicalAppointmentResponse(
             appointment.Id,
@@ -509,8 +509,8 @@ public sealed class ClinicalOperationsService(
             appointment.PatientAccount.FullName,
             appointment.PatientAccount.Email,
             appointment.PatientAccount.PhoneE164,
-            appointment.DoctorAccountId,
-            appointment.DoctorAccount.Account.FullName,
+            appointment.ProfessionalAccountId,
+            appointment.ProfessionalAccount.Account.FullName,
             appointment.AppointmentType.Name,
             appointment.StatusCode,
             appointment.ModalityCode,
@@ -563,11 +563,14 @@ public sealed class ClinicalOperationsService(
 
     private static void EnsureClinicalRole(string roleCode)
     {
-        if (roleCode is not (ViverAppRoles.Doctor or ViverAppRoles.Manager or ViverAppRoles.Administrator))
+        if (roleCode is not (ViverAppRoles.Doctor or ViverAppRoles.Psychologist or ViverAppRoles.Manager or ViverAppRoles.Administrator))
         {
             throw Forbidden();
         }
     }
+
+    private static bool IsClinicalProfessional(string roleCode) =>
+        roleCode is ViverAppRoles.Doctor or ViverAppRoles.Psychologist;
 
     private async Task<TimeZoneInfo> GetClinicTimezoneAsync(CancellationToken cancellationToken)
     {

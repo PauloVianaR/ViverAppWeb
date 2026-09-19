@@ -11,7 +11,7 @@ public partial class Appointment
 
     public ulong PatientAccountId { get; set; }
 
-    public ulong DoctorAccountId { get; set; }
+    public ulong ProfessionalAccountId { get; set; }
 
     public uint AppointmentTypeId { get; set; }
 
@@ -26,6 +26,8 @@ public partial class Appointment
     public DateTime EndsAtUtc { get; set; }
 
     public decimal PriceAmount { get; set; }
+
+    public bool RequiresPayment { get; set; }
 
     public string CurrencyCode { get; set; } = null!;
 
@@ -91,10 +93,6 @@ public partial class Appointment
 
     public virtual Payment? CurrentPayment { get; set; }
 
-    public virtual DoctorProfile DoctorAccount { get; set; } = null!;
-
-    public virtual ICollection<DoctorNotification> DoctorNotifications { get; set; } = new List<DoctorNotification>();
-
     public virtual Appointment? InverseRescheduledFromAppointment { get; set; }
 
     public virtual ICollection<MedicalRecordDocument> MedicalRecordDocuments { get; set; } = new List<MedicalRecordDocument>();
@@ -109,9 +107,15 @@ public partial class Appointment
 
     public virtual Account PatientAccount { get; set; } = null!;
 
+    public virtual ICollection<Payment> PaymentAppointment1s { get; set; } = new List<Payment>();
+
     public virtual ICollection<Payment> PaymentAppointmentNavigations { get; set; } = new List<Payment>();
 
     public virtual ICollection<Payment> PaymentProviderReferenceAppointments { get; set; } = new List<Payment>();
+
+    public virtual ProfessionalProfile ProfessionalAccount { get; set; } = null!;
+
+    public virtual ICollection<ProfessionalNotification> ProfessionalNotifications { get; set; } = new List<ProfessionalNotification>();
 
     public virtual Appointment? RescheduledFromAppointment { get; set; }
 

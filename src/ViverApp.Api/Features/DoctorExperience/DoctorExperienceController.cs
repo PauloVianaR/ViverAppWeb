@@ -36,7 +36,7 @@ public sealed class DoctorExperienceExceptionFilter : IExceptionFilter
     }
 }
 
-[ApiController, Route("api/v1/doctor"), Authorize(Policy = ViverAppPolicies.Doctor)]
+[ApiController, Route("api/v1/doctor"), Route("api/v1/psychologist"), Authorize(Policy = ViverAppPolicies.ClinicalProfessional)]
 [ServiceFilter(typeof(DoctorExperienceExceptionFilter))]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class DoctorExperienceController(DoctorExperienceService service, PatientSchedulingService scheduling,
@@ -44,19 +44,20 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
     IClinicalOperationsAuditWriter audit, ArrivalExperienceService arrivals) : ControllerBase
 {
     private ulong Actor => ulong.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!, CultureInfo.InvariantCulture);
+    private string Role => User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
 
     [HttpGet("home")]
     public Task<DoctorHomeResponse> Home(CancellationToken ct) => service.HomeAsync(Actor, ct);
     [HttpGet("capabilities")]
     public Task<DoctorCapabilitiesResponse> Capabilities(CancellationToken ct) => service.CapabilitiesAsync(ct);
     [HttpGet("profile")]
-    public Task<DoctorProfileResponse> Profile(CancellationToken ct) => service.ProfileAsync(Actor, ct);
+    public Task<ProfessionalProfileResponse> Profile(CancellationToken ct) => service.ProfileAsync(Actor, ct);
     [HttpPut("profile"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
-    public Task<DoctorProfileResponse> Profile(DoctorProfileUpdateRequest request, CancellationToken ct) => service.UpdateProfileAsync(Actor, request, ct);
+    public Task<ProfessionalProfileResponse> Profile(ProfessionalProfileUpdateRequest request, CancellationToken ct) => service.UpdateProfileAsync(Actor, request, ct);
     [HttpGet("services")]
-    public Task<IReadOnlyList<DoctorServiceResponse>> Services(CancellationToken ct) => service.ServicesAsync(Actor, ct);
+    public Task<IReadOnlyList<ProfessionalServiceResponse>> Services(CancellationToken ct) => service.ServicesAsync(Actor, ct);
     [HttpPut("services"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
-    public Task<IReadOnlyList<DoctorServiceResponse>> Services(DoctorServicesUpdateRequest request, CancellationToken ct) => service.UpdateServicesAsync(Actor, request, ct);
+    public Task<IReadOnlyList<ProfessionalServiceResponse>> Services(ProfessionalServicesUpdateRequest request, CancellationToken ct) => service.UpdateServicesAsync(Actor, request, ct);
 
     [HttpGet("agenda")]
     public Task<DoctorAgendaResponse> Agenda(DateOnly from, DateOnly to, string? status = null, string? modality = null,
@@ -100,7 +101,7 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
     public Task<ArrivalResponse> RevertStart(ulong id, AppointmentTransitionRequest request, CancellationToken ct) =>
         arrivals.RevertStartAsync(Actor, id, request, ct);
     [HttpPost("appointments/{id:long}/no-show"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
-    public Task<ClinicalAppointmentResponse> NoShow(ulong id, RecordNoShowRequest request, CancellationToken ct) => clinical.RecordNoShowAsync(Actor, ViverAppRoles.Doctor, id, request, ct);
+    public Task<ClinicalAppointmentResponse> NoShow(ulong id, RecordNoShowRequest request, CancellationToken ct) => clinical.RecordNoShowAsync(Actor, Role, id, request, ct);
     [HttpPost("appointments/{id:long}/report/rectify"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public Task<IReadOnlyList<DoctorReportVersionResponse>> Rectify(ulong id, DoctorReportRectificationRequest request, CancellationToken ct) => service.RectifyAsync(Actor, id, request, ct);
 
@@ -110,14 +111,14 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
     [HttpGet("patients/{id:long}")]
     public Task<DoctorPatientResponse> Patient(ulong id, CancellationToken ct) => service.PatientAsync(Actor, id, ct);
     [HttpPost("patients/link"), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
-    public Task<DoctorPatientResponse> Link(DoctorPatientLinkRequest request, CancellationToken ct) => service.LinkPatientAsync(Actor, request, ct);
+    public Task<DoctorPatientResponse> Link(ProfessionalPatientLinkRequest request, CancellationToken ct) => service.LinkPatientAsync(Actor, request, ct);
     [HttpPost("patients/invite"), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
     public Task<DoctorPatientResponse> Invite(DoctorPatientInviteRequest request, CancellationToken ct) => service.InvitePatientAsync(Actor, request, ct);
     [HttpPut("patients/{id:long}"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public Task<DoctorPatientResponse> UpdatePatient(ulong id, DoctorPatientUpdateRequest request, CancellationToken ct) => service.UpdatePatientAsync(Actor, id, request, ct);
 
     [HttpGet("notifications")]
-    public Task<DoctorNotificationsResponse> Notifications(int page = 1, int pageSize = 20, CancellationToken ct = default) => arrivals.NotificationsAsync(Actor, page, pageSize, ct);
+    public Task<ProfessionalNotificationsResponse> Notifications(int page = 1, int pageSize = 20, CancellationToken ct = default) => arrivals.NotificationsAsync(Actor, page, pageSize, ct);
     [HttpPost("notifications/{id:long}/read"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public async Task<IActionResult> ReadNotification(ulong id, ArrivalRequest request, CancellationToken ct) { await arrivals.ReadAsync(Actor, id, request.RowVersion, ct); return NoContent(); }
     [HttpPost("notifications/read-all"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
@@ -128,9 +129,9 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
     [HttpPut("availability"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public Task<DoctorAvailabilityResponse> Availability(DoctorAvailabilitySettingsRequest request, CancellationToken ct) => service.UpdateAvailabilityAsync(Actor, request, ct);
     [HttpPost("availability/exceptions"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
-    public Task<DoctorAvailabilityExceptionResponse> AddException(DoctorAvailabilityExceptionRequest request, CancellationToken ct) => service.SaveExceptionAsync(Actor, null, request, ct);
+    public Task<ProfessionalAvailabilityExceptionResponse> AddException(ProfessionalAvailabilityExceptionRequest request, CancellationToken ct) => service.SaveExceptionAsync(Actor, null, request, ct);
     [HttpPut("availability/exceptions/{id:long}"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
-    public Task<DoctorAvailabilityExceptionResponse> UpdateException(ulong id, DoctorAvailabilityExceptionRequest request, CancellationToken ct) => service.SaveExceptionAsync(Actor, id, request, ct);
+    public Task<ProfessionalAvailabilityExceptionResponse> UpdateException(ulong id, ProfessionalAvailabilityExceptionRequest request, CancellationToken ct) => service.SaveExceptionAsync(Actor, id, request, ct);
     [HttpDelete("availability/exceptions/{id:long}"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public async Task<IActionResult> DeleteException(ulong id, ulong rowVersion, CancellationToken ct) { await service.DeleteExceptionAsync(Actor, id, rowVersion, ct); return NoContent(); }
 
@@ -175,7 +176,7 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
     [HttpDelete("documents/{id:long}"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public async Task<IActionResult> DeleteDocument(ulong id, ulong rowVersion, CancellationToken ct)
     {
-        var link = await database.AppointmentDocuments.SingleOrDefaultAsync(x => x.Id == id && x.Appointment.DoctorAccountId == Actor && x.StatusCode == "available", ct)
+        var link = await database.AppointmentDocuments.SingleOrDefaultAsync(x => x.Id == id && x.Appointment.ProfessionalAccountId == Actor && x.StatusCode == "available", ct)
             ?? throw DoctorExperienceService.Missing();
         if (link.RowVersion != rowVersion) throw DoctorExperienceService.Conflict("O anexo foi alterado por outra sessão.");
         if (link.UploadedByAccountId != Actor) throw DoctorExperienceService.Conflict("Somente o autor pode remover este anexo.");

@@ -35,16 +35,16 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         db.Accounts.AddRange(manager, doctor, patient); await db.SaveChangesAsync(); managerId = manager.Id;
         doctorId = doctor.Id; patientId = patient.Id;
         db.ManagerPreferences.Add(new ManagerPreference { ManagerAccountId = manager.Id, EmailEnabled = true, SmsEnabled = true, UpdatedAtUtc = now, RowVersion = 1 });
-        db.DoctorProfiles.Add(new DoctorProfile { AccountId = doctor.Id, ProfessionalTitle = "Dra.", LicenseStateCode = "SP", LicenseNumber = "130001", DefaultAppointmentDurationMinutes = 30, CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 });
+        db.ProfessionalProfiles.Add(new ProfessionalProfile { AccountId = doctor.Id, ProfessionalTitle = "Dra.", LicenseTypeCode = "CRM", LicenseStateCode = "SP", LicenseNumber = "130001", DefaultAppointmentDurationMinutes = 30, CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 });
         db.PatientProfiles.Add(new PatientProfile { AccountId = patient.Id, PreferredName = "Paciente", CreatedAtUtc = now, UpdatedAtUtc = now });
-        var type = new AppointmentType { Name = Marker + Guid.NewGuid().ToString("N"), CategoryCode = "consultation", Description = "Teste do Gestor", ModalityCode = "in_person", DurationMinutes = 30, PriceAmount = 180, IsActive = true, DisplayOrder = 999, CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 };
+        var type = new AppointmentType { Name = Marker + Guid.NewGuid().ToString("N"), CategoryCode = "consultation", Description = "Teste do Gestor", ModalityCode = "in_person", DurationMinutes = 30, PriceAmount = 180, RequiresPayment = true, IsActive = true, DisplayOrder = 999, CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 };
         db.AppointmentTypes.Add(type); await db.SaveChangesAsync();
         var timezone = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
         appointmentLocalDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(now, timezone)).AddDays(1);
         var startsAtUtc = TimeZoneInfo.ConvertTimeToUtc(
             DateTime.SpecifyKind(appointmentLocalDate.ToDateTime(new TimeOnly(10, 0)), DateTimeKind.Unspecified),
             timezone);
-        var appointment = new Appointment { AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63), PatientAccountId = patient.Id, DoctorAccountId = doctor.Id, AppointmentTypeId = type.Id, CreatedByAccountId = manager.Id, StatusCode = "pending", ModalityCode = "in_person", StartsAtUtc = startsAtUtc, EndsAtUtc = startsAtUtc.AddMinutes(30), PriceAmount = 180, BasePriceAmount = 180, DiscountPercent = 0, PaymentLocationCode = "clinic", CurrencyCode = "BRL", PatientNotes = "Observação operacional sintética", CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 };
+        var appointment = new Appointment { AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63), PatientAccountId = patient.Id, ProfessionalAccountId = doctor.Id, AppointmentTypeId = type.Id, CreatedByAccountId = manager.Id, StatusCode = "pending", ModalityCode = "in_person", StartsAtUtc = startsAtUtc, EndsAtUtc = startsAtUtc.AddMinutes(30), PriceAmount = 180, BasePriceAmount = 180, RequiresPayment = true, DiscountPercent = 0, PaymentLocationCode = "clinic", CurrencyCode = "BRL", PatientNotes = "Observação operacional sintética", CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 };
         db.Appointments.Add(appointment); await db.SaveChangesAsync(); appointmentId = appointment.Id;
     }
 
@@ -137,7 +137,7 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ArrivalIsIdempotentAndCreatesOneDurableDoctorNotification()
+    public async Task ArrivalIsIdempotentAndCreatesOneDurableProfessionalNotification()
     {
         var timezone = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
         var localNow = TimeZoneInfo.ConvertTimeFromUtc(now, timezone);
@@ -161,7 +161,7 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         Assert.Equal(first.QueueNumber, replay.QueueNumber);
         Assert.True(first.QueueNumber >= 100);
         await using var verification = CreateContext();
-        var notification = await verification.DoctorNotifications.SingleAsync(x => x.DoctorAccountId == doctorId && x.AppointmentId == appointmentId);
+        var notification = await verification.ProfessionalNotifications.SingleAsync(x => x.ProfessionalAccountId == doctorId && x.AppointmentId == appointmentId);
         Assert.Equal(1, await verification.AppointmentStatusHistories.CountAsync(x => x.AppointmentId == appointmentId && x.ToStatusCode == "arrived"));
 
         var service = new ArrivalExperienceService(verification, new FixedClock(now), new NoOpAuditWriter(), new NullHubContext(), NullLogger<ArrivalExperienceService>.Instance);
@@ -181,8 +181,8 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         Assert.Null(canceled.BusinessDate);
         Assert.Null(canceled.QueueNumber);
         verification.ChangeTracker.Clear();
-        Assert.NotNull(await verification.DoctorNotifications
-            .Where(x => x.DoctorAccountId == doctorId && x.AppointmentId == appointmentId)
+        Assert.NotNull(await verification.ProfessionalNotifications
+            .Where(x => x.ProfessionalAccountId == doctorId && x.AppointmentId == appointmentId)
             .Select(x => x.ReadAtUtc)
             .SingleAsync());
         Assert.Contains(await verification.AppointmentStatusHistories.Where(x => x.AppointmentId == appointmentId).ToArrayAsync(),
@@ -239,10 +239,10 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         if (configuration is null) return; await using var db = CreateContext();
         var accountIds = new[] { managerId, doctorId, patientId, offlinePatientId }.Where(x => x != 0).Distinct().ToArray();
         if (accountIds.Length == 0) return;
-        var allAppointmentIds = await db.Appointments.Where(x => accountIds.Contains(x.PatientAccountId) || accountIds.Contains(x.DoctorAccountId) || accountIds.Contains(x.CreatedByAccountId)).Select(x => x.Id).ToArrayAsync();
+        var allAppointmentIds = await db.Appointments.Where(x => accountIds.Contains(x.PatientAccountId) || accountIds.Contains(x.ProfessionalAccountId) || accountIds.Contains(x.CreatedByAccountId)).Select(x => x.Id).ToArrayAsync();
         var retainedAppointmentIds = await db.CashMovements.Where(x => x.AppointmentId.HasValue && allAppointmentIds.Contains(x.AppointmentId.Value)).Select(x => x.AppointmentId!.Value).Distinct().ToArrayAsync();
-        var retainedAccounts = await db.Appointments.Where(x => retainedAppointmentIds.Contains(x.Id)).Select(x => new { x.PatientAccountId, x.DoctorAccountId, x.CreatedByAccountId }).ToArrayAsync();
-        var retainedAccountIds = retainedAccounts.SelectMany(x => new[] { x.PatientAccountId, x.DoctorAccountId, x.CreatedByAccountId }).Distinct().ToArray();
+        var retainedAccounts = await db.Appointments.Where(x => retainedAppointmentIds.Contains(x.Id)).Select(x => new { x.PatientAccountId, x.ProfessionalAccountId, x.CreatedByAccountId }).ToArrayAsync();
+        var retainedAccountIds = retainedAccounts.SelectMany(x => new[] { x.PatientAccountId, x.ProfessionalAccountId, x.CreatedByAccountId }).Distinct().ToArray();
         var appointmentIds = allAppointmentIds.Except(retainedAppointmentIds).ToArray();
         var deletableAccountIds = accountIds.Except(retainedAccountIds).ToArray();
         var paymentIds = await db.Payments.Where(x => appointmentIds.Contains(x.AppointmentId)).Select(x => x.Id).ToArrayAsync();
@@ -251,13 +251,13 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         await db.IdempotencyRecords.Where(x => idempotencyScopes.Contains(x.ScopeCode)).ExecuteDeleteAsync();
         await db.Appointments.Where(x => appointmentIds.Contains(x.Id)).ExecuteUpdateAsync(update => update.SetProperty(x => x.CurrentPaymentId, (ulong?)null));
         await db.Payments.Where(x => paymentIds.Contains(x.Id)).ExecuteDeleteAsync();
-        await db.DoctorNotifications.Where(x => appointmentIds.Contains(x.AppointmentId)).ExecuteDeleteAsync();
+        await db.ProfessionalNotifications.Where(x => appointmentIds.Contains(x.AppointmentId)).ExecuteDeleteAsync();
         await db.AppointmentStatusHistories.Where(x => appointmentIds.Contains(x.AppointmentId)).ExecuteDeleteAsync();
         await db.Appointments.Where(x => appointmentIds.Contains(x.Id) && x.RescheduledFromAppointmentId != null)
             .ExecuteUpdateAsync(update => update.SetProperty(x => x.RescheduledFromAppointmentId, (ulong?)null));
         await db.Appointments.Where(x => appointmentIds.Contains(x.Id)).ExecuteDeleteAsync();
         await db.ManagerPreferences.Where(x => deletableAccountIds.Contains(x.ManagerAccountId)).ExecuteDeleteAsync();
-        await db.DoctorProfiles.Where(x => deletableAccountIds.Contains(x.AccountId)).ExecuteDeleteAsync();
+        await db.ProfessionalProfiles.Where(x => deletableAccountIds.Contains(x.AccountId)).ExecuteDeleteAsync();
         await db.PatientProfiles.Where(x => deletableAccountIds.Contains(x.AccountId)).ExecuteDeleteAsync();
         await db.Accounts.Where(x => deletableAccountIds.Contains(x.Id)).ExecuteDeleteAsync();
         await db.AppointmentTypes.Where(x => x.Name.StartsWith(Marker) && !x.Appointments.Any()).ExecuteDeleteAsync();
@@ -279,7 +279,7 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
     private static Account Account(string email, string role, string name) => new() { RoleCode = role, StatusCode = "active", FullName = name, Email = email, NormalizedEmail = email.ToUpperInvariant(), EmailVerified = true, SecurityStamp = RandomNumberGenerator.GetBytes(32), CreatedAtUtc = DateTime.UtcNow, UpdatedAtUtc = DateTime.UtcNow, RowVersion = 1 };
     private sealed class NoOpAuditWriter : IClinicalOperationsAuditWriter { public Task WriteAsync(string eventCode, ulong actorAccountId, string entityType, string entityId, IReadOnlyDictionary<string, string>? safeData, CancellationToken cancellationToken) => Task.CompletedTask; }
     private sealed class FixedClock(DateTime value) : TimeProvider { public override DateTimeOffset GetUtcNow() => new(DateTime.SpecifyKind(value, DateTimeKind.Utc)); }
-    private sealed class NullHubContext : IHubContext<DoctorNotificationsHub>
+    private sealed class NullHubContext : IHubContext<ProfessionalNotificationsHub>
     {
         public IHubClients Clients { get; } = new NullHubClients();
         public IGroupManager Groups { get; } = new NullGroupManager();

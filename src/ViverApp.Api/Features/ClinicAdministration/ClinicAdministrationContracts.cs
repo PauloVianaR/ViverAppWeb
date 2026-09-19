@@ -74,7 +74,8 @@ public sealed record AppointmentTypeWriteRequest(
     bool IsActive,
     ushort DisplayOrder,
     [param: Range(0, long.MaxValue)] ulong RowVersion = 0,
-    [param: Required, RegularExpression("^(consultation|examination|surgery|procedure)$")] string CategoryCode = "consultation");
+    [param: Required, RegularExpression("^(consultation|examination|surgery|procedure)$")] string CategoryCode = "consultation",
+    bool RequiresPayment = true);
 
 public sealed record AppointmentTypeResponse(
     uint Id,
@@ -84,6 +85,7 @@ public sealed record AppointmentTypeResponse(
     string ModalityCode,
     ushort DurationMinutes,
     decimal PriceAmount,
+    bool RequiresPayment,
     bool IsActive,
     ushort DisplayOrder,
     ulong RowVersion);
@@ -105,7 +107,7 @@ public sealed record WeeklyHourResponse(
     ulong RowVersion);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record DoctorWeeklyHourWriteRequest(
+public sealed record ProfessionalWeeklyHourWriteRequest(
     [param: Range(0, 6)] byte DayOfWeek,
     TimeSpan StartTime,
     TimeSpan EndTime,
@@ -115,7 +117,7 @@ public sealed record DoctorWeeklyHourWriteRequest(
     [param: Range(0, long.MaxValue)] ulong RowVersion = 0,
     [param: RegularExpression("^(in_person|online|both)$")] string ModalityCode = "both");
 
-public sealed record DoctorWeeklyHourResponse(
+public sealed record ProfessionalWeeklyHourResponse(
     ulong Id,
     byte DayOfWeek,
     TimeSpan StartTime,
@@ -173,7 +175,7 @@ public sealed record ProfessionalCreateRequest(
     [param: Required, StringLength(200, MinimumLength = 2)] string FullName,
     [param: EmailAddress, StringLength(254)] string? Email,
     [param: RegularExpression("^\\+55[1-9][0-9]{9,10}$")] string? PhoneE164,
-    [param: Required, RegularExpression("^(doctor|manager)$")] string RoleCode,
+    [param: Required, RegularExpression("^(doctor|psychologist|manager)$")] string RoleCode,
     [param: RegularExpression("^[A-Z]{2}$")] string? LicenseStateCode,
     [param: StringLength(30, MinimumLength = 1)] string? LicenseNumber,
     [param: StringLength(4000)] string? Biography,

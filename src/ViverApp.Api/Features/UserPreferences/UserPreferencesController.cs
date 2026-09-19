@@ -13,10 +13,14 @@ using ViverApp.Security;
 namespace ViverApp.Api.Features.UserPreferences;
 
 public sealed record AppointmentViewPreferenceResponse(string Mode, ulong RowVersion);
+public sealed record CalendarViewPreferenceResponse(string Mode, ulong RowVersion);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AppointmentViewPreferenceRequest(
     [param: Required, RegularExpression("^(cards|compact)$")] string Mode);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record CalendarViewPreferenceRequest(
+    [param: Required, RegularExpression("^(day|week|month|year)$")] string Mode);
 
 [ApiController]
 [Route("api/v1/me/preferences")]
@@ -46,8 +50,8 @@ public sealed class UserPreferencesController(ViverAppDbContext database, TimePr
     {
         var now = clock.GetUtcNow().UtcDateTime;
         await database.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO account_ui_preferences (account_id, appointment_view_mode, updated_at_utc, row_version)
-            VALUES ({Actor}, {request.Mode}, {now}, 1)
+            INSERT INTO account_ui_preferences (account_id, appointment_view_mode, calendar_view_mode, updated_at_utc, row_version)
+            VALUES ({Actor}, {request.Mode}, {"month"}, {now}, 1)
             ON DUPLICATE KEY UPDATE
                 appointment_view_mode = VALUES(appointment_view_mode),
                 updated_at_utc = VALUES(updated_at_utc),
@@ -56,5 +60,32 @@ public sealed class UserPreferencesController(ViverAppDbContext database, TimePr
         var preference = await database.AccountUiPreferences.AsNoTracking()
             .SingleAsync(item => item.AccountId == Actor, ct);
         return new(preference.AppointmentViewMode, preference.RowVersion);
+    }
+
+    [HttpGet("calendar-view")]
+    public async Task<CalendarViewPreferenceResponse> GetCalendarView(CancellationToken ct)
+    {
+        var preference = await database.AccountUiPreferences.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.AccountId == Actor, ct);
+        return preference is null
+            ? new CalendarViewPreferenceResponse("month", 0)
+            : new CalendarViewPreferenceResponse(preference.CalendarViewMode, preference.RowVersion);
+    }
+
+    [HttpPut("calendar-view")]
+    [EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
+    public async Task<CalendarViewPreferenceResponse> UpdateCalendarView(CalendarViewPreferenceRequest request, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        await database.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO account_ui_preferences (account_id, appointment_view_mode, calendar_view_mode, updated_at_utc, row_version)
+            VALUES ({Actor}, {"cards"}, {request.Mode}, {now}, 1)
+            ON DUPLICATE KEY UPDATE
+                calendar_view_mode = VALUES(calendar_view_mode),
+                updated_at_utc = VALUES(updated_at_utc),
+                row_version = row_version + 1
+            """, ct);
+        var preference = await database.AccountUiPreferences.AsNoTracking().SingleAsync(item => item.AccountId == Actor, ct);
+        return new(preference.CalendarViewMode, preference.RowVersion);
     }
 }

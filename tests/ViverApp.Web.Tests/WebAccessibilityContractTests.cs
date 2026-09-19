@@ -145,8 +145,8 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     {
         var shell = ShellNavigationCatalog.ResolveRole("administrator");
         Assert.Equal(ShellProfile.Administrator, shell.Profile);
-        Assert.Equal(8, shell.Items.Count);
-        Assert.Equal(new[] { "/administracao", "/administracao/clinica", "/administracao/consultas", "/administracao/pacientes", "/administracao/analytics", "/administracao/caixa", "/administracao/notificacoes", "/administracao/usuarios" }, shell.Items.Select(x => x.Href));
+        Assert.Equal(9, shell.Items.Count);
+        Assert.Equal(new[] { "/administracao", "/administracao/clinica", "/administracao/agenda", "/administracao/atendimentos", "/administracao/pacientes", "/administracao/analytics", "/administracao/caixa", "/administracao/notificacoes", "/administracao/usuarios" }, shell.Items.Select(x => x.Href));
     }
 
     [Fact]
@@ -246,11 +246,10 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         var administrator = ShellNavigationCatalog.ResolveRole("administrator");
         var patient = ShellNavigationCatalog.ResolveRole("patient");
 
-        Assert.Equal(new[] { "Início", "Agenda", "Pacientes", "Histórico" }, manager.MobilePrimaryItems.Select(x => x.Label));
+        Assert.Equal(new[] { "Início", "Agenda", "Pacientes", "Atendimentos" }, manager.MobilePrimaryItems.Select(x => x.Label));
         Assert.Equal(new[] { "Caixa", "Clínica", "Perfil" }, manager.MobileOverflowItems.Select(x => x.Label));
-        Assert.Equal(new[] { "Analytics", "Caixa", "Alertas", "Usuários" }, administrator.MobileOverflowItems.Select(x => x.Label));
-        Assert.Equal(patient.Items, patient.MobilePrimaryItems);
-        Assert.Empty(patient.MobileOverflowItems);
+        Assert.Equal(new[] { "Pacientes", "Analytics", "Caixa", "Alertas", "Usuários" }, administrator.MobileOverflowItems.Select(x => x.Label));
+        Assert.Equal(new[] { "Pagamentos", "Perfil" }, patient.MobileOverflowItems.Select(x => x.Label));
     }
 
     [Theory]

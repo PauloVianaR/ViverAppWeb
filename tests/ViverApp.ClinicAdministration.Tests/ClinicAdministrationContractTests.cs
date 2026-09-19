@@ -131,11 +131,12 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
         doctor.NormalizedEmail = doctor.Email.ToUpperInvariant();
         database.Accounts.AddRange(patient, doctor);
         await database.SaveChangesAsync();
-        database.DoctorProfiles.Add(new DoctorProfile
+        database.ProfessionalProfiles.Add(new ProfessionalProfile
         {
             AccountId = doctor.Id,
             ProfessionalTitle = "Dra.",
             LicenseStateCode = "SP",
+            LicenseTypeCode = "CRM",
             LicenseNumber = "149999",
             DefaultAppointmentDurationMinutes = 30,
             CreatedAtUtc = now,
@@ -149,6 +150,7 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
             ModalityCode = "in_person",
             DurationMinutes = 30,
             PriceAmount = 180,
+            RequiresPayment = true,
             IsActive = true,
             DisplayOrder = 999,
             CreatedAtUtc = now,
@@ -161,7 +163,7 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
         {
             AppointmentNumber = (ulong)Random.Shared.Next(900_000_000, 999_999_999),
             PatientAccountId = patient.Id,
-            DoctorAccountId = doctor.Id,
+            ProfessionalAccountId = doctor.Id,
             AppointmentTypeId = appointmentType.Id,
             CreatedByAccountId = administrator.Id,
             StatusCode = "confirmed",
@@ -170,6 +172,7 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
             EndsAtUtc = now.AddDays(-1).AddMinutes(30),
             PriceAmount = 180,
             BasePriceAmount = 180,
+            RequiresPayment = true,
             DiscountPercent = 0,
             PaymentLocationCode = "clinic",
             CurrencyCode = "BRL",
@@ -182,6 +185,7 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
         database.Payments.Add(new Payment
         {
             AppointmentId = appointment.Id,
+            AppointmentRequiresPayment = true,
             ProviderCode = "internal",
             StatusCode = "paid",
             Amount = 180,

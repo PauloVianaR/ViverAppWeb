@@ -25,16 +25,16 @@ public sealed record AppointmentTransitionRequest([param: Range(1, long.MaxValue
 public sealed record AppointmentReopenRequest(
     [param: Range(1, long.MaxValue)] ulong RowVersion,
     [param: Required, StringLength(500, MinimumLength = 5)] string Reason);
-public sealed record DoctorNotificationResponse(ulong Id, ulong AppointmentId, ulong AppointmentNumber,
+public sealed record ProfessionalNotificationResponse(ulong Id, ulong AppointmentId, ulong AppointmentNumber,
     uint? QueueNumber, DateTime? StartsAtUtc, bool IsRead, DateTime CreatedAtUtc, ulong RowVersion);
-public sealed record DoctorNotificationsResponse(int UnreadCount, bool PopupEnabled, bool SoundEnabled,
-    int SoundVolume, string SoundKey, bool MarkReadOnOpen, IReadOnlyList<DoctorNotificationResponse> Items);
+public sealed record ProfessionalNotificationsResponse(int UnreadCount, bool PopupEnabled, bool SoundEnabled,
+    int SoundVolume, string SoundKey, bool MarkReadOnOpen, IReadOnlyList<ProfessionalNotificationResponse> Items);
 public sealed record ArrivalRealtimeMessage(ulong Id, ulong AppointmentId, ulong AppointmentNumber,
     uint QueueNumber, DateTime StartsAtUtc, bool IsRead, DateTime CreatedAtUtc, ulong RowVersion,
     bool PopupEnabled, bool SoundEnabled, int SoundVolume, string SoundKey);
 
-[Authorize(Policy = ViverAppPolicies.Doctor)]
-public sealed class DoctorNotificationsHub : Hub
+[Authorize(Policy = ViverAppPolicies.ClinicalProfessional)]
+public sealed class ProfessionalNotificationsHub : Hub
 {
     public override async Task OnConnectedAsync()
     {
@@ -52,7 +52,7 @@ public sealed class DoctorNotificationsHub : Hub
 }
 
 public sealed class ArrivalExperienceService(ViverAppDbContext database, TimeProvider clock,
-    IClinicalOperationsAuditWriter audit, IHubContext<DoctorNotificationsHub> hub,
+    IClinicalOperationsAuditWriter audit, IHubContext<ProfessionalNotificationsHub> hub,
     ILogger<ArrivalExperienceService> logger)
 {
     public async Task<ArrivalResponse> RegisterAsync(ulong actor, ulong appointmentId, ArrivalRequest request, CancellationToken ct)
@@ -112,19 +112,19 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
             OccurredAtUtc = now
         });
 
-        DoctorNotification? notification = null;
+        ProfessionalNotification? notification = null;
         if (settings.NotificationsEnabled)
         {
-            notification = new DoctorNotification
+            notification = new ProfessionalNotification
             {
-                DoctorAccountId = appointment.DoctorAccountId,
+                ProfessionalAccountId = appointment.ProfessionalAccountId,
                 AppointmentId = appointment.Id,
                 SourceKey = $"arrival:{appointment.Id.ToString(CultureInfo.InvariantCulture)}",
                 TypeCode = "patient_arrived",
                 CreatedAtUtc = now,
                 RowVersion = 1
             };
-            database.DoctorNotifications.Add(notification);
+            database.ProfessionalNotifications.Add(notification);
         }
         await database.SaveChangesAsync(ct);
         await audit.WriteAsync("appointment.arrival_recorded", actor, "appointment", appointment.Id.ToString(CultureInfo.InvariantCulture),
@@ -135,7 +135,7 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
         {
             try
             {
-                await hub.Clients.Group(DoctorNotificationsHub.Group(appointment.DoctorAccountId)).SendAsync("PatientArrived",
+                await hub.Clients.Group(ProfessionalNotificationsHub.Group(appointment.ProfessionalAccountId)).SendAsync("PatientArrived",
                     new ArrivalRealtimeMessage(notification.Id, appointment.Id, appointment.AppointmentNumber, queueNumber, appointment.StartsAtUtc, false, now, notification.RowVersion,
                         settings.PopupEnabled, settings.SoundEnabled, settings.SoundVolume, settings.SoundKey), CancellationToken.None);
             }
@@ -182,7 +182,7 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
             EndsAtUtc = appointment.EndsAtUtc,
             OccurredAtUtc = now
         });
-        await database.DoctorNotifications
+        await database.ProfessionalNotifications
             .Where(item => item.AppointmentId == appointmentId && item.ReadAtUtc == null)
             .ExecuteUpdateAsync(update => update
                 .SetProperty(item => item.ReadAtUtc, now)
@@ -204,7 +204,7 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
         var appointment = await database.Appointments
             .FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {appointmentId} FOR UPDATE")
             .SingleOrDefaultAsync(ct) ?? throw new ArrivalRuleException(404, "Atendimento não encontrado.");
-        if (appointment.DoctorAccountId != doctor) throw new ArrivalRuleException(404, "Atendimento não encontrado.");
+        if (appointment.ProfessionalAccountId != doctor) throw new ArrivalRuleException(404, "Atendimento não encontrado.");
         if (appointment.StatusCode == "in_progress") { await transaction.CommitAsync(ct); return MapArrival(appointment); }
         if (appointment.RowVersion != request.RowVersion) throw new ArrivalRuleException(409, "O atendimento foi alterado por outra sessão.");
         if (appointment.StatusCode is not ("confirmed" or "arrived"))
@@ -223,7 +223,7 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
             EndsAtUtc = appointment.EndsAtUtc,
             OccurredAtUtc = now
         });
-        await database.DoctorNotifications.Where(x => x.DoctorAccountId == doctor && x.AppointmentId == appointmentId && x.ReadAtUtc == null)
+        await database.ProfessionalNotifications.Where(x => x.ProfessionalAccountId == doctor && x.AppointmentId == appointmentId && x.ReadAtUtc == null)
             .ExecuteUpdateAsync(x => x.SetProperty(n => n.ReadAtUtc, now).SetProperty(n => n.RowVersion, n => n.RowVersion + 1), ct);
         await database.SaveChangesAsync(ct);
         await audit.WriteAsync("appointment.started", doctor, "appointment", appointment.Id.ToString(CultureInfo.InvariantCulture), null, ct);
@@ -241,7 +241,7 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
         var appointment = await database.Appointments
             .FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {appointmentId} FOR UPDATE")
             .SingleOrDefaultAsync(ct) ?? throw new ArrivalRuleException(404, "Atendimento não encontrado.");
-        if (appointment.DoctorAccountId != doctor) throw new ArrivalRuleException(404, "Atendimento não encontrado.");
+        if (appointment.ProfessionalAccountId != doctor) throw new ArrivalRuleException(404, "Atendimento não encontrado.");
         if (appointment.RowVersion != request.RowVersion)
             throw new ArrivalRuleException(409, "O atendimento foi alterado por outra sessão.");
         if (appointment.StatusCode != "in_progress")
@@ -366,24 +366,24 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
         return MapArrival(appointment);
     }
 
-    public async Task<DoctorNotificationsResponse> NotificationsAsync(ulong doctor, int page, int pageSize, CancellationToken ct)
+    public async Task<ProfessionalNotificationsResponse> NotificationsAsync(ulong doctor, int page, int pageSize, CancellationToken ct)
     {
         if (page < 1 || pageSize is < 1 or > 50) throw new ArrivalRuleException(400, "Paginação inválida.");
         var settings = await LoadSettingsAsync(ct);
         var cutoff = clock.GetUtcNow().UtcDateTime.AddDays(-settings.RetentionDays);
-        await database.DoctorNotifications.Where(x => x.DoctorAccountId == doctor && x.ReadAtUtc != null && x.CreatedAtUtc < cutoff).ExecuteDeleteAsync(ct);
-        var unread = await database.DoctorNotifications.CountAsync(x => x.DoctorAccountId == doctor && x.ReadAtUtc == null, ct);
-        var rows = await database.DoctorNotifications.AsNoTracking().Where(x => x.DoctorAccountId == doctor)
+        await database.ProfessionalNotifications.Where(x => x.ProfessionalAccountId == doctor && x.ReadAtUtc != null && x.CreatedAtUtc < cutoff).ExecuteDeleteAsync(ct);
+        var unread = await database.ProfessionalNotifications.CountAsync(x => x.ProfessionalAccountId == doctor && x.ReadAtUtc == null, ct);
+        var rows = await database.ProfessionalNotifications.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor)
             .Include(x => x.Appointment).OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(ct);
         return new(unread, settings.PopupEnabled, settings.SoundEnabled, settings.SoundVolume, settings.SoundKey,
-            settings.MarkReadOnOpen, rows.Select(x => new DoctorNotificationResponse(x.Id, x.AppointmentId,
+            settings.MarkReadOnOpen, rows.Select(x => new ProfessionalNotificationResponse(x.Id, x.AppointmentId,
                 x.Appointment.AppointmentNumber, x.Appointment.ArrivalQueueNumber, x.Appointment.StartsAtUtc,
                 x.ReadAtUtc.HasValue, x.CreatedAtUtc, x.RowVersion)).ToArray());
     }
 
     public async Task ReadAsync(ulong doctor, ulong id, ulong rowVersion, CancellationToken ct)
     {
-        var item = await database.DoctorNotifications.SingleOrDefaultAsync(x => x.Id == id && x.DoctorAccountId == doctor, ct)
+        var item = await database.ProfessionalNotifications.SingleOrDefaultAsync(x => x.Id == id && x.ProfessionalAccountId == doctor, ct)
             ?? throw new ArrivalRuleException(404, "Notificação não encontrada.");
         if (item.RowVersion != rowVersion) throw new ArrivalRuleException(409, "A notificação foi alterada por outra sessão.");
         if (!item.ReadAtUtc.HasValue) { item.ReadAtUtc = clock.GetUtcNow().UtcDateTime; item.RowVersion++; await database.SaveChangesAsync(ct); }
@@ -392,7 +392,7 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
     public Task ReadAllAsync(ulong doctor, CancellationToken ct)
     {
         var now = clock.GetUtcNow().UtcDateTime;
-        return database.DoctorNotifications.Where(x => x.DoctorAccountId == doctor && x.ReadAtUtc == null)
+        return database.ProfessionalNotifications.Where(x => x.ProfessionalAccountId == doctor && x.ReadAtUtc == null)
             .ExecuteUpdateAsync(x => x.SetProperty(n => n.ReadAtUtc, now).SetProperty(n => n.RowVersion, n => n.RowVersion + 1), ct);
     }
 

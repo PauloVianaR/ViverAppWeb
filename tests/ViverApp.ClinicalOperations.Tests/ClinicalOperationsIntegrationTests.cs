@@ -43,7 +43,7 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
             100,
             CancellationToken.None);
         Assert.Single(doctorAgenda.Items);
-        Assert.Equal(fixture.DoctorId, doctorAgenda.Items[0].DoctorAccountId);
+        Assert.Equal(fixture.DoctorId, doctorAgenda.Items[0].ProfessionalAccountId);
 
         var doctorPatients = await service.GetPatientsAsync(
             fixture.DoctorId, ViverAppRoles.Doctor, null, 1, 100, CancellationToken.None);
@@ -228,9 +228,9 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
         var otherPatient = Account($"patient2-{marker}@phase8.example.test", ViverAppRoles.Patient, "Segundo Paciente");
         context.Accounts.AddRange(doctor, otherDoctor, manager, patient, otherPatient);
         await context.SaveChangesAsync();
-        context.DoctorProfiles.AddRange(
-            DoctorProfile(doctor.Id, "80001"),
-            DoctorProfile(otherDoctor.Id, "80002"));
+        context.ProfessionalProfiles.AddRange(
+            ProfessionalProfile(doctor.Id, "80001"),
+            ProfessionalProfile(otherDoctor.Id, "80002"));
         context.PatientProfiles.AddRange(
             PatientProfile(patient.Id, "Paciente"),
             PatientProfile(otherPatient.Id, "Segundo"));
@@ -241,6 +241,7 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
             ModalityCode = "both",
             DurationMinutes = 30,
             PriceAmount = 100,
+            RequiresPayment = true,
             IsActive = true,
             DisplayOrder = 900,
             CreatedAtUtc = now,
@@ -272,10 +273,11 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
         RowVersion = 1,
     };
 
-    private static DoctorProfile DoctorProfile(ulong accountId, string license) => new()
+    private static ProfessionalProfile ProfessionalProfile(ulong accountId, string license) => new()
     {
         AccountId = accountId,
         LicenseStateCode = "SP",
+        LicenseTypeCode = "CRM",
         LicenseNumber = license,
         DefaultAppointmentDurationMinutes = 30,
         CreatedAtUtc = DateTime.UtcNow,
@@ -295,7 +297,7 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
     {
         AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
         PatientAccountId = patientId,
-        DoctorAccountId = doctorId,
+        ProfessionalAccountId = doctorId,
         AppointmentTypeId = typeId,
         CreatedByAccountId = patientId,
         StatusCode = "confirmed",
@@ -303,6 +305,7 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
         StartsAtUtc = startsAt,
         EndsAtUtc = startsAt.AddMinutes(30),
         PriceAmount = 100,
+        RequiresPayment = true,
         CurrencyCode = "BRL",
         PatientNotes = "Informação clínica restrita ao médico responsável.",
         CreatedAtUtc = DateTime.UtcNow,
@@ -340,7 +343,7 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
         if (ids.Length > 0)
         {
             var appointmentIds = await context.Appointments
-                .Where(item => ids.Contains(item.PatientAccountId) || ids.Contains(item.DoctorAccountId))
+                .Where(item => ids.Contains(item.PatientAccountId) || ids.Contains(item.ProfessionalAccountId))
                 .Select(item => item.Id)
                 .ToArrayAsync();
             var reportIds = await context.MedicalReports.Where(item => appointmentIds.Contains(item.AppointmentId)).Select(item => item.Id).ToArrayAsync();
@@ -348,13 +351,13 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
             await context.MedicalReports.Where(item => appointmentIds.Contains(item.AppointmentId)).ExecuteDeleteAsync();
             await context.AppointmentStatusHistories.Where(item => appointmentIds.Contains(item.AppointmentId)).ExecuteDeleteAsync();
             await context.Appointments.Where(item => appointmentIds.Contains(item.Id)).ExecuteDeleteAsync();
-            await context.DoctorWeeklyHours.Where(item => ids.Contains(item.DoctorAccountId)).ExecuteDeleteAsync();
-            await context.DoctorAvailabilityExceptions.Where(item => ids.Contains(item.DoctorAccountId)).ExecuteDeleteAsync();
-            await context.DoctorServices.Where(item => ids.Contains(item.DoctorAccountId)).ExecuteDeleteAsync();
-            await context.DoctorPreferences.Where(item => ids.Contains(item.DoctorAccountId)).ExecuteDeleteAsync();
-            await context.DoctorPatientLinks.Where(item => ids.Contains(item.DoctorAccountId) || ids.Contains(item.PatientAccountId)).ExecuteDeleteAsync();
-            await context.DoctorSpecialties.Where(item => ids.Contains(item.DoctorAccountId)).ExecuteDeleteAsync();
-            await context.DoctorProfiles.Where(item => ids.Contains(item.AccountId)).ExecuteDeleteAsync();
+            await context.ProfessionalWeeklyHours.Where(item => ids.Contains(item.ProfessionalAccountId)).ExecuteDeleteAsync();
+            await context.ProfessionalAvailabilityExceptions.Where(item => ids.Contains(item.ProfessionalAccountId)).ExecuteDeleteAsync();
+            await context.ProfessionalServices.Where(item => ids.Contains(item.ProfessionalAccountId)).ExecuteDeleteAsync();
+            await context.ProfessionalPreferences.Where(item => ids.Contains(item.ProfessionalAccountId)).ExecuteDeleteAsync();
+            await context.ProfessionalPatientLinks.Where(item => ids.Contains(item.ProfessionalAccountId) || ids.Contains(item.PatientAccountId)).ExecuteDeleteAsync();
+            await context.ProfessionalSpecialties.Where(item => ids.Contains(item.ProfessionalAccountId)).ExecuteDeleteAsync();
+            await context.ProfessionalProfiles.Where(item => ids.Contains(item.AccountId)).ExecuteDeleteAsync();
             await context.PatientProfiles.Where(item => ids.Contains(item.AccountId)).ExecuteDeleteAsync();
             await context.Accounts.Where(item => ids.Contains(item.Id)).ExecuteDeleteAsync();
         }

@@ -132,12 +132,12 @@
                         <div class="field"><label for="city">Cidade</label><input id="city" maxlength="100" @bind="City" /></div>
                         <div class="field"><label for="state">UF</label><input id="state" maxlength="2" @bind="StateCode" /></div>
                     }
-                    else if (RoleCode == "doctor")
+                    else if (RoleCode is "doctor" or "psychologist")
                     {
                         <h3 class="field--wide form-section-title">Dados profissionais</h3>
-                        <div class="field"><label for="title">Título</label><select id="title" @bind="ProfessionalTitle"><option>Dr.</option><option>Dra.</option></select></div>
-                        <div class="field"><label for="license-state">UF do CRM</label><input id="license-state" maxlength="2" @bind="LicenseState" /></div>
-                        <div class="field"><label for="license">CRM</label><input id="license" maxlength="30" @bind="LicenseNumber" /></div>
+                        <div class="field"><label for="title">Título</label><select id="title" @bind="ProfessionalTitle">@if(RoleCode=="psychologist"){<option>Psic.</option><option>Psicóloga</option>}else{<option>Dr.</option><option>Dra.</option>}</select></div>
+                        <div class="field"><label for="license-state">@(RoleCode=="psychologist"?"Região/UF do CRP":"UF do CRM")</label><input id="license-state" maxlength="2" @bind="LicenseState" /></div>
+                        <div class="field"><label for="license">@(RoleCode=="psychologist"?"CRP":"CRM")</label><input id="license" maxlength="30" @bind="LicenseNumber" /></div>
                         <div class="field"><label for="experience">Anos de experiência</label><input id="experience" type="number" min="0" max="80" @bind="YearsExperience" /></div>
                         <div class="field field--wide"><label for="specialty">Especialidade principal</label><select id="specialty" @bind="PrimarySpecialtyId">@foreach (var specialty in Options.Specialties){<option value="@specialty.Id">@specialty.Name</option>}</select></div>
                     }
@@ -257,13 +257,14 @@
     [
         ("patient", "Paciente", "Agendar e acompanhar atendimentos"),
         ("doctor", "Médico", "Atender pacientes após aprovação"),
+        ("psychologist", "Psicólogo", "Atender pacientes após aprovação"),
         ("manager", "Gestor", "Operar a clínica após aprovação"),
     ];
 
     private (string Code, string Label, string Help) SelectedRole =>
         Roles.Single(role => role.Code == RoleCode);
     private bool RequiresAdministrativeApproval =>
-        RoleCode is "doctor" or "manager";
+        RoleCode is "doctor" or "psychologist" or "manager";
     private string GoogleRegistrationUrl =>
         $"{Backend.GoogleLoginUrl}?role={Uri.EscapeDataString(RoleCode)}";
 
@@ -277,6 +278,7 @@
             && IsPublicRegistrationRole(RegistrationRole))
         {
             RoleCode = RegistrationRole!;
+            ProfessionalTitle = RoleCode == "psychologist" ? "Psic." : "Dr.";
             Mode = "google-register";
         }
         else if (string.IsNullOrWhiteSpace(Result) && InitialMode == "cadastro")
@@ -298,6 +300,7 @@
                 && IsPublicRegistrationRole(RegistrationRole))
             {
                 RoleCode = RegistrationRole!;
+                ProfessionalTitle = RoleCode == "psychologist" ? "Psic." : "Dr.";
                 Mode = "google-register";
             }
             else if (Result == "mfa_required") Mode = "mfa";
@@ -305,7 +308,7 @@
             else if (Result == "success") await RedirectCurrentAccountAsync();
             else if (State == "aguardando-aprovacao") ShowNotice("Cadastro confirmado. A administração da clínica precisa aprovar seu acesso.");
             else if (State == "sessao-expirada") ShowError("Sua sessão expirou. Entre novamente para continuar.");
-            else if (Result == "google_registration_role_required") { Mode = "register"; ShowError("Escolha primeiro se o cadastro é de Paciente, Médico ou Gestor e continue novamente com Google."); }
+            else if (Result == "google_registration_role_required") { Mode = "register"; ShowError("Escolha primeiro o tipo de cadastro e continue novamente com Google."); }
             else if (Result == "explicit_link_required") ShowError("Já existe uma conta com este e-mail. Entre por senha ou código e vincule o Google nas configurações.");
             else if (!string.IsNullOrWhiteSpace(Result)) ShowError("O acesso pelo Google não foi concluído. Tente novamente.");
             else if (InitialMode == "cadastro") Mode = "register";
@@ -334,7 +337,7 @@
         if (!DateOnly.TryParseExact(BirthDateText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var birthDate)) { ShowError("Informe a data de nascimento."); return; }
         if (Mode == "register" && Password != PasswordConfirmation) { ShowError("A confirmação da senha não corresponde."); return; }
         var address = RoleCode == "patient" ? new { postalCode = Digits(PostalCode), street = Street, number = Number, complement = Complement, district = District, city = City, stateCode = StateCode.ToUpperInvariant() } : null;
-        var doctor = RoleCode == "doctor" ? new { professionalTitle = ProfessionalTitle, licenseStateCode = LicenseState.ToUpperInvariant(), licenseNumber = LicenseNumber, yearsExperience = YearsExperience, primarySpecialtyId = PrimarySpecialtyId } : null;
+        var doctor = RoleCode is "doctor" or "psychologist" ? new { professionalTitle = ProfessionalTitle, licenseStateCode = LicenseState.ToUpperInvariant(), licenseNumber = LicenseNumber, yearsExperience = YearsExperience, primarySpecialtyId = PrimarySpecialtyId } : null;
         await RunAsync(async () =>
         {
             if (Mode == "google-register")
@@ -398,7 +401,7 @@
         }
     }
 
-    private async Task VerifyContactAsync() => await RunAsync(async () => { await SendAsync<object?>("api/v1/auth/contact/verify", new { requestId = RequestId, code = Code }); Mode = "login"; ShowNotice(RoleCode is "doctor" or "manager" ? "Contato confirmado. Aguarde a aprovação administrativa." : "Contato confirmado. Você já pode entrar."); });
+    private async Task VerifyContactAsync() => await RunAsync(async () => { await SendAsync<object?>("api/v1/auth/contact/verify", new { requestId = RequestId, code = Code }); Mode = "login"; ShowNotice(RoleCode is "doctor" or "psychologist" or "manager" ? "Contato confirmado. Aguarde a aprovação administrativa." : "Contato confirmado. Você já pode entrar."); });
     private async Task ResendContactAsync() => await RunAsync(async () => { var identifier = Channel == "email" ? Email : Phone; var result = await SendAsync<WebChallengeResult>("api/v1/auth/contact/resend", new { identifier, channel = Channel }); RequestId = result.RequestId; Code = string.Empty; ShowNotice(result.Message); });
     private async Task RequestLoginCodeAsync() => await RequestChallengeAsync("api/v1/auth/login/code/request", "code-complete");
     private async Task RequestRecoveryAsync() => await RequestChallengeAsync("api/v1/auth/password/recovery/request", "recovery-complete");
@@ -429,7 +432,7 @@
     private void ShowRegister() { UseClassicRegistration = false; SetMode("register"); }
     private void ShowClassicRegistration() { UseClassicRegistration = true; ClearNotice(); }
     private void ShowGoogleRegistration() { UseClassicRegistration = false; ClearNotice(); }
-    private void SelectRole(string roleCode) { RoleCode = roleCode; SetDefaultSpecialty(); ClearNotice(); }
+    private void SelectRole(string roleCode) { RoleCode = roleCode; ProfessionalTitle = roleCode == "psychologist" ? "Psic." : "Dr."; SetDefaultSpecialty(); ClearNotice(); }
     private void ShowCodeRequest() => SetMode("code-request");
     private void ShowRecoveryRequest() => SetMode("recovery-request");
     private void UpdateBirthDate(ChangeEventArgs args) => BirthDateText = args.Value?.ToString() ?? string.Empty;
@@ -457,12 +460,12 @@
     private static string FormatPostalCode(string digits) =>
         digits.Length <= 5 ? digits : $"{digits[..5]}-{digits[5..]}";
     private static bool IsPublicRegistrationRole(string? roleCode) =>
-        roleCode is "patient" or "doctor" or "manager";
+        roleCode is "patient" or "doctor" or "psychologist" or "manager";
     private void SetDefaultSpecialty()
     {
-        if (RoleCode != "doctor" || PrimarySpecialtyId != 0) return;
+        if (RoleCode is not ("doctor" or "psychologist") || PrimarySpecialtyId != 0) return;
         PrimarySpecialtyId = Options.Specialties
-            .FirstOrDefault(item => string.Equals(item.Name, "Oftalmologia", StringComparison.OrdinalIgnoreCase))?.Id ?? 0;
+            .FirstOrDefault(item => string.Equals(item.Name, RoleCode=="psychologist"?"Psicologia":"Oftalmologia", StringComparison.OrdinalIgnoreCase))?.Id ?? 0;
     }
     private sealed record MfaSetup(string SharedKey, string AuthenticatorUri);
     private sealed record MfaCompletion(IReadOnlyList<string> RecoveryCodes);

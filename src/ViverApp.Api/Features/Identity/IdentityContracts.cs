@@ -10,7 +10,7 @@ public sealed record RegisterRequest(
     [param: Required, StringLength(16)] string Phone,
     [param: Required, StringLength(128, MinimumLength = 12)] string Password,
     [param: Required, RegularExpression("^(email|sms)$")] string VerificationChannel,
-    [param: Required, RegularExpression("^(patient|doctor|manager)$")] string RoleCode,
+    [param: Required, RegularExpression("^(patient|doctor|psychologist|manager)$")] string RoleCode,
     [param: Required, RegularExpression("^[0-9]{11}$")] string TaxId,
     DateOnly BirthDate,
     bool TermsAccepted,
@@ -30,7 +30,7 @@ public sealed record RegistrationAddressRequest(
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record DoctorRegistrationRequest(
-    [param: Required, RegularExpression("^(Dr\\.|Dra\\.)$")] string ProfessionalTitle,
+    [param: Required, RegularExpression("^(Dr\\.|Dra\\.|Psic\\.|Psicóloga)$")] string ProfessionalTitle,
     [param: Required, RegularExpression("^[A-Z]{2}$")] string LicenseStateCode,
     [param: Required, StringLength(30, MinimumLength = 1)] string LicenseNumber,
     [param: Range(0, 80)] ushort YearsExperience,

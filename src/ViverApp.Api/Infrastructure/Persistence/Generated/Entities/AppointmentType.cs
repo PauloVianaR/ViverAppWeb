@@ -17,6 +17,8 @@ public partial class AppointmentType
 
     public decimal PriceAmount { get; set; }
 
+    public bool RequiresPayment { get; set; }
+
     public bool IsActive { get; set; }
 
     public ushort DisplayOrder { get; set; }
@@ -31,5 +33,5 @@ public partial class AppointmentType
 
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
 
-    public virtual ICollection<DoctorService> DoctorServices { get; set; } = new List<DoctorService>();
+    public virtual ICollection<ProfessionalService> ProfessionalServices { get; set; } = new List<ProfessionalService>();
 }

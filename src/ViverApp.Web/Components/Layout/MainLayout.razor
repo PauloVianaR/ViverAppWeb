@@ -27,7 +27,7 @@
         }
         @if (Account is not null && IsWorkspace)
         {
-            @if (Account.Role == "doctor")
+            @if (Account.Role is "doctor" or "psychologist")
             {
                 <details class="doctor-notification-center">
                     <summary class="topbar-action" aria-label="@NotificationLabel"><AppIcon Name="sparkles" /><span>Alertas</span>@if(UnreadCount>0){<strong class="notification-dot">@UnreadCount</strong>}</summary>
@@ -135,8 +135,8 @@
     private IJSObjectReference? notificationModule;
     private DotNetObjectReference<MainLayout>? selfReference;
     private WebCurrentAccount? Account;
-    private readonly List<DoctorNotification> Notifications = [];
-    private DoctorNotification? ArrivalToast;
+    private readonly List<ProfessionalNotification> Notifications = [];
+    private ProfessionalNotification? ArrivalToast;
     private bool NotificationConnected, PopupEnabled, SoundEnabled, SoundMuted, MarkReadOnOpen = true;
     private int SoundVolume = 60;
     private int UnreadCount => Notifications.Count(x => !x.IsRead);
@@ -175,7 +175,7 @@
             if (Account is null) { Navigation.NavigateTo("/acesso?estado=sessao-expirada", true); return; }
             if (!ShellNavigationCatalog.OwnsPath(Account.Role, path)) { Navigation.NavigateTo(Account.Destination, true); return; }
             Shell = ShellNavigationCatalog.ResolveRole(Account.Role);
-            if (Account.Role == "doctor" && !NotificationConnected) await ConnectNotificationsAsync();
+            if (Account.Role is "doctor" or "psychologist" && !NotificationConnected) await ConnectNotificationsAsync();
         }
         else Shell = ShellNavigationCatalog.Resolve("/");
         IdentityResolved = true;
@@ -185,33 +185,33 @@
     {
         notificationModule = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/doctor-notifications.js");
         selfReference = DotNetObjectReference.Create(this);
-        var data = await notificationModule.InvokeAsync<DoctorNotificationsData>("connect", Backend.BaseUrl.ToString(), selfReference);
+        var data = await notificationModule.InvokeAsync<ProfessionalNotificationsData>("connect", Backend.BaseUrl.ToString(), Account?.Role ?? "doctor", selfReference);
         Notifications.Clear(); Notifications.AddRange(data.Items); PopupEnabled = data.PopupEnabled; SoundEnabled = data.SoundEnabled; SoundVolume = data.SoundVolume; MarkReadOnOpen = data.MarkReadOnOpen; NotificationConnected = true;
     }
     [JSInvokable]
     public async Task ReceiveArrival(DoctorRealtimeNotification message)
     {
-        var item = new DoctorNotification(message.Id, message.AppointmentId, message.AppointmentNumber, message.QueueNumber, message.StartsAtUtc, message.IsRead, message.CreatedAtUtc, message.RowVersion);
+        var item = new ProfessionalNotification(message.Id, message.AppointmentId, message.AppointmentNumber, message.QueueNumber, message.StartsAtUtc, message.IsRead, message.CreatedAtUtc, message.RowVersion);
         if (Notifications.All(x => x.Id != item.Id)) Notifications.Insert(0, item);
         PopupEnabled = message.PopupEnabled; SoundEnabled = message.SoundEnabled; SoundVolume = message.SoundVolume;
         if (PopupEnabled) ArrivalToast = item;
         if (SoundEnabled && !SoundMuted && notificationModule is not null) await notificationModule.InvokeAsync<bool>("play", SoundVolume);
         await InvokeAsync(StateHasChanged);
     }
-    private async Task OpenNotificationAsync(DoctorNotification item)
+    private async Task OpenNotificationAsync(ProfessionalNotification item)
     {
         if (MarkReadOnOpen && !item.IsRead) await ReadNotificationAsync(item);
-        Navigation.NavigateTo($"/medico/atendimentos/{item.AppointmentId}");
+        Navigation.NavigateTo($"/{(Account?.Role=="psychologist"?"psicologo":"medico")}/atendimentos/{item.AppointmentId}");
     }
-    private async Task ReadNotificationAsync(DoctorNotification item)
+    private async Task ReadNotificationAsync(ProfessionalNotification item)
     {
         if (item.IsRead || module is null) return;
-        await module.InvokeAsync<object?>("send", Backend.BaseUrl.ToString(), $"api/v1/doctor/notifications/{item.Id}/read", new { rowVersion = item.RowVersion });
+        await module.InvokeAsync<object?>("send", Backend.BaseUrl.ToString(), $"api/v1/{(Account?.Role=="psychologist"?"psychologist":"doctor")}/notifications/{item.Id}/read", new { rowVersion = item.RowVersion });
         var index = Notifications.FindIndex(x => x.Id == item.Id);
         if (index >= 0) Notifications[index] = item with { IsRead = true, RowVersion = item.RowVersion + 1 };
     }
-    private Task OpenRealtimeAsync(DoctorNotification item) { ArrivalToast=null; return OpenNotificationAsync(item); }
-    private async Task ReadAllAsync(){if(module is null)return;await module.InvokeAsync<object?>("send",Backend.BaseUrl.ToString(),"api/v1/doctor/notifications/read-all",new{});for(var i=0;i<Notifications.Count;i++)Notifications[i]=Notifications[i] with{IsRead=true};}
+    private Task OpenRealtimeAsync(ProfessionalNotification item) { ArrivalToast=null; return OpenNotificationAsync(item); }
+    private async Task ReadAllAsync(){if(module is null)return;await module.InvokeAsync<object?>("send",Backend.BaseUrl.ToString(),$"api/v1/{(Account?.Role=="psychologist"?"psychologist":"doctor")}/notifications/read-all",new{});for(var i=0;i<Notifications.Count;i++)Notifications[i]=Notifications[i] with{IsRead=true};}
     private async Task LogoutAsync()
     {
         if (module is null) return;

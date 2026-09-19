@@ -3,11 +3,11 @@ using System.Collections.Generic;
 
 namespace ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 
-public partial class DoctorWeeklyHour
+public partial class ProfessionalWeeklyHour
 {
     public ulong Id { get; set; }
 
-    public ulong DoctorAccountId { get; set; }
+    public ulong ProfessionalAccountId { get; set; }
 
     public byte DayOfWeek { get; set; }
 
@@ -29,5 +29,5 @@ public partial class DoctorWeeklyHour
 
     public ulong RowVersion { get; set; }
 
-    public virtual DoctorProfile DoctorAccount { get; set; } = null!;
+    public virtual ProfessionalProfile ProfessionalAccount { get; set; } = null!;
 }

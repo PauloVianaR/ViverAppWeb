@@ -68,10 +68,11 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         }
         patient = await Account("patient", "owner"); other = await Account("patient", "other"); doctor = await Account("doctor", "doctor");
         var now = DateTime.UtcNow;
-        db.DoctorProfiles.Add(new()
+        db.ProfessionalProfiles.Add(new()
         {
             AccountId = doctor,
             LicenseStateCode = "SP",
+            LicenseTypeCode = "CRM",
             LicenseNumber = marker[..12],
             DefaultAppointmentDurationMinutes = 30,
             CreatedAtUtc = now,
@@ -85,6 +86,7 @@ public sealed class PatientExperienceTests : IAsyncLifetime
             ModalityCode = "both",
             DurationMinutes = 30,
             PriceAmount = 123.45m,
+            RequiresPayment = true,
             IsActive = true,
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
@@ -95,7 +97,7 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         {
             AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
             PatientAccountId = patient,
-            DoctorAccountId = doctor,
+            ProfessionalAccountId = doctor,
             AppointmentTypeId = type,
             CreatedByAccountId = patient,
             StatusCode = "pending",
@@ -103,6 +105,7 @@ public sealed class PatientExperienceTests : IAsyncLifetime
             StartsAtUtc = now.AddDays(7),
             EndsAtUtc = now.AddDays(7).AddMinutes(30),
             PriceAmount = 123.45m,
+            RequiresPayment = true,
             CurrencyCode = "BRL",
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
@@ -128,7 +131,7 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         await db.Payments.Where(x => x.AppointmentId == appointment).ExecuteDeleteAsync();
         await db.AppointmentStatusHistories.Where(x => x.AppointmentId == appointment).ExecuteDeleteAsync();
         await db.Appointments.Where(x => x.Id == appointment).ExecuteDeleteAsync();
-        await db.DoctorProfiles.Where(x => x.AccountId == doctor).ExecuteDeleteAsync();
+        await db.ProfessionalProfiles.Where(x => x.AccountId == doctor).ExecuteDeleteAsync();
         await db.AppointmentTypes.Where(x => x.Id == type).ExecuteDeleteAsync();
         await db.OutboxMessages.Where(x => x.Recipient.Contains(marker)).ExecuteDeleteAsync();
         await db.Accounts.Where(x => ids.Contains(x.Id)).ExecuteDeleteAsync();
@@ -339,7 +342,7 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         db.PrivateDocuments.Add(document);
         var now = DateTime.UtcNow;
         db.AppointmentDocuments.Add(new() { AppointmentId = appointment, UploadedByAccountId = doctor, CategoryCode = "attachment", ObjectKey = document.Id.ToString("D"), OriginalFileName = document.OriginalFileName, ContentType = document.ContentType, SizeBytes = document.SizeBytes, Sha256 = document.Sha256, StatusCode = "available", CreatedAtUtc = now, AvailableAtUtc = now });
-        var report = new MedicalReport { AppointmentId = appointment, AuthorDoctorAccountId = doctor, StatusCode = "draft", ClinicalSummary = "Conteúdo inteiramente sintético para teste.", CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 };
+        var report = new MedicalReport { AppointmentId = appointment, AuthorProfessionalAccountId = doctor, StatusCode = "draft", ClinicalSummary = "Conteúdo inteiramente sintético para teste.", CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 };
         db.MedicalReports.Add(report); await db.SaveChangesAsync();
         await Assert.ThrowsAsync<PatientExperienceException>(() => store.DownloadAsync(patient, document.Id, default));
         report.StatusCode = "published"; report.PublishedAtUtc = now; await db.SaveChangesAsync();
@@ -374,7 +377,7 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         await Assert.ThrowsAsync<HubException>(() => access.RequireAsync(principal, appointment, default));
         await db.Appointments.Where(x => x.Id == appointment).ExecuteUpdateAsync(s => s.SetProperty(x => x.ModalityCode, "online").SetProperty(x => x.StatusCode, "confirmed").SetProperty(x => x.StartsAtUtc, now).SetProperty(x => x.EndsAtUtc, now.AddMinutes(30)));
         await Assert.ThrowsAsync<HubException>(() => access.RequireAsync(principal, appointment, default));
-        var paidPayment = new Payment { AppointmentId = appointment, ProviderReferenceAppointmentId = appointment, ProviderCode = "pagbank", StatusCode = "paid", Amount = 123.45m, CurrencyCode = "BRL", CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 };
+        var paidPayment = new Payment { AppointmentId = appointment, AppointmentRequiresPayment = true, ProviderReferenceAppointmentId = appointment, ProviderCode = "pagbank", StatusCode = "paid", Amount = 123.45m, CurrencyCode = "BRL", CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 };
         db.Payments.Add(paidPayment); await db.SaveChangesAsync();
         await db.Appointments.Where(x => x.Id == appointment).ExecuteUpdateAsync(update => update.SetProperty(x => x.CurrentPaymentId, paidPayment.Id));
         Assert.Equal(appointment, (await access.RequireAsync(principal, appointment, default)).Id);

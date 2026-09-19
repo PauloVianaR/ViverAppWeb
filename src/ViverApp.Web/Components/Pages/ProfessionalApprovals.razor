@@ -6,7 +6,7 @@
 <PageTitle>Aprovações | ViverApp</PageTitle>
 
 <header class="workspace-heading">
-    <div><p class="eyebrow">Administração segura</p><h1 class="page-title">Aprovações profissionais</h1><p class="page-description">Confira os dados antes de liberar Médicos e Gestores. Toda decisão fica auditada e exige sessão administrativa com MFA.</p></div>
+    <div><p class="eyebrow">Administração segura</p><h1 class="page-title">Aprovações profissionais</h1><p class="page-description">Confira os dados antes de liberar Médicos, Psicólogos e Gestores. Toda decisão fica auditada e exige sessão administrativa com MFA.</p></div>
     <span class="badge badge--danger">MFA obrigatório</span>
 </header>
 
@@ -16,7 +16,7 @@
 }
 
 <section class="approval-toolbar surface" aria-label="Filtros">
-    <div class="field"><label for="approval-role">Papel</label><select id="approval-role" @bind="RoleFilter"><option value="">Todos</option><option value="doctor">Médicos</option><option value="manager">Gestores</option></select></div>
+    <div class="field"><label for="approval-role">Papel</label><select id="approval-role" @bind="RoleFilter"><option value="">Todos</option><option value="doctor">Médicos</option><option value="psychologist">Psicólogos</option><option value="manager">Gestores</option></select></div>
     <button class="button button--secondary" type="button" @onclick="LoadAsync" disabled="@IsBusy">Atualizar</button>
 </section>
 
@@ -26,7 +26,7 @@
 }
 else if (Items.Count == 0)
 {
-    <InterfaceState Title="Nenhuma aprovação pendente" Description="Novos cadastros de Médico e Gestor aparecerão aqui depois da confirmação de contato." Icon="check" Tone="success" />
+    <InterfaceState Title="Nenhuma aprovação pendente" Description="Novos cadastros profissionais aparecerão aqui depois da confirmação de contato." Icon="check" Tone="success" />
 }
 else
 {
@@ -39,9 +39,9 @@ else
                     <div><dt>Contato</dt><dd>@(item.Email ?? item.PhoneE164 ?? "Não informado")</dd></div>
                     <div><dt>CPF</dt><dd>@MaskTaxId(item.TaxId)</dd></div>
                     <div><dt>Nascimento</dt><dd>@(item.BirthDate?.ToString("dd/MM/yyyy") ?? "Não informado")</dd></div>
-                    @if (item.RoleCode == "doctor")
+                    @if (item.RoleCode is "doctor" or "psychologist")
                     {
-                        <div><dt>CRM</dt><dd>@item.ProfessionalTitle @item.LicenseStateCode @item.LicenseNumber</dd></div>
+                        <div><dt>@(item.RoleCode=="psychologist"?"CRP":"CRM")</dt><dd>@item.ProfessionalTitle @item.LicenseStateCode @item.LicenseNumber</dd></div>
                         <div><dt>Especialidade</dt><dd>@(item.Specialties.FirstOrDefault(option => option.Id == item.PrimarySpecialtyId)?.Name ?? "Não informada")</dd></div>
                         <div><dt>Experiência</dt><dd>@item.YearsExperience ano(s)</dd></div>
                     }
@@ -100,7 +100,7 @@ else
     }
     private void ShowError(string message) { Notice = UiErrorNotifier.Normalize(message); NoticeIsError = true; Errors.Show(Notice); }
     private void ClearNotice() { Notice = null; NoticeIsError = false; }
-    private static string RoleLabel(string role) => role == "doctor" ? "Médico" : "Gestor";
+    private static string RoleLabel(string role) => role switch { "doctor"=>"Médico", "psychologist"=>"Psicólogo", _=>"Gestor" };
     private static string MaskTaxId(string? value) => value?.Length == 11 ? $"***.{value[3..6]}.{value[6..9]}-**" : "Não informado";
     public async ValueTask DisposeAsync() { if (module is not null) try { await module.DisposeAsync(); } catch (JSDisconnectedException) { } }
 }

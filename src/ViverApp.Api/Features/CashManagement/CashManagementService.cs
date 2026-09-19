@@ -337,7 +337,7 @@ public sealed class CashManagementService(
                 EndsAtUtc = appointment.EndsAtUtc,
                 OccurredAtUtc = now
             });
-            await database.DoctorNotifications
+            await database.ProfessionalNotifications
                 .Where(item => item.AppointmentId == appointment.Id && item.ReadAtUtc == null)
                 .ExecuteUpdateAsync(update => update
                     .SetProperty(item => item.ReadAtUtc, now)

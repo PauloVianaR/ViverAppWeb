@@ -1,0 +1,19 @@
+@page "/paciente/historico"
+@page "/medico/historico"
+@page "/psicologo/historico"
+@page "/gestao/historico"
+@page "/administracao/consultas"
+@page "/administracao/consultas/historico"
+@inject NavigationManager Navigation
+
+@code {
+    protected override void OnInitialized()
+    {
+        var path=Navigation.ToBaseRelativePath(Navigation.Uri);
+        var destination=path.StartsWith("paciente",StringComparison.OrdinalIgnoreCase)?"/paciente/atendimentos":
+            path.StartsWith("medico",StringComparison.OrdinalIgnoreCase)?"/medico/atendimentos":
+            path.StartsWith("psicologo",StringComparison.OrdinalIgnoreCase)?"/psicologo/atendimentos":
+            path.StartsWith("gestao",StringComparison.OrdinalIgnoreCase)?"/gestao/atendimentos":"/administracao/atendimentos";
+        Navigation.NavigateTo(destination,true);
+    }
+}

@@ -3,9 +3,9 @@ using System.Collections.Generic;
 
 namespace ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 
-public partial class DoctorPreference
+public partial class ProfessionalPreference
 {
-    public ulong DoctorAccountId { get; set; }
+    public ulong ProfessionalAccountId { get; set; }
 
     public bool EmailEnabled { get; set; }
 
@@ -21,5 +21,5 @@ public partial class DoctorPreference
 
     public ulong RowVersion { get; set; }
 
-    public virtual DoctorProfile DoctorAccount { get; set; } = null!;
+    public virtual ProfessionalProfile ProfessionalAccount { get; set; } = null!;
 }

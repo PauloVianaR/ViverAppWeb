@@ -24,10 +24,10 @@ public sealed record WebMedicalRecordContent(string? ChiefComplaint, string? Pre
         null, null, null, null, null, null, null, null, null, null);
 }
 public sealed record WebMedicalRecordDraft(ulong Id, ulong AppointmentId, ulong AppointmentNumber, DateTime AppointmentAtUtc,
-    ulong AuthorDoctorAccountId, string AuthorDoctorName, WebMedicalRecordContent Content, DateTime UpdatedAtUtc,
+    ulong AuthorProfessionalAccountId, string AuthorDoctorName, WebMedicalRecordContent Content, DateTime UpdatedAtUtc,
     DateTime ExpiresAtUtc, ulong RowVersion);
 public sealed record WebMedicalRecordVersion(ulong Id, ulong EntryId, ulong AppointmentId, ulong AppointmentNumber,
-    uint VersionNumber, ulong? SupersedesVersionId, string? CorrectionReason, ulong AuthorDoctorAccountId,
+    uint VersionNumber, ulong? SupersedesVersionId, string? CorrectionReason, ulong AuthorProfessionalAccountId,
     string AuthorDoctorName, string LicenseLabel, WebMedicalRecordContent Content, DateTime FinalizedAtUtc, bool IsCurrent);
 public sealed record WebMedicalRecordEntry(ulong Id, ulong AppointmentId, ulong AppointmentNumber, DateTime AppointmentAtUtc,
     ulong CurrentVersionId, uint CurrentVersionNumber, string AuthorRoleCode, string DoctorName, string LicenseLabel, DateTime FinalizedAtUtc,

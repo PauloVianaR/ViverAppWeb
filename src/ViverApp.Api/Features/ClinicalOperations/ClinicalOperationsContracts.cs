@@ -30,7 +30,7 @@ public sealed record ClinicalAppointmentResponse(
     string PatientName,
     string? PatientEmail,
     string? PatientPhone,
-    ulong DoctorAccountId,
+    ulong ProfessionalAccountId,
     string DoctorName,
     string AppointmentTypeName,
     string StatusCode,

@@ -238,7 +238,7 @@ public sealed class IdentitySecurityTests
     public void RoleSet_IsExactAndSingleRoleStoreDoesNotRemoveRole()
     {
         Assert.Equal(
-            ["administrator", "doctor", "manager", "patient"],
+            ["administrator", "doctor", "manager", "patient", "psychologist"],
             ViverAppRoles.All.Order(StringComparer.Ordinal).ToArray());
     }
 

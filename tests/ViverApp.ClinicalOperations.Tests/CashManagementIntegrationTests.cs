@@ -52,11 +52,12 @@ public sealed class CashManagementIntegrationTests
         var patient = Account($"patient-{Guid.NewGuid():N}@phase17.example.test", ViverAppRoles.Patient, "Paciente Caixa");
         database.Accounts.AddRange(manager, administrator, doctor, patient);
         await database.SaveChangesAsync();
-        database.DoctorProfiles.Add(new DoctorProfile
+        database.ProfessionalProfiles.Add(new ProfessionalProfile
         {
             AccountId = doctor.Id,
             ProfessionalTitle = "Dra.",
             LicenseStateCode = "MG",
+            LicenseTypeCode = "CRM",
             LicenseNumber = "170017",
             DefaultAppointmentDurationMinutes = 30,
             CreatedAtUtc = now,
@@ -70,6 +71,7 @@ public sealed class CashManagementIntegrationTests
             ModalityCode = "in_person",
             DurationMinutes = 30,
             PriceAmount = 180m,
+            RequiresPayment = true,
             IsActive = true,
             DisplayOrder = 999,
             CreatedAtUtc = now,
@@ -82,7 +84,7 @@ public sealed class CashManagementIntegrationTests
         {
             AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
             PatientAccountId = patient.Id,
-            DoctorAccountId = doctor.Id,
+            ProfessionalAccountId = doctor.Id,
             AppointmentTypeId = appointmentType.Id,
             CreatedByAccountId = manager.Id,
             StatusCode = "confirmed",
@@ -91,6 +93,7 @@ public sealed class CashManagementIntegrationTests
             EndsAtUtc = now.AddDays(1).AddMinutes(30),
             PriceAmount = 180m,
             BasePriceAmount = 180m,
+            RequiresPayment = true,
             CurrencyCode = "BRL",
             PaymentLocationCode = "clinic",
             CreatedAtUtc = now,
@@ -102,6 +105,7 @@ public sealed class CashManagementIntegrationTests
         var original = new Payment
         {
             AppointmentId = appointment.Id,
+            AppointmentRequiresPayment = true,
             ProviderReferenceAppointmentId = appointment.Id,
             ProviderCode = "internal",
             StatusCode = "paid",
