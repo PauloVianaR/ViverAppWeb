@@ -12,6 +12,6 @@ public static class ClinicPublicIdentity
     public const string PublicEmail = "contato@viveralmenara.com";
     public const string PrivacyEmail = "privacidade@viveralmenara.com";
     public const string SecurityEmail = "seguranca@viveralmenara.com";
-    public const string InternalTechnicalReview = "Equipe de desenvolvimento do ViverApp, com revisão técnica conduzida pelo Codex/OpenAI";
+    public const string InternalTechnicalReview = "equipe técnica e jurídica da plataforma";
     public const string TechnicalReviewDate = "21/09/2026";
 }

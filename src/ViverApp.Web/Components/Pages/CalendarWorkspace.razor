@@ -55,7 +55,36 @@ else
 {
     var days=VisibleDays();
     <section class="calendar-timeline calendar-timeline--@View" aria-label="Agenda por @View">
-        @foreach(var day in days){var placed=PlaceEvents(day);<article class="surface calendar-day-column"><header><button @onclick="()=>OpenDay(day)"><strong>@day.ToString("ddd",CultureInfo.GetCultureInfo("pt-BR"))</strong><span>@day.ToString("dd/MM")</span></button></header><div class="calendar-day-events"><div class="calendar-slot-area" style="height:@TimelineHeight.ToString(CultureInfo.InvariantCulture)px">@for(var hour=TimelineStartHour;hour<=TimelineEndHour;hour++){<span class="calendar-hour-marker" style="top:@((hour-TimelineStartHour)*108)px"><span>@hour.ToString("00"):00</span></span>}@foreach(var entry in placed){var item=entry.Item;<a class="calendar-event appointment-card--@PatientLabels.StatusCss(item.StatusCode)" style="@EventStyle(entry)" href="@Details(item.Id)" title="@($"#{item.AppointmentNumber} {item.PatientName} · {Local(item.StartsAtUtc):HH:mm}–{Local(item.EndsAtUtc):HH:mm} · {Status(item.StatusCode)}")"><time>@Local(item.StartsAtUtc).ToString("HH:mm")–@Local(item.EndsAtUtc).ToString("HH:mm")</time><strong>#@item.AppointmentNumber @item.PatientName</strong><span>@item.AppointmentTypeName · @Status(item.StatusCode)</span>@if(CanChooseProfessional){<small>@item.ProfessionalName</small>}</a>}</div>@if(placed.Count==0){<p class="muted calendar-empty">Sem atendimentos</p>}</div></article>}
+        @foreach(var day in days)
+        {
+            var items=ItemsFor(day)
+                .OrderBy(item=>Local(item.StartsAtUtc))
+                .ThenBy(item=>item.AppointmentNumber)
+                .ToArray();
+            <article class="surface calendar-day-column">
+                <header><button @onclick="()=>OpenDay(day)"><strong>@day.ToString("ddd",CultureInfo.GetCultureInfo("pt-BR"))</strong><span>@day.ToString("dd/MM")</span></button></header>
+                <div class="calendar-day-events">
+                    @if(items.Length==0)
+                    {
+                        <p class="muted calendar-empty">Sem atendimentos</p>
+                    }
+                    else
+                    {
+                        <div class="calendar-slot-area">
+                            @foreach(var item in items)
+                            {
+                                <a class="calendar-event appointment-card--@PatientLabels.StatusCss(item.StatusCode)" href="@Details(item.Id)" title="@($"#{item.AppointmentNumber} {item.PatientName} · {Local(item.StartsAtUtc):HH:mm}–{Local(item.EndsAtUtc):HH:mm} · {Status(item.StatusCode)}")">
+                                    <time>@Local(item.StartsAtUtc).ToString("HH:mm")–@Local(item.EndsAtUtc).ToString("HH:mm")</time>
+                                    <strong>#@item.AppointmentNumber @item.PatientName</strong>
+                                    <span>@item.AppointmentTypeName · @Status(item.StatusCode)</span>
+                                    @if(CanChooseProfessional){<small>@item.ProfessionalName</small>}
+                                </a>
+                            }
+                        </div>
+                    }
+                </div>
+            </article>
+        }
     </section>
 }
 
@@ -75,20 +104,6 @@ else
     private string PeriodLabel=>View switch{"day"=>Anchor.ToString("dd 'de' MMMM 'de' yyyy",CultureInfo.GetCultureInfo("pt-BR")),"week"=>$"{Data?.RangeStart:dd/MM}–{Data?.RangeEnd:dd/MM/yyyy}","month"=>Anchor.ToString("MMMM 'de' yyyy",CultureInfo.GetCultureInfo("pt-BR")),_=>Anchor.Year.ToString(CultureInfo.InvariantCulture)};
     private IEnumerable<DateOnly> VisibleDays(){var start=Data?.RangeStart??Anchor;var end=Data?.RangeEnd??Anchor;for(var day=start;day<=end;day=day.AddDays(1))yield return day;}
     private IEnumerable<WebCalendarItem> ItemsFor(DateOnly day){var start=day.ToDateTime(TimeOnly.MinValue);var end=start.AddDays(1);return Data?.Items.Where(item=>Local(item.StartsAtUtc)<end&&Local(item.EndsAtUtc)>start)??[];}
-    private int TimelineStartHour=>Math.Min(7,Data?.Items.Count>0?Data.Items.Min(item=>Local(item.StartsAtUtc).Hour):7);
-    private int TimelineEndHour=>Math.Max(20,Data?.Items.Count>0?Data.Items.Max(item=>Math.Min(24,Math.Max(Local(item.StartsAtUtc).Hour+2,Local(item.EndsAtUtc).Hour+1))):20);
-    private int TimelineHeight=>(TimelineEndHour-TimelineStartHour)*108;
-    private sealed record PlacedEvent(WebCalendarItem Item,double StartMinute,double DurationMinute,int Lane,int Columns);
-    private IReadOnlyList<PlacedEvent> PlaceEvents(DateOnly day)
-    {
-        var dayStart=day.ToDateTime(TimeOnly.MinValue);var dayEnd=dayStart.AddDays(1);
-        var intervals=ItemsFor(day).Select(item=>new{Item=item,Start=Math.Max(0,(Local(item.StartsAtUtc)-dayStart).TotalMinutes),End=Math.Min(1440,(Local(item.EndsAtUtc)-dayStart).TotalMinutes)})
-            .Where(item=>item.End>item.Start).OrderBy(item=>item.Start).ThenBy(item=>item.Item.AppointmentNumber).ToArray();
-        var active=new List<(double End,int Lane)>();var placed=new List<PlacedEvent>();var maxColumns=1;
-        foreach(var interval in intervals){active.RemoveAll(item=>item.End<=interval.Start);var lane=0;while(active.Any(item=>item.Lane==lane))lane++;active.Add((interval.End,lane));maxColumns=Math.Max(maxColumns,active.Count);placed.Add(new(interval.Item,interval.Start,interval.End-interval.Start,lane,0));}
-        return placed.Select(item=>item with{Columns=maxColumns}).ToArray();
-    }
-    private string EventStyle(PlacedEvent entry){var top=(entry.StartMinute-TimelineStartHour*60)*1.8;var height=Math.Max(27,entry.DurationMinute*1.8-3);var left=entry.Lane*100d/entry.Columns;var width=100d/entry.Columns;return FormattableString.Invariant($"top:{top:0.##}px;height:{height:0.##}px;left:calc({left:0.##}% + 2px);width:calc({width:0.##}% - 4px)");}
     private WebCalendarDay? Day(DateOnly day)=>Data?.Days.FirstOrDefault(item=>item.Date==day);
     private static IEnumerable<DateOnly?> MonthCells(int year,int month){var first=new DateOnly(year,month,1);var offset=((int)first.DayOfWeek+6)%7;for(var i=0;i<offset;i++)yield return null;for(var day=1;day<=DateTime.DaysInMonth(year,month);day++)yield return new DateOnly(year,month,day);}
     private string Details(ulong id)=>Role switch{"patient"=>$"/paciente/atendimentos/{id}","doctor"=>$"/medico/atendimentos/{id}","psychologist"=>$"/psicologo/atendimentos/{id}","manager"=>$"/gestao/atendimentos/{id}",_=>$"/administracao/atendimentos/{id}"};

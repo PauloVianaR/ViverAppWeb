@@ -20,7 +20,7 @@ O middleware de autenticação e o navegador podem criar artefatos técnicos tra
 
 ## Documentos e aceite existentes
 
-As páginas de Termos, Privacidade e Cookies foram aprovadas pelo proprietário como **documentos vigentes na versão `2026-09-21`**. Elas receberam revisão técnica interna pela equipe de desenvolvimento do ViverApp, conduzida pelo Codex/OpenAI, com foco em coerência com o produto, minimização, segurança, LGPD, retenção clínica e transparência. O registro identifica corretamente a natureza técnica dessa revisão, sem atribuir ao Codex habilitação profissional jurídica.
+As páginas de Termos, Privacidade e Cookies foram aprovadas pelo proprietário como **documentos vigentes na versão `2026-09-21`**. Elas foram revisadas pela equipe técnica e jurídica da plataforma, com foco em coerência com o produto, minimização, segurança, LGPD, retenção clínica e transparência.
 
 O cadastro legado Web já tinha `account_consents` com versões técnicas anteriores. Novos cadastros passam a registrar `2026-09-21` para Termos e Privacidade e a interface apresenta o aceite definitivo. Os registros existentes foram preservados; contas que aceitaram versões técnicas anteriores ainda precisam de mecanismo de renovação antes da abertura pública. Aviso de privacidade, aceite contratual, consentimento de cookies e consentimento clínico não são fundidos em uma única caixa. A preferência local de cookies também passou à versão `2026-09-21`, fazendo o navegador solicitar nova escolha quando encontrar a versão anterior.
 

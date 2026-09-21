@@ -72,7 +72,8 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Contains("Documento vigente", html, StringComparison.Ordinal);
             Assert.Contains("Versão 2026-09-21", html, StringComparison.Ordinal);
-            Assert.Contains("Codex/OpenAI", html, StringComparison.Ordinal);
+            Assert.Contains("equipe técnica e jurídica da plataforma", html, StringComparison.Ordinal);
+            Assert.DoesNotContain("Codex/OpenAI", html, StringComparison.Ordinal);
             Assert.DoesNotContain("Documento em elaboração", html, StringComparison.Ordinal);
             Assert.Equal("noindex, nofollow, noarchive", response.Headers.GetValues("X-Robots-Tag").Single());
         }
