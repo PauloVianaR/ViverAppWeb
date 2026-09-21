@@ -2,7 +2,7 @@
 
 ## Estado e objetivo
 
-**Estado:** antecipada por decisão do proprietário; controles técnicos implementados na branch `codex/fase-20-seo-privacidade-cookies`. A identidade institucional foi confirmada pelo comprovante oficial fornecido, os textos receberam revisão técnica interna e os canais `contato@`, `privacidade@` e `seguranca@viveralmenara.com` foram ativados no Cloudflare Email Routing. A fase ainda não atende aos critérios jurídicos e de publicação: faltam aprovação institucional, revisão jurídica independente, teste de entrega dos canais e validação visual no monitor 3. O portão de indexação permanece fechado.
+**Estado:** antecipada por decisão do proprietário; controles técnicos implementados na branch `codex/fase-20-seo-privacidade-cookies`. A identidade institucional foi confirmada pelo comprovante oficial fornecido, os textos receberam revisão técnica interna e foram aprovados para publicação pelo proprietário em 21/09/2026, e os canais `contato@`, `privacidade@` e `seguranca@viveralmenara.com` foram ativados no Cloudflare Email Routing. A versão jurídica vigente é `2026-09-21`. Em ambientes não produtivos a indexação continua bloqueada; em produção ainda depende da configuração explícita, teste de entrega dos canais e validações de publicação.
 
 **Branch:** `codex/fase-20-seo-privacidade-cookies`.
 
@@ -17,7 +17,7 @@ Esta fase não transforma `robots.txt` em controle de segurança, não indexa á
 - executar agora, após a Fase 19, antecipando o fundamento público, de privacidade e cookies; o hardening da nova Fase 25 continua obrigatório antes de produção;
 - concluir os controles técnicos antes da Fase 26 de infraestrutura e da Fase 27 de pentest;
 - mudanças externas em DNS, Search Console, serviços analíticos ou fornecedores continuam dependentes de autorização;
-- os conteúdos finais de Termos, Privacidade, Cookies e atendimento a titulares já usam os dados reais fornecidos, mas ainda exigem aprovação institucional e revisão jurídica independente; a condição de minuta bloqueia produção;
+- os conteúdos de Termos, Privacidade e Cookies usam os dados reais fornecidos e foram aprovados institucionalmente na versão `2026-09-21`; qualquer mudança material exige nova versão e renovação do aceite quando aplicável;
 - nenhum tracker de marketing é requisito desta fase; a escolha padrão será não instalar rastreamento desnecessário;
 - dados de saúde nunca serão enviados a analytics, pixels, mapas de calor, gravação de sessão ou ferramentas publicitárias.
 

@@ -42,7 +42,7 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task UnapprovedPublicSite_RejectsIndexingAndDoesNotExposeSitemap()
+    public async Task NonProductionPublicSite_RejectsIndexingAndDoesNotExposeSitemap()
     {
         using var client = CreateClient();
         using var home = await client.GetAsync("/");
@@ -62,7 +62,7 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task LegalDraftsRemainClearlyUnapprovedAndPrivateAreasAreNotCached()
+    public async Task PublishedLegalDocumentsExposeTheirVersionAndPrivateAreasAreNotCached()
     {
         using var client = CreateClient();
         foreach (var path in new[] { "/termos", "/privacidade", "/cookies" })
@@ -70,9 +70,10 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
             using var response = await client.GetAsync(path);
             var html = await ReadUtf8Async(response.Content);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            Assert.Contains("Documento em elaboração", html, StringComparison.Ordinal);
-            Assert.Contains("vigência não iniciada", html, StringComparison.Ordinal);
+            Assert.Contains("Documento vigente", html, StringComparison.Ordinal);
+            Assert.Contains("Versão 2026-09-21", html, StringComparison.Ordinal);
             Assert.Contains("Codex/OpenAI", html, StringComparison.Ordinal);
+            Assert.DoesNotContain("Documento em elaboração", html, StringComparison.Ordinal);
             Assert.Equal("noindex, nofollow, noarchive", response.Headers.GetValues("X-Robots-Tag").Single());
         }
 

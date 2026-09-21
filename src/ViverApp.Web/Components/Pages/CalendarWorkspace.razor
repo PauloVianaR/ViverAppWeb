@@ -23,7 +23,28 @@ else if(Data is null){<InterfaceState Title="Agenda indisponível" Description="
 else if(View=="year")
 {
     <section class="calendar-year" aria-label="Agenda anual">
-        @for(var month=1;month<=12;month++){var current=month;<article class="surface calendar-mini-month"><h2>@CultureInfo.GetCultureInfo("pt-BR").DateTimeFormat.GetMonthName(current)</h2><div class="calendar-mini-grid">@foreach(var label in WeekLabels){<span class="calendar-week-label">@label[..1]</span>}@foreach(var day in MonthCells(Anchor.Year,current)){if(day is null){<span></span>}else{var aggregate=Day(day.Value);<button type="button" class="calendar-mini-day @(aggregate is null?null:"calendar-mini-day--busy")" title="@(aggregate is null?$"{day:dd/MM}: sem atendimentos":$"{day:dd/MM}: {aggregate.Count} atendimento(s)")" @onclick="()=>OpenDay(day.Value)"><span>@day.Value.Day</span>@if(aggregate is not null){<i aria-hidden="true"></i><span class="sr-only">@aggregate.Count atendimento(s)</span>}</button>}}</div></article>}
+        @for(var month=1;month<=12;month++)
+        {
+            var current=month;
+            <article class="surface calendar-mini-month">
+                <h2>@CultureInfo.GetCultureInfo("pt-BR").DateTimeFormat.GetMonthName(current)</h2>
+                <div class="calendar-mini-grid">
+                    @foreach(var label in WeekLabels){<span class="calendar-week-label">@label[..1]</span>}
+                    @foreach(var day in MonthCells(Anchor.Year,current))
+                    {
+                        if(day is null){<span></span>}
+                        else
+                        {
+                            var aggregate=Day(day.Value);
+                            <button type="button"
+                                    class="calendar-mini-day @(aggregate is null?null:"calendar-mini-day--busy")"
+                                    aria-label="@(aggregate is null?$"{day:dd/MM}, sem atendimentos":$"{day:dd/MM}, possui atendimentos; abrir dia")"
+                                    @onclick="()=>OpenDay(day.Value)"><span>@day.Value.Day</span></button>
+                        }
+                    }
+                </div>
+            </article>
+        }
     </section>
 }
 else if(View=="month")

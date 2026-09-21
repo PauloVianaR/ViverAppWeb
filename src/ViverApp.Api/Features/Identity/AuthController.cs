@@ -160,7 +160,7 @@ public sealed class AuthController(
             .OrderBy(item => item.Name)
             .Select(item => new RegistrationOption(item.Id, item.Name))
             .ToListAsync(cancellationToken);
-        return Ok(new RegistrationOptionsResponse(LegalDocumentVersions.Draft, LegalDocumentVersions.Draft, specialties));
+        return Ok(new RegistrationOptionsResponse(LegalDocumentVersions.Current, LegalDocumentVersions.Current, specialties));
     }
 
     [AllowAnonymous]
@@ -1120,7 +1120,7 @@ public sealed class AuthController(
 
         if (!termsAccepted)
         {
-            ModelState.AddModelError(nameof(termsAccepted), "Confirme a leitura das minutas de Termos e Privacidade da homologação.");
+            ModelState.AddModelError(nameof(termsAccepted), "Confirme o aceite dos Termos de uso e a leitura da Política de Privacidade.");
         }
 
         if (roleCode == ViverAppRoles.Patient)
@@ -1180,8 +1180,8 @@ public sealed class AuthController(
         database.AccountConsents.Add(new AccountConsent
         {
             AccountId = accountId,
-            TermsVersion = LegalDocumentVersions.Draft,
-            PrivacyVersion = LegalDocumentVersions.Draft,
+            TermsVersion = LegalDocumentVersions.Current,
+            PrivacyVersion = LegalDocumentVersions.Current,
             AcceptedAtUtc = now,
             SourceCode = sourceCode,
         });

@@ -129,8 +129,8 @@ public sealed class IdentityApiSecurityTests : IAsyncLifetime
         var specialties = body.RootElement.GetProperty("specialties");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("draft-2026-09", body.RootElement.GetProperty("termsVersion").GetString());
-        Assert.Equal("draft-2026-09", body.RootElement.GetProperty("privacyVersion").GetString());
+        Assert.Equal("2026-09-21", body.RootElement.GetProperty("termsVersion").GetString());
+        Assert.Equal("2026-09-21", body.RootElement.GetProperty("privacyVersion").GetString());
         Assert.Equal("noindex, nofollow, noarchive", response.Headers.GetValues("X-Robots-Tag").Single());
         Assert.True(specialties.GetArrayLength() >= 55);
         Assert.Contains(

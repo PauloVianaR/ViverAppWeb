@@ -5,6 +5,7 @@
 @page "/privacidade"
 @page "/cookies"
 @page "/acessibilidade"
+@implements IDisposable
 @inject NavigationManager Navigation
 
 <PublicSeo Title="@Title" Description="@Description" Path="@Path" />
@@ -12,10 +13,9 @@
 <article class="public-document">
     <p class="eyebrow">Centro Médico Viver</p>
     <h1>@Title</h1>
-    @if (IsLegalDraft)
+    @if (IsLegalDocument)
     {
-        <p class="public-document__draft" role="status"><strong>Documento em elaboração.</strong> Esta minuta recebeu revisão técnica interna, mas ainda não é um texto jurídico vigente. A aprovação institucional e a revisão jurídica independente permanecem necessárias antes da publicação definitiva.</p>
-        <p class="muted">Versão @PublicSitePolicy.LegalRevision · revisão técnica interna por @ClinicPublicIdentity.InternalTechnicalReview em @ClinicPublicIdentity.TechnicalReviewDate · vigência não iniciada.</p>
+        <p class="public-document__review" role="status"><strong>Documento vigente.</strong> Versão @PublicSitePolicy.LegalRevision, revisada tecnicamente por @ClinicPublicIdentity.InternalTechnicalReview e aprovada para publicação pelo proprietário em @ClinicPublicIdentity.TechnicalReviewDate.</p>
     }
 
     @switch (Path)
@@ -57,7 +57,7 @@
             <section><h2>3. Fontes e finalidades</h2><p>Os dados são fornecidos pelo titular, responsáveis autorizados, equipe clínica, conta Google vinculada, meios de pagamento e integrações necessárias. São usados para identificar e autenticar pessoas, aprovar perfis profissionais, prestar e documentar cuidados, gerenciar agenda e caixa, processar cobranças, comunicar eventos do atendimento, prevenir fraude, manter segurança, cumprir obrigações e exercer direitos.</p></section>
             <section><h2>4. Bases legais</h2><p>Conforme cada operação, o tratamento poderá se apoiar na execução de contrato e procedimentos preliminares; cumprimento de obrigação legal ou regulatória; exercício regular de direitos; proteção da vida; tutela da saúde por profissionais e serviços de saúde; legítimo interesse após avaliação aplicável; e consentimento quando ele for realmente exigido. Consentimento de cookies opcionais, consentimento clínico e aceite dos termos são decisões distintas.</p></section>
             <section><h2>5. Compartilhamento e operadores</h2><p>O acesso interno é limitado ao necessário para cada papel. Dados podem ser compartilhados com profissionais responsáveis e fornecedores indispensáveis de hospedagem e infraestrutura, armazenamento privado/CDN Cloudflare, autenticação Google, pagamentos PagBank, envio de e-mail e SMSBarato, suporte e autoridades quando houver dever legal. Cada fornecedor deve receber apenas o necessário e atuar sob finalidade definida. Dados clínicos não são vendidos nem enviados a publicidade, pixels, mapas de calor ou replay de sessão.</p></section>
-            <section><h2>6. Transferências internacionais</h2><p>Alguns fornecedores globais podem tratar dados fora do Brasil. Antes da produção, a clínica deve registrar os países, agentes, salvaguardas e mecanismo legal aplicável a cada transferência. Esta minuta não autoriza transferência genérica nem compartilhamento para finalidade nova.</p></section>
+            <section><h2>6. Transferências internacionais</h2><p>Alguns fornecedores globais podem tratar dados fora do Brasil. Antes da produção, a clínica deve registrar os países, agentes, salvaguardas e mecanismo legal aplicável a cada transferência. Esta política não autoriza transferência genérica nem compartilhamento para finalidade nova.</p></section>
             <section><h2>7. Retenção e eliminação</h2><p>Os dados são mantidos durante a relação e pelo período necessário à finalidade, às obrigações legais, regulatórias e ao exercício de direitos. O prontuário observa o prazo mínimo legal de 20 anos contado do último registro antes de eventual eliminação ou destinação adequada. Registros financeiros, fiscais, de segurança, conta, documentos e backups seguirão uma matriz formal de retenção ainda sujeita à aprovação institucional e jurídica. Pedidos de exclusão não alcançam dados cuja guarda seja obrigatória ou necessária ao exercício de direitos.</p></section>
             <section><h2>8. Direitos do titular</h2><p>O titular pode solicitar confirmação e acesso, correção, informação sobre compartilhamentos, anonimização, bloqueio ou eliminação quando cabíveis, portabilidade nos limites regulamentares, revisão de decisão automatizada, oposição e revogação de consentimento. O pedido deve ser enviado a <a href="mailto:@ClinicPublicIdentity.PrivacyEmail">@ClinicPublicIdentity.PrivacyEmail</a>; poderemos confirmar identidade e autoridade de representante antes de entregar ou alterar dados.</p></section>
             <section><h2>9. Crianças e adolescentes</h2><p>Quando o atendimento envolver criança ou adolescente, serão observados seu melhor interesse, a participação do responsável quando exigida e o grau de autonomia compatível com a idade e a situação clínica. O portal não deve ser usado por alguém que não possua capacidade ou autorização para o ato pretendido.</p></section>
@@ -88,5 +88,12 @@
         "/acessibilidade" => "Acessibilidade", _ => "Informações",
     };
     private string Description => $"Informações sobre {Title.ToLowerInvariant()} do Centro Médico Viver, operado por {ClinicPublicIdentity.LegalName}.";
-    private bool IsLegalDraft => Path is "/termos" or "/privacidade" or "/cookies";
+    private bool IsLegalDocument => Path is "/termos" or "/privacidade" or "/cookies";
+
+    protected override void OnInitialized() => Navigation.LocationChanged += HandleLocationChanged;
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs args) =>
+        _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Navigation.LocationChanged -= HandleLocationChanged;
 }

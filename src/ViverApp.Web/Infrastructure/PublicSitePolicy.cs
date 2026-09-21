@@ -5,11 +5,11 @@ namespace ViverApp.Web;
 
 public sealed class PublicSitePolicy(IConfiguration configuration, IHostEnvironment environment)
 {
-    public const string LegalRevision = LegalDocumentVersions.Draft;
+    public const string LegalRevision = LegalDocumentVersions.Current;
     public const string CanonicalOrigin = "https://viveralmenara.com";
 
-    // Draft legal text must never become indexable solely through configuration.
-    private const bool LegalTextReviewedAndPublished = false;
+    // Institutional approval is explicit in code; environment and configuration remain separate publication gates.
+    private const bool LegalTextReviewedAndPublished = true;
 
     private static readonly string[] PublicPaths =
     [

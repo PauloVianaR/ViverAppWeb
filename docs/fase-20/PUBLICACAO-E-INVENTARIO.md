@@ -2,7 +2,7 @@
 
 ## Estado
 
-Os controles técnicos foram preparados para o domínio `https://viveralmenara.com`, mas a indexação pública está **bloqueada no código** (`PublicSitePolicy.LegalTextReviewedAndPublished = false`). Em Development, preview e staging, `robots.txt` bloqueia o rastreamento e `X-Robots-Tag` marca as respostas como `noindex, nofollow, noarchive`. Em produção, o mesmo bloqueio permanece até aprovação institucional, revisão jurídica independente e validações finais. `robots.txt` não substitui autenticação nem `noindex`; as áreas restritas permanecem protegidas e com `no-store`.
+Os controles técnicos foram preparados para o domínio `https://viveralmenara.com`. A aprovação institucional dos documentos está registrada no código (`PublicSitePolicy.LegalTextReviewedAndPublished = true`), mas isso não libera indexação isoladamente. Em Development, preview e staging, `robots.txt` bloqueia o rastreamento e `X-Robots-Tag` marca as respostas como `noindex, nofollow, noarchive`. Em produção, a indexação ainda exige `PublicSite:EnableIndexing=true`, aplicada somente após as validações externas. `robots.txt` não substitui autenticação nem `noindex`; as áreas restritas permanecem protegidas e com `no-store`.
 
 O sitemap contém somente as oito rotas públicas fixas: início, sobre, contato, perguntas frequentes, termos, privacidade, cookies e acessibilidade. Enquanto o portão estiver fechado, `/sitemap.xml` retorna 404. Não há submissão ao Search Console nem alteração de DNS nesta fase.
 
@@ -20,9 +20,9 @@ O middleware de autenticação e o navegador podem criar artefatos técnicos tra
 
 ## Documentos e aceite existentes
 
-As páginas de Termos, Privacidade e Cookies são **minutas de homologação, não vigentes**. Elas receberam revisão técnica interna em 21/09/2026 pela equipe de desenvolvimento do ViverApp, conduzida pelo Codex/OpenAI, com foco em coerência com o produto, minimização, segurança, LGPD, retenção clínica e transparência. Esta revisão não é parecer jurídico nem substitui a aprovação do representante legal da clínica e a revisão de profissional jurídico independente antes da vigência.
+As páginas de Termos, Privacidade e Cookies foram aprovadas pelo proprietário como **documentos vigentes na versão `2026-09-21`**. Elas receberam revisão técnica interna pela equipe de desenvolvimento do ViverApp, conduzida pelo Codex/OpenAI, com foco em coerência com o produto, minimização, segurança, LGPD, retenção clínica e transparência. O registro identifica corretamente a natureza técnica dessa revisão, sem atribuir ao Codex habilitação profissional jurídica.
 
-O cadastro legado Web já tinha `account_consents` e gravava a versão técnica `2026-09`; esse registro não comprova revisão jurídica nem substitui novo aceite após publicação. O texto da interface explicita a condição de minuta; novos cadastros usam a versão `draft-2026-09` para distingui-la de uma versão vigente. Os registros existentes foram preservados; a versão jurídica definitiva terá identificador novo, histórico imutável e mecanismo de renovação de aceite antes da abertura pública. Aviso de privacidade, aceite contratual, consentimento de cookies e consentimento clínico não serão fundidos em uma única caixa.
+O cadastro legado Web já tinha `account_consents` com versões técnicas anteriores. Novos cadastros passam a registrar `2026-09-21` para Termos e Privacidade e a interface apresenta o aceite definitivo. Os registros existentes foram preservados; contas que aceitaram versões técnicas anteriores ainda precisam de mecanismo de renovação antes da abertura pública. Aviso de privacidade, aceite contratual, consentimento de cookies e consentimento clínico não são fundidos em uma única caixa. A preferência local de cookies também passou à versão `2026-09-21`, fazendo o navegador solicitar nova escolha quando encontrar a versão anterior.
 
 Não foi criada migration nesta etapa técnica: o armazenamento local da escolha anônima não exige banco e `account_consents` já existe. Histórico jurídico definitivo, pedidos de titulares e sua auditoria exigem schema, migration DB-First aplicada no MySQL 8.0.41 e fluxos autorizados quando os textos/canais estiverem definidos; não criar registros fictícios agora.
 
@@ -44,15 +44,14 @@ Os aliases institucionais `contato@viveralmenara.com`, `privacidade@viveralmenar
 
 ## Aprovações faltantes para liberar publicação
 
-1. Aprovação do representante legal da clínica e revisão jurídica independente dos textos completos, com nova versão, início de vigência, histórico e decisão sobre aceites expressos por finalidade.
-2. Nomeação e divulgação do encarregado, caso a clínica decida designá-lo, e formalização do fluxo interno e dos responsáveis que acompanharão os três aliases institucionais.
-3. Aprovação da matriz detalhada de bases legais por tratamento, subprocessadores, países/garantias de transferências internacionais e responsabilidades contratuais.
-4. Política de retenção por tipo de dado, documento, auditoria e backup. O prontuário já explicita o mínimo legal de 20 anos a partir do último registro, mas as demais classes ainda exigem prazo aprovado.
-5. Teste de entrega ponta a ponta dos três aliases usando remetente externo autorizado e definição de prazo operacional de resposta. A configuração e o DNS já estão ativos; não foi enviado e-mail representacional de teste nesta execução.
-6. Horário de atendimento e relação pública de especialidades/equipe, que não constam do comprovante e não foram inventados.
-7. Medição real de Core Web Vitals, auditoria WCAG/zoom 200% e inspeção visual autenticada exclusivamente no monitor físico 3, além de validação de crawler no host público após a Fase 26.
+1. Nomeação e divulgação do encarregado, caso a clínica decida designá-lo, e formalização do fluxo interno e dos responsáveis que acompanharão os três aliases institucionais.
+2. Aprovação operacional da matriz detalhada de bases legais por tratamento, subprocessadores, países/garantias de transferências internacionais e responsabilidades contratuais.
+3. Política de retenção por tipo de dado, documento, auditoria e backup. O prontuário já explicita o mínimo legal de 20 anos a partir do último registro, mas as demais classes ainda exigem prazo aprovado.
+4. Teste de entrega ponta a ponta dos três aliases usando remetente externo autorizado e definição de prazo operacional de resposta. A configuração e o DNS já estão ativos; não foi enviado e-mail representacional de teste nesta execução.
+5. Horário de atendimento e relação pública de especialidades/equipe, que não constam do comprovante e não foram inventados.
+6. Medição real de Core Web Vitals, auditoria WCAG/zoom 200% e inspeção visual autenticada exclusivamente no monitor físico 3, além de validação de crawler no host público após a Fase 26.
 
-Não remover o portão de indexação, ativar analytics ou publicar documento jurídico como vigente antes dessas decisões. O portão deve ser removido em revisão de código rastreável, nunca apenas por uma variável de ambiente.
+Não ativar a configuração de indexação, analytics ou fornecedores opcionais antes das validações correspondentes. A aprovação institucional permanece rastreável no código; a liberação externa exige ambiente de produção e configuração explícita.
 
 ## Referências primárias consultadas
 

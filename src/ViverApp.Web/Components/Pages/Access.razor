@@ -142,7 +142,7 @@
                         <div class="field field--wide"><label for="specialty">Especialidade principal</label><select id="specialty" @bind="PrimarySpecialtyId">@foreach (var specialty in Options.Specialties){<option value="@specialty.Id">@specialty.Name</option>}</select></div>
                     }
 
-                    <div class="field field--wide"><label class="check-field"><input type="checkbox" @bind="TermsAccepted" /> Li as minutas de <a href="/termos" target="_blank" rel="noopener noreferrer">Termos de uso</a> e <a href="/privacidade" target="_blank" rel="noopener noreferrer">Privacidade</a> desta homologação.</label><small>Os textos ainda não estão vigentes; o aceite definitivo será solicitado após revisão e publicação.</small></div>
+                    <div class="field field--wide"><label class="check-field"><input type="checkbox" @bind="TermsAccepted" /> Li e aceito os <a href="/termos" target="_blank" rel="noopener noreferrer">Termos de uso</a> e declaro que li a <a href="/privacidade" target="_blank" rel="noopener noreferrer">Política de Privacidade</a>.</label><small>Versão @Options.TermsVersion. As escolhas opcionais de cookies e consentimentos clínicos são tratadas separadamente.</small></div>
                     <div class="honeypot" aria-hidden="true"><label for="website">Não preencha</label><input id="website" tabindex="-1" autocomplete="off" @bind="Website" /></div>
                     <button class="button field--wide" type="button" @onclick="RegisterAsync" disabled="@(IsBusy || IsPostalCodeLoading)">@(Mode == "google-register" ? "Concluir cadastro" : "Criar conta")</button>
                 </div>
@@ -211,7 +211,7 @@
     [SupplyParameterFromQuery(Name = "modo")] public string? InitialMode { get; set; }
 
     private IJSObjectReference? module;
-    private WebRegistrationOptions Options = new("draft-2026-09", "draft-2026-09", []);
+    private WebRegistrationOptions Options = new(ViverApp.Security.LegalDocumentVersions.Current, ViverApp.Security.LegalDocumentVersions.Current, []);
     private string Mode = "login";
     private string Identifier = string.Empty;
     private string Password = string.Empty;

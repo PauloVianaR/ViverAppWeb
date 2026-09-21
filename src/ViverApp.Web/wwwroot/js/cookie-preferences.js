@@ -1,5 +1,5 @@
 const key = "viverappweb.cookie-preferences";
-const version = "draft-2026-09";
+const version = "2026-09-21";
 
 export function read() {
     try {
