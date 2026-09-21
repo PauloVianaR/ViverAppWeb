@@ -30,6 +30,12 @@ public sealed class PublicSitePolicy(IConfiguration configuration, IHostEnvironm
         ? $"User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /_blazor/\nSitemap: {CanonicalOrigin}/sitemap.xml\n"
         : "User-agent: *\nDisallow: /\n";
 
+    public string SecurityText => $"Contact: mailto:{ClinicPublicIdentity.SecurityEmail}\n"
+        + $"Expires: 2027-09-21T23:59:59Z\n"
+        + $"Canonical: {CanonicalOrigin}/.well-known/security.txt\n"
+        + $"Policy: {CanonicalOrigin}/contato#seguranca\n"
+        + "Preferred-Languages: pt-BR, en\n";
+
     public string SitemapXml()
     {
         XNamespace ns = "http://www.sitemaps.org/schemas/sitemap/0.9";

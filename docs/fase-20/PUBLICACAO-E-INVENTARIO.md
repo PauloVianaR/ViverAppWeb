@@ -2,7 +2,7 @@
 
 ## Estado
 
-Os controles técnicos foram preparados para o domínio `https://viveralmenara.com`, mas a indexação pública está **bloqueada no código** (`PublicSitePolicy.LegalTextReviewedAndPublished = false`). Em Development, preview e staging, `robots.txt` bloqueia o rastreamento e `X-Robots-Tag` marca as respostas como `noindex, nofollow, noarchive`. Em produção, o mesmo bloqueio permanece até revisão de código, dados institucionais confirmados e aprovação dos textos jurídicos. `robots.txt` não substitui autenticação nem `noindex`; as áreas restritas permanecem protegidas e com `no-store`.
+Os controles técnicos foram preparados para o domínio `https://viveralmenara.com`, mas a indexação pública está **bloqueada no código** (`PublicSitePolicy.LegalTextReviewedAndPublished = false`). Em Development, preview e staging, `robots.txt` bloqueia o rastreamento e `X-Robots-Tag` marca as respostas como `noindex, nofollow, noarchive`. Em produção, o mesmo bloqueio permanece até aprovação institucional, revisão jurídica independente e validações finais. `robots.txt` não substitui autenticação nem `noindex`; as áreas restritas permanecem protegidas e com `no-store`.
 
 O sitemap contém somente as oito rotas públicas fixas: início, sobre, contato, perguntas frequentes, termos, privacidade, cookies e acessibilidade. Enquanto o portão estiver fechado, `/sitemap.xml` retorna 404. Não há submissão ao Search Console nem alteração de DNS nesta fase.
 
@@ -20,18 +20,36 @@ O middleware de autenticação e o navegador podem criar artefatos técnicos tra
 
 ## Documentos e aceite existentes
 
-As páginas de Termos, Privacidade e Cookies são **minutas de homologação, não vigentes**. O cadastro legado Web já tinha `account_consents` e gravava a versão técnica `2026-09`; esse registro não comprova revisão jurídica nem substitui novo aceite após publicação. O texto da interface foi corrigido para explicitar a condição de minuta; novos cadastros usam a versão `draft-2026-09` para distingui-la de uma versão vigente. Os registros existentes foram preservados; a versão jurídica definitiva terá identificador novo, histórico imutável e mecanismo de renovação de aceite antes da abertura pública. Aviso de privacidade, aceite contratual, consentimento de cookies e consentimento clínico não serão fundidos em uma única caixa.
+As páginas de Termos, Privacidade e Cookies são **minutas de homologação, não vigentes**. Elas receberam revisão técnica interna em 21/09/2026 pela equipe de desenvolvimento do ViverApp, conduzida pelo Codex/OpenAI, com foco em coerência com o produto, minimização, segurança, LGPD, retenção clínica e transparência. Esta revisão não é parecer jurídico nem substitui a aprovação do representante legal da clínica e a revisão de profissional jurídico independente antes da vigência.
+
+O cadastro legado Web já tinha `account_consents` e gravava a versão técnica `2026-09`; esse registro não comprova revisão jurídica nem substitui novo aceite após publicação. O texto da interface explicita a condição de minuta; novos cadastros usam a versão `draft-2026-09` para distingui-la de uma versão vigente. Os registros existentes foram preservados; a versão jurídica definitiva terá identificador novo, histórico imutável e mecanismo de renovação de aceite antes da abertura pública. Aviso de privacidade, aceite contratual, consentimento de cookies e consentimento clínico não serão fundidos em uma única caixa.
 
 Não foi criada migration nesta etapa técnica: o armazenamento local da escolha anônima não exige banco e `account_consents` já existe. Histórico jurídico definitivo, pedidos de titulares e sua auditoria exigem schema, migration DB-First aplicada no MySQL 8.0.41 e fluxos autorizados quando os textos/canais estiverem definidos; não criar registros fictícios agora.
 
-## Dados e aprovações faltantes para liberar publicação
+## Identidade institucional confirmada
 
-1. Razão social, CNPJ, endereço público, canais de suporte e de privacidade, responsável/controlador e dados de contato do encarregado, se designado.
-2. Finalidades e bases legais aprovadas para cadastro, prontuário, teleconsulta, pagamentos, notificações, marketing inexistente e cookies; subprocessadores e transferências internacionais.
-3. Política de retenção por tipo de dado, backup e solicitação de titulares, incluindo verificação de identidade, prazos e escalonamento.
-4. Textos completos de Termos, Privacidade e Cookies revisados por profissional competente, com versão, vigência, responsável e histórico; decidir se aceite expresso é necessário por finalidade.
-5. Canal monitorado para direitos dos titulares e divulgação de vulnerabilidades. `security.txt` não foi publicado porque nenhum contato monitorado foi confirmado; não prometer bug bounty inexistente.
-6. Contato, horários, localização e especialidades públicos confirmados. Páginas de Contato/Sobre ainda informam que os dados aguardam confirmação; não há mapa, endereço ou telefone inventado.
+Dados extraídos do comprovante oficial fornecido pelo proprietário e conferidos visualmente:
+
+- razão social: `CLINICA DE OLHOS JUSTINIANO LTDA`;
+- CNPJ: `35.843.469/0001-77`;
+- endereço: Rua Tude Tupy, 214, Centro, Almenara/MG, CEP 39.900-000;
+- telefone: `(33) 9951-2186`;
+- abertura e situação: 23/12/2019, ativa;
+- atividade principal: atividade médica ambulatorial com recursos para realização de procedimentos cirúrgicos;
+- atividades secundárias: consultas médicas e atendimento em pronto-socorro/unidades de urgência.
+
+O nome fantasia veio mascarado no comprovante, portanto não foi inventado. `Centro Médico Viver` permanece como marca de apresentação do portal, sem declaração de que seja o nome fantasia cadastral. O endereço de e-mail constante do comprovante aparenta pertencer ao escritório contábil e não será divulgado como contato assistencial ou de privacidade.
+
+Os aliases institucionais `contato@viveralmenara.com`, `privacidade@viveralmenara.com` e `seguranca@viveralmenara.com` foram ativados no Cloudflare Email Routing em 21/09/2026 e encaminham para o endereço administrativo verificado `vivermobileapp@gmail.com`. Os três aparecem como regras ativas no painel. Os três registros MX, SPF e DKIM gerenciados pela Cloudflare foram confirmados no DNS público. `/.well-known/security.txt` passou a divulgar exclusivamente o canal de segurança, sem prometer recompensa ou autorizar exploração.
+
+## Aprovações faltantes para liberar publicação
+
+1. Aprovação do representante legal da clínica e revisão jurídica independente dos textos completos, com nova versão, início de vigência, histórico e decisão sobre aceites expressos por finalidade.
+2. Nomeação e divulgação do encarregado, caso a clínica decida designá-lo, e formalização do fluxo interno e dos responsáveis que acompanharão os três aliases institucionais.
+3. Aprovação da matriz detalhada de bases legais por tratamento, subprocessadores, países/garantias de transferências internacionais e responsabilidades contratuais.
+4. Política de retenção por tipo de dado, documento, auditoria e backup. O prontuário já explicita o mínimo legal de 20 anos a partir do último registro, mas as demais classes ainda exigem prazo aprovado.
+5. Teste de entrega ponta a ponta dos três aliases usando remetente externo autorizado e definição de prazo operacional de resposta. A configuração e o DNS já estão ativos; não foi enviado e-mail representacional de teste nesta execução.
+6. Horário de atendimento e relação pública de especialidades/equipe, que não constam do comprovante e não foram inventados.
 7. Medição real de Core Web Vitals, auditoria WCAG/zoom 200% e inspeção visual autenticada exclusivamente no monitor físico 3, além de validação de crawler no host público após a Fase 26.
 
 Não remover o portão de indexação, ativar analytics ou publicar documento jurídico como vigente antes dessas decisões. O portão deve ser removido em revisão de código rastreável, nunca apenas por uma variável de ambiente.
@@ -42,3 +60,5 @@ Não remover o portão de indexação, ativar analytics ou publicar documento ju
 - [Google Search Central — robots.txt não é mecanismo de privacidade](https://developers.google.com/search/docs/crawling-indexing/robots/intro)
 - [Google Search Central — robots meta e X-Robots-Tag](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag)
 - [LGPD — Lei nº 13.709/2018](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm)
+- [Lei nº 13.787/2018 — digitalização, uso e guarda de prontuário](https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13787.htm)
+- [CFM — Resolução nº 2.314/2022 sobre telemedicina](https://portal.cfm.org.br/noticias/apos-amplo-debate-cfm-regulamenta-pratica-da-telemedicina-no-brasil/)

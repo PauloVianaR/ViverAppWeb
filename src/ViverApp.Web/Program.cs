@@ -86,6 +86,8 @@ app.MapHealthChecks(
     .DisableRateLimiting();
 app.MapGet("/robots.txt", (PublicSitePolicy policy) => Results.Text(policy.RobotsText, "text/plain; charset=utf-8"))
     .DisableRateLimiting();
+app.MapGet("/.well-known/security.txt", (PublicSitePolicy policy) => Results.Text(policy.SecurityText, "text/plain; charset=utf-8"))
+    .DisableRateLimiting();
 app.MapGet("/sitemap.xml", (PublicSitePolicy policy) => policy.CanIndex
         ? Results.Text(policy.SitemapXml(), "application/xml; charset=utf-8")
         : Results.NotFound())

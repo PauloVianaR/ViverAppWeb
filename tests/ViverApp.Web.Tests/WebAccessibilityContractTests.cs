@@ -72,12 +72,47 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Contains("Documento em elaboração", html, StringComparison.Ordinal);
             Assert.Contains("vigência não iniciada", html, StringComparison.Ordinal);
+            Assert.Contains("Codex/OpenAI", html, StringComparison.Ordinal);
             Assert.Equal("noindex, nofollow, noarchive", response.Headers.GetValues("X-Robots-Tag").Single());
         }
 
         using var protectedResponse = await client.GetAsync("/paciente");
         Assert.True(protectedResponse.Headers.CacheControl?.NoStore);
         Assert.Equal("noindex, nofollow, noarchive", protectedResponse.Headers.GetValues("X-Robots-Tag").Single());
+    }
+
+    [Fact]
+    public async Task PublicInformation_UsesVerifiedClinicIdentityAndInstitutionalChannels()
+    {
+        using var client = CreateClient();
+        foreach (var path in new[] { "/sobre", "/contato", "/termos", "/privacidade", "/cookies" })
+        {
+            using var response = await client.GetAsync(path);
+            var html = await ReadUtf8Async(response.Content);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Contains("CLINICA DE OLHOS JUSTINIANO LTDA", html, StringComparison.Ordinal);
+        }
+
+        var contact = await ReadUtf8Async((await client.GetAsync("/contato")).Content);
+        Assert.Contains("35.843.469/0001-77", contact, StringComparison.Ordinal);
+        Assert.Contains("Rua Tude Tupy, 214", contact, StringComparison.Ordinal);
+        Assert.Contains("contato@viveralmenara.com", contact, StringComparison.Ordinal);
+        Assert.Contains("privacidade@viveralmenara.com", contact, StringComparison.Ordinal);
+        Assert.Contains("seguranca@viveralmenara.com", contact, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SecurityText_UsesTheMonitoredInstitutionalChannel()
+    {
+        using var client = CreateClient();
+        using var response = await client.GetAsync("/.well-known/security.txt");
+        var content = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("text/plain", response.Content.Headers.ContentType?.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Contact: mailto:seguranca@viveralmenara.com", content, StringComparison.Ordinal);
+        Assert.Contains("Canonical: https://viveralmenara.com/.well-known/security.txt", content, StringComparison.Ordinal);
+        Assert.Contains("Preferred-Languages: pt-BR, en", content, StringComparison.Ordinal);
     }
 
     [Fact]
