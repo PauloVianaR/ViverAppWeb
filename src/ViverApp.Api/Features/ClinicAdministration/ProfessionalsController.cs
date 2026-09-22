@@ -505,6 +505,10 @@ public sealed class ProfessionalsController(
         {
             return ConflictProblem("O horário conflita com outro período ativo do médico.");
         }
+        if (await WouldUncoverAppointments(accountId, id, request, cancellationToken))
+        {
+            return ConflictProblem("A alteração deixaria atendimentos futuros sem disponibilidade. Reagende-os antes de editar esta faixa.");
+        }
 
         ClinicAdministrationSupport.SetConcurrency(database, entity, nameof(ProfessionalWeeklyHour.RowVersion), request.RowVersion);
         entity.DayOfWeek = request.DayOfWeek;
@@ -551,6 +555,11 @@ public sealed class ProfessionalsController(
         if (entity is null)
         {
             return NotFound();
+        }
+
+        if (await WouldUncoverAppointments(accountId, id, null, cancellationToken))
+        {
+            return ConflictProblem("Esta faixa contém atendimentos futuros. Reagende-os antes de removê-la.");
         }
 
         ClinicAdministrationSupport.SetConcurrency(database, entity, nameof(ProfessionalWeeklyHour.RowVersion), rowVersion);
@@ -706,6 +715,49 @@ public sealed class ProfessionalsController(
                 && (!item.ValidUntil.HasValue || !validFrom.HasValue || item.ValidUntil >= validFrom)
                 && (!validUntil.HasValue || !item.ValidFrom.HasValue || validUntil >= item.ValidFrom),
             cancellationToken);
+    }
+
+    private async Task<bool> WouldUncoverAppointments(ulong accountId, ulong excludedId,
+        ProfessionalWeeklyHourWriteRequest? replacement, CancellationToken ct)
+    {
+        var mode = await database.ProfessionalPreferences.AsNoTracking()
+            .Where(x => x.ProfessionalAccountId == accountId).Select(x => x.AvailabilityMode)
+            .SingleOrDefaultAsync(ct);
+        if (mode != "recurring") return false;
+        var now = DateTime.UtcNow;
+        var bookings = await database.Appointments.AsNoTracking()
+            .Where(x => x.ProfessionalAccountId == accountId && x.StartsAtUtc >= now
+                && (x.StatusCode == "pending" || x.StatusCode == "confirmed"
+                    || x.StatusCode == "arrived" || x.StatusCode == "in_progress"))
+            .Select(x => new { x.StartsAtUtc, x.EndsAtUtc, x.ModalityCode }).ToListAsync(ct);
+        if (bookings.Count == 0) return false;
+        var hours = await database.ProfessionalWeeklyHours.AsNoTracking()
+            .Where(x => x.ProfessionalAccountId == accountId && x.IsActive && x.Id != excludedId).ToListAsync(ct);
+        var exceptions = await database.ProfessionalAvailabilityExceptions.AsNoTracking()
+            .Where(x => x.ProfessionalAccountId == accountId && x.IsAvailable).ToListAsync(ct);
+        var zoneName = await database.Clinics.AsNoTracking().Select(x => x.TimezoneName).SingleOrDefaultAsync(ct)
+            ?? "America/Sao_Paulo";
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(zoneName);
+        foreach (var booking in bookings)
+        {
+            var start = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(booking.StartsAtUtc, DateTimeKind.Utc), zone);
+            var end = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(booking.EndsAtUtc, DateTimeKind.Utc), zone);
+            if (exceptions.Any(x => x.ExceptionDate.Date == start.Date
+                && (x.ModalityCode == "both" || x.ModalityCode == booking.ModalityCode))) continue;
+            var covered = hours.Any(x => x.DayOfWeek == (byte)start.DayOfWeek
+                && (x.ModalityCode == "both" || x.ModalityCode == booking.ModalityCode)
+                && (!x.ValidFrom.HasValue || x.ValidFrom.Value.Date <= start.Date)
+                && (!x.ValidUntil.HasValue || x.ValidUntil.Value.Date >= start.Date)
+                && x.StartTime <= start.TimeOfDay && x.EndTime >= end.TimeOfDay);
+            if (!covered && replacement is { IsActive: true })
+                covered = replacement.DayOfWeek == (byte)start.DayOfWeek
+                    && (replacement.ModalityCode == "both" || replacement.ModalityCode == booking.ModalityCode)
+                    && (!replacement.ValidFrom.HasValue || replacement.ValidFrom.Value.ToDateTime(TimeOnly.MinValue) <= start.Date)
+                    && (!replacement.ValidUntil.HasValue || replacement.ValidUntil.Value.ToDateTime(TimeOnly.MinValue) >= start.Date)
+                    && replacement.StartTime <= start.TimeOfDay && replacement.EndTime >= end.TimeOfDay;
+            if (!covered) return true;
+        }
+        return false;
     }
 
     private async Task Audit(string eventCode, string entityType, string entityId, CancellationToken cancellationToken) =>

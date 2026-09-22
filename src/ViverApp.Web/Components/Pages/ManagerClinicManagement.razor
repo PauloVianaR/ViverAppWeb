@@ -28,6 +28,7 @@ else
         <section class="surface patient-panel patient-section">
             <div class="section-heading"><div><p class="eyebrow">Disponibilidade</p><h2>Grade semanal dos profissionais</h2></div><button class="button" @onclick="NewHour" disabled="@(DoctorId==0)">Adicionar horário</button></div>
             <div class="field"><label for="schedule-doctor">Profissional</label><select id="schedule-doctor" value="@DoctorId" @onchange="DoctorChanged"><option value="0">Selecione</option>@foreach(var doctor in Doctors){<option value="@doctor.AccountId">@doctor.FullName · @doctor.LicenseLabel</option>}</select></div>
+            @if(DoctorId!=0){<ProfessionalAvailabilityPlanner ProfessionalId="@DoctorId" />}
             @if(DoctorId!=0 && Hours.Count==0){<InterfaceState Title="Sem horários cadastrados" Description="Adicione a primeira faixa semanal para este profissional." Icon="calendar" />}
             <div class="administrator-grid">@foreach(var hour in Hours){<article class="surface administrator-card"><span class="badge @(hour.IsActive?"badge--success":"badge--warning")">@(hour.IsActive?"Ativo":"Inativo")</span><h3>@Day(hour.DayOfWeek)</h3><p>@TimeOnly.FromTimeSpan(hour.StartTime).ToString("HH:mm")–@TimeOnly.FromTimeSpan(hour.EndTime).ToString("HH:mm") · @Modality(hour.ModalityCode)</p><div class="administrator-actions"><button class="button button--secondary" @onclick="()=>EditHour(hour)">Editar</button><button class="button button--danger" @onclick="()=>DeleteHour(hour)">Remover</button></div></article>}</div>
         </section>

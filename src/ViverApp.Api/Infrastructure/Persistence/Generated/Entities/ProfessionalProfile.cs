@@ -47,5 +47,7 @@ public partial class ProfessionalProfile
 
     public virtual ICollection<ProfessionalSpecialty> ProfessionalSpecialties { get; set; } = new List<ProfessionalSpecialty>();
 
+    public virtual ICollection<ProfessionalVariableHour> ProfessionalVariableHours { get; set; } = new List<ProfessionalVariableHour>();
+
     public virtual ICollection<ProfessionalWeeklyHour> ProfessionalWeeklyHours { get; set; } = new List<ProfessionalWeeklyHour>();
 }

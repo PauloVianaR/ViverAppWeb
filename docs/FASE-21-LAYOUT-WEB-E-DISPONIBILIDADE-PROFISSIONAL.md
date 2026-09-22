@@ -2,9 +2,18 @@
 
 ## Estado e limite da fase
 
-**Estado:** planejada; nenhuma implementação iniciada.
+**Estado:** implementada na branch `codex/fase-21-layout-disponibilidade-profissional`, aguardando revisão e autorização do proprietário para integrar à `main`.
 
 Esta fase será executada individualmente, em branch própria, somente depois da integração e autorização de encerramento da Fase 20. Ela não altera o comportamento mobile aprovado.
+
+## Entrega e verificação
+
+- A Fase 20 foi integrada à `main` antes da criação desta branch. O novo shell Web tem menu lateral expandido/recolhido por conta e configuração administrativa reversível `web.desktop_sidebar_enabled`, padrão `true`; abaixo do breakpoint permanece a navegação inferior existente.
+- Médicos e psicólogos podem manter disponibilidade semanal ou cadastrar datas variáveis. Gestor e Administrador selecionam o profissional; permissões e impacto em atendimentos futuros são validados na API. O calendário sinaliza datas cadastradas, feriados, dias com atendimento e conflitos. A geração de horários de agendamento usa somente o modo ativo e mantém feriados e exceções.
+- A migration `0039__desktop_sidebar_and_variable_availability.sql` foi executada no banco local `viverappweb` MySQL 8.0.41, verificada pelo runner e seguida de scaffold DB-First. Nenhuma escrita foi feita no banco legado.
+- Compilação de API e Web sem avisos ou erros. As sete suítes totalizaram 230 testes aprovados, incluindo cálculo de slots em modo variável, contratos de autorização, persistência e reversibilidade do flag com preferência de recolhimento isolada por conta.
+- No navegador integrado, a navegação expandida e recolhida foi conferida em desktop, com persistência após recarga; o calendário e a prévia de mudança de modo foram conferidos no perfil de Gestor. Em 390 px, o calendário, editor e menu inferior existente foram conferidos sem alteração do shell mobile.
+- A inspeção visual autenticada individual de Administrador, Médico e Psicólogo, o zoom nativo de 200% e a ativação/desativação real do flag administrativo permanecem registrados em `.local/PENDENCIAS.md` para homologação complementar, sem criar usuários ou alterar disponibilidade operacional somente para o teste.
 
 ## Objetivos
 

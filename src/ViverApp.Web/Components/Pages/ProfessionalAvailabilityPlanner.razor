@@ -1,0 +1,243 @@
+@using ViverApp.Web.Models
+@implements IAsyncDisposable
+@inject IJSRuntime JavaScript
+@inject WebBackendOptions Backend
+
+<section class="surface availability-planner" aria-labelledby="availability-planner-title">
+    <div class="section-heading">
+        <div><p class="eyebrow">Planejamento profissional</p><h2 id="availability-planner-title">Disponibilidade recorrente ou variável</h2></div>
+    </div>
+    @if (Plan is null)
+    {
+        <p role="status">Carregando calendário de disponibilidade…</p>
+    }
+    else
+    {
+        <div class="availability-planner__mode">
+            <p><strong>Modo ativo:</strong> @(Plan.Mode == "variable" ? "Variável por data" : "Recorrente semanal")</p>
+            <div class="field"><label for="availability-mode-@ProfessionalId">Alterar modo</label>
+                <select id="availability-mode-@ProfessionalId" @bind="SelectedMode" @bind:after="()=>ModeImpact=null">
+                    <option value="recurring">Recorrente semanal</option><option value="variable">Variável por data</option>
+                </select>
+            </div>
+            <button type="button" class="button button--secondary" disabled="@(Busy || SelectedMode == Plan.Mode)" @onclick="PreviewModeAsync">Ver impacto</button>
+        </div>
+        @if (ModeImpact is not null)
+        {
+            <div class="availability-planner__impact" role="status">
+                <p>@(ModeImpact.AffectedAppointments == 0
+                    ? "Nenhum atendimento futuro perderá disponibilidade com a troca de modo."
+                    : $"{ModeImpact.AffectedAppointments} atendimento(s) futuro(s) perderiam disponibilidade: {string.Join(", ", ModeImpact.AppointmentNumbers.Select(x => $"#{x}"))}.")</p>
+                @if (ModeImpact.AffectedAppointments == 0)
+                {
+                    <button class="button" type="button" disabled="@Busy" @onclick="ChangeModeAsync">Confirmar mudança de modo</button>
+                }
+            </div>
+        }
+        <p class="field-hint">A grade semanal e as datas variáveis podem ser preparadas antes da troca. O modo ativo controla os horários oferecidos para agendamento; feriados e exceções continuam tendo prioridade.</p>
+
+        <div class="availability-planner__calendar-heading">
+            <h3>@Month.ToString("MMMM yyyy", new System.Globalization.CultureInfo("pt-BR"))</h3>
+            <div class="patient-actions">
+                <button class="button button--secondary button--small" type="button" @onclick="()=>MoveMonth(-12)" aria-label="Ano anterior">«</button>
+                <button class="button button--secondary button--small" type="button" @onclick="()=>MoveMonth(-1)" aria-label="Mês anterior">‹</button>
+                <button class="button button--secondary button--small" type="button" @onclick="GoToToday">Hoje</button>
+                <button class="button button--secondary button--small" type="button" @onclick="()=>MoveMonth(1)" aria-label="Próximo mês">›</button>
+                <button class="button button--secondary button--small" type="button" @onclick="()=>MoveMonth(12)" aria-label="Próximo ano">»</button>
+            </div>
+        </div>
+        <p class="field-hint">Selecione um ou vários dias. Os horários iniciais seguem o funcionamento da clínica; você pode ajustar ou dividir as faixas antes de salvar.</p>
+        <div class="availability-planner__calendar" role="group" aria-label="Dias de @Month.ToString("MMMM yyyy", new System.Globalization.CultureInfo("pt-BR"))">
+            @foreach (var label in Weekdays) { <strong class="availability-planner__weekday">@label</strong> }
+            @foreach (var date in CalendarDays)
+            {
+                if (date is null) { <span aria-hidden="true"></span> }
+                else
+                {
+                    var day = date.Value;
+                    var hasHours = Plan.Days.Any(x => x.Date == day);
+                    var holiday = Plan.Holidays.Contains(day);
+                    var booked = Plan.BookedDates.Contains(day);
+                    var conflict = Plan.ConflictDates.Contains(day);
+                    <button type="button" class="availability-planner__day @(SelectedDates.Contains(day) ? "is-selected" : null) @(hasHours ? "has-hours" : null) @(holiday ? "is-holiday" : null) @(booked ? "has-bookings" : null) @(conflict ? "has-conflict" : null)"
+                            aria-pressed="@SelectedDates.Contains(day)" title="@(conflict ? "Conflito com atendimento futuro" : booked ? "Dia com atendimento" : holiday ? "Feriado ou bloqueio" : hasHours ? "Faixas cadastradas" : "Sem faixas cadastradas")"
+                            @onclick="()=>SelectDay(day)">
+                        @day.Day @if (hasHours || booked) { <span aria-hidden="true">●</span> }
+                    </button>
+                }
+            }
+        </div>
+        <div class="availability-planner__legend"><span>Verde: disponível</span><span>Azul: com atendimento</span><span>Vermelho: conflito ou feriado</span><span>Contorno: selecionado</span></div>
+        @if (SelectedDates.Count > 0)
+        {
+            <div class="availability-planner__editor">
+                <h3>@(SelectedDates.Count == 1 ? $"Faixas de {SelectedDates.Min():dd/MM/yyyy}" : $"Aplicar faixas em {SelectedDates.Count} dias")</h3>
+                @if (SelectedDates.Any(Plan.BookedDates.Contains))
+                {
+                    <p class="notice" role="status">Há atendimentos nas datas selecionadas. O sistema impedirá qualquer alteração que deixe atendimentos futuros sem disponibilidade.</p>
+                }
+                @if (SelectedDates.Count > 1) { <p class="field-hint">Salvar substituirá as faixas dos dias selecionados pelo mesmo conjunto abaixo.</p> }
+                @foreach (var interval in EditorIntervals)
+                {
+                    <div class="availability-planner__interval">
+                        <div class="field"><label>Início</label><input type="time" @bind="interval.StartsAt" /></div>
+                        <div class="field"><label>Fim</label><input type="time" @bind="interval.EndsAt" /></div>
+                        <div class="field"><label>Modalidade</label><select @bind="interval.ModalityCode"><option value="in_person">Presencial</option>@if (Plan.OnlineEnabled) { <option value="online">Online</option><option value="both">Ambas</option> }</select></div>
+                        <button class="button button--secondary button--small" type="button" @onclick="()=>EditorIntervals.Remove(interval)" aria-label="Remover faixa">Remover</button>
+                    </div>
+                }
+                <div class="patient-actions">
+                    <button class="button button--secondary" type="button" disabled="@(EditorIntervals.Count >= 8)" @onclick="AddInterval">Dividir / adicionar faixa</button>
+                    <button class="button" type="button" disabled="@(Busy || EditorIntervals.Count == 0)" @onclick="ConfirmSaveAsync">@(ConfirmingSave ? "Confirmar e salvar faixas" : "Revisar alterações")</button>
+                    @if (SelectedDates.Count == 1 && Plan.Days.Any(x => x.Date == SelectedDates.Min()))
+                    {
+                        <button class="button button--danger" type="button" disabled="@Busy" @onclick="RemoveSelectedDayAsync">Remover dia</button>
+                    }
+                </div>
+                @if (ConfirmingSave) { <p role="status">Confirme as datas e faixas acima. A mudança será validada contra os atendimentos já marcados.</p> }
+            </div>
+        }
+    }
+    @if (!string.IsNullOrWhiteSpace(Notice)) { <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="alert">@Notice</p> }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public ulong ProfessionalId { get; set; }
+    private IJSObjectReference? Module;
+    private ulong LoadedId;
+    private ProfessionalAvailabilityPlan? Plan;
+    private AvailabilityImpact? ModeImpact;
+    private string SelectedMode = "recurring", Notice = "";
+    private bool NoticeError, Busy, ConfirmingSave;
+    private DateOnly Month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private readonly HashSet<DateOnly> SelectedDates = [];
+    private readonly List<EditableInterval> EditorIntervals = [];
+    private static readonly string[] Weekdays = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+    private sealed class EditableInterval
+    {
+        public TimeOnly StartsAt { get; set; }
+        public TimeOnly EndsAt { get; set; }
+        public string ModalityCode { get; set; } = "in_person";
+    }
+    private IEnumerable<DateOnly?> CalendarDays
+    {
+        get
+        {
+            for (var i = 0; i < (int)Month.DayOfWeek; i++) yield return null;
+            for (var day = Month; day.Month == Month.Month; day = day.AddDays(1)) yield return day;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        Module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/identity-access.js");
+        await LoadAsync();
+    }
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Module is not null && LoadedId != ProfessionalId) await LoadAsync();
+    }
+    private async Task LoadAsync()
+    {
+        if (Module is null || ProfessionalId == 0) return;
+        LoadedId = ProfessionalId;
+        try
+        {
+            var first = Month;
+            var last = Month.AddMonths(1).AddDays(-1);
+            Plan = await Module.InvokeAsync<ProfessionalAvailabilityPlan>("get", Backend.BaseUrl.ToString(),
+                $"api/v1/professionals/{ProfessionalId}/availability-plan?from={first:yyyy-MM-dd}&to={last:yyyy-MM-dd}");
+            SelectedMode = Plan.Mode;
+            ModeImpact = null;
+            SelectedDates.Clear();
+            EditorIntervals.Clear();
+            Notice = "";
+        }
+        catch (JSException error) { Notice = CleanError(error); NoticeError = true; }
+        await InvokeAsync(StateHasChanged);
+    }
+    private Task MoveMonth(int months) { Month = Month.AddMonths(months); return LoadAsync(); }
+    private Task GoToToday() { Month = new(DateTime.Today.Year, DateTime.Today.Month, 1); return LoadAsync(); }
+    private void SelectDay(DateOnly date)
+    {
+        ConfirmingSave = false;
+        if (!SelectedDates.Add(date)) SelectedDates.Remove(date);
+        if (SelectedDates.Count == 0) { EditorIntervals.Clear(); return; }
+        if (SelectedDates.Count > 1) return;
+        var source = Plan?.Days.FirstOrDefault(x => x.Date == date)?.Intervals
+            ?? Plan?.ClinicDefaults.FirstOrDefault(x => x.Date == date)?.Intervals ?? [];
+        EditorIntervals.Clear();
+        EditorIntervals.AddRange(source.Select(x => new EditableInterval { StartsAt = x.StartsAt, EndsAt = x.EndsAt,
+            ModalityCode = x.ModalityCode == "both" && Plan?.OnlineEnabled != true ? "in_person" : x.ModalityCode }));
+    }
+    private void AddInterval()
+    {
+        ConfirmingSave = false;
+        var start = EditorIntervals.Count == 0 ? new TimeOnly(8, 0) : EditorIntervals[^1].EndsAt;
+        EditorIntervals.Add(new EditableInterval { StartsAt = start, EndsAt = start.AddHours(1) });
+    }
+    private Task ConfirmSaveAsync()
+    {
+        if (!ConfirmingSave) { ConfirmingSave = true; return Task.CompletedTask; }
+        return SaveAsync();
+    }
+    private async Task SaveAsync()
+    {
+        if (Module is null || Plan is null) return;
+        Busy = true;
+        try
+        {
+            await Module.InvokeAsync<ProfessionalAvailabilityPlan>("sendMethod", Backend.BaseUrl.ToString(),
+                $"api/v1/professionals/{ProfessionalId}/availability-plan/variable-days", "PUT",
+                new { dates = SelectedDates.Order().ToArray(), intervals = EditorIntervals.Select(x => new {
+                    startsAt = x.StartsAt, endsAt = x.EndsAt, modalityCode = x.ModalityCode }).ToArray(), rowVersion = Plan.RowVersion });
+            await LoadAsync();
+            Notice = "Datas e horários salvos."; NoticeError = false;
+        }
+        catch (JSException error) { Notice = CleanError(error); NoticeError = true; }
+        finally { Busy = false; ConfirmingSave = false; }
+    }
+    private async Task RemoveSelectedDayAsync()
+    {
+        if (Module is null || Plan is null || SelectedDates.Count != 1) return;
+        Busy = true;
+        try
+        {
+            await Module.InvokeAsync<object?>("sendMethod", Backend.BaseUrl.ToString(),
+                $"api/v1/professionals/{ProfessionalId}/availability-plan/variable-days/{SelectedDates.Min():yyyy-MM-dd}?rowVersion={Plan.RowVersion}", "DELETE", null);
+            await LoadAsync();
+            Notice = "Disponibilidade da data removida."; NoticeError = false;
+        }
+        catch (JSException error) { Notice = CleanError(error); NoticeError = true; }
+        finally { Busy = false; }
+    }
+    private async Task PreviewModeAsync()
+    {
+        if (Module is null) return;
+        try
+        {
+            ModeImpact = await Module.InvokeAsync<AvailabilityImpact>("get", Backend.BaseUrl.ToString(),
+                $"api/v1/professionals/{ProfessionalId}/availability-plan/impact?mode={SelectedMode}");
+            Notice = "";
+        }
+        catch (JSException error) { Notice = CleanError(error); NoticeError = true; }
+    }
+    private async Task ChangeModeAsync()
+    {
+        if (Module is null || Plan is null || ModeImpact?.AffectedAppointments != 0) return;
+        Busy = true;
+        try
+        {
+            await Module.InvokeAsync<AvailabilityImpact>("sendMethod", Backend.BaseUrl.ToString(),
+                $"api/v1/professionals/{ProfessionalId}/availability-plan/mode", "PUT",
+                new { mode = SelectedMode, rowVersion = Plan.RowVersion });
+            await LoadAsync();
+            Notice = "Modo de disponibilidade atualizado."; NoticeError = false;
+        }
+        catch (JSException error) { Notice = CleanError(error); NoticeError = true; }
+        finally { Busy = false; }
+    }
+    private static string CleanError(JSException error) => error.Message.Split(" Error:", StringSplitOptions.None)[0];
+    public async ValueTask DisposeAsync() { if (Module is not null) try { await Module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+}

@@ -126,6 +126,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<ProfessionalSpecialty> ProfessionalSpecialties { get; set; }
 
+    public virtual DbSet<ProfessionalVariableHour> ProfessionalVariableHours { get; set; }
+
     public virtual DbSet<ProfessionalWeeklyHour> ProfessionalWeeklyHours { get; set; }
 
     public virtual DbSet<Role> Roles { get; set; }
@@ -435,6 +437,7 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(10)
                 .HasDefaultValueSql("'month'")
                 .HasColumnName("calendar_view_mode");
+            entity.Property(e => e.DesktopSidebarCollapsed).HasColumnName("desktop_sidebar_collapsed");
             entity.Property(e => e.RowVersion)
                 .HasDefaultValueSql("'1'")
                 .HasColumnName("row_version");
@@ -2625,6 +2628,10 @@ public partial class ViverAppDbContext : DbContext
             entity.ToTable("professional_preferences");
 
             entity.Property(e => e.ProfessionalAccountId).HasColumnName("professional_account_id");
+            entity.Property(e => e.AvailabilityMode)
+                .HasMaxLength(10)
+                .HasDefaultValueSql("'recurring'")
+                .HasColumnName("availability_mode");
             entity.Property(e => e.EmailEnabled).HasColumnName("email_enabled");
             entity.Property(e => e.MaxInPersonDaily)
                 .HasDefaultValueSql("'16'")
@@ -2776,6 +2783,43 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey(d => d.SpecialtyId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_doctor_specialties_specialty");
+        });
+
+        modelBuilder.Entity<ProfessionalVariableHour>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("professional_variable_hours");
+
+            entity.HasIndex(e => new { e.ProfessionalAccountId, e.AvailableDate, e.ModalityCode }, "ix_professional_variable_hours_date");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AvailableDate)
+                .HasColumnType("date")
+                .HasColumnName("available_date");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.EndTime)
+                .HasColumnType("time")
+                .HasColumnName("end_time");
+            entity.Property(e => e.ModalityCode)
+                .HasMaxLength(10)
+                .HasColumnName("modality_code");
+            entity.Property(e => e.ProfessionalAccountId).HasColumnName("professional_account_id");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.StartTime)
+                .HasColumnType("time")
+                .HasColumnName("start_time");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.ProfessionalAccount).WithMany(p => p.ProfessionalVariableHours)
+                .HasForeignKey(d => d.ProfessionalAccountId)
+                .HasConstraintName("fk_professional_variable_hours_professional");
         });
 
         modelBuilder.Entity<ProfessionalWeeklyHour>(entity =>

@@ -1,0 +1,37 @@
+@using ViverApp.Web.Navigation
+
+<aside class="desktop-sidebar" aria-label="Navegação da área @Definition.Label">
+    <div class="desktop-sidebar__heading">
+        <span>@Definition.Context</span>
+        <button class="desktop-sidebar__toggle" type="button" title="@(Collapsed ? "Expandir menu" : "Recolher menu")"
+                aria-label="@(Collapsed ? "Expandir menu lateral" : "Recolher menu lateral")"
+                aria-expanded="@(!Collapsed)" @onclick="OnToggle">
+            <span aria-hidden="true">@(Collapsed ? "›" : "‹")</span>
+        </button>
+    </div>
+    <nav aria-label="Áreas do perfil @Definition.Label">
+        @foreach (var item in Definition.Items)
+        {
+            <a class="@(IsActive(item) ? "active" : null)" href="@item.Href" title="@item.Label"
+               aria-label="@item.Label" aria-current="@(IsActive(item) ? "page" : null)">
+                <AppIcon Name="@item.Icon" /><span>@item.Label</span>
+            </a>
+        }
+    </nav>
+    <a class="desktop-sidebar__security" href="/seguranca" title="Segurança da conta" aria-label="Segurança da conta">
+        <AppIcon Name="shield" /><span>Segurança da conta</span>
+    </a>
+</aside>
+
+@code {
+    [Parameter, EditorRequired] public ShellDefinition Definition { get; set; } = null!;
+    [Parameter, EditorRequired] public string CurrentPath { get; set; } = "/";
+    [Parameter] public bool Collapsed { get; set; }
+    [Parameter] public EventCallback OnToggle { get; set; }
+
+    private bool IsActive(ShellNavigationItem item)
+    {
+        var target = item.Href.Split('#')[0];
+        return string.Equals(CurrentPath.TrimEnd('/'), target.TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
+    }
+}

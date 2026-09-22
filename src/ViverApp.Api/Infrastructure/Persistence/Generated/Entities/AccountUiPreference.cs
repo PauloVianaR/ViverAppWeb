@@ -11,6 +11,8 @@ public partial class AccountUiPreference
 
     public string CalendarViewMode { get; set; } = null!;
 
+    public bool DesktopSidebarCollapsed { get; set; }
+
     public DateTime UpdatedAtUtc { get; set; }
 
     public ulong RowVersion { get; set; }

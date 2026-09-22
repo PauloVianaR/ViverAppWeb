@@ -32,7 +32,7 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(61, applicationEntities.Length);
+        Assert.Equal(62, applicationEntities.Length);
         Assert.DoesNotContain(
             applicationEntities,
             entity => string.Equals(entity.GetTableName(), "__schema_migrations", StringComparison.Ordinal));
@@ -42,6 +42,9 @@ public sealed class DatabaseContractTests
         Assert.False(account.FindProperty(nameof(Account.RoleCode))!.IsNullable);
         Assert.False(account.FindProperty(nameof(Account.PortalAccessEnabled))!.IsNullable);
         Assert.True(account.FindProperty(nameof(Account.RowVersion))!.IsConcurrencyToken);
+        Assert.True(context.Model.FindEntityType(typeof(ProfessionalPreference))!
+            .FindProperty(nameof(ProfessionalPreference.RowVersion))!.IsConcurrencyToken);
+        Assert.NotNull(context.Model.FindEntityType(typeof(ProfessionalVariableHour)));
         var medicalReport = context.Model.FindEntityType(typeof(MedicalReport));
         Assert.NotNull(medicalReport);
         Assert.True(medicalReport.FindProperty(nameof(MedicalReport.RowVersion))!.IsConcurrencyToken);
@@ -98,7 +101,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039", migrations);
 
         var portalAccessColumn = await ExecuteScalarAsync(connection,
             "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'viverappweb' AND table_name = 'accounts' AND column_name = 'portal_access_enabled' AND is_nullable = 'NO'");

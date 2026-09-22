@@ -744,9 +744,14 @@ public sealed class PatientSchedulingService(
                 && item.EndsAtUtc > fromUtc)
             .Select(item => new BusyPeriod(item.StartsAtUtc, item.EndsAtUtc))
             .ToListAsync(cancellationToken);
-        var doctorHours = await database.ProfessionalWeeklyHours.AsNoTracking()
+        var variableMode = preferences?.AvailabilityMode == "variable";
+        var doctorHours = variableMode ? [] : await database.ProfessionalWeeklyHours.AsNoTracking()
             .Where(item => item.ProfessionalAccountId == doctorId && item.IsActive)
             .ToListAsync(cancellationToken);
+        var variableHours = variableMode ? await database.ProfessionalVariableHours.AsNoTracking()
+            .Where(item => item.ProfessionalAccountId == doctorId && item.AvailableDate >= from.ToDateTime(TimeOnly.MinValue)
+                && item.AvailableDate <= until.ToDateTime(TimeOnly.MinValue))
+            .ToListAsync(cancellationToken) : [];
         var clinicHours = modality == "in_person"
             ? await database.ClinicWeeklyHours.AsNoTracking().Where(item => item.IsActive).ToListAsync(cancellationToken)
             : [];
@@ -790,7 +795,12 @@ public sealed class PatientSchedulingService(
                 .Select(item => new LocalAvailabilityWindow(item.StartTime, item.EndTime)).ToArray();
             var overrideWindows = dateExceptions.Where(x => x.IsAvailable)
                 .Select(x => new LocalAvailabilityWindow(x.StartTime!.Value, x.EndTime!.Value)).ToArray();
-            var doctorWindows = overrideWindows.Length > 0 ? overrideWindows : weeklyWindows;
+            var variableWindows = variableHours
+                .Where(item => item.AvailableDate.Date == dateValue.Date
+                    && (item.ModalityCode == modality || item.ModalityCode == "both"))
+                .Select(item => new LocalAvailabilityWindow(item.StartTime, item.EndTime)).ToArray();
+            var doctorWindows = overrideWindows.Length > 0 ? overrideWindows
+                : variableMode ? variableWindows : weeklyWindows;
             var clinicWindows = clinicHours
                 .Where(item => item.DayOfWeek == day)
                 .Select(item => new LocalAvailabilityWindow(item.StartTime, item.EndTime));

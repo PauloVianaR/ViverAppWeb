@@ -311,7 +311,7 @@ Cada fase deve:
 
 ## Fase 20 — SEO, privacidade, cookies e conformidade Web
 
-**Estado:** antecipada da antiga Fase 25 por decisão do proprietário; controles técnicos implementados na branch `codex/fase-20-seo-privacidade-cookies`. Publicação jurídica definitiva, canal de titulares e indexação aguardam dados institucionais, revisão competente e homologação. O portão de indexação segue fechado.
+**Estado:** integrada à `main` antes do início da Fase 21. Os controles técnicos e documentos aprovados estão implementados; a indexação pública segue desabilitada até a homologação do domínio e das dependências externas registradas em `.local/PENDENCIAS.md`.
 
 **Plano detalhado:** [SEO, privacidade, cookies e conformidade Web](FASE-20-SEO-PRIVACIDADE-E-CONFORMIDADE-WEB.md).
 
@@ -319,7 +319,7 @@ Cada fase deve:
 
 ## Fase 21 — Layout Web com navegação lateral e disponibilidade profissional variável
 
-**Estado:** planejada como a fase imediata após a Fase 20; nenhuma implementação iniciada.
+**Estado:** implementada na branch `codex/fase-21-layout-disponibilidade-profissional`, ainda não integrada à `main`. Migration 0039 aplicada e verificada no MySQL local; validação automatizada e visual descritas no plano detalhado.
 
 **Plano detalhado:** [Layout Web e disponibilidade profissional](FASE-21-LAYOUT-WEB-E-DISPONIBILIDADE-PROFISSIONAL.md).
 

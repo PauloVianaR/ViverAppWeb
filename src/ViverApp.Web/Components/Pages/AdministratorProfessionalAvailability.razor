@@ -1,0 +1,143 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JavaScript
+@inject WebBackendOptions Backend
+
+<section class="surface patient-panel patient-section" aria-labelledby="admin-professional-availability-title">
+    <div class="section-heading"><div><p class="eyebrow">Profissionais</p><h2 id="admin-professional-availability-title">Disponibilidade médica e psicológica</h2></div></div>
+    @if (Loading) { <LoadingSkeleton Lines="3" /> }
+    else
+    {
+        <div class="field"><label for="admin-availability-professional">Profissional</label>
+            <select id="admin-availability-professional" @bind="SelectedId" @bind:after="LoadHoursAsync">
+                <option value="0">Selecione</option>
+                @foreach (var professional in Professionals)
+                {
+                    <option value="@professional.AccountId">@professional.FullName · @(professional.RoleCode == "psychologist" ? "Psicólogo" : "Médico")</option>
+                }
+            </select>
+        </div>
+        @if (SelectedId > 0)
+        {
+            <ProfessionalAvailabilityPlanner ProfessionalId="@SelectedId" />
+            <section aria-labelledby="admin-recurring-heading">
+                <h3 id="admin-recurring-heading">Grade semanal recorrente</h3>
+                <p class="field-hint">Essas faixas são usadas quando o modo recorrente estiver ativo.</p>
+                <div class="administrator-grid">
+                    @foreach (var hour in WeeklyHours)
+                    {
+                        <article class="surface administrator-card">
+                            <strong>@Day(hour.DayOfWeek)</strong>
+                            <p>@TimeOnly.FromTimeSpan(hour.StartTime).ToString("HH:mm")–@TimeOnly.FromTimeSpan(hour.EndTime).ToString("HH:mm") · @hour.ModalityCode · @(hour.IsActive ? "Ativo" : "Inativo")</p>
+                            <button class="button button--secondary button--small" @onclick="()=>EditHour(hour)">Editar</button>
+                            <button class="button button--danger button--small" @onclick="()=>DeleteHourAsync(hour)">Remover</button>
+                        </article>
+                    }
+                </div>
+                <form @onsubmit="SaveHourAsync" @onsubmit:preventDefault>
+                    <h4>@(EditingHour is null ? "Adicionar faixa" : "Editar faixa")</h4>
+                    <div class="administrator-filter-grid">
+                        <div class="field"><label for="admin-recurring-day">Dia da semana</label><select id="admin-recurring-day" @bind="DayOfWeek">@for(byte day=0;day<7;day++){<option value="@day">@Day(day)</option>}</select></div>
+                        <div class="field"><label for="admin-recurring-start">Início</label><input id="admin-recurring-start" type="time" @bind="Start" /></div>
+                        <div class="field"><label for="admin-recurring-end">Fim</label><input id="admin-recurring-end" type="time" @bind="End" /></div>
+                        <div class="field"><label for="admin-recurring-modality">Modalidade</label><select id="admin-recurring-modality" @bind="Modality"><option value="both">Ambas</option><option value="in_person">Presencial</option><option value="online">Online</option></select></div>
+                    </div>
+                    <label class="patient-check"><input type="checkbox" @bind="Active" /> Faixa ativa</label>
+                    <div class="patient-actions"><button class="button" disabled="@Saving">Salvar faixa</button>@if(EditingHour is not null){<button class="button button--secondary" type="button" @onclick="ClearHour">Cancelar edição</button>}</div>
+                </form>
+            </section>
+        }
+    }
+    @if (!string.IsNullOrWhiteSpace(Error)) { <p class="notice notice--error" role="alert">@Error</p> }
+</section>
+
+@code {
+    private IJSObjectReference? Module;
+    private IReadOnlyList<WebProfessional> Professionals = [];
+    private IReadOnlyList<ManagerProfessionalWeeklyHour> WeeklyHours = [];
+    private ManagerProfessionalWeeklyHour? EditingHour;
+    private byte DayOfWeek = 1;
+    private TimeOnly Start = new(8, 0), End = new(12, 0);
+    private string Modality = "both";
+    private bool Active = true, Saving;
+    private ulong SelectedId;
+    private bool Loading = true;
+    private string Error = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            Module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/identity-access.js");
+            var professionals = new List<WebProfessional>();
+            foreach (var role in new[] { "doctor", "psychologist" })
+            {
+                for (var page = 1; ; page++)
+                {
+                    var result = await Module.InvokeAsync<WebPage<WebProfessional>>("get", Backend.BaseUrl.ToString(),
+                        $"api/v1/professionals?page={page}&pageSize=100&role={role}");
+                    professionals.AddRange(result.Items);
+                    if (result.Items.Count == 0 || page * result.PageSize >= result.TotalCount) break;
+                }
+            }
+            Professionals = professionals.OrderBy(x => x.FullName).ToArray();
+            SelectedId = Professionals.FirstOrDefault()?.AccountId ?? 0;
+            await LoadHoursAsync();
+        }
+        catch (JSException exception) { Error = exception.Message.Split(" Error:", StringSplitOptions.None)[0]; }
+        Loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+    private async Task LoadHoursAsync()
+    {
+        if (Module is null || SelectedId == 0) { WeeklyHours = []; return; }
+        try
+        {
+            WeeklyHours = await Module.InvokeAsync<IReadOnlyList<ManagerProfessionalWeeklyHour>>("get", Backend.BaseUrl.ToString(),
+                $"api/v1/professionals/{SelectedId}/weekly-hours");
+            Error = "";
+            ClearHour();
+        }
+        catch (JSException exception) { Error = exception.Message.Split(" Error:", StringSplitOptions.None)[0]; }
+    }
+    private void EditHour(ManagerProfessionalWeeklyHour hour)
+    {
+        EditingHour = hour; DayOfWeek = hour.DayOfWeek; Start = TimeOnly.FromTimeSpan(hour.StartTime);
+        End = TimeOnly.FromTimeSpan(hour.EndTime); Modality = hour.ModalityCode; Active = hour.IsActive;
+    }
+    private void ClearHour()
+    {
+        EditingHour = null; DayOfWeek = 1; Start = new(8, 0); End = new(12, 0); Modality = "both"; Active = true;
+    }
+    private async Task SaveHourAsync()
+    {
+        if (Module is null || SelectedId == 0) return;
+        Saving = true;
+        try
+        {
+            var path = $"api/v1/professionals/{SelectedId}/weekly-hours"
+                + (EditingHour is null ? "" : $"/{EditingHour.Id}");
+            await Module.InvokeAsync<ManagerProfessionalWeeklyHour>("sendMethod", Backend.BaseUrl.ToString(), path,
+                EditingHour is null ? "POST" : "PUT", new { dayOfWeek = DayOfWeek, startTime = Start.ToTimeSpan(),
+                    endTime = End.ToTimeSpan(), validFrom = (DateOnly?)null, validUntil = (DateOnly?)null,
+                    isActive = Active, rowVersion = EditingHour?.RowVersion ?? 0, modalityCode = Modality });
+            await LoadHoursAsync();
+        }
+        catch (JSException exception) { Error = exception.Message.Split(" Error:", StringSplitOptions.None)[0]; }
+        finally { Saving = false; }
+    }
+    private async Task DeleteHourAsync(ManagerProfessionalWeeklyHour hour)
+    {
+        if (Module is null) return;
+        try
+        {
+            await Module.InvokeAsync<object?>("sendMethod", Backend.BaseUrl.ToString(),
+                $"api/v1/professionals/{SelectedId}/weekly-hours/{hour.Id}?rowVersion={hour.RowVersion}", "DELETE", null);
+            await LoadHoursAsync();
+        }
+        catch (JSException exception) { Error = exception.Message.Split(" Error:", StringSplitOptions.None)[0]; }
+    }
+    private static string Day(byte day) => day switch { 0 => "Domingo", 1 => "Segunda", 2 => "Terça",
+        3 => "Quarta", 4 => "Quinta", 5 => "Sexta", _ => "Sábado" };
+    public async ValueTask DisposeAsync() { if (Module is not null) try { await Module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+}

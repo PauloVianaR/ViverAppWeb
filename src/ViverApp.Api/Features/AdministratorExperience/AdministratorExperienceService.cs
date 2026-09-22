@@ -15,7 +15,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
 {
     private static readonly HashSet<string> EditableSettings = new(StringComparer.Ordinal)
     {
-        "web.maintenance_mode", "appointments.allow_clinic_payment", "appointments.online_calls_enabled",
+        "web.maintenance_mode", "web.desktop_sidebar_enabled", "appointments.allow_clinic_payment", "appointments.online_calls_enabled",
         "appointments.booking_horizon_days", "appointments.minimum_lead_minutes", "appointments.cancellation_cutoff_hours",
         "appointments.reschedule_cutoff_hours", "appointments.slot_interval_minutes", "appointments.patient_daily_limit",
         "appointments.default_consultation_minutes", "appointments.default_examination_minutes", "appointments.default_surgery_minutes",
@@ -317,7 +317,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
     private static DateTime ToUtc(DateOnly date, TimeZoneInfo timezone) => TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(date.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified), timezone);
     private static void ValidateSetting(string key, JsonElement value)
     {
-        if (key is "web.maintenance_mode" or "appointments.allow_clinic_payment" or "appointments.online_calls_enabled" or "communications.email_enabled" or "communications.sms_enabled" or "premium.manager_can_decide"
+        if (key is "web.maintenance_mode" or "web.desktop_sidebar_enabled" or "appointments.allow_clinic_payment" or "appointments.online_calls_enabled" or "communications.email_enabled" or "communications.sms_enabled" or "premium.manager_can_decide"
             or "manager.appointment_types_enabled" or "manager.professional_schedules_enabled" or "manager.professional_services_enabled" or "professional.patient_scheduling_enabled"
             or "premium.manager_can_manage" or "manager.medical_records_write_enabled"
             or "cash.manager_can_reopen" or "cash.manager_can_view_cumulative_totals"

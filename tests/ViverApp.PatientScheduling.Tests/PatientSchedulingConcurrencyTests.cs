@@ -17,6 +17,47 @@ namespace ViverApp.PatientScheduling.Tests;
 public sealed class PatientSchedulingConcurrencyTests
 {
     [Fact]
+    public async Task VariableMode_UsesOnlyIntervalsRegisteredForTheDate()
+    {
+        var configuration = LoadConfiguration();
+        var fixture = await CreateFixtureAsync(configuration);
+        try
+        {
+            await using var database = CreateContext(configuration);
+            var now = fixture.UtcNow.UtcDateTime;
+            var preference = await database.ProfessionalPreferences.SingleOrDefaultAsync(x => x.ProfessionalAccountId == fixture.DoctorId);
+            if (preference is null)
+            {
+                preference = new ProfessionalPreference
+                {
+                    ProfessionalAccountId = fixture.DoctorId, EmailEnabled = true, SmsEnabled = true,
+                    OnlineEnabled = true, MaxOnlineDaily = 8, MaxInPersonDaily = 16,
+                    AvailabilityMode = "variable", UpdatedAtUtc = now, RowVersion = 1,
+                };
+                database.ProfessionalPreferences.Add(preference);
+            }
+            else { preference.AvailabilityMode = "variable"; preference.RowVersion++; }
+            database.ProfessionalVariableHours.Add(new ProfessionalVariableHour
+            {
+                ProfessionalAccountId = fixture.DoctorId,
+                AvailableDate = fixture.LocalDate.ToDateTime(TimeOnly.MinValue),
+                StartTime = TimeSpan.FromHours(13), EndTime = TimeSpan.FromHours(14),
+                ModalityCode = "online", CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1,
+            });
+            await database.SaveChangesAsync();
+            var service = new PatientSchedulingService(database, new NullAuditWriter(), new FixedTimeProvider(fixture.UtcNow));
+            var slots = await service.GetAvailableSlotsAsync(fixture.PatientId, fixture.DoctorId,
+                fixture.AppointmentTypeId, "online", fixture.LocalDate, 1, CancellationToken.None);
+            Assert.Contains(slots, x => x.StartsAt == new TimeOnly(13, 0));
+            Assert.DoesNotContain(slots, x => x.StartsAt == new TimeOnly(10, 0));
+        }
+        finally
+        {
+            await DeleteFixtureAsync(configuration, fixture);
+        }
+    }
+
+    [Fact]
     public async Task ProfessionalSelection_RequiresActiveAppointmentTypeLink()
     {
         var configuration = LoadConfiguration();
