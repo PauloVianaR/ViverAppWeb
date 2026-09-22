@@ -10,7 +10,7 @@
 
 Reorganizar a operação diária em torno de uma agenda visual responsiva, transformar o histórico atual em uma consulta única de atendimentos, acrescentar o papel Psicólogo com a mesma experiência clínica do Médico e permitir tipos de atendimento que não exigem cobrança.
 
-Esta fase será executada integralmente em uma branch própria, sem iniciar os workers de e-mail/SMS/jobs da Fase 21 (renumerada após sua execução).
+Esta fase será executada integralmente em uma branch própria, sem iniciar os workers de e-mail/SMS/jobs da Fase 22 (renumerada após sua execução).
 
 ## Resultado esperado
 

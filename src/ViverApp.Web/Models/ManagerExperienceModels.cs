@@ -9,7 +9,7 @@ public sealed record ManagerProfileData(ulong AccountId, string FullName, string
 public sealed record ManagerDoctor(ulong AccountId, string FullName, string LicenseLabel);
 public sealed record ManagerProfessionalWeeklyHour(ulong Id, byte DayOfWeek, TimeSpan StartTime, TimeSpan EndTime,
     DateOnly? ValidFrom, DateOnly? ValidUntil, bool IsActive, ulong RowVersion, string ModalityCode);
-public sealed record ManagerCapabilities(bool AppointmentTypesEnabled, bool DoctorSchedulesEnabled,
+public sealed record ManagerCapabilities(bool AppointmentTypesEnabled, bool DoctorSchedulesEnabled, bool ProfessionalServicesEnabled,
     bool PremiumManagementEnabled, bool MedicalRecordWriteEnabled, bool CashReopeningEnabled,
     bool CashCumulativeTotalsEnabled);
 public sealed record ManagerService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal BasePrice, bool RequiresPayment);

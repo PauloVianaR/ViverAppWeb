@@ -17,6 +17,52 @@ namespace ViverApp.PatientScheduling.Tests;
 public sealed class PatientSchedulingConcurrencyTests
 {
     [Fact]
+    public async Task ProfessionalSelection_RequiresActiveAppointmentTypeLink()
+    {
+        var configuration = LoadConfiguration();
+        var fixture = await CreateFixtureAsync(configuration);
+        try
+        {
+            await using (var database = CreateContext(configuration))
+            {
+                var service = new PatientSchedulingService(database, new NullAuditWriter(), new FixedTimeProvider(fixture.UtcNow));
+                var linked = await service.SearchProfessionalsAsync(1, 20, null, null,
+                    fixture.AppointmentTypeId, "online", CancellationToken.None);
+                Assert.Contains(linked.Items, item => item.AccountId == fixture.DoctorId);
+
+                var link = await database.ProfessionalServices.SingleAsync(item =>
+                    item.ProfessionalAccountId == fixture.DoctorId
+                    && item.AppointmentTypeId == fixture.AppointmentTypeId);
+                link.IsActive = false;
+                link.RowVersion++;
+                link.UpdatedAtUtc = fixture.UtcNow.UtcDateTime;
+                await database.SaveChangesAsync();
+            }
+
+            await using (var verification = CreateContext(configuration))
+            {
+                var service = new PatientSchedulingService(verification, new NullAuditWriter(), new FixedTimeProvider(fixture.UtcNow));
+                var unlinked = await service.SearchProfessionalsAsync(1, 20, null, null,
+                    fixture.AppointmentTypeId, "online", CancellationToken.None);
+                Assert.DoesNotContain(unlinked.Items, item => item.AccountId == fixture.DoctorId);
+            }
+
+            var attempt = await AttemptCreateAsync(configuration, fixture.PatientId,
+                $"schedule-{Guid.NewGuid():N}",
+                new AppointmentCreateRequest(fixture.DoctorId, fixture.AppointmentTypeId,
+                    "online", fixture.LocalDate, new TimeOnly(10, 0), null),
+                fixture.UtcNow,
+                CancellationToken.None);
+            Assert.Null(attempt.Response);
+            Assert.Contains("não está mais disponível", attempt.Error, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            await DeleteFixtureAsync(configuration, fixture);
+        }
+    }
+
+    [Fact]
     public async Task PsychologistFreeAppointment_IsConfirmedWithoutPaymentAndCalendarRespectsOwnership()
     {
         var configuration = LoadConfiguration();
@@ -288,6 +334,16 @@ public sealed class PatientSchedulingConcurrencyTests
             EndTime = TimeSpan.FromHours(12),
             ValidFrom = localDate.ToDateTime(TimeOnly.MinValue),
             ValidUntil = localDate.ToDateTime(TimeOnly.MinValue),
+            IsActive = true,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        });
+        await database.SaveChangesAsync();
+        database.ProfessionalServices.Add(new ProfessionalService
+        {
+            ProfessionalAccountId = doctor.Id,
+            AppointmentTypeId = appointmentType.Id,
             IsActive = true,
             CreatedAtUtc = now,
             UpdatedAtUtc = now,

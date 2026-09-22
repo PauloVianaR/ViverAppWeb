@@ -123,7 +123,7 @@ Ao registrar a chegada:
 4. o shell do Médico atualiza o sininho, indicador/contador não lido, popup e áudio;
 5. se o Médico estiver desconectado, a notificação aparece ao reconectar.
 
-A fase pode usar o processamento interno já existente para essa entrega específica. O endurecimento geral de e-mail/SMS e jobs permanece na Fase 21.
+A fase pode usar o processamento interno já existente para essa entrega específica. O endurecimento geral de e-mail/SMS e jobs permanece na Fase 22.
 
 ### Sininho
 

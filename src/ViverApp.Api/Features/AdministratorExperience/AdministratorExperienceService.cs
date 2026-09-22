@@ -20,6 +20,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         "appointments.reschedule_cutoff_hours", "appointments.slot_interval_minutes", "appointments.patient_daily_limit",
         "appointments.default_consultation_minutes", "appointments.default_examination_minutes", "appointments.default_surgery_minutes",
         "appointments.default_procedure_minutes", "manager.appointment_types_enabled", "manager.professional_schedules_enabled",
+        "manager.professional_services_enabled",
         "professional.patient_scheduling_enabled", "premium.manager_can_manage", "manager.medical_records_write_enabled",
         "cash.manager_can_reopen", "cash.manager_can_view_cumulative_totals",
         "appointments.interval_minutes", "communications.email_enabled", "communications.sms_enabled", "premium.manager_can_decide",
@@ -317,7 +318,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
     private static void ValidateSetting(string key, JsonElement value)
     {
         if (key is "web.maintenance_mode" or "appointments.allow_clinic_payment" or "appointments.online_calls_enabled" or "communications.email_enabled" or "communications.sms_enabled" or "premium.manager_can_decide"
-            or "manager.appointment_types_enabled" or "manager.professional_schedules_enabled" or "professional.patient_scheduling_enabled"
+            or "manager.appointment_types_enabled" or "manager.professional_schedules_enabled" or "manager.professional_services_enabled" or "professional.patient_scheduling_enabled"
             or "premium.manager_can_manage" or "manager.medical_records_write_enabled"
             or "cash.manager_can_reopen" or "cash.manager_can_view_cumulative_totals"
             or "appointments.arrival_notifications_enabled" or "appointments.arrival_popup_enabled" or "appointments.arrival_sound_enabled" or "appointments.arrival_mark_read_on_open")

@@ -90,6 +90,17 @@ public sealed record AppointmentTypeResponse(
     ushort DisplayOrder,
     ulong RowVersion);
 
+public sealed record AppointmentTypeProfessionalResponse(
+    ulong ProfessionalAccountId,
+    string FullName,
+    string RoleCode,
+    string LicenseLabel,
+    bool Linked);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record AppointmentTypeProfessionalsUpdateRequest(
+    [param: MaxLength(500)] IReadOnlyList<ulong> ProfessionalAccountIds);
+
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record WeeklyHourWriteRequest(
     [param: Range(0, 6)] byte DayOfWeek,
