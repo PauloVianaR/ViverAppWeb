@@ -25,6 +25,9 @@ public sealed class PatientSchedulingConcurrencyTests
         {
             await using (var database = CreateContext(configuration))
             {
+                await database.ProfessionalWeeklyHours
+                    .Where(item => item.ProfessionalAccountId == fixture.DoctorId)
+                    .ExecuteDeleteAsync();
                 var service = new PatientSchedulingService(database, new NullAuditWriter(), new FixedTimeProvider(fixture.UtcNow));
                 var linked = await service.SearchProfessionalsAsync(1, 20, null, null,
                     fixture.AppointmentTypeId, "online", CancellationToken.None);

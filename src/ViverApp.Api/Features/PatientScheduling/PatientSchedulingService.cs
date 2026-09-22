@@ -45,8 +45,7 @@ public sealed class PatientSchedulingService(
         var query = database.Accounts.AsNoTracking()
             .Where(account => (account.RoleCode == ViverAppRoles.Doctor || account.RoleCode == ViverAppRoles.Psychologist)
                 && account.StatusCode == "active"
-                && account.ProfessionalProfile != null
-                && account.ProfessionalProfile.ProfessionalWeeklyHours.Any(hour => hour.IsActive));
+                && account.ProfessionalProfile != null);
         var normalizedSearch = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
         if (normalizedSearch is not null)
         {

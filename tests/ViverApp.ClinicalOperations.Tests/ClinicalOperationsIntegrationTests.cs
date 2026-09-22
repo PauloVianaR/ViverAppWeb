@@ -192,6 +192,44 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task DoctorExperience_DoesNotExposeInactiveAppointmentTypesInServiceSelection()
+    {
+        await using var context = CreateContext(configuration);
+        var inactive = new AppointmentType
+        {
+            Name = $"__phase8_test__inactive_{Guid.NewGuid():N}",
+            Description = "Serviço inativo que não deve aparecer no perfil profissional.",
+            CategoryCode = "consultation",
+            ModalityCode = "in_person",
+            DurationMinutes = 30,
+            PriceAmount = 100,
+            RequiresPayment = true,
+            IsActive = false,
+            DisplayOrder = 901,
+            CreatedAtUtc = fixture.NowUtc,
+            UpdatedAtUtc = fixture.NowUtc,
+            RowVersion = 1,
+        };
+        context.AppointmentTypes.Add(inactive);
+        await context.SaveChangesAsync();
+        context.ProfessionalServices.Add(new ProfessionalService
+        {
+            ProfessionalAccountId = fixture.DoctorId,
+            AppointmentTypeId = inactive.Id,
+            IsActive = false,
+            CreatedAtUtc = fixture.NowUtc,
+            UpdatedAtUtc = fixture.NowUtc,
+            RowVersion = 1,
+        });
+        await context.SaveChangesAsync();
+
+        var service = new DoctorExperienceService(context, null!, null!, new NoOpAuditWriter(), new FixedTimeProvider(fixture.NowUtc));
+        var services = await service.ServicesAsync(fixture.DoctorId, CancellationToken.None);
+
+        Assert.DoesNotContain(services, item => item.Id == inactive.Id);
+    }
+
+    [Fact]
     public async Task PublishedReport_RectificationCreatesImmutableVersionAndPreservesFirstVersion()
     {
         await using var context = CreateContext(configuration);
