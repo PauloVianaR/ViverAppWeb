@@ -160,7 +160,7 @@ public sealed class AuthController(
             .OrderBy(item => item.Name)
             .Select(item => new RegistrationOption(item.Id, item.Name))
             .ToListAsync(cancellationToken);
-        return Ok(new RegistrationOptionsResponse("2026-09", "2026-09", specialties));
+        return Ok(new RegistrationOptionsResponse(LegalDocumentVersions.Current, LegalDocumentVersions.Current, specialties));
     }
 
     [AllowAnonymous]
@@ -1120,7 +1120,7 @@ public sealed class AuthController(
 
         if (!termsAccepted)
         {
-            ModelState.AddModelError(nameof(termsAccepted), "O aceite dos termos e do aviso de privacidade é obrigatório.");
+            ModelState.AddModelError(nameof(termsAccepted), "Confirme o aceite dos Termos de uso e a leitura da Política de Privacidade.");
         }
 
         if (roleCode == ViverAppRoles.Patient)
@@ -1180,8 +1180,8 @@ public sealed class AuthController(
         database.AccountConsents.Add(new AccountConsent
         {
             AccountId = accountId,
-            TermsVersion = "2026-09",
-            PrivacyVersion = "2026-09",
+            TermsVersion = LegalDocumentVersions.Current,
+            PrivacyVersion = LegalDocumentVersions.Current,
             AcceptedAtUtc = now,
             SourceCode = sourceCode,
         });

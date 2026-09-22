@@ -1,7 +1,11 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
+using System.Xml.Linq;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using ViverApp.Web;
 using ViverApp.Web.Navigation;
 using Xunit;
 
@@ -15,6 +19,18 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     public Task InitializeAsync() => Task.CompletedTask;
 
     public async Task DisposeAsync() => await factory.DisposeAsync();
+
+    [Fact]
+    public void ManagerAppointmentCreate_UsesProfessionalAccountIdContract()
+    {
+        var request = new ManagerAppointmentCreate(10, 20, 30, "in_person",
+            new DateOnly(2026, 9, 23), new TimeOnly(9, 30), null);
+
+        var json = JsonSerializer.Serialize(request);
+
+        Assert.Contains("\"professionalAccountId\":20", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("doctorAccountId", json, StringComparison.Ordinal);
+    }
 
     [Fact]
     public async Task Home_HasBrandFaviconLandmarksAndSkipLink()
@@ -36,6 +52,94 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.Contains("Escolha seu perfil", html, StringComparison.Ordinal);
         Assert.Contains("Ocorreu um erro interno não classificado. Contate o administrador do sistema.", html, StringComparison.Ordinal);
         Assert.Contains("role=\"alertdialog\"", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NonProductionPublicSite_RejectsIndexingAndDoesNotExposeSitemap()
+    {
+        using var client = CreateClient();
+        using var home = await client.GetAsync("/");
+        var html = await ReadUtf8Async(home.Content);
+        Assert.Equal("noindex, nofollow, noarchive", home.Headers.GetValues("X-Robots-Tag").Single());
+        Assert.Contains("rel=\"canonical\"", html, StringComparison.Ordinal);
+        Assert.Contains("https://viveralmenara.com/", html, StringComparison.Ordinal);
+        Assert.Contains("Preferências de cookies", html, StringComparison.Ordinal);
+        Assert.Contains("href=\"/privacidade\"", html, StringComparison.Ordinal);
+
+        using var robots = await client.GetAsync("/robots.txt");
+        Assert.Equal(HttpStatusCode.OK, robots.StatusCode);
+        Assert.Contains("text/plain", robots.Content.Headers.ContentType?.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Disallow: /", await robots.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        using var sitemap = await client.GetAsync("/sitemap.xml");
+        Assert.Equal(HttpStatusCode.NotFound, sitemap.StatusCode);
+    }
+
+    [Fact]
+    public async Task PublishedLegalDocumentsExposeTheirVersionAndPrivateAreasAreNotCached()
+    {
+        using var client = CreateClient();
+        foreach (var path in new[] { "/termos", "/privacidade", "/cookies" })
+        {
+            using var response = await client.GetAsync(path);
+            var html = await ReadUtf8Async(response.Content);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Contains("Documento vigente", html, StringComparison.Ordinal);
+            Assert.Contains("Versão 2026-09-21", html, StringComparison.Ordinal);
+            Assert.Contains("equipe técnica e jurídica da plataforma", html, StringComparison.Ordinal);
+            Assert.DoesNotContain("Codex/OpenAI", html, StringComparison.Ordinal);
+            Assert.DoesNotContain("Documento em elaboração", html, StringComparison.Ordinal);
+            Assert.Equal("noindex, nofollow, noarchive", response.Headers.GetValues("X-Robots-Tag").Single());
+        }
+
+        using var protectedResponse = await client.GetAsync("/paciente");
+        Assert.True(protectedResponse.Headers.CacheControl?.NoStore);
+        Assert.Equal("noindex, nofollow, noarchive", protectedResponse.Headers.GetValues("X-Robots-Tag").Single());
+    }
+
+    [Fact]
+    public async Task PublicInformation_UsesVerifiedClinicIdentityAndInstitutionalChannels()
+    {
+        using var client = CreateClient();
+        foreach (var path in new[] { "/sobre", "/contato", "/termos", "/privacidade", "/cookies" })
+        {
+            using var response = await client.GetAsync(path);
+            var html = await ReadUtf8Async(response.Content);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Contains("CLINICA DE OLHOS JUSTINIANO LTDA", html, StringComparison.Ordinal);
+        }
+
+        var contact = await ReadUtf8Async((await client.GetAsync("/contato")).Content);
+        Assert.Contains("35.843.469/0001-77", contact, StringComparison.Ordinal);
+        Assert.Contains("Rua Tude Tupy, 214", contact, StringComparison.Ordinal);
+        Assert.Contains("contato@viveralmenara.com", contact, StringComparison.Ordinal);
+        Assert.Contains("privacidade@viveralmenara.com", contact, StringComparison.Ordinal);
+        Assert.Contains("seguranca@viveralmenara.com", contact, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SecurityText_UsesTheMonitoredInstitutionalChannel()
+    {
+        using var client = CreateClient();
+        using var response = await client.GetAsync("/.well-known/security.txt");
+        var content = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("text/plain", response.Content.Headers.ContentType?.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Contact: mailto:seguranca@viveralmenara.com", content, StringComparison.Ordinal);
+        Assert.Contains("Canonical: https://viveralmenara.com/.well-known/security.txt", content, StringComparison.Ordinal);
+        Assert.Contains("Preferred-Languages: pt-BR, en", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SitemapCatalog_ContainsOnlyApprovedPublicRouteShapes()
+    {
+        var policy = factory.Services.GetRequiredService<PublicSitePolicy>();
+        var xml = XDocument.Parse(policy.SitemapXml());
+        XNamespace ns = "http://www.sitemaps.org/schemas/sitemap/0.9";
+        var locations = xml.Descendants(ns + "loc").Select(node => node.Value).ToArray();
+        Assert.Equal(8, locations.Length);
+        Assert.All(locations, url => Assert.StartsWith("https://viveralmenara.com/", url, StringComparison.Ordinal));
+        Assert.DoesNotContain(locations, url => url.Contains("/acesso", StringComparison.Ordinal) || url.Contains("/paciente", StringComparison.Ordinal));
     }
 
     [Theory]

@@ -10,7 +10,7 @@
 
 Reorganizar a operação diária em torno de uma agenda visual responsiva, transformar o histórico atual em uma consulta única de atendimentos, acrescentar o papel Psicólogo com a mesma experiência clínica do Médico e permitir tipos de atendimento que não exigem cobrança.
 
-Esta fase será executada integralmente em uma branch própria, sem iniciar os workers de e-mail/SMS/jobs da Fase 20.
+Esta fase será executada integralmente em uma branch própria, sem iniciar os workers de e-mail/SMS/jobs da Fase 22 (renumerada após sua execução).
 
 ## Resultado esperado
 
@@ -30,7 +30,7 @@ Ao concluir a fase:
 - não copiar visualmente o Google Agenda nem depender de APIs do Google Calendar: a referência é apenas o padrão de interação;
 - não criar uma segunda clínica ou associação multiclínica;
 - não permitir que Psicólogo visualize agenda ou prontuário de outro profissional sem uma permissão administrativa que já exista para Gestor/Administrador;
-- não considerar `robots.txt`, SEO, cookies ou documentos jurídicos, reservados à Fase 25;
+- não considerar `robots.txt`, SEO, cookies ou documentos jurídicos, reservados à Fase 20 antecipada;
 - não efetuar cobrança real durante os testes.
 
 ## 1. Descoberta e consolidação antes da migration

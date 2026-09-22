@@ -30,6 +30,7 @@ public sealed class SecurityHeadersMiddleware(
 
         if (surface == SecuritySurface.Api)
         {
+            headers["X-Robots-Tag"] = "noindex, nofollow, noarchive";
             headers["Content-Security-Policy"] =
                 "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; sandbox";
             headers.CacheControl = "no-store";

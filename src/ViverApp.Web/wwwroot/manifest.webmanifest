@@ -1,0 +1,12 @@
+{
+  "name": "Centro Médico Viver",
+  "short_name": "Viver",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#ffffff",
+  "theme_color": "#0b2340",
+  "icons": [
+    { "src": "/images/logo.png", "sizes": "288x288", "type": "image/png", "purpose": "any" }
+  ]
+}

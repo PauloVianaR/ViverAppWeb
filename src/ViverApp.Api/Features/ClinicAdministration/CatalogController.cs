@@ -333,6 +333,98 @@ public sealed class CatalogController(
         return NoContent();
     }
 
+    [HttpGet("appointment-types/{id}/professionals")]
+    [Authorize(Policy = ViverAppPolicies.Management)]
+    [ManagerFeatureGate("manager.professional_services_enabled")]
+    public async Task<ActionResult<IReadOnlyList<AppointmentTypeProfessionalResponse>>> GetAppointmentTypeProfessionals(
+        uint id,
+        CancellationToken cancellationToken)
+    {
+        if (!await database.AppointmentTypes.AsNoTracking().AnyAsync(item => item.Id == id, cancellationToken))
+        {
+            return NotFound();
+        }
+
+        var professionals = await database.ProfessionalProfiles.AsNoTracking()
+            .Where(profile => profile.Account.StatusCode == "active"
+                && (profile.Account.RoleCode == ViverAppRoles.Doctor
+                    || profile.Account.RoleCode == ViverAppRoles.Psychologist))
+            .OrderBy(profile => profile.Account.FullName)
+            .Select(profile => new AppointmentTypeProfessionalResponse(
+                profile.AccountId,
+                profile.Account.FullName,
+                profile.Account.RoleCode,
+                profile.LicenseTypeCode + " " + profile.LicenseStateCode + " " + profile.LicenseNumber,
+                profile.ProfessionalServices.Any(link => link.AppointmentTypeId == id && link.IsActive)))
+            .ToArrayAsync(cancellationToken);
+
+        return Ok(professionals);
+    }
+
+    [HttpPut("appointment-types/{id}/professionals")]
+    [Authorize(Policy = ViverAppPolicies.Management)]
+    [ManagerFeatureGate("manager.professional_services_enabled")]
+    public async Task<ActionResult<IReadOnlyList<AppointmentTypeProfessionalResponse>>> UpdateAppointmentTypeProfessionals(
+        uint id,
+        [FromBody] AppointmentTypeProfessionalsUpdateRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!await database.AppointmentTypes.AnyAsync(item => item.Id == id, cancellationToken))
+        {
+            return NotFound();
+        }
+
+        var selectedIds = request.ProfessionalAccountIds?.Distinct().ToArray() ?? [];
+        var validIds = await database.ProfessionalProfiles.AsNoTracking()
+            .Where(profile => selectedIds.Contains(profile.AccountId)
+                && profile.Account.StatusCode == "active"
+                && (profile.Account.RoleCode == ViverAppRoles.Doctor
+                    || profile.Account.RoleCode == ViverAppRoles.Psychologist))
+            .Select(profile => profile.AccountId)
+            .ToArrayAsync(cancellationToken);
+        if (validIds.Length != selectedIds.Length)
+        {
+            ModelState.AddModelError(nameof(request.ProfessionalAccountIds),
+                "Um ou mais profissionais não existem, estão inativos ou não são clínicos.");
+            return ValidationProblem(ModelState);
+        }
+
+        var now = DateTime.UtcNow;
+        var existing = await database.ProfessionalServices
+            .Where(link => link.AppointmentTypeId == id)
+            .ToArrayAsync(cancellationToken);
+        foreach (var link in existing)
+        {
+            link.IsActive = selectedIds.Contains(link.ProfessionalAccountId);
+            link.UpdatedAtUtc = now;
+            link.RowVersion++;
+        }
+
+        var existingIds = existing.Select(link => link.ProfessionalAccountId).ToHashSet();
+        foreach (var professionalId in selectedIds.Where(professionalId => !existingIds.Contains(professionalId)))
+        {
+            database.ProfessionalServices.Add(new ProfessionalService
+            {
+                ProfessionalAccountId = professionalId,
+                AppointmentTypeId = id,
+                IsActive = true,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+                RowVersion = 1,
+            });
+        }
+
+        await database.SaveChangesAsync(cancellationToken);
+        await auditWriter.WriteAsync(
+            "catalog.appointment_type.professionals_updated",
+            ClinicAdministrationSupport.RequireActorId(User),
+            "appointment_type",
+            id.ToString(),
+            new Dictionary<string, string> { ["linkedCount"] = selectedIds.Length.ToString() },
+            cancellationToken);
+        return await GetAppointmentTypeProfessionals(id, cancellationToken);
+    }
+
     private bool ValidatePagination(int page, int pageSize, string? search)
     {
         if (page >= 1 && pageSize is >= 1 and <= 100 && (search?.Length ?? 0) <= 120)

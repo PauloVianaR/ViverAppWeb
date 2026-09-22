@@ -1,0 +1,99 @@
+@page "/sobre"
+@page "/contato"
+@page "/perguntas-frequentes"
+@page "/termos"
+@page "/privacidade"
+@page "/cookies"
+@page "/acessibilidade"
+@implements IDisposable
+@inject NavigationManager Navigation
+
+<PublicSeo Title="@Title" Description="@Description" Path="@Path" />
+
+<article class="public-document">
+    <p class="eyebrow">Centro Médico Viver</p>
+    <h1>@Title</h1>
+    @if (IsLegalDocument)
+    {
+        <p class="public-document__review" role="status"><strong>Documento vigente.</strong> Versão @PublicSitePolicy.LegalRevision, revisada tecnicamente por @ClinicPublicIdentity.InternalTechnicalReview e aprovada para publicação pelo proprietário em @ClinicPublicIdentity.TechnicalReviewDate.</p>
+    }
+
+    @switch (Path)
+    {
+        case "/sobre":
+            <p>O <strong>@ClinicPublicIdentity.BrandName</strong> é a identidade pública utilizada nesta plataforma pela pessoa jurídica <strong>@ClinicPublicIdentity.LegalName</strong>, inscrita no CNPJ sob o nº <strong>@ClinicPublicIdentity.TaxId</strong>.</p>
+            <p>A clínica está localizada na @ClinicPublicIdentity.StreetAddress, @ClinicPublicIdentity.CityAddress. Sua atividade principal cadastrada é o atendimento médico ambulatorial com recursos para realização de procedimentos cirúrgicos; também constam atividades de consultas e de atendimento de urgência em sua inscrição.</p>
+            <p>O portal permite agendamento, acompanhamento de atendimentos e comunicação entre pacientes e profissionais autorizados. A disponibilidade de cada especialidade, profissional, modalidade e horário é informada durante o agendamento.</p>
+            <p class="muted">Situação cadastral consultada no comprovante de inscrição: ativa desde 23/12/2019. “Centro Médico Viver” é a marca de apresentação do portal; o nome fantasia aparece oculto no comprovante fornecido.</p>
+            break;
+        case "/contato":
+            <section><h2>Atendimento geral</h2><address><strong>@ClinicPublicIdentity.LegalName</strong><br />@ClinicPublicIdentity.StreetAddress<br />@ClinicPublicIdentity.CityAddress</address><p><a href="tel:@ClinicPublicIdentity.PhoneUri">@ClinicPublicIdentity.PhoneDisplay</a><br /><a href="mailto:@ClinicPublicIdentity.PublicEmail">@ClinicPublicIdentity.PublicEmail</a></p></section>
+            <section><h2>Privacidade e proteção de dados</h2><p>Para exercer direitos relacionados a dados pessoais ou esclarecer como eles são tratados, escreva para <a href="mailto:@ClinicPublicIdentity.PrivacyEmail">@ClinicPublicIdentity.PrivacyEmail</a>. A identidade do solicitante poderá ser confirmada de forma proporcional ao risco antes da entrega ou alteração de informações.</p></section>
+            <section id="seguranca"><h2>Segurança</h2><p>Para comunicar uma possível vulnerabilidade, sem incluir dados de pacientes ou explorar sistemas, utilize <a href="mailto:@ClinicPublicIdentity.SecurityEmail">@ClinicPublicIdentity.SecurityEmail</a>. Este canal não representa programa de recompensa nem autorização para testes invasivos.</p></section>
+            <p class="public-document__notice"><strong>Importante:</strong> estes canais não substituem serviços de urgência ou emergência. Não envie prontuário, exames, credenciais ou outros dados sensíveis por e-mail comum; quando necessário, a clínica indicará um meio autenticado.</p>
+            break;
+        case "/perguntas-frequentes":
+            <section><h2>Como criar minha conta?</h2><p>Escolha o perfil no cadastro. A opção inicial usa sua conta Google; também há cadastro clássico por contato e senha.</p></section>
+            <section><h2>Profissionais entram imediatamente?</h2><p>O cadastro de Médico, Psicólogo ou Gestor depende de aprovação administrativa.</p></section>
+            <section><h2>Onde acompanho meus atendimentos?</h2><p>Após entrar, use sua área pessoal para consultar agenda, atendimentos e ações disponíveis ao seu perfil.</p></section>
+            <section><h2>Como falar sobre meus dados pessoais?</h2><p>Use o canal <a href="mailto:@ClinicPublicIdentity.PrivacyEmail">@ClinicPublicIdentity.PrivacyEmail</a>. Poderemos solicitar confirmação de identidade antes de atender pedidos que envolvam dados clínicos ou de conta.</p></section>
+            <section><h2>Posso usar o portal em uma emergência?</h2><p>Não. O portal é destinado à gestão de atendimentos e não deve ser usado para pedir socorro ou substituir avaliação presencial de urgência.</p></section>
+            break;
+        case "/termos":
+            <section><h2>1. Identificação e objeto</h2><p>Estes termos disciplinam o uso do portal @ClinicPublicIdentity.BrandName, operado por @ClinicPublicIdentity.LegalName, CNPJ @ClinicPublicIdentity.TaxId. O portal organiza contas, agendamentos, pagamentos, comunicações e documentos relacionados aos serviços da clínica; ele não substitui orientação médica, diagnóstico nem serviço de emergência.</p></section>
+            <section><h2>2. Cadastro, papéis e segurança</h2><p>A conta é individual e deve conter informações verdadeiras e atualizadas. Pacientes podem criar o próprio acesso; cadastros de Médico, Psicólogo e Gestor dependem de aprovação administrativa. O usuário deve proteger senha, conta Google, códigos e dispositivos, comunicar uso suspeito e nunca acessar dados de outra pessoa sem autorização.</p></section>
+            <section><h2>3. Agendamento e atendimento</h2><p>Datas, profissionais, modalidades, serviços e valores disponíveis são apresentados no fluxo de agendamento. Confirmação, remarcação, chegada, ausência, cancelamento e conclusão seguem o estado exibido no portal e as regras informadas pela clínica. Uma solicitação só é considerada concluída após a confirmação mostrada pelo sistema.</p></section>
+            <section><h2>4. Pagamentos, descontos e estornos</h2><p>Quando houver cobrança, o valor final é exibido antes da confirmação. Pagamentos on-line podem ser processados por provedor contratado; a clínica não recebe o número completo do cartão. Descontos, inclusive Premium, dependem das regras ativas no momento. Cancelamentos, estornos e nova cobrança seguem a situação do atendimento, o meio de pagamento e a legislação aplicável.</p></section>
+            <section><h2>5. Teleatendimento</h2><p>Quando oferecido, o teleatendimento depende de indicação profissional, identificação das partes, condições técnicas e consentimentos próprios. Falhas de conexão podem exigir reconexão, reagendamento ou continuidade por outro meio seguro. O usuário deve buscar atendimento presencial ou serviço de emergência quando a condição não puder ser conduzida remotamente.</p></section>
+            <section><h2>6. Prontuário e documentos</h2><p>Registros clínicos são acessados apenas por pessoas autorizadas e permanecem sujeitos ao dever de sigilo e às regras profissionais e legais. Documentos disponibilizados no portal não devem ser publicados, adulterados ou usados em nome de terceiros.</p></section>
+            <section><h2>7. Condutas proibidas</h2><p>É proibido fraudar identidade ou pagamento, tentar contornar autorização, explorar vulnerabilidades, automatizar acessos abusivos, inserir código malicioso, interromper o serviço ou usar o portal para violar direitos. A clínica poderá limitar ou suspender acessos para investigar abuso, cumprir obrigação ou proteger pessoas e sistemas, preservadas as garantias legais aplicáveis.</p></section>
+            <section><h2>8. Disponibilidade e responsabilidades</h2><p>A equipe adota medidas razoáveis de disponibilidade e segurança, mas interrupções técnicas e manutenções podem ocorrer. Nenhuma disposição exclui direitos obrigatórios do consumidor ou responsabilidades que a lei não permita afastar. O usuário continua responsável pela qualidade de sua conexão e pela proteção do dispositivo utilizado.</p></section>
+            <section><h2>9. Propriedade intelectual e comunicações</h2><p>Marca, interface, textos e software são protegidos nos limites legais. O usuário recebe apenas permissão pessoal para utilizar o serviço. Comunicações essenciais de segurança, cadastro e atendimento podem ser enviadas aos contatos informados; eventual marketing exigirá tratamento separado e opção de recusa.</p></section>
+            <section><h2>10. Alterações, suporte e legislação</h2><p>Mudanças materiais terão nova versão e, quando necessário, novo aceite. Dúvidas operacionais podem ser enviadas a <a href="mailto:@ClinicPublicIdentity.PublicEmail">@ClinicPublicIdentity.PublicEmail</a>. Aplicam-se as leis brasileiras, preservados o foro legalmente competente e todos os direitos que não possam ser renunciados.</p></section>
+            break;
+        case "/privacidade":
+            <section><h2>1. Controlador e contato</h2><p>@ClinicPublicIdentity.LegalName, CNPJ @ClinicPublicIdentity.TaxId, com endereço na @ClinicPublicIdentity.StreetAddress, @ClinicPublicIdentity.CityAddress, é a controladora dos dados tratados no contexto clínico e operacional descrito nesta política. O canal de privacidade é <a href="mailto:@ClinicPublicIdentity.PrivacyEmail">@ClinicPublicIdentity.PrivacyEmail</a>. A designação formal de encarregado, se aplicável, será publicada após decisão institucional.</p></section>
+            <section><h2>2. Dados tratados</h2><p>Podem ser tratados dados de identificação e contato; autenticação e segurança; endereço; dados profissionais; agendamentos, presença e comunicações; cobranças, pagamentos e estornos; comprovantes; registros de auditoria; e dados de saúde contidos em prontuários, anamnese, laudos, documentos e teleatendimento. Dados de saúde são sensíveis e recebem controles adicionais.</p></section>
+            <section><h2>3. Fontes e finalidades</h2><p>Os dados são fornecidos pelo titular, responsáveis autorizados, equipe clínica, conta Google vinculada, meios de pagamento e integrações necessárias. São usados para identificar e autenticar pessoas, aprovar perfis profissionais, prestar e documentar cuidados, gerenciar agenda e caixa, processar cobranças, comunicar eventos do atendimento, prevenir fraude, manter segurança, cumprir obrigações e exercer direitos.</p></section>
+            <section><h2>4. Bases legais</h2><p>Conforme cada operação, o tratamento poderá se apoiar na execução de contrato e procedimentos preliminares; cumprimento de obrigação legal ou regulatória; exercício regular de direitos; proteção da vida; tutela da saúde por profissionais e serviços de saúde; legítimo interesse após avaliação aplicável; e consentimento quando ele for realmente exigido. Consentimento de cookies opcionais, consentimento clínico e aceite dos termos são decisões distintas.</p></section>
+            <section><h2>5. Compartilhamento e operadores</h2><p>O acesso interno é limitado ao necessário para cada papel. Dados podem ser compartilhados com profissionais responsáveis e fornecedores indispensáveis de hospedagem e infraestrutura, armazenamento privado/CDN Cloudflare, autenticação Google, pagamentos PagBank, envio de e-mail e SMSBarato, suporte e autoridades quando houver dever legal. Cada fornecedor deve receber apenas o necessário e atuar sob finalidade definida. Dados clínicos não são vendidos nem enviados a publicidade, pixels, mapas de calor ou replay de sessão.</p></section>
+            <section><h2>6. Transferências internacionais</h2><p>Alguns fornecedores globais podem tratar dados fora do Brasil. Antes da produção, a clínica deve registrar os países, agentes, salvaguardas e mecanismo legal aplicável a cada transferência. Esta política não autoriza transferência genérica nem compartilhamento para finalidade nova.</p></section>
+            <section><h2>7. Retenção e eliminação</h2><p>Os dados são mantidos durante a relação e pelo período necessário à finalidade, às obrigações legais, regulatórias e ao exercício de direitos. O prontuário observa o prazo mínimo legal de 20 anos contado do último registro antes de eventual eliminação ou destinação adequada. Registros financeiros, fiscais, de segurança, conta, documentos e backups seguirão uma matriz formal de retenção ainda sujeita à aprovação institucional e jurídica. Pedidos de exclusão não alcançam dados cuja guarda seja obrigatória ou necessária ao exercício de direitos.</p></section>
+            <section><h2>8. Direitos do titular</h2><p>O titular pode solicitar confirmação e acesso, correção, informação sobre compartilhamentos, anonimização, bloqueio ou eliminação quando cabíveis, portabilidade nos limites regulamentares, revisão de decisão automatizada, oposição e revogação de consentimento. O pedido deve ser enviado a <a href="mailto:@ClinicPublicIdentity.PrivacyEmail">@ClinicPublicIdentity.PrivacyEmail</a>; poderemos confirmar identidade e autoridade de representante antes de entregar ou alterar dados.</p></section>
+            <section><h2>9. Crianças e adolescentes</h2><p>Quando o atendimento envolver criança ou adolescente, serão observados seu melhor interesse, a participação do responsável quando exigida e o grau de autonomia compatível com a idade e a situação clínica. O portal não deve ser usado por alguém que não possua capacidade ou autorização para o ato pretendido.</p></section>
+            <section><h2>10. Segurança, incidentes e decisões automatizadas</h2><p>São adotados controles de autenticação, autorização por papel, MFA administrativo, criptografia em trânsito, registros de auditoria, proteção de requisições e armazenamento privado. Nenhuma medida elimina todo risco. Suspeitas de incidente podem ser comunicadas a <a href="mailto:@ClinicPublicIdentity.SecurityEmail">@ClinicPublicIdentity.SecurityEmail</a>; incidentes confirmados serão avaliados e comunicados às autoridades e titulares quando exigido. O sistema não toma atualmente decisão clínica exclusivamente automatizada.</p></section>
+            <section><h2>11. Cookies e alterações</h2><p>Cookies necessários protegem sessão e requisições; preferências opcionais são explicadas na Política de Cookies. Mudanças materiais receberão nova versão e data de vigência, com aviso e novo aceite quando aplicável.</p></section>
+            break;
+        case "/cookies":
+            <section><h2>1. Como estas tecnologias funcionam</h2><p>Cookies são pequenos registros enviados pelo site ao navegador; o armazenamento local guarda preferências no próprio dispositivo. O portal usa o mínimo necessário para autenticação e segurança. Cookies não essenciais ficam desabilitados enquanto não houver uma escolha válida.</p></section>
+            <section><h2>2. Itens necessários</h2><div class="public-document__table" role="region" aria-label="Cookies necessários" tabindex="0"><table><thead><tr><th>Item</th><th>Finalidade</th><th>Duração aproximada</th></tr></thead><tbody><tr><td><code>__Host-ViverApp.Session</code></td><td>Manter sessão autenticada e revogável.</td><td>Até 30 dias.</td></tr><tr><td><code>__Host-ViverApp.External</code></td><td>Concluir temporariamente o vínculo externo, inclusive Google.</td><td>Até 5 minutos.</td></tr><tr><td><code>__Host-ViverApp.Google.Correlation.*</code></td><td>Proteger a correlação no login Google.</td><td>Somente durante o login.</td></tr><tr><td><code>__Host-ViverApp.Api.Antiforgery</code> e <code>__Host-ViverApp.Web.Antiforgery</code></td><td>Impedir requisições forjadas.</td><td>Sessão técnica do navegador.</td></tr></tbody></table></div><p>Em desenvolvimento HTTP os nomes podem terminar em <code>.Local</code>; em produção são usados atributos seguros, conforme a finalidade.</p></section>
+            <section><h2>3. Preferências locais</h2><p><code>viverappweb.cookie-preferences</code> guarda no navegador a versão da política, categorias escolhidas, instante e origem da decisão. Não contém nome, documento, contato nem dado clínico e permanece até ser substituído ou apagado pelo navegador.</p></section>
+            <section><h2>4. Medição e marketing</h2><p>Não há Google Analytics, pixel, heatmap, replay de sessão ou cookie de marketing instalado. Por isso, aceitar todas as categorias não ativa rastreadores inexistentes. Uma futura inclusão exigirá atualização desta política e nova escolha quando cabível.</p></section>
+            <section><h2>5. Como escolher ou retirar</h2><p>Use “Preferências de cookies” no rodapé para aceitar, recusar ou personalizar itens não necessários. Também é possível limpar cookies e armazenamento nas configurações do navegador; isso pode encerrar a sessão ou exigir nova escolha. Itens estritamente necessários não podem ser desligados pelo painel sem inviabilizar segurança e autenticação.</p></section>
+            <section><h2>6. Contato e atualização</h2><p>Dúvidas podem ser enviadas a <a href="mailto:@ClinicPublicIdentity.PrivacyEmail">@ClinicPublicIdentity.PrivacyEmail</a>. O inventário será revisto após a configuração final do domínio e sempre que houver nova integração.</p></section>
+            break;
+        case "/acessibilidade":
+            <p>A interface foi construída para navegação por teclado, foco visível, leitura semântica e adaptação a telas de tamanhos distintos. A validação completa com tecnologias assistivas e zoom ainda faz parte da homologação.</p>
+            <p>Para comunicar uma barreira de acessibilidade, descreva a página, ação e tecnologia assistiva utilizada em <a href="mailto:@ClinicPublicIdentity.PublicEmail">@ClinicPublicIdentity.PublicEmail</a>. Não inclua dados de saúde no relato por e-mail. Esta declaração é preliminar e não afirma certificação.</p>
+            break;
+    }
+</article>
+
+@code {
+    private string Path => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant();
+    private string Title => Path switch
+    {
+        "/sobre" => "Sobre a clínica", "/contato" => "Contato", "/perguntas-frequentes" => "Perguntas frequentes",
+        "/termos" => "Termos de uso", "/privacidade" => "Privacidade", "/cookies" => "Política de cookies",
+        "/acessibilidade" => "Acessibilidade", _ => "Informações",
+    };
+    private string Description => $"Informações sobre {Title.ToLowerInvariant()} do Centro Médico Viver, operado por {ClinicPublicIdentity.LegalName}.";
+    private bool IsLegalDocument => Path is "/termos" or "/privacidade" or "/cookies";
+
+    protected override void OnInitialized() => Navigation.LocationChanged += HandleLocationChanged;
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs args) =>
+        _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Navigation.LocationChanged -= HandleLocationChanged;
+}

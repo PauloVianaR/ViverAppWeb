@@ -118,6 +118,14 @@
         </nav>
     }
 </div>
+<footer class="site-footer" aria-label="Informações institucionais">
+    <span>@ClinicPublicIdentity.BrandName · @ClinicPublicIdentity.LegalName · CNPJ @ClinicPublicIdentity.TaxId</span>
+    <nav aria-label="Informações e políticas">
+        <a href="/sobre">Sobre</a><a href="/contato">Contato</a><a href="/perguntas-frequentes">Perguntas frequentes</a>
+        <a href="/termos">Termos</a><a href="/privacidade">Privacidade</a><a href="/cookies">Cookies</a><a href="/acessibilidade">Acessibilidade</a>
+        <CookiePreferences />
+    </nav>
+</footer>
 @if(ArrivalToast is not null){<aside class="arrival-toast" role="status" aria-live="polite"><strong>Paciente chegou</strong><span>Atendimento @ArrivalToast.AppointmentNumber · senha @ArrivalToast.QueueNumber</span><button type="button" @onclick="()=>OpenRealtimeAsync(ArrivalToast)">Abrir atendimento</button></aside>}
 <div id="blazor-error-ui" data-nosnippet>
     <div class="fatal-error-card" role="alertdialog" aria-modal="true" aria-labelledby="fatal-error-title">

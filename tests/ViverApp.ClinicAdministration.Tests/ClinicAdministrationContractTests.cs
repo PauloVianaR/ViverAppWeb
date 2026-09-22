@@ -44,6 +44,7 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
     [InlineData("/api/v1/clinic")]
     [InlineData("/api/v1/catalog/specialties")]
     [InlineData("/api/v1/catalog/appointment-types")]
+    [InlineData("/api/v1/catalog/appointment-types/1/professionals")]
     [InlineData("/api/v1/professionals")]
     [InlineData("/api/v1/users")]
     [InlineData("/api/v1/administrator/home")]

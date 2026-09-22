@@ -13,7 +13,7 @@ public sealed record ManagerHomeSources(IReadOnlyList<ulong> Today, IReadOnlyLis
 public sealed record ManagerProfileResponse(ulong AccountId, string FullName, string? Email, string? Phone, string? TaxId,
     bool EmailVerified, bool PhoneVerified, bool EmailEnabled, bool SmsEnabled, ulong AccountRowVersion, ulong PreferenceRowVersion);
 public sealed record ManagerDoctorOption(ulong AccountId, string FullName, string LicenseLabel);
-public sealed record ManagerCapabilitiesResponse(bool AppointmentTypesEnabled, bool DoctorSchedulesEnabled,
+public sealed record ManagerCapabilitiesResponse(bool AppointmentTypesEnabled, bool DoctorSchedulesEnabled, bool ProfessionalServicesEnabled,
     bool PremiumManagementEnabled, bool MedicalRecordWriteEnabled, bool CashReopeningEnabled,
     bool CashCumulativeTotalsEnabled);
 public sealed record ManagerServiceOption(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode,

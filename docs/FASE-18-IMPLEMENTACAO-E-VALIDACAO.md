@@ -2,7 +2,7 @@
 
 ## Resultado
 
-O prontuário eletrônico foi implementado na branch `codex/fase-18-prontuario-eletronico`, sem implementar a Agenda/Psicólogo da Fase 19 nem iniciar e-mail, SMS ou jobs da Fase 20. Médico, Gestor e Administrador acessam uma visão centrada no Paciente. Médico vinculado e Gestor podem registrar conteúdo clínico; a autoria do Gestor é controlada pela configuração administrativa `manager.medical_records_write_enabled`, ligada por padrão.
+O prontuário eletrônico foi implementado na branch `codex/fase-18-prontuario-eletronico`, sem implementar a Agenda/Psicólogo da Fase 19 nem iniciar e-mail, SMS ou jobs da Fase 22. Médico, Gestor e Administrador acessam uma visão centrada no Paciente. Médico vinculado e Gestor podem registrar conteúdo clínico; a autoria do Gestor é controlada pela configuração administrativa `manager.medical_records_write_enabled`, ligada por padrão.
 
 ## Dados e integridade
 

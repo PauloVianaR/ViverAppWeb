@@ -8,7 +8,7 @@
 
 Entregar um prontuário eletrônico centrado no Paciente para Médico, Gestor e Administrador, com visão geral, linha do tempo, informações clínicas, anamnese/evolução, financeiro, documentos e PDF privado, preservando autoria médica, sigilo, versionamento e auditoria.
 
-Esta fase não inicia a Agenda/Psicólogo da Fase 19, e-mail/SMS/jobs da Fase 20 nem altera o legado.
+Esta fase não inicia a Agenda/Psicólogo da Fase 19, e-mail/SMS/jobs da Fase 22 nem altera o legado.
 
 ## Referência visual
 
@@ -35,7 +35,7 @@ A Web não copiará aparência, fotografia, dados ou textos do exemplo. Em deskt
 - PDF e documento obedecem exatamente ao recorte autorizado da tela;
 - nenhuma informação clínica entra em logs, telemetria, analytics, popup ou CDN pública;
 - acesso sensível usa autorização revalidada, justificativa quando aplicável, step-up, `no-store` e auditoria append-only;
-- nenhuma funcionalidade da Fase 19 ou da Fase 20 será antecipada.
+- nenhuma funcionalidade da Fase 19 ou da Fase 22 será antecipada.
 
 ## Decisão de acesso por papel
 
@@ -297,7 +297,7 @@ Queries projetam apenas campos permitidos, limitam intervalo/página, evitam N+1
 12. atualizar decisões anteriores e matriz de paridade;
 13. executar build, suíte integral, MySQL, segurança e privacidade;
 14. validar exclusivamente no monitor 3 em celular, tablet e desktop;
-15. parar sem implementar a Fase 19 nem iniciar a Fase 20.
+15. parar sem implementar a Fase 19 nem iniciar a Fase 22.
 
 ## Testes mínimos
 
@@ -352,7 +352,7 @@ Queries projetam apenas campos permitidos, limitam intervalo/página, evitam N+1
 - migration foi aplicada no MySQL local 8.0.41 e EF regenerado por DB-First;
 - build, suíte integral, segurança, privacidade e validação visual estão aprovados;
 - decisões das Fases 8/13/14 e matriz de paridade foram atualizadas;
-- Fase 19 não foi implementada, Fase 20 não foi iniciada e nenhuma pendência real foi ocultada.
+- Fase 19 não foi implementada, Fase 22 não foi iniciada e nenhuma pendência real foi ocultada.
 
 ## Implementação realizada
 
