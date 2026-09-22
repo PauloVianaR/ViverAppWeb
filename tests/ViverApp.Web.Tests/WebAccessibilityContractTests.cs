@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -18,6 +19,18 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     public Task InitializeAsync() => Task.CompletedTask;
 
     public async Task DisposeAsync() => await factory.DisposeAsync();
+
+    [Fact]
+    public void ManagerAppointmentCreate_UsesProfessionalAccountIdContract()
+    {
+        var request = new ManagerAppointmentCreate(10, 20, 30, "in_person",
+            new DateOnly(2026, 9, 23), new TimeOnly(9, 30), null);
+
+        var json = JsonSerializer.Serialize(request);
+
+        Assert.Contains("\"professionalAccountId\":20", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("doctorAccountId", json, StringComparison.Ordinal);
+    }
 
     [Fact]
     public async Task Home_HasBrandFaviconLandmarksAndSkipLink()

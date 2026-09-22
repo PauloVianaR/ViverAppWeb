@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ViverApp.Web;
 
 public sealed record ManagerHomeData(ManagerProfileData Profile, ManagerHomeCounters Counters, ManagerHomeSources Sources, IReadOnlyList<ManagerAppointment> Today);
@@ -13,6 +15,14 @@ public sealed record ManagerCapabilities(bool AppointmentTypesEnabled, bool Doct
     bool PremiumManagementEnabled, bool MedicalRecordWriteEnabled, bool CashReopeningEnabled,
     bool CashCumulativeTotalsEnabled);
 public sealed record ManagerService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal BasePrice, bool RequiresPayment);
+public sealed record ManagerAppointmentCreate(
+    [property: JsonPropertyName("patientAccountId")] ulong PatientAccountId,
+    [property: JsonPropertyName("professionalAccountId")] ulong ProfessionalAccountId,
+    [property: JsonPropertyName("appointmentTypeId")] uint AppointmentTypeId,
+    [property: JsonPropertyName("modalityCode")] string ModalityCode,
+    [property: JsonPropertyName("localDate")] DateOnly LocalDate,
+    [property: JsonPropertyName("localStartsAt")] TimeOnly LocalStartsAt,
+    [property: JsonPropertyName("patientNotes")] string? PatientNotes);
 public sealed record ManagerReportMetadata(bool Exists, string? StatusCode, uint VersionCount, DateTime? PublishedAtUtc);
 public sealed record ManagerPaymentMetadata(ulong? Id, string StatusCode, string? MethodCode, DateTime? PaidAtUtc,
     string? CardLastFour, string? AuthorizationReference, ulong RowVersion);
