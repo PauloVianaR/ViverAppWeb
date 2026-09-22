@@ -88,7 +88,8 @@ public sealed record AppointmentTypeResponse(
     bool RequiresPayment,
     bool IsActive,
     ushort DisplayOrder,
-    ulong RowVersion);
+    ulong RowVersion,
+    bool CanDelete = false);
 
 public sealed record AppointmentTypeProfessionalResponse(
     ulong ProfessionalAccountId,

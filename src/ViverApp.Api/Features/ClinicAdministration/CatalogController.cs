@@ -202,8 +202,13 @@ public sealed class CatalogController(
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
+        var ids = entities.Select(item => item.Id).ToArray();
+        var usedIds = await database.Appointments.AsNoTracking()
+            .Where(item => ids.Contains(item.AppointmentTypeId))
+            .Select(item => item.AppointmentTypeId).Distinct().ToArrayAsync(cancellationToken);
+        var used = usedIds.ToHashSet();
         return Ok(new PagedResponse<AppointmentTypeResponse>(
-            entities.Select(ToResponse).ToArray(),
+            entities.Select(item => ToResponse(item, !used.Contains(item.Id))).ToArray(),
             page,
             pageSize,
             total));
@@ -330,6 +335,36 @@ public sealed class CatalogController(
         }
 
         await Audit("catalog.appointment_type.deactivated", "appointment_type", id.ToString(), cancellationToken);
+        return NoContent();
+    }
+
+    [HttpDelete("appointment-types/{id}/permanent")]
+    [Authorize(Policy = ViverAppPolicies.Management)]
+    [ManagerFeatureGate("manager.appointment_types_enabled")]
+    public async Task<IActionResult> DeleteUnusedAppointmentType(
+        uint id, [FromQuery] ulong rowVersion, CancellationToken cancellationToken)
+    {
+        if (rowVersion == 0)
+            return Problem(statusCode: 400, title: "Recarregue o tipo de atendimento antes de excluí-lo.");
+
+        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        var entity = await database.AppointmentTypes.SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (entity is null) return NotFound();
+        if (entity.RowVersion != rowVersion) return ClinicAdministrationSupport.ConcurrencyProblem(this);
+        if (await database.Appointments.AsNoTracking().AnyAsync(item => item.AppointmentTypeId == id, cancellationToken))
+            return ConflictProblem("Este tipo já foi usado em um agendamento e não pode ser excluído. Você pode desativá-lo.");
+
+        var links = await database.ProfessionalServices.Where(item => item.AppointmentTypeId == id)
+            .ToListAsync(cancellationToken);
+        database.ProfessionalServices.RemoveRange(links);
+        ClinicAdministrationSupport.SetConcurrency(database, entity, nameof(AppointmentType.RowVersion), rowVersion);
+        database.AppointmentTypes.Remove(entity);
+        var save = await TrySaveWithConcurrency(cancellationToken);
+        if (save == SaveResult.Concurrency) return ClinicAdministrationSupport.ConcurrencyProblem(this);
+        if (save == SaveResult.Conflict)
+            return ConflictProblem("O tipo foi associado a um atendimento durante a exclusão. Recarregue a lista.");
+        await transaction.CommitAsync(cancellationToken);
+        await Audit("catalog.appointment_type.deleted", "appointment_type", id.ToString(), cancellationToken);
         return NoContent();
     }
 
@@ -481,7 +516,7 @@ public sealed class CatalogController(
     private static SpecialtyResponse ToResponse(Specialty item) =>
         new(item.Id, item.Name, item.IsActive, item.RowVersion);
 
-    private static AppointmentTypeResponse ToResponse(AppointmentType item) => new(
+    private static AppointmentTypeResponse ToResponse(AppointmentType item, bool canDelete = false) => new(
         item.Id,
         item.Name,
         item.Description,
@@ -492,7 +527,8 @@ public sealed class CatalogController(
         item.RequiresPayment,
         item.IsActive,
         item.DisplayOrder,
-        item.RowVersion);
+        item.RowVersion,
+        canDelete);
 
     private enum SaveResult
     {

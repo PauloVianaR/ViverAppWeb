@@ -1,0 +1,13 @@
+<details class="clinic-section">
+    <summary>
+        <span class="clinic-section__heading"><strong>@Title</strong>@if (!string.IsNullOrWhiteSpace(Description)) { <small>@Description</small> }</span>
+        <span class="clinic-section__indicator" aria-hidden="true">⌄</span>
+    </summary>
+    <div class="clinic-section__content">@ChildContent</div>
+</details>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Description { get; set; }
+    [Parameter, EditorRequired] public RenderFragment ChildContent { get; set; } = null!;
+}

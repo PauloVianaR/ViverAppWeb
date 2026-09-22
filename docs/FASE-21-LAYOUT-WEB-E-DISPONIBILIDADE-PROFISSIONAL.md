@@ -160,3 +160,13 @@ O schema real será decidido na fase após inspeção do banco. Todas as migrati
 - migrations aplicadas e verificadas em `viverappweb`/MySQL 8.0.41, scaffold regenerado e suíte verde;
 - validação visual concluída no navegador integrado do Codex;
 - nenhuma implementação da fase seguinte iniciada.
+
+## Ajustes de homologação de 22/09/2026
+
+- O editor de datas variáveis agora impede selecionar datas passadas ou além dos dois anos permitidos pela API; falhas de validação exibem a causa em português, sem stack JavaScript, também no aviso global. A semana de **14 a 18/06/2027**, 08h–18h, foi salva pelo navegador integrado para a Psicóloga Validação. O mesmo intervalo em junho de **2026** já é passado e fica indisponível na interface.
+- Agenda diária, semanal, mensal e anual não inclui atendimentos concluídos ou cancelados. O calendário de disponibilidade também não os marca como dias ocupados/conflitos. Os testes no MySQL comprovam a retirada de `BookedDates` e cobrem Paciente, Psicólogo, Gestor e Administrador nas quatro visualizações da Agenda.
+- Calendário e edição por data aparecem somente no modo variável selecionado; grade semanal aparece somente no modo recorrente, nos acessos de Gestor, Administrador e profissional.
+- A navegação lateral passa a receber a rota atual de fato, destacando o item/ícone ativo na cor do perfil e sem marcar rotas secundárias.
+- Tipos de atendimento sem qualquer agendamento recebem a ação **Excluir**, com confirmação, proteção por `row_version`, remoção dos vínculos profissionais, bloqueio server-side caso passem a ter agendamentos e auditoria. O fluxo de desativação dos tipos usados permanece.
+- As funções de Clínica do Gestor e do Administrador foram agrupadas em seções recolhidas por padrão. Cards e detalhes financeiros de atendimentos gratuitos mostram **Sem cobrança**.
+- Verificações: build sem avisos; 233 testes aprovados nos sete projetos; MySQL 8.0.41, `viverappweb` e migrations conferidos. No navegador integrado foram conferidos o Gestor em desktop, tablet e celular, o menu lateral aberto/recolhido, as seções recolhidas e o salvamento da semana variável da psicóloga de teste. O próprio perfil da Psicóloga também foi conferido, com grade semanal somente no recorrente e calendário somente no variável. A inspeção visual individual de Administrador e Médico continua registrada em `.local/PENDENCIAS.md`.

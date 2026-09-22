@@ -1,6 +1,6 @@
 @using ViverApp.Web.Navigation
 
-<aside class="desktop-sidebar" aria-label="Navegação da área @Definition.Label">
+<aside class="desktop-sidebar @(Collapsed ? "desktop-sidebar--collapsed" : null)" aria-label="Navegação da área @Definition.Label">
     <div class="desktop-sidebar__heading">
         <span>@Definition.Context</span>
         <button class="desktop-sidebar__toggle" type="button" title="@(Collapsed ? "Expandir menu" : "Recolher menu")"

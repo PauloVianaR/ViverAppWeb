@@ -18,7 +18,9 @@
         </div>
         @if (SelectedId > 0)
         {
-            <ProfessionalAvailabilityPlanner ProfessionalId="@SelectedId" />
+            <ProfessionalAvailabilityPlanner ProfessionalId="@SelectedId" OnModeChanged="mode => AvailabilityMode = mode" />
+            @if (AvailabilityMode == "recurring")
+            {
             <section aria-labelledby="admin-recurring-heading">
                 <h3 id="admin-recurring-heading">Grade semanal recorrente</h3>
                 <p class="field-hint">Essas faixas são usadas quando o modo recorrente estiver ativo.</p>
@@ -45,6 +47,7 @@
                     <div class="patient-actions"><button class="button" disabled="@Saving">Salvar faixa</button>@if(EditingHour is not null){<button class="button button--secondary" type="button" @onclick="ClearHour">Cancelar edição</button>}</div>
                 </form>
             </section>
+            }
         }
     }
     @if (!string.IsNullOrWhiteSpace(Error)) { <p class="notice notice--error" role="alert">@Error</p> }
@@ -60,6 +63,7 @@
     private string Modality = "both";
     private bool Active = true, Saving;
     private ulong SelectedId;
+    private string? AvailabilityMode;
     private bool Loading = true;
     private string Error = "";
 
@@ -90,6 +94,7 @@
     }
     private async Task LoadHoursAsync()
     {
+        AvailabilityMode = null;
         if (Module is null || SelectedId == 0) { WeeklyHours = []; return; }
         try
         {

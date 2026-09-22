@@ -54,7 +54,8 @@ public sealed class ProfessionalAvailabilityPlanController(
         ulong professionalId, [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken ct)
     {
         if (!CanAccess(professionalId)) return Forbid();
-        if (to < from || to.DayNumber - from.DayNumber > 62) return BadRequest("Selecione um período de até 63 dias.");
+        if (to < from || to.DayNumber - from.DayNumber > 62)
+            return Problem(statusCode: 400, title: "Selecione um período de até 63 dias.");
         var preference = await database.ProfessionalPreferences.AsNoTracking()
             .SingleOrDefaultAsync(x => x.ProfessionalAccountId == professionalId, ct);
         if (preference is null) return NotFound();
@@ -89,7 +90,7 @@ public sealed class ProfessionalAvailabilityPlanController(
         var fromUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(first, DateTimeKind.Unspecified), zone);
         var untilUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(to.AddDays(1).ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified), zone);
         var appointments = await database.Appointments.AsNoTracking()
-            .Where(x => x.ProfessionalAccountId == professionalId && x.StatusCode != "cancelled"
+            .Where(x => x.ProfessionalAccountId == professionalId && OpenAppointmentStatuses.Contains(x.StatusCode)
                 && x.StartsAtUtc >= fromUtc && x.StartsAtUtc < untilUtc)
             .Select(x => x.StartsAtUtc).ToListAsync(ct);
         var bookedDates = appointments.Select(x => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
@@ -106,7 +107,8 @@ public sealed class ProfessionalAvailabilityPlanController(
         ulong professionalId, [FromQuery] string mode, CancellationToken ct)
     {
         if (!CanAccess(professionalId)) return Forbid();
-        if (mode is not ("recurring" or "variable")) return BadRequest("Modo de disponibilidade inválido.");
+        if (mode is not ("recurring" or "variable"))
+            return Problem(statusCode: 400, title: "Modo de disponibilidade inválido.");
         if (!await database.ProfessionalPreferences.AsNoTracking().AnyAsync(x => x.ProfessionalAccountId == professionalId, ct))
             return NotFound();
         return Ok(await FindImpact(professionalId, mode, null, null, ct));
@@ -145,23 +147,23 @@ public sealed class ProfessionalAvailabilityPlanController(
         if (!CanAccess(professionalId)) return Forbid();
         if (request.Dates is null || request.Intervals is null || request.Dates.Count is < 1 or > 31
             || request.Intervals.Count is < 1 or > 8 || request.Dates.Distinct().Count() != request.Dates.Count)
-            return BadRequest("Selecione até 31 datas distintas e até 8 faixas de horário.");
+            return Problem(statusCode: 400, title: "Selecione até 31 datas distintas e até 8 faixas de horário.");
         var timezoneName = await database.Clinics.AsNoTracking()
             .Select(x => x.TimezoneName).SingleOrDefaultAsync(ct) ?? "America/Sao_Paulo";
         var clinicNow = TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById(timezoneName));
         var today = DateOnly.FromDateTime(clinicNow.DateTime);
         if (request.Dates.Any(x => x < today || x > today.AddDays(730)))
-            return BadRequest("As datas devem ser atuais ou futuras, dentro de dois anos.");
+            return Problem(statusCode: 400, title: "Selecione datas de hoje em diante, dentro dos próximos dois anos.");
         var ordered = request.Intervals.OrderBy(x => x.StartsAt).ToArray();
         if (ordered.Any(x => x.StartsAt >= x.EndsAt || x.ModalityCode is not ("both" or "online" or "in_person"))
             || ordered.Zip(ordered.Skip(1)).Any(x => x.First.EndsAt > x.Second.StartsAt))
-            return BadRequest("Revise as faixas: horários ou modalidades inválidos, ou faixas sobrepostas.");
+            return Problem(statusCode: 400, title: "Revise as faixas: horários ou modalidades inválidos, ou faixas sobrepostas.");
         await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var preference = await LockedPreference(professionalId, ct);
         if (preference is null) return NotFound();
         if (preference.RowVersion != request.RowVersion) return ConflictResult("A disponibilidade mudou em outra sessão. Recarregue os horários.");
         if (!preference.OnlineEnabled && ordered.Any(x => x.ModalityCode is "online" or "both"))
-            return BadRequest("Habilite o atendimento online no perfil antes de criar faixas online.");
+            return Problem(statusCode: 400, title: "Habilite o atendimento online no perfil antes de criar faixas online.");
         var clinic = await database.ClinicWeeklyHours.AsNoTracking().Where(x => x.IsActive).ToListAsync(ct);
         var holidayRows = await database.Holidays.AsNoTracking().ToListAsync(ct);
         foreach (var date in request.Dates)

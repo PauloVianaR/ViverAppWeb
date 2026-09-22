@@ -47,6 +47,8 @@ public sealed class CalendarService(ViverAppDbContext database)
         var query = database.Appointments.AsNoTracking()
             .Where(item => item.StartsAtUtc < endUtc
                 && item.EndsAtUtc > startUtc
+                && item.StatusCode != "completed"
+                && item.StatusCode != "canceled"
                 && item.InverseRescheduledFromAppointment == null);
 
         query = roleCode switch
