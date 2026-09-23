@@ -377,6 +377,14 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     }
 
     [Fact]
+    public void AvailabilityError_RemovesJavaScriptStackAndKeepsDateValidation()
+    {
+        const string message = "Selecione datas de hoje em diante, dentro dos próximos dois anos. Error: Selecione datas de hoje em diante, dentro dos próximos dois anos. at readResponse (https://localhost/js/identity-access.js:27:19)";
+        Assert.Equal("Selecione datas de hoje em diante, dentro dos próximos dois anos.",
+            UiErrorNotifier.Normalize(message));
+    }
+
+    [Fact]
     public void MedicalRecordRoute_UsesAParameterCompatibleWithTheLongConstraint()
     {
         var parameter = typeof(ViverApp.Web.Components.Pages.MedicalRecordWorkspace)

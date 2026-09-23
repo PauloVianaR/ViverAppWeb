@@ -30,7 +30,7 @@ public sealed record AdministratorSetting(string Key, string ValueJson, string? 
 public sealed record AdministratorPremiumPlan(uint Id, string Name, decimal AppointmentDiscountPercent, ushort? ValidityDays, bool IsActive, ulong RowVersion);
 public sealed record AdministratorUser(ulong Id, string FullName, string RoleCode, string StatusCode, string? Email, bool EmailVerified, string? PhoneE164, bool PhoneVerified, DateTime CreatedAtUtc, DateTime? LastLoginAtUtc, ulong RowVersion);
 public sealed record AdministratorClinic(string LegalName, string DisplayName, string? TaxId, string? Email, string? PhoneE164, string? PostalCode, string? Street, string? Number, string? Complement, string? District, string? City, string? StateCode, string TimezoneName, ulong RowVersion);
-public sealed record AdministratorService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal PriceAmount, bool RequiresPayment, bool IsActive, ushort DisplayOrder, ulong RowVersion);
+public sealed record AdministratorService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal PriceAmount, bool RequiresPayment, bool IsActive, ushort DisplayOrder, ulong RowVersion, bool CanDelete = false);
 public sealed record AppointmentTypeProfessional(ulong ProfessionalAccountId, string FullName, string RoleCode, string LicenseLabel, bool Linked);
 public sealed record AdministratorWeeklyHour(ulong Id, byte DayOfWeek, TimeSpan StartTime, TimeSpan EndTime, bool IsActive, ulong RowVersion);
 public sealed record AdministratorHoliday(uint Id, DateOnly HolidayDate, string Name, TimeSpan? StartTime, TimeSpan? EndTime, ulong RowVersion, bool IsAnnual);

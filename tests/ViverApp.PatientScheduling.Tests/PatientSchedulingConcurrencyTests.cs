@@ -2,11 +2,13 @@ using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using MySql.Data.MySqlClient;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.Calendar;
+using ViverApp.Api.Features.ClinicAdministration;
 using ViverApp.Api.Features.PatientScheduling;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
@@ -16,6 +18,50 @@ namespace ViverApp.PatientScheduling.Tests;
 
 public sealed class PatientSchedulingConcurrencyTests
 {
+    [Fact]
+    public async Task VariableMode_UsesOnlyIntervalsRegisteredForTheDate()
+    {
+        var configuration = LoadConfiguration();
+        var fixture = await CreateFixtureAsync(configuration);
+        try
+        {
+            await using var database = CreateContext(configuration);
+            var now = fixture.UtcNow.UtcDateTime;
+            var preference = await database.ProfessionalPreferences.SingleOrDefaultAsync(x => x.ProfessionalAccountId == fixture.DoctorId);
+            if (preference is null)
+            {
+                preference = new ProfessionalPreference
+                {
+                    ProfessionalAccountId = fixture.DoctorId, EmailEnabled = true, SmsEnabled = true,
+                    OnlineEnabled = true, MaxOnlineDaily = 8, MaxInPersonDaily = 16,
+                    AvailabilityMode = "variable", UpdatedAtUtc = now, RowVersion = 1,
+                };
+                database.ProfessionalPreferences.Add(preference);
+            }
+            else { preference.AvailabilityMode = "variable"; preference.RowVersion++; }
+            database.ProfessionalVariableHours.Add(new ProfessionalVariableHour
+            {
+                ProfessionalAccountId = fixture.DoctorId,
+                AvailableDate = fixture.LocalDate.ToDateTime(TimeOnly.MinValue),
+                StartTime = TimeSpan.FromHours(13), EndTime = TimeSpan.FromHours(14),
+                ModalityCode = "online", CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1,
+            });
+            await database.SaveChangesAsync();
+            var service = new PatientSchedulingService(database, new NullAuditWriter(), new FixedTimeProvider(fixture.UtcNow));
+            var slots = await service.GetAvailableSlotsAsync(fixture.PatientId, fixture.DoctorId,
+                fixture.AppointmentTypeId, "online", fixture.LocalDate, 1, CancellationToken.None);
+            Assert.Contains(slots, x => x.StartsAt == new TimeOnly(13, 0));
+            Assert.DoesNotContain(slots, x => x.StartsAt == new TimeOnly(10, 0));
+            var availableDates = await service.GetAvailableDatesAsync(fixture.PatientId, fixture.DoctorId,
+                fixture.AppointmentTypeId, "online", fixture.LocalDate, 3, CancellationToken.None);
+            Assert.Equal([fixture.LocalDate], availableDates);
+        }
+        finally
+        {
+            await DeleteFixtureAsync(configuration, fixture);
+        }
+    }
+
     [Fact]
     public async Task ProfessionalSelection_RequiresActiveAppointmentTypeLink()
     {
@@ -94,6 +140,98 @@ public sealed class PatientSchedulingConcurrencyTests
                 calendar.GetAsync(fixture.DoctorId, ViverAppRoles.Psychologist, "day",
                     fixture.LocalDate, fixture.PatientId, CancellationToken.None));
             Assert.Equal(403, crossProfessional.StatusCode);
+        }
+        finally
+        {
+            await DeleteFixtureAsync(configuration, fixture);
+        }
+    }
+
+    [Theory]
+    [InlineData("completed")]
+    [InlineData("canceled")]
+    [InlineData("no_show")]
+    public async Task Calendar_OmitsCompletedCanceledAndNoShowAppointmentsInEveryView(string status)
+    {
+        var configuration = LoadConfiguration();
+        var fixture = await CreateFixtureAsync(configuration, free: true, professionalRole: ViverAppRoles.Psychologist);
+        try
+        {
+            var attempt = await AttemptCreateAsync(configuration, fixture.PatientId,
+                $"calendar-{Guid.NewGuid():N}",
+                new AppointmentCreateRequest(fixture.DoctorId, fixture.AppointmentTypeId,
+                    "online", fixture.LocalDate, new TimeOnly(10, 0), null),
+                fixture.UtcNow, CancellationToken.None);
+            var created = Assert.IsType<AppointmentResponse>(attempt.Response);
+
+            await using var database = CreateContext(configuration);
+            var preference = await database.ProfessionalPreferences.SingleOrDefaultAsync(x => x.ProfessionalAccountId == fixture.DoctorId);
+            if (preference is null)
+            {
+                database.ProfessionalPreferences.Add(new ProfessionalPreference
+                {
+                    ProfessionalAccountId = fixture.DoctorId, EmailEnabled = true, SmsEnabled = true,
+                    OnlineEnabled = true, MaxOnlineDaily = 8, MaxInPersonDaily = 16,
+                    AvailabilityMode = "recurring", UpdatedAtUtc = fixture.UtcNow.UtcDateTime, RowVersion = 1,
+                });
+                await database.SaveChangesAsync();
+            }
+            var http = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(
+                    [new Claim(ClaimTypes.NameIdentifier, fixture.DoctorId.ToString()),
+                     new Claim(ClaimTypes.Role, ViverAppRoles.Psychologist)], "Test")),
+            };
+            var audit = new IdentityAuditWriter(database, new HttpContextAccessor { HttpContext = http },
+                IdentitySecurityOptions.Load(configuration));
+            var availability = new ProfessionalAvailabilityPlanController(database, audit,
+                new FixedTimeProvider(fixture.UtcNow))
+            {
+                ControllerContext = new ControllerContext { HttpContext = http },
+            };
+            async Task<VariableAvailabilityPlan> PlanAsync()
+            {
+                var response = await availability.Get(fixture.DoctorId, fixture.LocalDate,
+                    fixture.LocalDate, CancellationToken.None);
+                return Assert.IsType<VariableAvailabilityPlan>(Assert.IsType<OkObjectResult>(response.Result).Value);
+            }
+            Assert.Contains(fixture.LocalDate, (await PlanAsync()).BookedDates);
+            var appointment = await database.Appointments.SingleAsync(x => x.Id == created.Id);
+            appointment.StatusCode = status;
+            if (status == "completed")
+            {
+                appointment.CompletedByAccountId = fixture.DoctorId;
+                appointment.CompletedAtUtc = fixture.UtcNow.UtcDateTime;
+            }
+            else if (status == "no_show")
+            {
+                appointment.NoShowRecordedByAccountId = fixture.DoctorId;
+                appointment.NoShowRecordedAtUtc = fixture.UtcNow.UtcDateTime;
+            }
+            else
+            {
+                appointment.CanceledByAccountId = fixture.PatientId;
+                appointment.CanceledAtUtc = fixture.UtcNow.UtcDateTime;
+                appointment.CancellationReason = "Cancelamento sintético do teste de agenda";
+            }
+            appointment.RowVersion++;
+            await database.SaveChangesAsync();
+            Assert.DoesNotContain(fixture.LocalDate, (await PlanAsync()).BookedDates);
+            var calendar = new CalendarService(database);
+            foreach (var view in new[] { "day", "week", "month", "year" })
+            {
+                foreach (var role in new[] { ViverAppRoles.Patient, ViverAppRoles.Psychologist,
+                    ViverAppRoles.Manager, ViverAppRoles.Administrator })
+                {
+                    var actor = role == ViverAppRoles.Patient ? fixture.PatientId : fixture.DoctorId;
+                    var filter = role is ViverAppRoles.Manager or ViverAppRoles.Administrator
+                        ? fixture.DoctorId : (ulong?)null;
+                    var result = await calendar.GetAsync(actor, role, view, fixture.LocalDate,
+                        filter, CancellationToken.None);
+                    Assert.DoesNotContain(result.Items, item => item.Id == created.Id);
+                    Assert.DoesNotContain(result.Days, item => item.Date == fixture.LocalDate && item.Count > 0);
+                }
+            }
         }
         finally
         {

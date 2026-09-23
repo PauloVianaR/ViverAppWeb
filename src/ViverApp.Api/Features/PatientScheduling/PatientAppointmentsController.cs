@@ -49,6 +49,15 @@ public sealed class PatientAppointmentsController(PatientSchedulingService sched
             days,
             cancellationToken));
 
+    [HttpGet("booking/available-dates")]
+    [EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
+    public Task<ActionResult<IReadOnlyList<DateOnly>>> GetAvailableDates(
+        [FromQuery] ulong doctorAccountId, [FromQuery] uint appointmentTypeId,
+        [FromQuery] string modality, [FromQuery] DateOnly from,
+        [FromQuery] int days = 31, CancellationToken cancellationToken = default) =>
+        ExecuteAsync(() => scheduling.GetAvailableDatesAsync(ActorId, doctorAccountId,
+            appointmentTypeId, modality, from, days, cancellationToken));
+
     [HttpGet("appointments")]
     public Task<ActionResult<SchedulingPage<AppointmentResponse>>> GetAppointments(
         [FromQuery] int page = 1,

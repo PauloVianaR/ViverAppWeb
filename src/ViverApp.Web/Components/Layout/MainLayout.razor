@@ -6,7 +6,7 @@
 
 <a class="skip-link" href="#main-content">Ir para o conteúdo principal</a>
 <GlobalErrorDialog />
-<div class="app-shell @(IsWorkspace ? "app-shell--workspace" : "app-shell--public") app-shell--@Shell.Profile.ToString().ToLowerInvariant()">
+<div class="app-shell @(IsWorkspace ? "app-shell--workspace" : "app-shell--public") @(IsWorkspace && DesktopSidebarEnabled ? "app-shell--desktop-new" : "app-shell--desktop-legacy") @(DesktopSidebarCollapsed ? "app-shell--sidebar-collapsed" : null) app-shell--@Shell.Profile.ToString().ToLowerInvariant()">
     <header class="topbar">
         <a class="brand" href="/" aria-label="Centro Médico Viver — início">
             <img class="brand-logo" src="/images/logo.png" alt="" />
@@ -64,6 +64,12 @@
     <div class="shell-body">
         @if (IsWorkspace)
         {
+            @if (DesktopSidebarEnabled)
+            {
+                <DesktopSidebar Definition="Shell" CurrentPath="@CurrentPath" Collapsed="DesktopSidebarCollapsed" OnToggle="ToggleDesktopSidebarAsync" />
+            }
+            else
+            {
             <aside class="sidebar" aria-label="Navegação da área @Shell.Label">
                 <p class="sidebar-label">@Shell.Context</p>
                 <nav>
@@ -74,6 +80,7 @@
                 </nav>
                 <a class="sidebar-security" href="/seguranca"><AppIcon Name="shield" /><div><strong>Segurança da conta</strong><span>Sessões, Google e passkeys.</span></div></a>
             </aside>
+            }
         }
         <main id="main-content" class="page-container" tabindex="-1">
             @if (IsProtectedPath && !IdentityResolved)
@@ -150,6 +157,8 @@
     private int UnreadCount => Notifications.Count(x => !x.IsRead);
     private string NotificationLabel => UnreadCount == 0 ? "Notificações de chegada" : $"Notificações de chegada: {UnreadCount} não lida(s)";
     private bool IdentityResolved;
+    private bool DesktopSidebarEnabled = true;
+    private bool DesktopSidebarCollapsed;
     private string CurrentPath => new Uri(Navigation.Uri).AbsolutePath;
     private bool IsProtectedPath => ShellNavigationCatalog.IsWorkspacePath(CurrentPath);
     private bool IsWorkspace => Shell.Profile != ShellProfile.Public;
@@ -183,6 +192,13 @@
             if (Account is null) { Navigation.NavigateTo("/acesso?estado=sessao-expirada", true); return; }
             if (!ShellNavigationCatalog.OwnsPath(Account.Role, path)) { Navigation.NavigateTo(Account.Destination, true); return; }
             Shell = ShellNavigationCatalog.ResolveRole(Account.Role);
+            try
+            {
+                var preference = await module.InvokeAsync<ViverApp.Web.Models.DesktopSidebarPreference>("get", Backend.BaseUrl.ToString(), "api/v1/me/preferences/desktop-sidebar");
+                DesktopSidebarEnabled = preference.Enabled;
+                DesktopSidebarCollapsed = preference.Collapsed;
+            }
+            catch (JSException) { DesktopSidebarEnabled = false; }
             if (Account.Role is "doctor" or "psychologist" && !NotificationConnected) await ConnectNotificationsAsync();
         }
         else Shell = ShellNavigationCatalog.Resolve("/");
@@ -228,6 +244,18 @@
     }
     private string? ActiveClass(ShellNavigationItem item) => IsActive(item) ? "active" : null;
     private void ToggleMobileMore() => MobileMoreOpen = !MobileMoreOpen;
+    private async Task ToggleDesktopSidebarAsync()
+    {
+        if (module is null) return;
+        try
+        {
+            var next = !DesktopSidebarCollapsed;
+            var result = await module.InvokeAsync<ViverApp.Web.Models.DesktopSidebarPreference>(
+                "sendMethod", Backend.BaseUrl.ToString(), "api/v1/me/preferences/desktop-sidebar", "PUT", new { collapsed = next });
+            DesktopSidebarCollapsed = result.Collapsed;
+        }
+        catch (JSException) { }
+    }
     private void CloseMobileMore() => MobileMoreOpen = false;
     private string? AriaCurrent(ShellNavigationItem item) => IsActive(item) ? "page" : null;
     private bool IsActive(ShellNavigationItem item)

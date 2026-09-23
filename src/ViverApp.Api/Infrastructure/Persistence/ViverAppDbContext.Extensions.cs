@@ -28,6 +28,12 @@ public partial class ViverAppDbContext
         modelBuilder.Entity<ProfessionalWeeklyHour>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();
+        modelBuilder.Entity<ProfessionalPreference>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
+        modelBuilder.Entity<ProfessionalVariableHour>()
+            .Property(entity => entity.RowVersion)
+            .IsConcurrencyToken();
         modelBuilder.Entity<Holiday>()
             .Property(entity => entity.RowVersion)
             .IsConcurrencyToken();

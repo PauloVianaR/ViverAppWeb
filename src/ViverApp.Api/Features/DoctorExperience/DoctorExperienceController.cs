@@ -72,6 +72,13 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
         await service.EnsurePatientSchedulingEnabledAsync(ct);
         return await scheduling.GetAvailableSlotsAsync(patientAccountId, Actor, appointmentTypeId, modality, from, days, ct);
     }
+    [HttpGet("booking/available-dates"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
+    public async Task<IReadOnlyList<DateOnly>> AvailableDates(ulong patientAccountId, uint appointmentTypeId,
+        string modality, DateOnly from, int days = 31, CancellationToken ct = default)
+    {
+        await service.EnsurePatientSchedulingEnabledAsync(ct);
+        return await scheduling.GetAvailableDatesAsync(patientAccountId, Actor, appointmentTypeId, modality, from, days, ct);
+    }
     [HttpPost("appointments"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public async Task<ActionResult<AppointmentResponse>> Create([FromHeader(Name = "Idempotency-Key")] string key,
         DoctorAppointmentCreateRequest request, CancellationToken ct)

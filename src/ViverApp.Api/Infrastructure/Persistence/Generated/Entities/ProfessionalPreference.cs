@@ -13,6 +13,8 @@ public partial class ProfessionalPreference
 
     public bool OnlineEnabled { get; set; }
 
+    public string AvailabilityMode { get; set; } = null!;
+
     public ushort MaxOnlineDaily { get; set; }
 
     public ushort MaxInPersonDaily { get; set; }

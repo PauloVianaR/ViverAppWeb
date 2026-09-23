@@ -39,6 +39,8 @@ public sealed record WebAvailableSlot(
     DateTime EndsAtUtc,
     string TimezoneName);
 
+public sealed record BookingDaySelection(DateOnly Date, IReadOnlyList<WebAvailableSlot> Slots);
+
 public sealed record WebAppointmentRescheduleHistory(
     uint SequenceNumber,
     DateTime PreviousStartsAtUtc,

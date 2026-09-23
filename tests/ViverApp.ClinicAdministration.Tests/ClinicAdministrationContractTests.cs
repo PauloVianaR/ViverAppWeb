@@ -16,6 +16,7 @@ using MySql.Data.MySqlClient;
 using ViverApp.Api.Features.ClinicAdministration;
 using ViverApp.Api.Features.AdministratorExperience;
 using ViverApp.Api.Features.Identity;
+using ViverApp.Api.Features.UserPreferences;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 using Xunit;
@@ -46,6 +47,8 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
     [InlineData("/api/v1/catalog/appointment-types")]
     [InlineData("/api/v1/catalog/appointment-types/1/professionals")]
     [InlineData("/api/v1/professionals")]
+    [InlineData("/api/v1/professionals/1/availability-plan?from=2026-09-01&to=2026-09-30")]
+    [InlineData("/api/v1/me/preferences/desktop-sidebar")]
     [InlineData("/api/v1/users")]
     [InlineData("/api/v1/administrator/home")]
     [InlineData("/api/v1/administrator/analytics?from=2026-01-01&to=2026-01-31")]
@@ -70,12 +73,61 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
     [Fact]
     public void CriticalAdministrationControllers_ApplyStepUpFilter()
     {
-        var protectedControllers = new[] { typeof(AdministratorExperienceController), typeof(UsersController), typeof(ProfessionalsController), typeof(ClinicConfigurationController), typeof(CatalogController) };
+        var protectedControllers = new[] { typeof(AdministratorExperienceController), typeof(UsersController), typeof(ProfessionalsController), typeof(ProfessionalAvailabilityPlanController), typeof(ClinicConfigurationController), typeof(CatalogController) };
         foreach (var controller in protectedControllers)
         {
             Assert.Contains(controller.GetCustomAttributes(typeof(ServiceFilterAttribute), true).Cast<ServiceFilterAttribute>(),
                 attribute => attribute.ServiceType == typeof(AdministratorStepUpFilter));
         }
+    }
+
+    [Fact]
+    public async Task DesktopSidebar_FlagAndCollapsePreference_AreIndependentPerAccount()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddUserSecrets(typeof(ClinicAdministrationContractTests).Assembly, optional: false).Build();
+        await using var database = CreateContext(configuration);
+        await database.Database.OpenConnectionAsync();
+        await using var transaction = await database.Database.BeginTransactionAsync();
+        var now = DateTime.UtcNow;
+        var accounts = Enumerable.Range(0, 2).Select(_ =>
+        {
+            var email = $"sidebar-{Guid.NewGuid():N}@example.test";
+            return new Account
+            {
+                RoleCode = ViverAppRoles.Manager, StatusCode = "active", FullName = "Teste de navegação",
+                Email = email, NormalizedEmail = email.ToUpperInvariant(), EmailVerified = true,
+                SecurityStamp = RandomNumberGenerator.GetBytes(32), CreatedAtUtc = now, UpdatedAtUtc = now,
+                RowVersion = 1,
+            };
+        }).ToArray();
+        database.Accounts.AddRange(accounts);
+        await database.SaveChangesAsync();
+        UserPreferencesController ControllerFor(Account account) => new(database, TimeProvider.System)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { User = CreateAdministratorPrincipal(account.Id) },
+            },
+        };
+        var first = ControllerFor(accounts[0]);
+        var second = ControllerFor(accounts[1]);
+        var setting = await database.ApplicationSettings.SingleAsync(x => x.SettingKey == "web.desktop_sidebar_enabled");
+        setting.ValueJson = "false";
+        setting.RowVersion++;
+        await database.SaveChangesAsync();
+        Assert.False((await first.GetDesktopSidebar(CancellationToken.None)).Enabled);
+
+        await first.UpdateDesktopSidebar(new DesktopSidebarPreferenceRequest(true), CancellationToken.None);
+        Assert.True((await first.GetDesktopSidebar(CancellationToken.None)).Collapsed);
+        Assert.False((await second.GetDesktopSidebar(CancellationToken.None)).Collapsed);
+
+        setting.ValueJson = "true";
+        setting.RowVersion++;
+        await database.SaveChangesAsync();
+        Assert.True((await first.GetDesktopSidebar(CancellationToken.None)).Enabled);
+        Assert.True((await first.GetDesktopSidebar(CancellationToken.None)).Collapsed);
+        await transaction.RollbackAsync();
     }
 
     [Fact]

@@ -1,0 +1,126 @@
+@using System.Globalization
+@using ViverApp.Web.Models
+@implements IAsyncDisposable
+@inject IJSRuntime JavaScript
+@inject WebBackendOptions Backend
+@inject UiErrorNotifier Errors
+
+<div class="booking-calendar" aria-label="Datas disponíveis para agendamento">
+    <div class="booking-calendar__heading">
+        <strong>@Month.ToString("MMMM yyyy", CultureInfo.GetCultureInfo("pt-BR"))</strong>
+        <div class="patient-actions">
+            <button type="button" class="button button--secondary button--small" disabled="@(Loading || Month <= CurrentMonth)" aria-label="Mês anterior" @onclick="() => MoveMonth(-1)">‹</button>
+            <button type="button" class="button button--secondary button--small" disabled="@Loading" aria-label="Próximo mês" @onclick="() => MoveMonth(1)">›</button>
+        </div>
+    </div>
+    <div class="booking-calendar__days" role="group" aria-label="Escolha uma data com horário disponível">
+        @foreach (var label in Weekdays) { <span class="booking-calendar__weekday">@label</span> }
+        @foreach (var date in Days)
+        {
+            if (date is null) { <span aria-hidden="true"></span> }
+            else
+            {
+                var day = date.Value;
+                var available = !Loading && day >= Today && AvailableDates.Contains(day);
+                <button type="button" class="booking-calendar__day @(available ? "is-available" : null) @(SelectedDate == day ? "is-selected" : null)"
+                        disabled="@(!available)" aria-label="@day.ToString("dd 'de' MMMM", CultureInfo.GetCultureInfo("pt-BR"))"
+                        aria-pressed="@(SelectedDate == day)" title="@(available ? "Horários disponíveis" : "Sem horários disponíveis")"
+                        @onclick="() => SelectDate(day)">@day.Day</button>
+            }
+        }
+    </div>
+    @if (Loading) { <p class="field-hint" role="status">Consultando dias disponíveis…</p> }
+    @if (LoadingDay) { <p class="field-hint" role="status">Consultando horários do dia selecionado…</p> }
+    else if (AvailableDates.Count == 0 && Error is null) { <p class="field-hint" role="status">Nenhum dia com horário disponível neste mês. Avance ou altere o serviço/profissional.</p> }
+    @if (Error is not null) { <p class="notice notice--error" role="alert">@Error</p> }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string SlotsApiPrefix { get; set; } = "";
+    [Parameter] public EventCallback<BookingDaySelection> DateSelected { get; set; }
+    private IJSObjectReference? Module;
+    private DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly CurrentMonth => new(Today.Year, Today.Month, 1);
+    private DateOnly Month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateOnly? SelectedDate;
+    private HashSet<DateOnly> AvailableDates = [];
+    private readonly Dictionary<DateOnly, IReadOnlyList<WebAvailableSlot>> SlotsByDate = [];
+    private bool Loading;
+    private bool LoadingDay;
+    private string? Error;
+    private static readonly string[] Weekdays = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+    private IEnumerable<DateOnly?> Days
+    {
+        get
+        {
+            for (var i = 0; i < (int)Month.DayOfWeek; i++) yield return null;
+            for (var date = Month; date.Month == Month.Month; date = date.AddDays(1)) yield return date;
+        }
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        Module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/identity-access.js");
+        await LoadMonth();
+    }
+    private async Task MoveMonth(int amount)
+    {
+        Month = Month.AddMonths(amount);
+        SelectedDate = null;
+        AvailableDates.Clear();
+        await DateSelected.InvokeAsync(new BookingDaySelection(default, []));
+        await LoadMonth();
+    }
+    private async Task LoadMonth()
+    {
+        if (Module is null || string.IsNullOrWhiteSpace(SlotsApiPrefix)) return;
+        Loading = true;
+        Error = null;
+        AvailableDates.Clear();
+        try
+        {
+            var from = Month <= CurrentMonth ? Today : Month;
+            var days = Month.AddMonths(1).DayNumber - from.DayNumber;
+            var datesApi = SlotsApiPrefix.Replace("/booking/slots?", "/booking/available-dates?", StringComparison.Ordinal);
+            var dates = await Module.InvokeAsync<IReadOnlyList<DateOnly>>("get", Backend.BaseUrl.ToString(),
+                $"{datesApi}&from={from:yyyy-MM-dd}&days={days}");
+            AvailableDates = dates.ToHashSet();
+        }
+        catch (JSException exception)
+        {
+            var message = UiErrorNotifier.Normalize(exception.Message);
+            Error = message.Contains("fora do período permitido", StringComparison.OrdinalIgnoreCase)
+                ? "Este mês está fora do período permitido para agendamento." : message;
+            if (!message.Contains("fora do período permitido", StringComparison.OrdinalIgnoreCase)) Errors.Show(Error);
+        }
+        finally { Loading = false; await InvokeAsync(StateHasChanged); }
+    }
+    private async Task SelectDate(DateOnly date)
+    {
+        if (!AvailableDates.Contains(date) || date < Today || Module is null) return;
+        SelectedDate = date;
+        await DateSelected.InvokeAsync(new BookingDaySelection(date, []));
+        LoadingDay = true;
+        Error = null;
+        try
+        {
+            if (!SlotsByDate.TryGetValue(date, out var slots))
+            {
+                slots = await Module.InvokeAsync<IReadOnlyList<WebAvailableSlot>>("get", Backend.BaseUrl.ToString(),
+                    $"{SlotsApiPrefix}&from={date:yyyy-MM-dd}&days=1");
+                SlotsByDate[date] = slots;
+            }
+            await DateSelected.InvokeAsync(new BookingDaySelection(date, slots));
+        }
+        catch (JSException exception)
+        {
+            Error = UiErrorNotifier.Normalize(exception.Message);
+            Errors.Show(Error);
+        }
+        finally { LoadingDay = false; }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        if (Module is not null) try { await Module.DisposeAsync(); } catch (JSDisconnectedException) { }
+    }
+}

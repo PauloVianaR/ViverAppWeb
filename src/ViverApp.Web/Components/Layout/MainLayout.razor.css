@@ -177,11 +177,103 @@
 .app-shell--public .page-container { margin: 0 auto; max-width: var(--content-wide); }
 .mobile-navigation { display: none; }
 
+@media (min-width: 46.001rem) {
+    .app-shell--desktop-new .shell-body {
+        grid-template-columns: 16.5rem minmax(0, 1fr);
+        max-width: 120rem;
+        width: 100%;
+    }
+
+    .app-shell--desktop-new.app-shell--sidebar-collapsed .shell-body {
+        grid-template-columns: 5.25rem minmax(0, 1fr);
+    }
+
+    .app-shell--desktop-new .page-container {
+        padding: clamp(1.25rem, 2.2vw, 2.75rem);
+    }
+
+    .app-shell--desktop-new .topbar {
+        padding-inline: clamp(1.25rem, 2.2vw, 2.75rem);
+    }
+
+    ::deep .desktop-sidebar {
+        align-self: start;
+        border-right: 1px solid var(--color-border);
+        min-height: calc(100dvh - 5rem);
+        padding: var(--space-5) var(--space-3);
+        position: sticky;
+        top: 5rem;
+    }
+
+    ::deep .desktop-sidebar__heading {
+        align-items: center;
+        display: flex;
+        gap: var(--space-2);
+        justify-content: space-between;
+        margin-bottom: var(--space-4);
+        min-height: 2.75rem;
+        padding-left: var(--space-3);
+    }
+
+    ::deep .desktop-sidebar__heading > span {
+        color: var(--color-text-subtle);
+        font-size: var(--text-xs);
+        font-weight: 800;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    ::deep .desktop-sidebar__toggle {
+        align-items: center;
+        background: var(--color-surface-muted);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        color: var(--color-text);
+        cursor: pointer;
+        display: inline-flex;
+        justify-content: center;
+        min-height: 2.75rem;
+        min-width: 2.75rem;
+    }
+
+    ::deep .desktop-sidebar nav { display: grid; gap: var(--space-1); }
+    ::deep .desktop-sidebar nav a, ::deep .desktop-sidebar__security {
+        align-items: center;
+        border-radius: var(--radius-md);
+        color: var(--color-text-muted);
+        display: flex;
+        font-weight: 750;
+        gap: var(--space-3);
+        min-height: 3rem;
+        padding: .75rem var(--space-3);
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    ::deep .desktop-sidebar nav a:hover, ::deep .desktop-sidebar nav a.active,
+    ::deep .desktop-sidebar__security:hover {
+        background: var(--color-brand-soft);
+        color: var(--color-brand-strong);
+    }
+
+    ::deep .desktop-sidebar nav a.active { box-shadow: inset 3px 0 var(--color-brand); }
+    ::deep .desktop-sidebar__security { border-top: 1px solid var(--color-border); margin-top: var(--space-5); }
+
+    .app-shell--sidebar-collapsed ::deep .desktop-sidebar nav a,
+    .app-shell--sidebar-collapsed ::deep .desktop-sidebar__security { justify-content: center; padding-inline: 0; }
+    .app-shell--sidebar-collapsed ::deep .desktop-sidebar nav a span,
+    .app-shell--sidebar-collapsed ::deep .desktop-sidebar__security span,
+    .app-shell--sidebar-collapsed ::deep .desktop-sidebar__heading > span { display: none; }
+    .app-shell--sidebar-collapsed ::deep .desktop-sidebar__heading { justify-content: center; padding-left: 0; }
+}
+
 @media (max-width: 64rem) {
     .app-shell--workspace .shell-body { grid-template-columns: 5.25rem minmax(0, 1fr); }
     .sidebar-label, .sidebar nav a span, .sidebar-security div { display: none; }
     .sidebar nav a { justify-content: center; padding-inline: 0; }
     .sidebar-security { justify-content: center; padding-inline: 0; }
+    .app-shell--desktop-new .shell-body { grid-template-columns: 16.5rem minmax(0, 1fr); }
+    .app-shell--desktop-new.app-shell--sidebar-collapsed .shell-body { grid-template-columns: 5.25rem minmax(0, 1fr); }
 }
 
 @media (max-width: 46rem) {
@@ -191,6 +283,7 @@
     .brand-copy, .workspace-context, .public-navigation { display: none; }
     .app-shell--workspace .shell-body { display: block; }
     .sidebar { display: none; }
+    ::deep .desktop-sidebar { display: none; }
     .page-container { padding: var(--space-5) var(--space-4) calc(6.5rem + env(safe-area-inset-bottom)); }
     .app-shell--public .page-container { padding-bottom: var(--space-8); }
 

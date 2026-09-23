@@ -4,6 +4,7 @@
 <PageTitle>Atendimentos | ViverApp</PageTitle>
 <header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Atendimentos</h1><p class="page-description">Consulte seus atendimentos e documentos do cuidado.</p></div><a class="button" href="/paciente/agendar">Novo agendamento</a></header>
 @if (Notice is not null) { <p class="notice notice--error" role="alert">@Notice</p> }
+<AppointmentStatusLegend />
 <MobileFilterPanel AriaLabel="Filtros da agenda">
     <form @onsubmit="Apply" @onsubmit:preventDefault>
         <div class="patient-filter-grid">
