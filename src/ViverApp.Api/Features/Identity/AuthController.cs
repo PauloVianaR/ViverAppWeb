@@ -1219,7 +1219,7 @@ public sealed class AuthController(
                 LicenseStateCode = doctor.LicenseStateCode,
                 LicenseNumber = doctor.LicenseNumber.Trim(),
                 YearsExperience = doctor.YearsExperience,
-                DefaultAppointmentDurationMinutes = 30,
+                DefaultAppointmentDurationMinutes = 10,
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now,
                 RowVersion = 1,

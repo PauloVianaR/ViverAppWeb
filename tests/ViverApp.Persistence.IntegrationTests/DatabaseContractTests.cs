@@ -104,7 +104,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043", migrations);
 
         var portalAccessColumn = await ExecuteScalarAsync(connection,
             "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'viverappweb' AND table_name = 'accounts' AND column_name = 'portal_access_enabled' AND is_nullable = 'NO'");
@@ -116,7 +116,11 @@ public sealed class DatabaseContractTests
 
         var operationalSettings = await ExecuteScalarAsync(connection,
             "SELECT GROUP_CONCAT(CONCAT(setting_key, '=', value_json) ORDER BY setting_key SEPARATOR ',') FROM application_settings WHERE setting_key IN ('cash.manager_can_reopen','cash.manager_can_view_cumulative_totals','professional.patient_scheduling_enabled','manager.medical_records_write_enabled','premium.manager_can_manage')");
-        Assert.Equal("cash.manager_can_reopen=false,cash.manager_can_view_cumulative_totals=true,manager.medical_records_write_enabled=true,premium.manager_can_manage=true,professional.patient_scheduling_enabled=false", operationalSettings);
+        Assert.Equal("cash.manager_can_reopen=false,cash.manager_can_view_cumulative_totals=true,manager.medical_records_write_enabled=true,premium.manager_can_manage=true,professional.patient_scheduling_enabled=true", operationalSettings);
+
+        var professionalDurationDefault = await ExecuteScalarAsync(connection,
+            "SELECT column_default FROM information_schema.columns WHERE table_schema = 'viverappweb' AND table_name = 'professional_profiles' AND column_name = 'default_appointment_duration_minutes'");
+        Assert.Equal("10", professionalDurationDefault);
 
         var clinicalAuthors = await ExecuteScalarAsync(connection,
             "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'viverappweb' AND table_name IN ('medical_record_drafts','medical_record_entries','medical_record_versions') AND column_name = 'author_account_id' AND is_nullable = 'NO'");

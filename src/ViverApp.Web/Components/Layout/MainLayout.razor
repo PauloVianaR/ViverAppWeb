@@ -27,6 +27,7 @@
         }
         @if (Account is not null && IsWorkspace)
         {
+            <div class="topbar-actions">
             @if (Account.Role is "doctor" or "psychologist")
             {
                 <details class="doctor-notification-center">
@@ -54,7 +55,8 @@
                     </div>
                 </details>
             }
-            <button class="topbar-action" type="button" @onclick="LogoutAsync"><AppIcon Name="user" /><span>Sair</span></button>
+            <button class="topbar-action topbar-action--logout" type="button" @onclick="LogoutAsync"><AppIcon Name="user" /><span>Sair</span></button>
+            </div>
         }
         else
         {

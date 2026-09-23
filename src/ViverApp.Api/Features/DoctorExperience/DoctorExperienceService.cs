@@ -17,11 +17,11 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
     private static readonly string[] Categories = ["consultation", "examination", "surgery", "procedure"];
 
     public async Task<DoctorCapabilitiesResponse> CapabilitiesAsync(CancellationToken ct) =>
-        new(await SettingEnabledAsync("professional.patient_scheduling_enabled", false, ct));
+        new(await SettingEnabledAsync("professional.patient_scheduling_enabled", true, ct));
 
     public async Task EnsurePatientSchedulingEnabledAsync(CancellationToken ct)
     {
-        if (!await SettingEnabledAsync("professional.patient_scheduling_enabled", false, ct))
+        if (!await SettingEnabledAsync("professional.patient_scheduling_enabled", true, ct))
             throw Forbidden("O agendamento de pacientes pelo profissional está desabilitado nas configurações administrativas.");
     }
 
@@ -278,13 +278,14 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
     {
         if (to < from || to.DayNumber - from.DayNumber > 366) throw Invalid("Período inválido.");
         var preference = await database.ProfessionalPreferences.AsNoTracking().SingleAsync(x => x.ProfessionalAccountId == doctor, ct);
-        var hours = await database.ProfessionalWeeklyHours.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor).OrderBy(x => x.DayOfWeek).ThenBy(x => x.StartTime)
-            .Select(x => new ProfessionalWeeklyHourResponse(x.Id, x.DayOfWeek, TimeOnly.FromTimeSpan(x.StartTime), TimeOnly.FromTimeSpan(x.EndTime),
-                x.ValidFrom.HasValue ? DateOnly.FromDateTime(x.ValidFrom.Value) : null, x.ValidUntil.HasValue ? DateOnly.FromDateTime(x.ValidUntil.Value) : null, x.IsActive, x.RowVersion, x.ModalityCode)).ToArrayAsync(ct);
-        var exceptions = await database.ProfessionalAvailabilityExceptions.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor
+        var hourRows = await database.ProfessionalWeeklyHours.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor).OrderBy(x => x.DayOfWeek).ThenBy(x => x.StartTime).ToArrayAsync(ct);
+        var hours = hourRows.Select(x => new ProfessionalWeeklyHourResponse(x.Id, x.DayOfWeek, TimeOnly.FromTimeSpan(x.StartTime), TimeOnly.FromTimeSpan(x.EndTime),
+            x.ValidFrom.HasValue ? DateOnly.FromDateTime(x.ValidFrom.Value) : null, x.ValidUntil.HasValue ? DateOnly.FromDateTime(x.ValidUntil.Value) : null, x.IsActive, x.RowVersion, x.ModalityCode)).ToArray();
+        var exceptionRows = await database.ProfessionalAvailabilityExceptions.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor
             && x.ExceptionDate >= from.ToDateTime(TimeOnly.MinValue) && x.ExceptionDate <= to.ToDateTime(TimeOnly.MinValue)).OrderBy(x => x.ExceptionDate).ThenBy(x => x.StartTime)
-            .Select(x => new ProfessionalAvailabilityExceptionResponse(x.Id, DateOnly.FromDateTime(x.ExceptionDate), x.ModalityCode, x.IsAvailable,
-                x.StartTime.HasValue ? TimeOnly.FromTimeSpan(x.StartTime.Value) : null, x.EndTime.HasValue ? TimeOnly.FromTimeSpan(x.EndTime.Value) : null, x.RowVersion)).ToArrayAsync(ct);
+            .ToArrayAsync(ct);
+        var exceptions = exceptionRows.Select(x => new ProfessionalAvailabilityExceptionResponse(x.Id, DateOnly.FromDateTime(x.ExceptionDate), x.ModalityCode, x.IsAvailable,
+            x.StartTime.HasValue ? TimeOnly.FromTimeSpan(x.StartTime.Value) : null, x.EndTime.HasValue ? TimeOnly.FromTimeSpan(x.EndTime.Value) : null, x.RowVersion)).ToArray();
         return new(preference.OnlineEnabled, preference.MaxOnlineDaily, preference.MaxInPersonDaily, preference.RowVersion, hours, exceptions);
     }
 

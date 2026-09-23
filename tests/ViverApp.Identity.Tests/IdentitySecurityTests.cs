@@ -156,7 +156,7 @@ public sealed class IdentitySecurityTests
         await using var provider = services.BuildServiceProvider();
 
         var identityOptions = provider.GetRequiredService<IOptions<IdentityOptions>>().Value;
-        Assert.Equal(12, identityOptions.Password.RequiredLength);
+        Assert.Equal(8, identityOptions.Password.RequiredLength);
         Assert.Equal(5, identityOptions.Lockout.MaxFailedAccessAttempts);
 
         var policies = provider.GetRequiredService<IAuthorizationPolicyProvider>();

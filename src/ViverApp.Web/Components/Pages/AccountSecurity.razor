@@ -13,6 +13,7 @@
 <div class="security-grid">
     <section class="surface security-panel" aria-labelledby="methods-title">
         <h2 id="methods-title">Métodos de acesso</h2>
+        <div class="security-method"><div><strong>Senha</strong><span>Altere sua senha em uma sessão recente.</span></div><PasswordChangeButton /></div>
         <div class="security-method"><div><strong>Google</strong><span>Vincule somente após entrar com um método já confirmado.</span></div><a class="button button--secondary button--small" href="@Backend.GoogleLinkUrl">Vincular Google</a></div>
         <div class="security-method"><div><strong>Chave de acesso</strong><span>Use a biometria ou o bloqueio deste dispositivo.</span></div><button class="button button--secondary button--small" type="button" @onclick="CreatePasskeyAsync" disabled="@IsBusy">Adicionar passkey</button></div>
         @foreach (var passkey in Passkeys)

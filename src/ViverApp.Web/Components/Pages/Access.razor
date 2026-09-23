@@ -116,7 +116,7 @@
                     <div class="field"><label for="birth-date">Data de nascimento</label><input id="birth-date" type="date" autocomplete="bday" value="@BirthDateText" @onchange="UpdateBirthDate" /></div>
                     @if (Mode == "register")
                     {
-                        <div class="field"><label for="password">Senha</label><input id="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" @bind="Password" /><p class="field-hint">12+ caracteres, maiúscula, minúscula, número e símbolo.</p></div>
+                        <div class="field"><label for="password">Senha</label><input id="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" @bind="Password" /><p class="field-hint">8+ caracteres, maiúscula, minúscula, número e símbolo.</p></div>
                         <div class="field"><label for="password-confirm">Confirmar senha</label><input id="password-confirm" type="password" autocomplete="new-password" @bind="PasswordConfirmation" /></div>
                         <div class="field"><label for="channel">Confirmar por</label><select id="channel" @bind="Channel"><option value="sms">SMS</option><option value="email">E-mail</option></select></div>
                     }

@@ -8,3 +8,8 @@
 .booking-calendar__day.is-available { background: #eaf8ee; border-color: #2d8a4e; color: #17482b; cursor: pointer; font-weight: 700; }
 .booking-calendar__day.is-selected { box-shadow: inset 0 0 0 2px var(--color-brand); }
 @media (max-width: 34rem) { .booking-calendar__day { min-height: 2.2rem; } }
+@media (min-width: 48rem) {
+    .booking-calendar { margin-inline: auto; max-width: min(100%, 52rem); width: 100%; }
+    .booking-calendar__day { min-height: 3.7rem; }
+    .booking-calendar__days { gap: .65rem; }
+}

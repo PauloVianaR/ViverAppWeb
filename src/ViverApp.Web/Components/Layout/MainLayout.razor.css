@@ -100,6 +100,9 @@
 }
 
 .topbar-action:hover { background: var(--color-brand); }
+.topbar-actions { align-items: center; display: flex; gap: .5rem; justify-self: end; }
+.topbar-action--logout { background: #344054; border: 1px solid #344054; cursor: pointer; }
+.topbar-action--logout:hover { background: #182230; }
 
 .workspace-context { display: grid; justify-self: start; }
 .workspace-context span { color: var(--color-text-muted); font-size: var(--text-xs); }

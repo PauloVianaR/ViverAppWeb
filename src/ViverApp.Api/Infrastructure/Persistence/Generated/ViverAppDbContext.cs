@@ -2747,7 +2747,7 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(6)
                 .HasColumnName("created_at_utc");
             entity.Property(e => e.DefaultAppointmentDurationMinutes)
-                .HasDefaultValueSql("'30'")
+                .HasDefaultValueSql("'10'")
                 .HasColumnName("default_appointment_duration_minutes");
             entity.Property(e => e.LicenseNumber)
                 .HasMaxLength(30)

@@ -44,8 +44,7 @@ public sealed record PatientContactRequest([param: Required, RegularExpression("
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PatientContactConfirmRequest(Guid RequestId, [param: Required, RegularExpression("^[0-9]{6}$")] string Code);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record ChangeOwnPasswordRequest([param: Required, StringLength(128)] string CurrentPassword,
-    [param: Required, StringLength(128, MinimumLength = 12)] string NewPassword);
+public sealed record ChangeOwnPasswordRequest([param: Required, StringLength(128, MinimumLength = 8)] string NewPassword);
 
 public sealed class PatientExperienceException(int statusCode, string message) : Exception(message)
 {

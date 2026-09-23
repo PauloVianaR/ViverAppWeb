@@ -230,6 +230,39 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task DoctorAvailability_LoadsDatedExceptionsWithoutDateOnlyCastFailure()
+    {
+        await using var context = CreateContext(configuration);
+        var date = fixture.NowUtc.Date.AddDays(30);
+        context.ProfessionalPreferences.Add(new ProfessionalPreference
+        {
+            ProfessionalAccountId = fixture.DoctorId,
+            AvailabilityMode = "variable",
+            MaxOnlineDaily = 10,
+            MaxInPersonDaily = 10,
+            UpdatedAtUtc = fixture.NowUtc,
+            RowVersion = 1,
+        });
+        context.ProfessionalAvailabilityExceptions.Add(new ProfessionalAvailabilityException
+        {
+            ProfessionalAccountId = fixture.DoctorId,
+            ExceptionDate = date,
+            ModalityCode = "both",
+            IsAvailable = false,
+            CreatedAtUtc = fixture.NowUtc,
+            UpdatedAtUtc = fixture.NowUtc,
+            RowVersion = 1,
+        });
+        await context.SaveChangesAsync();
+
+        var service = new DoctorExperienceService(context, null!, null!, new NoOpAuditWriter(), new FixedTimeProvider(fixture.NowUtc));
+        var availability = await service.AvailabilityAsync(fixture.DoctorId,
+            DateOnly.FromDateTime(date.AddDays(-1)), DateOnly.FromDateTime(date.AddDays(1)), CancellationToken.None);
+
+        Assert.Contains(availability.Exceptions, item => item.Date == DateOnly.FromDateTime(date));
+    }
+
+    [Fact]
     public async Task PublishedReport_RectificationCreatesImmutableVersionAndPreservesFirstVersion()
     {
         await using var context = CreateContext(configuration);
