@@ -165,6 +165,52 @@ public sealed class PatientExperienceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Free_appointment_appears_in_attendances_but_not_payments()
+    {
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<PatientExperienceService>();
+        var db = scope.ServiceProvider.GetRequiredService<ViverAppDbContext>();
+        var now = DateTime.UtcNow;
+        var visit = new Appointment
+        {
+            AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
+            PatientAccountId = patient,
+            ProfessionalAccountId = doctor,
+            AppointmentTypeId = type,
+            CreatedByAccountId = patient,
+            StatusCode = "confirmed",
+            ModalityCode = "in_person",
+            StartsAtUtc = now.AddDays(35),
+            EndsAtUtc = now.AddDays(35).AddMinutes(30),
+            PriceAmount = 0,
+            RequiresPayment = false,
+            CurrencyCode = "BRL",
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1
+        };
+        db.Appointments.Add(visit);
+        await db.SaveChangesAsync();
+        try
+        {
+            var localDate = (await service.AppointmentAsync(patient, visit.Id, default)).Appointment.LocalDate;
+            var day = localDate.ToDateTime(TimeOnly.MinValue);
+            var agenda = await service.AgendaAsync(patient, 1, 12, "all", null, visit.AppointmentNumber,
+                day, day, null, null, null, default);
+            Assert.Single(agenda.Items);
+            Assert.Equal(visit.Id, agenda.Items[0].Appointment.Id);
+            var payments = await service.PaymentsAsync(patient, 1, 12, "pending", null, null,
+                null, null, null, null, null, default);
+            Assert.DoesNotContain(payments.Items, x => x.AppointmentId == visit.Id);
+        }
+        finally
+        {
+            db.ChangeTracker.Clear();
+            await db.Appointments.Where(x => x.Id == visit.Id).ExecuteDeleteAsync();
+        }
+    }
+
+    [Fact]
     public async Task Premium_document_is_encrypted_owned_and_cooldown_enforced()
     {
         using var scope = factory.Services.CreateScope();

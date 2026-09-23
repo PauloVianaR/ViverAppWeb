@@ -167,7 +167,7 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task DoctorExperience_DoesNotExposeAnotherDoctorsAppointmentOrPatient()
+    public async Task DoctorExperience_RestrictsAppointmentsButListsAllClinicPatients()
     {
         await using var context = CreateContext(configuration);
         var service = new DoctorExperienceService(context, null!, null!, new NoOpAuditWriter(), new FixedTimeProvider(fixture.NowUtc));
@@ -186,9 +186,47 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
         var appointment = await Assert.ThrowsAsync<DoctorRuleException>(() =>
             service.AppointmentAsync(fixture.DoctorId, fixture.OtherAppointmentId, CancellationToken.None));
         Assert.Equal((int)HttpStatusCode.NotFound, appointment.StatusCode);
-        var patient = await Assert.ThrowsAsync<DoctorRuleException>(() =>
-            service.PatientAsync(fixture.DoctorId, fixture.OtherPatientId, CancellationToken.None));
-        Assert.Equal((int)HttpStatusCode.NotFound, patient.StatusCode);
+        var patients = await service.PatientsAsync(fixture.DoctorId, null, null, null, 1, 100, CancellationToken.None);
+        Assert.Contains(patients.Page.Items, item => item.AccountId == fixture.OtherPatientId);
+        var patient = await service.PatientAsync(fixture.DoctorId, fixture.OtherPatientId, CancellationToken.None);
+        Assert.Equal(fixture.OtherPatientId, patient.AccountId);
+        Assert.Equal(0, patient.AppointmentCount);
+    }
+
+    [Fact]
+    public async Task DoctorExperience_CanUpdateNameAndTitleWithoutReplacingExistingSpecialty()
+    {
+        await using var context = CreateContext(configuration);
+        var specialty = await context.Specialties.FirstAsync(x => x.IsActive);
+        context.ProfessionalPreferences.Add(new ProfessionalPreference
+        {
+            ProfessionalAccountId = fixture.DoctorId,
+            AvailabilityMode = "recurring",
+            MaxOnlineDaily = 8,
+            MaxInPersonDaily = 16,
+            UpdatedAtUtc = fixture.NowUtc,
+            RowVersion = 1,
+        });
+        context.ProfessionalSpecialties.Add(new ProfessionalSpecialty
+        {
+            ProfessionalAccountId = fixture.DoctorId,
+            SpecialtyId = specialty.Id,
+            IsPrimary = true,
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var service = new DoctorExperienceService(context, null!, null!, new NoOpAuditWriter(), new FixedTimeProvider(fixture.NowUtc));
+        var current = await service.ProfileAsync(fixture.DoctorId, CancellationToken.None);
+        var updated = await service.UpdateProfileAsync(fixture.DoctorId, new ProfessionalProfileUpdateRequest(
+            "Dra. Nome Atualizado", "Especialista em Saúde", null, 0, 30, [specialty.Id], specialty.Id,
+            true, true, current.AccountRowVersion, current.ProfileRowVersion, current.PreferenceRowVersion),
+            CancellationToken.None);
+
+        Assert.Equal("Dra. Nome Atualizado", updated.FullName);
+        Assert.Equal("Especialista em Saúde", updated.ProfessionalTitle);
+        Assert.Single(updated.Specialties);
+        Assert.Equal(specialty.Id, updated.Specialties[0].Id);
     }
 
     [Fact]

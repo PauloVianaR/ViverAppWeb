@@ -21,7 +21,7 @@
         </div>
         <ul class="access-assurances">
             <li><AppIcon Name="shield" /> Senhas protegidas por hash adaptativo</li>
-            <li><AppIcon Name="check" /> Médico e Gestor passam por aprovação</li>
+            <li><AppIcon Name="check" /> Médico, Psicólogo e Gestor passam por aprovação</li>
             <li><AppIcon Name="user" /> Uma conta, um único papel</li>
         </ul>
     </aside>
@@ -47,6 +47,7 @@
                 <label class="check-field"><input type="checkbox" @bind="RememberMe" /> Manter acesso neste dispositivo</label>
                 <button class="button" type="button" @onclick="LoginAsync" disabled="@IsBusy">Entrar com senha</button>
                 <button class="button button--secondary" type="button" @onclick="PasskeyLoginAsync" disabled="@IsBusy">Usar chave de acesso</button>
+                <p class="field-hint">Esta opção só funciona se você já cadastrou uma passkey em Segurança e sessões. O navegador pode oferecer biometria, desbloqueio do dispositivo, celular ou chave física USB; não é necessário usar um pen drive comum.</p>
                 <a class="button google-button" href="@Backend.GoogleLoginUrl"><span aria-hidden="true">G</span> Continuar com Google</a>
                 <div class="access-links">
                     <button type="button" @onclick="ShowCodeRequest">Entrar com código</button>

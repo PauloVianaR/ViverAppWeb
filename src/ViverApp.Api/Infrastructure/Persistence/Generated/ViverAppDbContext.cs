@@ -2760,7 +2760,7 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(3)
                 .HasColumnName("license_type_code");
             entity.Property(e => e.ProfessionalTitle)
-                .HasMaxLength(4)
+                .HasMaxLength(30)
                 .HasDefaultValueSql("'Dr.'")
                 .HasColumnName("professional_title");
             entity.Property(e => e.RowVersion)
