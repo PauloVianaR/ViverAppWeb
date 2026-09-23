@@ -49,7 +49,8 @@
                 <button class="button button--secondary button--small" type="button" @onclick="()=>MoveMonth(12)" aria-label="Próximo ano">»</button>
             </div>
         </div>
-        <p class="field-hint">Selecione um ou vários dias futuros. Os horários iniciais seguem o funcionamento da clínica; você pode ajustar ou dividir as faixas antes de salvar.</p>
+        <p class="field-hint">Selecione até 31 dias futuros, inclusive de meses diferentes. A seleção permanece ao navegar entre meses; os horários serão aplicados a todos os dias escolhidos.</p>
+        @if (SelectedDates.Count > 0) { <p class="field-hint" role="status">@SelectedDates.Count dia(s) selecionado(s) entre @SelectedDates.Min().ToString("dd/MM/yyyy") e @SelectedDates.Max().ToString("dd/MM/yyyy").</p> }
         <div class="availability-planner__calendar" role="group" aria-label="Dias de @Month.ToString("MMMM yyyy", new System.Globalization.CultureInfo("pt-BR"))">
             @foreach (var label in Weekdays) { <strong class="availability-planner__weekday">@label</strong> }
             @foreach (var date in CalendarDays)
@@ -58,20 +59,21 @@
                 else
                 {
                     var day = date.Value;
-                    var unavailable = day < DateOnly.FromDateTime(DateTime.Today) || day > DateOnly.FromDateTime(DateTime.Today).AddDays(730);
+                    var today = DateOnly.FromDateTime(DateTime.Today);
+                    var unavailable = day < today || day > today.AddDays(730);
                     var hasHours = Plan.Days.Any(x => x.Date == day);
                     var holiday = Plan.Holidays.Contains(day);
                     var booked = Plan.BookedDates.Contains(day);
                     var conflict = Plan.ConflictDates.Contains(day);
-                    <button type="button" class="availability-planner__day @(SelectedDates.Contains(day) ? "is-selected" : null) @(hasHours ? "has-hours" : null) @(holiday ? "is-holiday" : null) @(booked ? "has-bookings" : null) @(conflict ? "has-conflict" : null)"
-                            aria-pressed="@SelectedDates.Contains(day)" disabled="@unavailable" title="@(unavailable ? "Somente datas futuras dos próximos dois anos podem ser alteradas" : conflict ? "Conflito com atendimento futuro" : booked ? "Dia com atendimento" : holiday ? "Feriado ou bloqueio" : hasHours ? "Faixas cadastradas" : "Sem faixas cadastradas")"
+                    <button type="button" class="availability-planner__day @(SelectedDates.Contains(day) ? "is-selected" : null) @(day < today ? "is-past" : null) @(day == today ? "is-today" : null) @(hasHours ? "has-hours" : null) @(holiday ? "is-holiday" : null) @(booked ? "has-bookings" : null) @(conflict ? "has-conflict" : null)"
+                            aria-pressed="@SelectedDates.Contains(day)" aria-current="@(day == today ? "date" : null)" disabled="@unavailable" title="@(day < today ? "Data passada" : unavailable ? "Fora dos próximos dois anos" : conflict ? "Conflito com atendimento futuro" : booked ? "Dia com atendimento" : holiday ? "Feriado ou bloqueio" : hasHours ? "Faixas cadastradas" : "Sem faixas cadastradas")"
                             @onclick="()=>SelectDay(day)">
                         @day.Day @if (hasHours || booked) { <span aria-hidden="true">●</span> }
                     </button>
                 }
             }
         </div>
-        <div class="availability-planner__legend"><span>Verde: disponível</span><span>Azul: com atendimento</span><span>Vermelho: conflito ou feriado</span><span>Contorno: selecionado</span></div>
+        <div class="availability-planner__legend"><span>Verde: disponível</span><span>Azul: com atendimento</span><span>Vermelho: conflito ou feriado</span><span>Contorno: selecionado</span><span>Destaque: hoje</span><span>Esmaecido: dia passado</span></div>
         @if (SelectedDates.Count > 0)
         {
             <div class="availability-planner__editor">
@@ -144,7 +146,7 @@
     {
         if (Module is not null && LoadedId != ProfessionalId) await LoadAsync();
     }
-    private async Task LoadAsync(bool preserveSelection = false)
+    private async Task LoadAsync(bool preserveSelection = false, bool clearSelection = false)
     {
         if (Module is null || ProfessionalId == 0) return;
         LoadedId = ProfessionalId;
@@ -157,8 +159,7 @@
             SelectedMode = preserveSelection ? SelectedMode : Plan.Mode;
             await OnModeChanged.InvokeAsync(SelectedMode);
             ModeImpact = null;
-            SelectedDates.Clear();
-            EditorIntervals.Clear();
+            if (!preserveSelection || clearSelection) { SelectedDates.Clear(); EditorIntervals.Clear(); }
             Notice = "";
         }
         catch (JSException error) { ShowError(error); }
@@ -175,9 +176,12 @@
     private void SelectDay(DateOnly date)
     {
         ConfirmingSave = false;
-        if (!SelectedDates.Add(date)) SelectedDates.Remove(date);
+        var wasEmpty = SelectedDates.Count == 0;
+        if (SelectedDates.Contains(date)) SelectedDates.Remove(date);
+        else if (SelectedDates.Count < 31) SelectedDates.Add(date);
+        else { Notice = "Selecione no máximo 31 dias por vez. Salve esta seleção antes de continuar."; NoticeError = true; return; }
         if (SelectedDates.Count == 0) { EditorIntervals.Clear(); return; }
-        if (SelectedDates.Count > 1) return;
+        if (!wasEmpty) return;
         var source = Plan?.Days.FirstOrDefault(x => x.Date == date)?.Intervals
             ?? Plan?.ClinicDefaults.FirstOrDefault(x => x.Date == date)?.Intervals ?? [];
         EditorIntervals.Clear();
@@ -205,7 +209,7 @@
                 $"api/v1/professionals/{ProfessionalId}/availability-plan/variable-days", "PUT",
                 new { dates = SelectedDates.Order().ToArray(), intervals = EditorIntervals.Select(x => new {
                     startsAt = x.StartsAt, endsAt = x.EndsAt, modalityCode = x.ModalityCode }).ToArray(), rowVersion = Plan.RowVersion });
-            await LoadAsync(true);
+            await LoadAsync(true, clearSelection: true);
             Notice = "Datas e horários salvos."; NoticeError = false;
         }
         catch (JSException error) { ShowError(error); }
@@ -219,7 +223,7 @@
         {
             await Module.InvokeAsync<object?>("sendMethod", Backend.BaseUrl.ToString(),
                 $"api/v1/professionals/{ProfessionalId}/availability-plan/variable-days/{SelectedDates.Min():yyyy-MM-dd}?rowVersion={Plan.RowVersion}", "DELETE", null);
-            await LoadAsync(true);
+            await LoadAsync(true, clearSelection: true);
             Notice = "Disponibilidade da data removida."; NoticeError = false;
         }
         catch (JSException error) { ShowError(error); }

@@ -142,6 +142,15 @@ public sealed class PatientSchedulingService(
             cancellationToken);
     }
 
+    public async Task<IReadOnlyList<DateOnly>> GetAvailableDatesAsync(
+        ulong patientId, ulong doctorId, uint appointmentTypeId, string modality,
+        DateOnly from, int days, CancellationToken cancellationToken)
+    {
+        var slots = await GetAvailableSlotsAsync(patientId, doctorId, appointmentTypeId,
+            modality, from, days, cancellationToken);
+        return slots.Select(slot => slot.Date).Distinct().Order().ToArray();
+    }
+
     public async Task<SchedulingPage<AppointmentResponse>> GetAppointmentsAsync(
         ulong patientId,
         int page,

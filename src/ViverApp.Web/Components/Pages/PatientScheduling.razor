@@ -34,8 +34,10 @@
             }
             else { <p>@Original.DoctorName</p> }
         </section>
-        <section class="surface booking-panel"><h2>3. Data e horário</h2><div class="field"><label for="slots-from">Buscar a partir de</label><input id="slots-from" type="date" @bind="From" disabled="@Busy" /></div><button class="button button--secondary" disabled="@(Busy || SelectedDoctor is null)" @onclick="() => Run(LoadSlots)">Atualizar horários</button>
-            @if (Slots.Count == 0) { <p>Selecione um profissional ou outra data para consultar os horários disponíveis.</p> }
+        <section class="surface booking-panel"><h2>3. Data e horário</h2>
+            @if (SelectedDoctor is not null) { <BookingAvailabilityCalendar @key="CalendarKey" SlotsApiPrefix="@CalendarApi" DateSelected="SelectDate" /> }
+            else { <p>Selecione um profissional para consultar os dias disponíveis.</p> }
+            @if (SelectedDoctor is not null && Slots.Count == 0) { <p>Escolha um dia disponível no calendário para ver os horários.</p> }
             <div class="slot-days">@foreach(var day in Slots.GroupBy(x => x.Date)){<fieldset class="slot-day"><legend>@day.Key.ToString("dddd, dd/MM", CultureInfo.GetCultureInfo("pt-BR"))</legend><div class="slot-grid appointment-slot-grid">@foreach(var slot in day){<button class="slot-button @(SelectedSlot?.StartsAtUtc == slot.StartsAtUtc ? "slot-button--selected" : null)" aria-pressed="@(SelectedSlot?.StartsAtUtc == slot.StartsAtUtc)" disabled="@Busy" @onclick="() => SelectedSlot = slot">@slot.StartsAt.ToString("HH:mm")</button>}</div></fieldset>}</div>
         </section>
     </div>
@@ -60,6 +62,8 @@
     private int ServicePage=1, DoctorPage=1;
     private string CategoryCode="consultation", ServiceSearch="", DoctorSearch="", Modality="in_person", Notes="", Reason="";
     private DateTime From=DateTime.Today;
+    private string CalendarKey=>$"{SelectedDoctor?.AccountId}-{ServiceId}-{Modality}";
+    private string CalendarApi=>$"api/v1/patient/booking/slots?doctorAccountId={SelectedDoctor?.AccountId}&appointmentTypeId={ServiceId}&modality={Modality}";
     private string? SubmissionFingerprint, SubmissionKey;
     protected override async Task Load()
     {
@@ -72,7 +76,7 @@
             if(visit?.CanReschedule != true) throw new PatientUiException("Este atendimento não está disponível para reagendamento.");
             Original=visit.Appointment; ServiceId=Original.AppointmentTypeId; CategoryCode=visit.CategoryCode;
             SelectedService=await Get<PatientService>($"api/v1/patient/experience/services/{ServiceId}"); Modality=Original.ModalityCode; Notes=Original.PatientNotes ?? "";
-            SelectedDoctor=new(Original.ProfessionalAccountId,Original.DoctorName,null,"","",0,[]); await LoadSlots();
+            SelectedDoctor=new(Original.ProfessionalAccountId,Original.DoctorName,null,"","",0,[]);
         }
         else if(uint.TryParse(ServiceQuery,out var serviceId))
         {
@@ -92,8 +96,9 @@
     private Task SearchDoctors()=>Run(async()=>{DoctorPage=1;SelectedDoctor=null;SelectedSlot=null;Slots=[];await LoadDoctors();});
     private Task DoctorPageChange(int delta)=>Run(async()=>{DoctorPage+=delta;await LoadDoctors();});
     private async Task LoadDoctors(){if(SelectedService is not null)Doctors=await Get<WebPage<WebBookingProfessional>>($"api/v1/patient/booking/professionals?page={DoctorPage}&pageSize=20&appointmentTypeId={ServiceId}&modality={Modality}&search={Escape(DoctorSearch)}");}
-    private Task ChooseDoctor(WebBookingProfessional doctor)=>Run(async()=>{SelectedDoctor=doctor;await LoadSlots();});
-    private async Task LoadSlots(){SelectedSlot=null;Slots=[];if(SelectedDoctor is not null)Slots=await Get<IReadOnlyList<WebAvailableSlot>>($"api/v1/patient/booking/slots?doctorAccountId={SelectedDoctor.AccountId}&appointmentTypeId={ServiceId}&modality={Modality}&from={From:yyyy-MM-dd}&days=14")??[];}
+    private Task ChooseDoctor(WebBookingProfessional doctor)=>Run(()=>{SelectedDoctor=doctor;SelectedSlot=null;Slots=[];return Task.CompletedTask;});
+    private void SelectDate(BookingDaySelection selection){SelectedSlot=null;Slots=selection.Slots;if(selection.Date!=default)From=selection.Date.ToDateTime(TimeOnly.MinValue);}
+    private async Task LoadSlots(){SelectedSlot=null;Slots=[];if(SelectedDoctor is not null)Slots=await Get<IReadOnlyList<WebAvailableSlot>>($"{CalendarApi}&from={From:yyyy-MM-dd}&days=1")??[];}
     private Task Confirm()=>Run(async()=>
     {
         if(SelectedSlot is null || SelectedDoctor is null || SelectedService is null)return;

@@ -4,6 +4,7 @@
 <PageTitle>Atendimentos | ViverApp</PageTitle>
 <header class="workspace-heading"><div><p class="eyebrow">Gestor</p><h1 class="page-title">Atendimentos</h1><p class="page-description">Consulte estados, finanças e metadados clínicos sem abrir conteúdo reservado.</p></div><a class="button" href="/gestao/agendar">Agendar para paciente</a></header>
 @if(Notice is not null){<p class="notice notice--error" role="alert">@Notice</p>}
+<AppointmentStatusLegend />
 <MobileFilterPanel AriaLabel="Filtros da agenda da clínica"><form @onsubmit="Apply" @onsubmit:preventDefault><div class="manager-filter-grid">
 <div class="field"><label for="manager-search">Paciente, profissional ou serviço</label><input id="manager-search" @bind="Search" maxlength="120" /></div>
 <div class="field"><label for="manager-number">Número do atendimento</label><input id="manager-number" type="number" min="100" @bind="AppointmentNumber" @bind:event="oninput" /></div>

@@ -52,6 +52,9 @@ public sealed class PatientSchedulingConcurrencyTests
                 fixture.AppointmentTypeId, "online", fixture.LocalDate, 1, CancellationToken.None);
             Assert.Contains(slots, x => x.StartsAt == new TimeOnly(13, 0));
             Assert.DoesNotContain(slots, x => x.StartsAt == new TimeOnly(10, 0));
+            var availableDates = await service.GetAvailableDatesAsync(fixture.PatientId, fixture.DoctorId,
+                fixture.AppointmentTypeId, "online", fixture.LocalDate, 3, CancellationToken.None);
+            Assert.Equal([fixture.LocalDate], availableDates);
         }
         finally
         {
@@ -147,7 +150,8 @@ public sealed class PatientSchedulingConcurrencyTests
     [Theory]
     [InlineData("completed")]
     [InlineData("canceled")]
-    public async Task Calendar_OmitsFinishedAndCanceledAppointmentsInEveryView(string status)
+    [InlineData("no_show")]
+    public async Task Calendar_OmitsCompletedCanceledAndNoShowAppointmentsInEveryView(string status)
     {
         var configuration = LoadConfiguration();
         var fixture = await CreateFixtureAsync(configuration, free: true, professionalRole: ViverAppRoles.Psychologist);
@@ -198,6 +202,11 @@ public sealed class PatientSchedulingConcurrencyTests
             {
                 appointment.CompletedByAccountId = fixture.DoctorId;
                 appointment.CompletedAtUtc = fixture.UtcNow.UtcDateTime;
+            }
+            else if (status == "no_show")
+            {
+                appointment.NoShowRecordedByAccountId = fixture.DoctorId;
+                appointment.NoShowRecordedAtUtc = fixture.UtcNow.UtcDateTime;
             }
             else
             {

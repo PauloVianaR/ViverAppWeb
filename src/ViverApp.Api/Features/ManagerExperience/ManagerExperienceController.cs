@@ -61,6 +61,10 @@ public sealed class ManagerExperienceController(ManagerExperienceService service
     public Task<IReadOnlyList<AvailableSlotResponse>> Slots(ulong patientAccountId, ulong doctorAccountId, uint appointmentTypeId,
         string modality, DateOnly from, int days = 14, CancellationToken ct = default) =>
         scheduling.GetAvailableSlotsAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct);
+    [HttpGet("booking/available-dates"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
+    public Task<IReadOnlyList<DateOnly>> AvailableDates(ulong patientAccountId, ulong doctorAccountId,
+        uint appointmentTypeId, string modality, DateOnly from, int days = 31, CancellationToken ct = default) =>
+        scheduling.GetAvailableDatesAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct);
     [HttpGet("booking/professionals"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
     public Task<SchedulingPage<BookingProfessionalResponse>> Professionals(uint appointmentTypeId, string modality,
         string? search = null, int page = 1, int pageSize = 50, CancellationToken ct = default) =>

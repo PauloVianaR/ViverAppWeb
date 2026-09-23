@@ -49,6 +49,7 @@ public sealed class CalendarService(ViverAppDbContext database)
                 && item.EndsAtUtc > startUtc
                 && item.StatusCode != "completed"
                 && item.StatusCode != "canceled"
+                && item.StatusCode != "no_show"
                 && item.InverseRescheduledFromAppointment == null);
 
         query = roleCode switch

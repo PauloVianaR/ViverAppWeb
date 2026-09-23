@@ -1,0 +1,12 @@
+.appointment-status-legend { margin-block: 1rem; }
+.appointment-status-legend > strong { display: block; font-size: .9rem; margin-bottom: .55rem; }
+.appointment-status-legend__items { display: flex; flex-wrap: wrap; gap: .45rem; }
+.appointment-status-legend__item { border: 1px solid; border-radius: 999px; font-size: .78rem; font-weight: 700; padding: .28rem .65rem; }
+.appointment-status-legend__item.appointment-card--pending { background: #fff8e5; border-color: #d99a17; }
+.appointment-status-legend__item.appointment-card--confirmed { background: #eaf8ee; border-color: #2d8a4e; }
+.appointment-status-legend__item.appointment-card--arrived { background: #e7f7fb; border-color: #1686a3; }
+.appointment-status-legend__item.appointment-card--in-progress { background: #e9f1ff; border-color: #2f68bb; }
+.appointment-status-legend__item.appointment-card--completed { background: #f0f3f5; border-color: #697580; }
+.appointment-status-legend__item.appointment-card--canceled { background: #fff0f1; border-color: #c53a45; }
+.appointment-status-legend__item.appointment-card--no-show { background: #f4eff8; border-color: #77538f; }
+.appointment-status-legend__item.appointment-card--rescheduled { background: #fff1e5; border-color: #c7651b; }

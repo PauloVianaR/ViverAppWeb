@@ -1,0 +1,10 @@
+.booking-calendar { margin-block: 1rem; max-width: 38rem; }
+.booking-calendar__heading { align-items: center; display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .7rem; }
+.booking-calendar__heading strong { text-transform: capitalize; }
+.booking-calendar__days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .35rem; }
+.booking-calendar__weekday { color: var(--color-text-muted); font-size: .75rem; text-align: center; }
+.booking-calendar__day { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: .5rem; color: var(--color-text-muted); font: inherit; min-height: 2.6rem; min-width: 0; padding: 0; }
+.booking-calendar__day:disabled { cursor: not-allowed; opacity: .38; }
+.booking-calendar__day.is-available { background: #eaf8ee; border-color: #2d8a4e; color: #17482b; cursor: pointer; font-weight: 700; }
+.booking-calendar__day.is-selected { box-shadow: inset 0 0 0 2px var(--color-brand); }
+@media (max-width: 34rem) { .booking-calendar__day { min-height: 2.2rem; } }
