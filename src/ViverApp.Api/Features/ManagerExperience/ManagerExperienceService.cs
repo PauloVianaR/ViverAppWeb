@@ -312,8 +312,27 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         var notes = Text(request.Notes); var rejection = Text(request.RejectionReason); if (!request.Approve && (rejection?.Length ?? 0) < 5) throw Invalid("Informe um motivo de rejeição com pelo menos 5 caracteres.");
         var now = clock.GetUtcNow().UtcDateTime; item.StatusCode = request.Approve ? "active" : "rejected"; item.StartsAtUtc = request.Approve ? now : null;
         item.ReviewedAtUtc = now; item.ReviewedByAccountId = actor; item.ReviewNotes = notes; item.RejectionReason = request.Approve ? null : rejection; item.UpdatedAtUtc = now; item.RowVersion++;
-        var recipient = await database.Accounts.AsNoTracking().Where(x => x.Id == item.AccountId).Select(x => x.Email ?? x.PhoneE164).SingleAsync(ct);
-        if (recipient is not null) database.OutboxMessages.Add(new OutboxMessage { ChannelCode = recipient.Contains('@') ? "email" : "sms", TemplateKey = request.Approve ? "manager.premium.approved" : "manager.premium.rejected", Recipient = recipient, PayloadJson = JsonSerializer.Serialize(new { membershipId = id, status = item.StatusCode }), StatusCode = "pending", IdempotencyKey = Guid.NewGuid(), AttemptCount = 0, MaxAttempts = 5, NextAttemptAtUtc = now, CreatedAtUtc = now });
+        var contact = await database.Accounts.AsNoTracking().Where(x => x.Id == item.AccountId)
+            .Select(x => new { x.Email, x.EmailVerified, x.PhoneE164, x.PhoneVerified }).SingleAsync(ct);
+        var channel = contact.EmailVerified && contact.Email is not null ? "email"
+            : contact.PhoneVerified && contact.PhoneE164 is not null ? "sms" : null;
+        var recipient = channel == "email" ? contact.Email : contact.PhoneE164;
+        if (channel is not null && recipient is not null)
+            database.OutboxMessages.Add(new OutboxMessage
+            {
+                AccountId = item.AccountId,
+                ChannelCode = channel,
+                TemplateKey = request.Approve ? "manager.premium.approved" : "manager.premium.rejected",
+                TemplateVersion = 1,
+                Recipient = recipient,
+                PayloadJson = JsonSerializer.Serialize(new { membershipId = id, status = item.StatusCode }),
+                StatusCode = "pending",
+                IdempotencyKey = Guid.NewGuid(),
+                AttemptCount = 0,
+                MaxAttempts = 5,
+                NextAttemptAtUtc = now,
+                CreatedAtUtc = now,
+            });
         await database.SaveChangesAsync(ct); await audit.WriteAsync(request.Approve ? "manager.premium.approved" : "manager.premium.rejected", actor, "premium_membership", id.ToString(CultureInfo.InvariantCulture), new Dictionary<string, string> { ["previousStatus"] = "pending", ["newStatus"] = item.StatusCode }, ct);
         await transaction.CommitAsync(ct); return await PremiumRequestAsync(id, ct);
     }

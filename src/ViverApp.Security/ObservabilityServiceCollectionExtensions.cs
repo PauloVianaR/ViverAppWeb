@@ -43,7 +43,8 @@ public static class ObservabilityServiceCollectionExtensions
             metrics
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
-                .AddRuntimeInstrumentation();
+                .AddRuntimeInstrumentation()
+                .AddMeter("ViverApp.Notifications");
             if (endpoint is not null)
             {
                 metrics.AddOtlpExporter(exporter => exporter.Endpoint = endpoint);

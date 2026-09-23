@@ -11,7 +11,11 @@ public partial class OutboxMessage
 
     public string TemplateKey { get; set; } = null!;
 
+    public ushort TemplateVersion { get; set; }
+
     public string Recipient { get; set; } = null!;
+
+    public ulong? AccountId { get; set; }
 
     public string PayloadJson { get; set; } = null!;
 
@@ -31,7 +35,13 @@ public partial class OutboxMessage
 
     public string? LastErrorCode { get; set; }
 
+    public string? ProviderReference { get; set; }
+
     public DateTime CreatedAtUtc { get; set; }
 
     public DateTime? SentAtUtc { get; set; }
+
+    public DateTime? CompletedAtUtc { get; set; }
+
+    public virtual Account? Account { get; set; }
 }

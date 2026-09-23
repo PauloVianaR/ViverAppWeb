@@ -319,11 +319,15 @@ Cada fase deve:
 
 ## Fase 21 — Layout Web com navegação lateral e disponibilidade profissional variável
 
-**Estado:** implementada na branch `codex/fase-21-layout-disponibilidade-profissional`, ainda não integrada à `main`. Migration 0039 aplicada e verificada no MySQL local; validação automatizada e visual descritas no plano detalhado.
+**Estado:** integrada à `main` em `f651c3d`. Migration 0039 aplicada e verificada no MySQL local; validação automatizada e visual descritas no plano detalhado. As homologações restantes estão no registro local de pendências.
 
 **Plano detalhado:** [Layout Web e disponibilidade profissional](FASE-21-LAYOUT-WEB-E-DISPONIBILIDADE-PROFISSIONAL.md).
 
 ## Fase 22 — E-mail, SMS e jobs dentro da API
+
+**Estado:** implementada na branch `codex/fase-22-email-sms-jobs-api`, ainda não integrada à `main`. Migrations 0040–0042 aplicadas no MySQL local. A entrega externa de notificações de negócio e o scheduler permanecem desligados por padrão até homologação autorizada; o processamento interno é local.
+
+**Operação e ativação:** [runbook da Fase 22](fase-22/OPERACAO.md).
 
 **Objetivo:** ampliar os envios já visíveis na experiência Web e substituir definitivamente os workers separados por processamento durável e observável.
 

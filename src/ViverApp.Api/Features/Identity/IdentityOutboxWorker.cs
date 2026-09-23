@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using ViverApp.Api.Features.Notifications;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 
@@ -42,6 +43,7 @@ public sealed partial class IdentityOutboxWorker(
 
                 await DeliverAsync(message, stoppingToken);
                 await CompleteAsync(message.Id, succeeded: true, null, stoppingToken);
+                NotificationTelemetry.RecordSent(message.ChannelCode, message.CreatedAtUtc, DateTime.UtcNow);
                 DeliverySucceeded(logger, message.Id, message.ChannelCode);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -57,6 +59,7 @@ public sealed partial class IdentityOutboxWorker(
                 else
                 {
                     await TryRegisterFailureAsync(message, exception, stoppingToken);
+                    NotificationTelemetry.RecordFailed(message.ChannelCode);
                     DeliveryFailed(
                         logger,
                         message.Id,
@@ -131,6 +134,8 @@ public sealed partial class IdentityOutboxWorker(
 
     private async Task DeliverAsync(OutboxMessage message, CancellationToken cancellationToken)
     {
+        if (message.TemplateVersion != 1)
+            throw new InvalidOperationException("identity_template_version_invalid");
         var wrapper = JsonSerializer.Deserialize<ProtectedPayloadEnvelope>(message.PayloadJson)
             ?? throw new InvalidOperationException("identity_payload_envelope_invalid");
         var protectedPayload = Convert.FromBase64String(wrapper.ProtectedPayload);
@@ -149,7 +154,8 @@ public sealed partial class IdentityOutboxWorker(
                 message.Recipient,
                 template.Subject,
                 template.Body,
-                cancellationToken);
+                cancellationToken,
+                message.IdempotencyKey);
         }
         else if (message.ChannelCode == "sms")
         {
@@ -190,6 +196,7 @@ public sealed partial class IdentityOutboxWorker(
         {
             message.StatusCode = "sent";
             message.SentAtUtc = now;
+            message.CompletedAtUtc = now;
             message.LastErrorCode = null;
         }
         else
@@ -199,6 +206,7 @@ public sealed partial class IdentityOutboxWorker(
             message.StatusCode = message.AttemptCount >= message.MaxAttempts
                 ? "dead_letter"
                 : "pending";
+            message.CompletedAtUtc = message.StatusCode == "dead_letter" ? now : null;
             var backoffMinutes = Math.Min(30, 1 << Math.Min(message.AttemptCount, (ushort)5));
             message.NextAttemptAtUtc = now.AddMinutes(backoffMinutes)
                 .AddSeconds(Random.Shared.Next(5, 31));

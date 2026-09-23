@@ -10,6 +10,7 @@ using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.Calendar;
 using ViverApp.Api.Features.ClinicAdministration;
 using ViverApp.Api.Features.PatientScheduling;
+using ViverApp.Api.Features.Notifications;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 using Xunit;
@@ -18,6 +19,77 @@ namespace ViverApp.PatientScheduling.Tests;
 
 public sealed class PatientSchedulingConcurrencyTests
 {
+    [Fact]
+    public async Task ReminderJob_QueuesOneEmailIdempotently_WithoutContactingProvider()
+    {
+        var configuration = LoadConfiguration();
+        var fixture = await CreateFixtureAsync(configuration, free: true);
+        ulong appointmentId = 0;
+        try
+        {
+            var request = new AppointmentCreateRequest(fixture.DoctorId, fixture.AppointmentTypeId,
+                "online", fixture.LocalDate, new TimeOnly(10, 0), null);
+            var attempt = await AttemptCreateAsync(configuration, fixture.PatientId,
+                $"reminder-{Guid.NewGuid():N}", request, fixture.UtcNow, CancellationToken.None);
+            var appointment = Assert.IsType<AppointmentResponse>(attempt.Response);
+            appointmentId = appointment.Id;
+            await using (var database = CreateContext(configuration))
+            {
+                var patient = await database.Accounts.SingleAsync(item => item.Id == fixture.PatientId);
+                patient.PortalAccessEnabled = true;
+                patient.RowVersion++;
+                database.AccountConsents.Add(new AccountConsent
+                {
+                    AccountId = fixture.PatientId, TermsVersion = "test",
+                    PrivacyVersion = "test", SourceCode = "local",
+                    AcceptedAtUtc = fixture.UtcNow.UtcDateTime,
+                });
+                database.ScheduledJobs.Add(new ScheduledJob
+                {
+                    JobKey = $"appointment_reminder:{appointment.Id}:{appointment.StartsAtUtc.Ticks}",
+                    JobTypeCode = "appointment_reminder", AppointmentId = appointment.Id,
+                    DueAtUtc = fixture.UtcNow.UtcDateTime, StatusCode = "pending",
+                    AttemptCount = 0, MaxAttempts = 5,
+                    NextAttemptAtUtc = fixture.UtcNow.UtcDateTime,
+                    CreatedAtUtc = fixture.UtcNow.UtcDateTime,
+                });
+                await database.SaveChangesAsync();
+            }
+            ulong jobId;
+            await using (var database = CreateContext(configuration))
+            {
+                var scheduler = new ReminderScheduler(database, new FixedTimeProvider(fixture.UtcNow));
+                var claimed = await scheduler.ClaimAsync("scheduler-test", CancellationToken.None);
+                jobId = Assert.IsType<ScheduledJob>(claimed).Id;
+                await scheduler.ProcessAsync(jobId, "scheduler-test", CancellationToken.None);
+                await scheduler.ProcessAsync(jobId, "scheduler-test", CancellationToken.None);
+            }
+            await using (var database = CreateContext(configuration))
+            {
+                var job = await database.ScheduledJobs.AsNoTracking().SingleAsync(item => item.Id == jobId);
+                Assert.Equal("succeeded", job.StatusCode);
+                var messages = await database.OutboxMessages.AsNoTracking()
+                    .Where(item => item.AccountId == fixture.PatientId
+                        && item.TemplateKey == "appointment.reminder").ToArrayAsync();
+                Assert.Single(messages);
+                Assert.Equal("email", messages[0].ChannelCode);
+                Assert.DoesNotContain("@example.test", messages[0].PayloadJson, StringComparison.Ordinal);
+            }
+        }
+        finally
+        {
+            await using (var database = CreateContext(configuration))
+            {
+                await database.OutboxMessages.Where(item => item.AccountId == fixture.PatientId)
+                    .ExecuteDeleteAsync();
+                if (appointmentId != 0)
+                    await database.ScheduledJobs.Where(item => item.AppointmentId == appointmentId)
+                        .ExecuteDeleteAsync();
+            }
+            await DeleteFixtureAsync(configuration, fixture);
+        }
+    }
+
     [Fact]
     public async Task VariableMode_UsesOnlyIntervalsRegisteredForTheDate()
     {
