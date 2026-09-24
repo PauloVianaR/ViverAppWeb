@@ -52,6 +52,7 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
     [InlineData("/api/v1/users")]
     [InlineData("/api/v1/administrator/home")]
     [InlineData("/api/v1/administrator/analytics?from=2026-01-01&to=2026-01-31")]
+    [InlineData("/api/v1/administrator/analytics-exports")]
     [InlineData("/api/v1/administrator/notifications")]
     public async Task MasterDataQueries_RequireAuthentication(string path)
     {
@@ -73,7 +74,7 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
     [Fact]
     public void CriticalAdministrationControllers_ApplyStepUpFilter()
     {
-        var protectedControllers = new[] { typeof(AdministratorExperienceController), typeof(UsersController), typeof(ProfessionalsController), typeof(ProfessionalAvailabilityPlanController), typeof(ClinicConfigurationController), typeof(CatalogController) };
+        var protectedControllers = new[] { typeof(AdministratorExperienceController), typeof(AdministratorAnalyticsExportsController), typeof(UsersController), typeof(ProfessionalsController), typeof(ProfessionalAvailabilityPlanController), typeof(ClinicConfigurationController), typeof(CatalogController) };
         foreach (var controller in protectedControllers)
         {
             Assert.Contains(controller.GetCustomAttributes(typeof(ServiceFilterAttribute), true).Cast<ServiceFilterAttribute>(),

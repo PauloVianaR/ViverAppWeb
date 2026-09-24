@@ -74,10 +74,40 @@ else if (Data is not null)
         <div class="section-heading"><div><p class="eyebrow">Resumo adicional</p><h2>Estados dos agendamentos</h2></div></div>
         <MetricPanel Title="Consultas por estado" Items="Data.AppointmentsByStatus" />
     </section>
+
+    <section class="patient-section surface" aria-label="Exportações analíticas">
+        <div class="section-heading"><div><p class="eyebrow">Relatório protegido</p><h2>Exportar este período</h2></div></div>
+        <p>O CSV é preparado em segundo plano, inclui indicadores agregados e fica disponível por 24 horas somente para esta conta administradora.</p>
+        <div class="administrator-actions">
+            <button type="button" class="button" disabled="@Busy" @onclick="RequestExport">Preparar exportação</button>
+            <button type="button" class="button button--secondary" disabled="@Busy" @onclick="RefreshExports">Atualizar lista</button>
+        </div>
+        @if (Exports.Count == 0)
+        {
+            <p>Você ainda não solicitou exportações.</p>
+        }
+        else
+        {
+            <ul>
+                @foreach (var item in Exports)
+                {
+                    <li>
+                        <strong>@item.From.ToString("dd/MM/yyyy")–@item.To.ToString("dd/MM/yyyy")</strong>
+                        <span> · @ExportStatus(item.Status) · expira @item.ExpiresAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                        @if (item.Status == "ready")
+                        {
+                            <button type="button" class="button button--secondary button--small" disabled="@Busy" @onclick="() => DownloadExport(item.Id)">Baixar CSV</button>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    </section>
 }
 
 @code {
     private AdministratorAnalyticsData? Data;
+    private IReadOnlyList<AdministratorAnalyticsExportData> Exports = [];
     private DateTime From = DateTime.Today.AddMonths(-3);
     private DateTime To = DateTime.Today;
     private string? SelectedMetric;
@@ -116,7 +146,29 @@ else if (Data is not null)
         new("Avaliação média", "#2667b8", Data.DoctorPerformance.Select(x => x.Value).ToArray(), AdministratorChartSeriesKind.Line, AdministratorChartValueFormat.Rating, true),
     ];
 
-    protected override async Task Load() => Data = await Get<AdministratorAnalyticsData>($"api/v1/administrator/analytics?from={From:yyyy-MM-dd}&to={To:yyyy-MM-dd}");
+    protected override async Task Load()
+    {
+        Data = await Get<AdministratorAnalyticsData>($"api/v1/administrator/analytics?from={From:yyyy-MM-dd}&to={To:yyyy-MM-dd}");
+        await LoadExports();
+    }
+    private async Task LoadExports() => Exports = await Get<IReadOnlyList<AdministratorAnalyticsExportData>>("api/v1/administrator/analytics-exports") ?? [];
+    private Task RefreshExports() => Run(LoadExports);
+    private Task RequestExport() => Run(async () =>
+    {
+        await Request<AdministratorAnalyticsExportData>("api/v1/administrator/analytics-exports", "POST", new { from = DateOnly.FromDateTime(From), to = DateOnly.FromDateTime(To) });
+        await LoadExports();
+        Notice = "Exportação solicitada. Atualize a lista em alguns instantes.";
+    });
+    private Task DownloadExport(ulong id) => Run(async () =>
+    {
+        var result = await Module!.InvokeAsync<AdministratorDownloadResult>("downloadAnalyticsExport", Backend.BaseUrl.ToString(), id);
+        if (!result.Ok) throw new AdministratorUiException(result.Error ?? "Não foi possível baixar a exportação.");
+    });
+    private static string ExportStatus(string status) => status switch
+    {
+        "queued" => "Na fila", "processing" => "Em preparação", "ready" => "Pronto",
+        "failed" => "Falhou; solicite novamente", "expired" => "Expirado", _ => "Indisponível"
+    };
     private Task Apply() => Run(Load);
     private Task Period(int months) => Run(async () => { To = DateTime.Today; From = To.AddMonths(-months); await Load(); });
     private void SelectMetric(string value) => SelectedMetric = SelectedMetric == value ? null : value;
