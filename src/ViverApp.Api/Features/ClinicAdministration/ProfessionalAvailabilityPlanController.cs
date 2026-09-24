@@ -21,6 +21,14 @@ public sealed record VariableAvailabilityPlan(string Mode, ulong RowVersion, boo
     IReadOnlyList<DateOnly> Holidays, IReadOnlyList<DateOnly> BookedDates, IReadOnlyList<DateOnly> ConflictDates);
 public sealed record AvailabilityImpact(int AffectedAppointments, IReadOnlyList<ulong> AppointmentNumbers,
     IReadOnlyList<DateOnly> AffectedDates);
+public sealed record ProfessionalDailyLimits(bool OnlineEnabled, ushort MaxOnlineDaily,
+    ushort MaxInPersonDaily, ulong RowVersion);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ProfessionalDailyLimitsRequest(bool OnlineEnabled,
+    [param: Range(0, 100)] ushort MaxOnlineDaily,
+    [param: Range(0, 100)] ushort MaxInPersonDaily,
+    [param: Range(1, long.MaxValue)] ulong RowVersion);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AvailabilityModeChangeRequest(
@@ -47,6 +55,41 @@ public sealed class ProfessionalAvailabilityPlanController(
         User.IsInRole(ViverAppRoles.Administrator)
         || User.IsInRole(ViverAppRoles.Manager)
         || (User.IsInRole(ViverAppRoles.Doctor) || User.IsInRole(ViverAppRoles.Psychologist)) && Actor == professionalId;
+
+    [HttpGet("daily-limits")]
+    [ManagerFeatureGate("manager.professional_schedules_enabled")]
+    public async Task<ActionResult<ProfessionalDailyLimits>> DailyLimits(ulong professionalId, CancellationToken ct)
+    {
+        if (!CanAccess(professionalId)) return Forbid();
+        var preference = await database.ProfessionalPreferences.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.ProfessionalAccountId == professionalId, ct);
+        return preference is null ? NotFound() : Ok(new ProfessionalDailyLimits(preference.OnlineEnabled,
+            preference.MaxOnlineDaily, preference.MaxInPersonDaily, preference.RowVersion));
+    }
+
+    [HttpPut("daily-limits")]
+    [ManagerFeatureGate("manager.professional_schedules_enabled")]
+    public async Task<ActionResult<ProfessionalDailyLimits>> UpdateDailyLimits(ulong professionalId,
+        ProfessionalDailyLimitsRequest request, CancellationToken ct)
+    {
+        if (!CanAccess(professionalId)) return Forbid();
+        await using var transaction = await database.Database.BeginTransactionAsync(ct);
+        var preference = await LockedPreference(professionalId, ct);
+        if (preference is null) return NotFound();
+        if (preference.RowVersion != request.RowVersion)
+            return Conflict(new ProblemDetails { Status = 409, Title = "A disponibilidade foi alterada. Recarregue e tente novamente." });
+        preference.OnlineEnabled = request.OnlineEnabled;
+        preference.MaxOnlineDaily = request.MaxOnlineDaily;
+        preference.MaxInPersonDaily = request.MaxInPersonDaily;
+        preference.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
+        preference.RowVersion++;
+        await database.SaveChangesAsync(ct);
+        await audit.WriteAsync("professional.availability.settings.updated", Actor, "professional_preference",
+            professionalId.ToString(), null, ct);
+        await transaction.CommitAsync(ct);
+        return Ok(new ProfessionalDailyLimits(preference.OnlineEnabled, preference.MaxOnlineDaily,
+            preference.MaxInPersonDaily, preference.RowVersion));
+    }
 
     [HttpGet]
     [ManagerFeatureGate("manager.professional_schedules_enabled")]

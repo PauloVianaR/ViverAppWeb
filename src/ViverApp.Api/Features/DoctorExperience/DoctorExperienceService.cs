@@ -17,11 +17,11 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
     private static readonly string[] Categories = ["consultation", "examination", "surgery", "procedure"];
 
     public async Task<DoctorCapabilitiesResponse> CapabilitiesAsync(CancellationToken ct) =>
-        new(await SettingEnabledAsync("professional.patient_scheduling_enabled", false, ct));
+        new(await SettingEnabledAsync("professional.patient_scheduling_enabled", true, ct));
 
     public async Task EnsurePatientSchedulingEnabledAsync(CancellationToken ct)
     {
-        if (!await SettingEnabledAsync("professional.patient_scheduling_enabled", false, ct))
+        if (!await SettingEnabledAsync("professional.patient_scheduling_enabled", true, ct))
             throw Forbidden("O agendamento de pacientes pelo profissional está desabilitado nas configurações administrativas.");
     }
 
@@ -64,6 +64,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
 
     public async Task<ProfessionalProfileResponse> UpdateProfileAsync(ulong doctor, ProfessionalProfileUpdateRequest request, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(request.ProfessionalTitle)) throw Invalid("Informe um título profissional.");
         var ids = request.SpecialtyIds.Distinct().ToArray();
         if (ids.Length == 0 || !ids.Contains(request.PrimarySpecialtyId)) throw Invalid("Selecione uma especialidade principal válida.");
         var specialties = await database.Specialties.Where(x => x.IsActive && ids.Contains(x.Id)).ToArrayAsync(ct);
@@ -79,13 +80,21 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         var profile = account.ProfessionalProfile; profile.ProfessionalTitle = request.ProfessionalTitle.Trim();
         profile.Biography = Text(request.Biography); profile.YearsExperience = request.YearsExperience;
         profile.DefaultAppointmentDurationMinutes = request.DefaultAppointmentDurationMinutes; profile.UpdatedAtUtc = now; profile.RowVersion++;
-        database.ProfessionalSpecialties.RemoveRange(profile.ProfessionalSpecialties);
-        foreach (var specialty in specialties) database.ProfessionalSpecialties.Add(new()
+        // Preserve unchanged composite-key links instead of deleting and recreating them
+        // on every profile update.
+        var existingSpecialties = profile.ProfessionalSpecialties.ToArray();
+        foreach (var existing in existingSpecialties)
         {
-            ProfessionalAccountId = doctor,
-            SpecialtyId = specialty.Id,
-            IsPrimary = specialty.Id == request.PrimarySpecialtyId
-        });
+            if (!ids.Contains(existing.SpecialtyId)) database.ProfessionalSpecialties.Remove(existing);
+            else existing.IsPrimary = existing.SpecialtyId == request.PrimarySpecialtyId;
+        }
+        foreach (var specialty in specialties.Where(x => existingSpecialties.All(existing => existing.SpecialtyId != x.Id)))
+            database.ProfessionalSpecialties.Add(new()
+            {
+                ProfessionalAccountId = doctor,
+                SpecialtyId = specialty.Id,
+                IsPrimary = specialty.Id == request.PrimarySpecialtyId
+            });
         preference.EmailEnabled = request.EmailEnabled; preference.SmsEnabled = request.SmsEnabled; preference.UpdatedAtUtc = now; preference.RowVersion++;
         await SaveAsync(ct); await audit.WriteAsync("professional.profile.updated", doctor, "professional_profile", doctor.ToString(), null, ct);
         await transaction.CommitAsync(ct); return await ProfileAsync(doctor, ct);
@@ -166,16 +175,13 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         int page, int pageSize, CancellationToken ct)
     {
         Page(page, pageSize); if (status is not null && status is not ("active" or "blocked")) throw Invalid("Estado inválido.");
-        var visible = database.Accounts.AsNoTracking().Where(x => x.RoleCode == ViverAppRoles.Patient &&
-            (x.AppointmentPatientAccounts.Any(a => a.ProfessionalAccountId == doctor)
-             || database.ProfessionalPatientLinks.Any(l => l.ProfessionalAccountId == doctor && l.PatientAccountId == x.Id && l.StatusCode == "active")));
+        var visible = database.Accounts.AsNoTracking().Where(x => x.RoleCode == ViverAppRoles.Patient);
         var term = Text(search); if (term is { Length: > 120 }) throw Invalid("A busca deve ter no máximo 120 caracteres.");
         if (term is not null) visible = visible.Where(x => x.FullName.Contains(term) || x.Email != null && x.Email.Contains(term) || x.PhoneE164 != null && x.PhoneE164.Contains(term));
         if (status is not null) visible = visible.Where(x => x.StatusCode == status);
         var now = clock.GetUtcNow().UtcDateTime;
         if (premium.HasValue) visible = visible.Where(x => x.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)) == premium.Value);
-        var all = database.Accounts.AsNoTracking().Where(x => x.RoleCode == ViverAppRoles.Patient &&
-            (x.AppointmentPatientAccounts.Any(a => a.ProfessionalAccountId == doctor) || database.ProfessionalPatientLinks.Any(l => l.ProfessionalAccountId == doctor && l.PatientAccountId == x.Id && l.StatusCode == "active")));
+        var all = database.Accounts.AsNoTracking().Where(x => x.RoleCode == ViverAppRoles.Patient);
         var counters = new DoctorPatientCounters(await all.CountAsync(ct), await all.CountAsync(x => x.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)), ct),
             await all.CountAsync(x => x.StatusCode == "active", ct), await all.CountAsync(x => x.StatusCode == "blocked", ct));
         var total = await visible.CountAsync(ct); var rows = await visible.Include(x => x.PatientProfile).Include(x => x.PremiumMembershipAccounts).ThenInclude(x => x.PremiumPlan)
@@ -278,13 +284,14 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
     {
         if (to < from || to.DayNumber - from.DayNumber > 366) throw Invalid("Período inválido.");
         var preference = await database.ProfessionalPreferences.AsNoTracking().SingleAsync(x => x.ProfessionalAccountId == doctor, ct);
-        var hours = await database.ProfessionalWeeklyHours.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor).OrderBy(x => x.DayOfWeek).ThenBy(x => x.StartTime)
-            .Select(x => new ProfessionalWeeklyHourResponse(x.Id, x.DayOfWeek, TimeOnly.FromTimeSpan(x.StartTime), TimeOnly.FromTimeSpan(x.EndTime),
-                x.ValidFrom.HasValue ? DateOnly.FromDateTime(x.ValidFrom.Value) : null, x.ValidUntil.HasValue ? DateOnly.FromDateTime(x.ValidUntil.Value) : null, x.IsActive, x.RowVersion, x.ModalityCode)).ToArrayAsync(ct);
-        var exceptions = await database.ProfessionalAvailabilityExceptions.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor
+        var hourRows = await database.ProfessionalWeeklyHours.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor).OrderBy(x => x.DayOfWeek).ThenBy(x => x.StartTime).ToArrayAsync(ct);
+        var hours = hourRows.Select(x => new ProfessionalWeeklyHourResponse(x.Id, x.DayOfWeek, TimeOnly.FromTimeSpan(x.StartTime), TimeOnly.FromTimeSpan(x.EndTime),
+            x.ValidFrom.HasValue ? DateOnly.FromDateTime(x.ValidFrom.Value) : null, x.ValidUntil.HasValue ? DateOnly.FromDateTime(x.ValidUntil.Value) : null, x.IsActive, x.RowVersion, x.ModalityCode)).ToArray();
+        var exceptionRows = await database.ProfessionalAvailabilityExceptions.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor
             && x.ExceptionDate >= from.ToDateTime(TimeOnly.MinValue) && x.ExceptionDate <= to.ToDateTime(TimeOnly.MinValue)).OrderBy(x => x.ExceptionDate).ThenBy(x => x.StartTime)
-            .Select(x => new ProfessionalAvailabilityExceptionResponse(x.Id, DateOnly.FromDateTime(x.ExceptionDate), x.ModalityCode, x.IsAvailable,
-                x.StartTime.HasValue ? TimeOnly.FromTimeSpan(x.StartTime.Value) : null, x.EndTime.HasValue ? TimeOnly.FromTimeSpan(x.EndTime.Value) : null, x.RowVersion)).ToArrayAsync(ct);
+            .ToArrayAsync(ct);
+        var exceptions = exceptionRows.Select(x => new ProfessionalAvailabilityExceptionResponse(x.Id, DateOnly.FromDateTime(x.ExceptionDate), x.ModalityCode, x.IsAvailable,
+            x.StartTime.HasValue ? TimeOnly.FromTimeSpan(x.StartTime.Value) : null, x.EndTime.HasValue ? TimeOnly.FromTimeSpan(x.EndTime.Value) : null, x.RowVersion)).ToArray();
         return new(preference.OnlineEnabled, preference.MaxOnlineDaily, preference.MaxInPersonDaily, preference.RowVersion, hours, exceptions);
     }
 
@@ -396,8 +403,8 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         else if (link.StatusCode != "active") { link.StatusCode = "active"; link.UpdatedAtUtc = now; link.RowVersion++; }
         await SaveAsync(ct); await audit.WriteAsync("doctor.patient.linked", doctor, "account", patient.ToString(), null, ct);
     }
-    private Task<bool> VisiblePatientAsync(ulong doctor, ulong patient, CancellationToken ct) => database.Accounts.AsNoTracking().AnyAsync(x => x.Id == patient && x.RoleCode == ViverAppRoles.Patient
-        && (x.AppointmentPatientAccounts.Any(a => a.ProfessionalAccountId == doctor) || database.ProfessionalPatientLinks.Any(l => l.ProfessionalAccountId == doctor && l.PatientAccountId == patient && l.StatusCode == "active")), ct);
+    private Task<bool> VisiblePatientAsync(ulong doctor, ulong patient, CancellationToken ct) => database.Accounts.AsNoTracking()
+        .AnyAsync(x => x.Id == patient && x.RoleCode == ViverAppRoles.Patient, ct);
     private async Task RequireDoctorAsync(ulong doctor, CancellationToken ct)
     {
         if (!await database.ProfessionalProfiles.AsNoTracking().AnyAsync(x => x.AccountId == doctor && x.Account.StatusCode == "active", ct)) throw Missing();

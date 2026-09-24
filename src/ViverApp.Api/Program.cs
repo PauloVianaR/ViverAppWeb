@@ -11,6 +11,7 @@ using ViverApp.Api.Features.PatientScheduling;
 using ViverApp.Api.Features.Payments;
 using ViverApp.Api.Features.PatientExperience;
 using ViverApp.Api.Features.Calendar;
+using ViverApp.Api.Features.Notifications;
 using ViverApp.Api.Infrastructure.Persistence;
 using ViverApp.Security;
 
@@ -67,6 +68,7 @@ builder.Services.AddViverAppObservability(
 builder.Services.AddViverAppDatabase(builder.Configuration);
 builder.Services.AddViverAppPrivateStorage(builder.Configuration, builder.Environment);
 builder.Services.AddViverAppIdentity(builder.Configuration, builder.Environment);
+builder.Services.AddViverAppNotifications(builder.Configuration);
 builder.Services.AddViverAppPayments(builder.Configuration, builder.Environment);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpClient("PostalCodeLookup", client =>

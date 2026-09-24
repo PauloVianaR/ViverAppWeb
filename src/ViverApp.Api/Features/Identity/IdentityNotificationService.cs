@@ -33,7 +33,9 @@ public sealed class IdentityNotificationService(
             TemplateKey = decisionCode == "approved"
                 ? "identity.professional_approved"
                 : "identity.professional_rejected",
+            TemplateVersion = 1,
             Recipient = recipient,
+            AccountId = account.Id,
             PayloadJson = JsonSerializer.Serialize(new
             {
                 protectedPayload = Convert.ToBase64String(protectedMessage),

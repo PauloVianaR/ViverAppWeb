@@ -53,6 +53,9 @@ public sealed record WebProfessional(
 
 public sealed record WebSession(Guid Id, bool IsCurrent, string AuthenticationMethod, bool MfaSatisfied, DateTime CreatedAtUtc, DateTime ExpiresAtUtc, DateTime? LastSeenAtUtc);
 
-public sealed record WebPasskey(string CredentialId, string DisplayName, DateTime CreatedAtUtc);
+
+public sealed record WebNotificationPreferences(
+    bool ReminderEmailEnabled, bool ReminderSmsEnabled,
+    bool PremiumUpdatesEnabled, ulong RowVersion);
 
 public sealed record WebPostalCode(string Street, string? Complement, string District, string City, string StateCode);

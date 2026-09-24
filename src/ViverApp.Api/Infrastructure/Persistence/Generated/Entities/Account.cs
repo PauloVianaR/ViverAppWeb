@@ -117,6 +117,10 @@ public partial class Account
 
     public virtual ICollection<MedicalRecordVersion> MedicalRecordVersions { get; set; } = new List<MedicalRecordVersion>();
 
+    public virtual NotificationPreference? NotificationPreference { get; set; }
+
+    public virtual ICollection<OutboxMessage> OutboxMessages { get; set; } = new List<OutboxMessage>();
+
     public virtual PatientPreference? PatientPreference { get; set; }
 
     public virtual PatientProfile? PatientProfile { get; set; }

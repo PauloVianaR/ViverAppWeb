@@ -106,7 +106,7 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
         if (view is not ("future" or "history" or "all")) throw Invalid("Visualização inválida.");
         if (from > until) throw Invalid("O período é inválido.");
         (from, until) = await UtcPeriodAsync(from, until, ct);
-        var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == actor && x.RequiresPayment && x.InverseRescheduledFromAppointment == null);
+        var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == actor && x.InverseRescheduledFromAppointment == null);
         if (view == "future") query = query.Where(x => (x.StatusCode == "pending" || x.StatusCode == "confirmed" || x.StatusCode == "arrived" || x.StatusCode == "in_progress") && x.EndsAtUtc >= Now);
         if (view == "history") query = query.Where(x => (x.StatusCode != "pending" && x.StatusCode != "confirmed" && x.StatusCode != "arrived" && x.StatusCode != "in_progress") || x.EndsAtUtc < Now);
         if (from.HasValue) query = query.Where(x => x.StartsAtUtc >= from);
@@ -235,7 +235,7 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
         ValidatePage(page, pageSize);
         if (view is not ("pending" or "history") || from > until || min < 0 || max < min) throw Invalid("Filtros inválidos.");
         (from, until) = await UtcPeriodAsync(from, until, ct);
-        var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == actor && x.InverseRescheduledFromAppointment == null);
+        var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == actor && x.RequiresPayment && x.InverseRescheduledFromAppointment == null);
         query = view == "pending" ? query.Where(x => (x.StatusCode == "pending" || x.StatusCode == "confirmed") && x.StartsAtUtc > Now && (x.CurrentPayment == null || x.CurrentPayment.StatusCode == "pending" || x.CurrentPayment.StatusCode == "failed" || x.CurrentPayment.StatusCode == "canceled" || x.CurrentPayment.StatusCode == "reversed" || x.CurrentPayment.StatusCode == "refunded")) : query.Where(x => x.CurrentPayment != null);
         if (from.HasValue) query = query.Where(x => (x.CurrentPayment != null ? x.CurrentPayment.CreatedAtUtc : x.CreatedAtUtc) >= from);
         if (until.HasValue) query = query.Where(x => (x.CurrentPayment != null ? x.CurrentPayment.CreatedAtUtc : x.CreatedAtUtc) < until);

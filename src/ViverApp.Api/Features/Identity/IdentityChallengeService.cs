@@ -60,7 +60,9 @@ public sealed class IdentityChallengeService(
         {
             ChannelCode = channel,
             TemplateKey = $"identity.{purpose}",
+            TemplateVersion = 1,
             Recipient = destination,
+            AccountId = user.Id,
             PayloadJson = JsonSerializer.Serialize(new
             {
                 protectedPayload = Convert.ToBase64String(protectedMessage),

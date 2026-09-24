@@ -1,0 +1,97 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JavaScript
+@inject WebBackendOptions Backend
+
+@if (ProfessionalId != 0)
+{
+    <section class="patient-section" aria-label="Limites diários do profissional">
+        <h3>Limites diários</h3>
+        @if (Loading) { <LoadingSkeleton Lines="2" /> }
+        else if (Limits is not null)
+        {
+            <form @onsubmit="SaveAsync" @onsubmit:preventDefault>
+                <label class="patient-check"><input type="checkbox" @bind="OnlineEnabled" /> Permitir atendimento online</label>
+                <div class="administrator-filter-grid">
+                    <div class="field"><label for="professional-max-online">Máximo online por dia</label><input id="professional-max-online" type="number" min="0" max="100" @bind="MaxOnline" /></div>
+                    <div class="field"><label for="professional-max-presential">Máximo presencial por dia</label><input id="professional-max-presential" type="number" min="0" max="100" @bind="MaxInPerson" /></div>
+                </div>
+                <button class="button" disabled="@Saving">Salvar limites</button>
+            </form>
+        }
+        @if (!string.IsNullOrWhiteSpace(Notice)) { <p class="notice @(IsError ? "notice--error" : "notice--success")" role="@(IsError ? "alert" : "status")">@Notice</p> }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public ulong ProfessionalId { get; set; }
+    private IJSObjectReference? Module;
+    private ProfessionalDailyLimitsData? Limits;
+    private ulong LoadedProfessionalId;
+    private ushort MaxOnline, MaxInPerson;
+    private bool OnlineEnabled, Loading, Saving, IsError;
+    private string? Notice;
+
+    protected override void OnParametersSet()
+    {
+        if (ProfessionalId == LoadedProfessionalId) return;
+        Limits = null;
+        Notice = null;
+        if (ProfessionalId == 0) return;
+        Loading = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (ProfessionalId == 0 || ProfessionalId == LoadedProfessionalId) return;
+        LoadedProfessionalId = ProfessionalId;
+        try
+        {
+            Module ??= await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/identity-access.js");
+            Limits = await Module.InvokeAsync<ProfessionalDailyLimitsData>("get", Backend.BaseUrl.ToString(),
+                $"api/v1/professionals/{ProfessionalId}/availability-plan/daily-limits");
+            SetValues();
+        }
+        catch (JSException exception) { Fail(exception); }
+        finally { Loading = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    private void SetValues()
+    {
+        if (Limits is null) return;
+        OnlineEnabled = Limits.OnlineEnabled;
+        MaxOnline = Limits.MaxOnlineDaily;
+        MaxInPerson = Limits.MaxInPersonDaily;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (Limits is null || Module is null) return;
+        Saving = true;
+        try
+        {
+            Limits = await Module.InvokeAsync<ProfessionalDailyLimitsData>("sendMethod", Backend.BaseUrl.ToString(),
+                $"api/v1/professionals/{ProfessionalId}/availability-plan/daily-limits", "PUT",
+                new { onlineEnabled = OnlineEnabled, maxOnlineDaily = MaxOnline,
+                    maxInPersonDaily = MaxInPerson, rowVersion = Limits.RowVersion });
+            SetValues();
+            IsError = false;
+            Notice = "Limites diários atualizados.";
+        }
+        catch (JSException exception) { Fail(exception); }
+        finally { Saving = false; }
+    }
+
+    private void Fail(JSException exception)
+    {
+        IsError = true;
+        Notice = exception.Message.Split(" Error:", StringSplitOptions.None)[0];
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (Module is not null) try { await Module.DisposeAsync(); } catch (JSDisconnectedException) { }
+    }
+
+    private sealed record ProfessionalDailyLimitsData(bool OnlineEnabled, ushort MaxOnlineDaily,
+        ushort MaxInPersonDaily, ulong RowVersion);
+}

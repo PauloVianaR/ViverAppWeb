@@ -79,6 +79,9 @@ $tables = @(
     'premium_plans',
     'premium_memberships',
     'outbox_messages',
+    'notification_preferences',
+    'notification_suppressions',
+    'scheduled_jobs',
     'audit_events',
     'application_settings',
     'idempotency_records'

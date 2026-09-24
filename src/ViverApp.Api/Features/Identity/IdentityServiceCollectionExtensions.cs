@@ -45,7 +45,7 @@ public static class IdentityServiceCollectionExtensions
 
         services.AddIdentityCore<ViverAppUser>(options =>
             {
-                options.Password.RequiredLength = 12;
+                options.Password.RequiredLength = 8;
                 options.Password.RequiredUniqueChars = 4;
                 options.Password.RequireDigit = true;
                 options.Password.RequireLowercase = true;
@@ -60,13 +60,6 @@ public static class IdentityServiceCollectionExtensions
             })
             .AddSignInManager()
             .AddDefaultTokenProviders();
-        services.Configure<IdentityPasskeyOptions>(options =>
-        {
-            options.ServerDomain = configuration["Authentication:Passkeys:ServerDomain"];
-            options.UserVerificationRequirement = "required";
-            options.ResidentKeyRequirement = "preferred";
-        });
-
         var authentication = services.AddAuthentication(options =>
         {
             options.DefaultAuthenticateScheme = IdentityConstants.ApplicationScheme;

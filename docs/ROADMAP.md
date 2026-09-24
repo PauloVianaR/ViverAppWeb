@@ -127,7 +127,7 @@ Cada fase deve:
 - confirmação e recuperação por código curto, de uso único e armazenado como hash, enviado por e-mail ou SMSBarato; nunca enviar senha temporária em texto claro;
 - Google OpenID Connect/OAuth 2.0 com `state`, `nonce`, PKCE quando aplicável, e-mail verificado e vínculo explícito de conta para impedir account takeover;
 - exatamente um papel por conta entre Paciente, Médico, Gestor e Administrador, com policies e checagem de ownership na API;
-- passkeys/WebAuthn como login primário moderno e MFA obrigatório para administrador por TOTP ou recovery code de uso único, pois passkeys nativas do ASP.NET Core 10 não operam como segundo fator;
+- acesso por Google, e-mail/telefone com senha ou código de verificação, com MFA obrigatório para administrador por TOTP ou recovery code de uso único; chaves de acesso/WebAuthn foram desativadas na fase 22;
 - gestão de dispositivos/sessões, rotação, revogação e eventos de segurança;
 - testes para brute force, enumeração, CSRF, fixation, redirect indevido, privilege escalation e vínculo Google.
 
@@ -319,11 +319,15 @@ Cada fase deve:
 
 ## Fase 21 — Layout Web com navegação lateral e disponibilidade profissional variável
 
-**Estado:** implementada na branch `codex/fase-21-layout-disponibilidade-profissional`, ainda não integrada à `main`. Migration 0039 aplicada e verificada no MySQL local; validação automatizada e visual descritas no plano detalhado.
+**Estado:** integrada à `main` em `f651c3d`. Migration 0039 aplicada e verificada no MySQL local; validação automatizada e visual descritas no plano detalhado. As homologações restantes estão no registro local de pendências.
 
 **Plano detalhado:** [Layout Web e disponibilidade profissional](FASE-21-LAYOUT-WEB-E-DISPONIBILIDADE-PROFISSIONAL.md).
 
 ## Fase 22 — E-mail, SMS e jobs dentro da API
+
+**Estado:** implementada na branch `codex/fase-22-email-sms-jobs-api`, ainda não integrada à `main`. Migrations 0040–0042 aplicadas no MySQL local. A entrega externa de notificações de negócio e o scheduler permanecem desligados por padrão até homologação autorizada; o processamento interno é local.
+
+**Operação e ativação:** [runbook da Fase 22](fase-22/OPERACAO.md).
 
 **Objetivo:** ampliar os envios já visíveis na experiência Web e substituir definitivamente os workers separados por processamento durável e observável.
 

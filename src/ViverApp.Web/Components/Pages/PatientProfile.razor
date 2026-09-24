@@ -2,7 +2,7 @@
 @inherits PatientPageBase
 @using static ViverApp.Web.PatientLabels
 <PageTitle>Meu perfil e Premium | ViverApp</PageTitle>
-<header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Meu perfil</h1><p class="page-description">Seus dados, suas preferências e os benefícios do seu cuidado.</p></div><a class="button button--secondary" href="/seguranca">Passkeys e sessões</a></header>
+<header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Meu perfil</h1><p class="page-description">Seus dados, suas preferências e os benefícios do seu cuidado.</p></div><a class="button button--secondary" href="/seguranca">Segurança e sessões</a></header>
 @if (Notice is not null) { <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="alert">@Notice</p> }
 <nav class="patient-tabs" aria-label="Seções do perfil"><a class="button button--secondary" href="#dados">Dados pessoais</a><a class="button button--secondary" href="#contatos">Contatos e segurança</a><a class="button button--secondary" href="#premium">Premium</a></nav>
 @if (Loading) { <LoadingSkeleton Lines="5" /> }
@@ -33,9 +33,8 @@ else if (Profile is not null)
         @if (Security?.GoogleLinked == true) { <button class="button button--danger" disabled="@(Busy || Security?.RecentAuthentication != true)" @onclick='() => Open("unlink-google")'>Desvincular Google</button> }
         else if(Security?.RecentAuthentication == true) { <a class="button button--secondary" href="@Backend.GoogleLinkUrl">Vincular Google</a> }
         <h3>Senha</h3>
-        @if (Security?.HasPassword == true) { <form @onsubmit="ChangePassword" @onsubmit:preventDefault><div class="patient-filter-grid"><div class="field"><label for="current-password">Senha atual</label><input id="current-password" type="password" @bind="CurrentPassword" autocomplete="current-password" required maxlength="128" /></div><div class="field"><label for="new-password">Nova senha</label><input id="new-password" type="password" @bind="NewPassword" autocomplete="new-password" required minlength="12" maxlength="128" /></div><div class="field"><label for="confirm-password">Confirmar nova senha</label><input id="confirm-password" type="password" @bind="ConfirmPassword" autocomplete="new-password" required minlength="12" maxlength="128" /></div></div><p>Use pelo menos 12 caracteres, maiúsculas, minúsculas, números e símbolo.</p><button class="button button--secondary" disabled="@Busy">Alterar senha e encerrar sessões</button></form> }
-        else { <p>Você usa Google ou códigos de acesso. Para configurar uma senha, use a recuperação com um contato confirmado.</p><a href="/acesso">Acessar recuperação de senha</a> }
-        <div class="patient-actions patient-section"><a class="button button--secondary" href="/seguranca">Gerenciar passkeys e dispositivos</a><button class="button button--secondary" disabled="@Busy" @onclick="RevokeOthers">Encerrar outras sessões</button></div>
+        <PasswordChangeButton Role="patient" />
+        <div class="patient-actions patient-section"><a class="button button--secondary" href="/seguranca">Gerenciar segurança da conta</a><button class="button button--secondary" disabled="@Busy" @onclick="RevokeOthers">Encerrar outras sessões</button></div>
     </section>
     @if (Premium is not null)
     {
@@ -63,7 +62,7 @@ else if (Profile is not null)
     private PatientPremium? Premium;
     private PatientSecurity? Security;
     private string FullName="", TaxId="", PostalCode="", Street="", Number="", Complement="", District="", City="", StateCode="";
-    private string Channel="email", Destination="", ContactCode="", CurrentPassword="", NewPassword="", ConfirmPassword="";
+    private string Channel="email", Destination="", ContactCode="";
     private DateTime? BirthDate;
     private bool EmailEnabled, SmsEnabled;
     private Guid? ContactRequest;
@@ -89,7 +88,6 @@ else if (Profile is not null)
     private Task Save()=>Run(async()=>{if(BirthDate is null)throw new PatientUiException("Informe o nascimento.");await Request<object>("api/v1/patient/experience/profile","PUT",new{fullName=FullName,taxId=Digits(TaxId),birthDate=DateOnly.FromDateTime(BirthDate.Value),address=new PatientAddress(Digits(PostalCode),Street,Number,Complement,District,City,StateCode),emailEnabled=EmailEnabled,smsEnabled=SmsEnabled,rowVersion=Profile!.RowVersion});await Load();Notice="Dados atualizados.";});
     private Task RequestContact()=>Run(async()=>{var result=await Request<WebChallengeResult>("api/v1/patient/account/contact/request","POST",new{channel=Channel,destination=Destination});ContactRequest=result!.RequestId;Notice=result.Message;});
     private Task ConfirmContact()=>Run(async()=>{await Request<object>("api/v1/patient/account/contact/confirm","POST",new{requestId=ContactRequest,code=ContactCode});Navigation.NavigateTo("/acesso",true);});
-    private Task ChangePassword()=>Run(async()=>{if(NewPassword!=ConfirmPassword)throw new PatientUiException("A confirmação da senha não corresponde.");await Request<object>("api/v1/patient/account/password","POST",new{currentPassword=CurrentPassword,newPassword=NewPassword});Navigation.NavigateTo("/acesso",true);});
     private Task RevokeOthers()=>Run(async()=>{await Request<object>("api/v1/patient/account/sessions/revoke-others","POST",new{});Notice="Outras sessões encerradas. Este dispositivo continua conectado.";});
     private async Task Open(string id)=>await Module!.InvokeVoidAsync("showDialog",id);
     private async Task Close(string id)=>await Module!.InvokeVoidAsync("closeDialog",id);

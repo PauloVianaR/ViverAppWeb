@@ -27,6 +27,7 @@
         }
         @if (Account is not null && IsWorkspace)
         {
+            <div class="topbar-actions">
             @if (Account.Role is "doctor" or "psychologist")
             {
                 <details class="doctor-notification-center">
@@ -54,7 +55,8 @@
                     </div>
                 </details>
             }
-            <button class="topbar-action" type="button" @onclick="LogoutAsync"><AppIcon Name="user" /><span>Sair</span></button>
+            <button class="topbar-action topbar-action--logout" type="button" @onclick="LogoutAsync"><AppIcon Name="user" /><span>Sair</span></button>
+            </div>
         }
         else
         {
@@ -78,7 +80,7 @@
                         <a class="@ActiveClass(item)" href="@item.Href" aria-current="@AriaCurrent(item)"><AppIcon Name="@item.Icon" /><span>@item.Label</span></a>
                     }
                 </nav>
-                <a class="sidebar-security" href="/seguranca"><AppIcon Name="shield" /><div><strong>Segurança da conta</strong><span>Sessões, Google e passkeys.</span></div></a>
+                <a class="sidebar-security" href="/seguranca"><AppIcon Name="shield" /><div><strong>Segurança da conta</strong><span>Sessões e formas de acesso.</span></div></a>
             </aside>
             }
         }

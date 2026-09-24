@@ -26,7 +26,7 @@ public sealed class RecentAuthentication(ViverAppDbContext database)
     }
 }
 
-[ApiController, Route("api/v1/patient/account"), Route("api/v1/doctor/account"), Route("api/v1/psychologist/account"), Route("api/v1/manager/account"), Authorize(Roles = "patient,doctor,psychologist,manager")]
+[ApiController, Route("api/v1/patient/account"), Route("api/v1/doctor/account"), Route("api/v1/psychologist/account"), Route("api/v1/manager/account"), Route("api/v1/admin/account"), Authorize(Roles = "patient,doctor,psychologist,manager,admin")]
 [ServiceFilter(typeof(PatientExperienceExceptionFilter))]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class PatientAccountController(ViverAppDbContext database, UserManager<ViverAppUser> users,
@@ -99,10 +99,14 @@ public sealed class PatientAccountController(ViverAppDbContext database, UserMan
     [HttpPost("password"), EnableRateLimiting(SecurityPolicyNames.SensitiveRateLimit)]
     public async Task<IActionResult> Password(ChangeOwnPasswordRequest request, CancellationToken ct)
     {
+        await RequireRecentAsync(ct);
         await using var tx = await database.Database.BeginTransactionAsync(ct);
         var user = (await users.GetUserAsync(User))!;
-        var result = await users.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
-        if (!result.Succeeded) throw PatientExperienceService.Invalid("Confira a senha atual. A nova senha precisa ter pelo menos 12 caracteres, maiúsculas, minúsculas, números e símbolo.");
+        if (await users.CheckPasswordAsync(user, request.NewPassword))
+            throw PatientExperienceService.Invalid("A nova senha precisa ser diferente da senha atual.");
+        var token = await users.GeneratePasswordResetTokenAsync(user);
+        var result = await users.ResetPasswordAsync(user, token, request.NewPassword);
+        if (!result.Succeeded) throw PatientExperienceService.Invalid("Use pelo menos 8 caracteres, maiúscula, minúscula, número e símbolo na nova senha.");
         await sessions.RevokeAllAsync(Actor, "password_changed", ct);
         await audit.WriteAsync("patient.password_changed", Actor, null, ct);
         await tx.CommitAsync(ct);
@@ -116,9 +120,8 @@ public sealed class PatientAccountController(ViverAppDbContext database, UserMan
         await RequireRecentAsync(ct);
         await using var tx = await database.Database.BeginTransactionAsync(ct);
         var user = (await users.GetUserAsync(User))!;
-        var alternative = (await users.HasPasswordAsync(user) && (user.EmailConfirmed || user.PhoneNumberConfirmed))
-            || user.PhoneNumberConfirmed || await database.AccountPasskeys.AnyAsync(x => x.AccountId == Actor, ct);
-        if (!alternative) throw PatientExperienceService.Conflict("Confirme um telefone, cadastre uma chave de acesso ou configure senha antes de desvincular o Google.");
+        var alternative = user.EmailConfirmed || user.PhoneNumberConfirmed;
+        if (!alternative) throw PatientExperienceService.Conflict("Confirme um e-mail ou telefone antes de desvincular o Google.");
         var login = (await users.GetLoginsAsync(user)).SingleOrDefault(x => x.LoginProvider == "Google");
         if (login is not null && !(await users.RemoveLoginAsync(user, login.LoginProvider, login.ProviderKey)).Succeeded) throw PatientExperienceService.Conflict("Não foi possível desvincular o Google.");
         await sessions.RevokeAllAsync(Actor, "google_unlinked", ct);

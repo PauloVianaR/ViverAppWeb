@@ -156,7 +156,7 @@ public sealed class IdentitySecurityTests
         await using var provider = services.BuildServiceProvider();
 
         var identityOptions = provider.GetRequiredService<IOptions<IdentityOptions>>().Value;
-        Assert.Equal(12, identityOptions.Password.RequiredLength);
+        Assert.Equal(8, identityOptions.Password.RequiredLength);
         Assert.Equal(5, identityOptions.Lockout.MaxFailedAccessAttempts);
 
         var policies = provider.GetRequiredService<IAuthorizationPolicyProvider>();
@@ -335,7 +335,6 @@ public sealed class IdentitySecurityTests
         {
             ["Authentication:ChallengePepper"] = Convert.ToBase64String(new byte[32]),
             ["Authentication:WebReturnUrl"] = "https://localhost:7110/auth/result",
-            ["Authentication:Passkeys:ServerDomain"] = "localhost",
             ["Smtp:Host"] = "smtp.example.com",
             ["Smtp:Port"] = "587",
             ["Smtp:User"] = "sender@example.com",

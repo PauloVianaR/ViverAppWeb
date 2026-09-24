@@ -8,7 +8,7 @@ public sealed record RegisterRequest(
     [param: Required, StringLength(200, MinimumLength = 3)] string FullName,
     [param: EmailAddress, StringLength(254)] string? Email,
     [param: Required, StringLength(16)] string Phone,
-    [param: Required, StringLength(128, MinimumLength = 12)] string Password,
+    [param: Required, StringLength(128, MinimumLength = 8)] string Password,
     [param: Required, RegularExpression("^(email|sms)$")] string VerificationChannel,
     [param: Required, RegularExpression("^(patient|doctor|psychologist|manager)$")] string RoleCode,
     [param: Required, RegularExpression("^[0-9]{11}$")] string TaxId,
@@ -61,7 +61,7 @@ public sealed record ChallengeCodeRequest(
 public sealed record PasswordResetRequest(
     Guid RequestId,
     [param: Required, StringLength(20, MinimumLength = 6)] string Code,
-    [param: Required, StringLength(128, MinimumLength = 12)] string NewPassword);
+    [param: Required, StringLength(128, MinimumLength = 8)] string NewPassword);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PasswordLoginRequest(
@@ -75,15 +75,6 @@ public sealed record PasswordLoginRequest(
 public sealed record MfaCodeRequest(
     [param: StringLength(20)] string? TotpCode,
     [param: StringLength(32)] string? RecoveryCode);
-
-[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record PasskeyCredentialRequest(
-    [param: Required, StringLength(131072)] string CredentialJson,
-    [param: StringLength(100)] string? DisplayName,
-    bool RememberMe = false);
-
-[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record PasskeyOptionsRequest([param: StringLength(254)] string? Identifier);
 
 public sealed record ChallengeAcceptedResponse(Guid RequestId, string Message);
 
@@ -124,8 +115,3 @@ public sealed record SessionResponse(
     DateTime CreatedAtUtc,
     DateTime ExpiresAtUtc,
     DateTime? LastSeenAtUtc);
-
-public sealed record PasskeyResponse(
-    string CredentialId,
-    string DisplayName,
-    DateTime CreatedAtUtc);

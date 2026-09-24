@@ -18,6 +18,7 @@
         </div>
         @if (SelectedId > 0)
         {
+            <ProfessionalDailyLimitsEditor @key="SelectedId" ProfessionalId="@SelectedId" />
             <ProfessionalAvailabilityPlanner ProfessionalId="@SelectedId" OnModeChanged="mode => AvailabilityMode = mode" />
             @if (AvailabilityMode == "recurring")
             {

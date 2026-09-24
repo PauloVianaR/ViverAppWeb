@@ -1,0 +1,83 @@
+@using ViverApp.Web.Models
+@inherits ViverApp.Web.Components.Pages.AdministratorPageBase
+
+<details class="notification-operations surface">
+    <summary>Entrega de e-mail e SMS</summary>
+    <p class="field-hint">Esta área mostra somente metadados da fila. Destinatários e conteúdo das mensagens não são exibidos.</p>
+    @if (Loading) { <LoadingSkeleton Lines="4" /> }
+    else if (Summary is not null)
+    {
+        <div class="notification-operations__metrics" aria-label="Indicadores da fila">
+            <span><strong>@Summary.Pending</strong> pendentes</span>
+            <span><strong>@Summary.Processing</strong> em processamento</span>
+            <span><strong>@Summary.Sent</strong> entregues ao provedor</span>
+            <span><strong>@Summary.Suppressed</strong> suprimidas</span>
+            <span><strong>@Summary.DeadLetter</strong> falhas finais</span>
+            <span><strong>@Summary.ScheduledPending</strong> jobs agendados</span>
+        </div>
+        @if (Summary.OldestPendingMinutes.HasValue)
+        {
+            <p>Mensagem pendente mais antiga: @Math.Round(Summary.OldestPendingMinutes.Value) minuto(s).</p>
+        }
+        @if (Summary.ScheduledDeadLetter > 0)
+        {
+            <p class="notice notice--error">@Summary.ScheduledDeadLetter job(s) exigem investigação técnica.</p>
+        }
+        <button class="button button--secondary button--small" disabled="@Busy" @onclick="Refresh">Atualizar indicadores</button>
+        <h3>Falhas finais de entrega</h3>
+        @if (DeadLetters.Count == 0) { <p>Nenhuma mensagem aguardando reprocessamento.</p> }
+        else
+        {
+            <div class="notification-operations__list">
+                @foreach (var item in DeadLetters)
+                {
+                    <article>
+                        <div><strong>Mensagem #@item.Id</strong><span>@item.Channel · @item.TemplateKey v@item.TemplateVersion · @item.Attempts tentativa(s)</span><small>@item.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @(item.ErrorCode ?? "Falha não classificada")</small></div>
+                        @if (!item.TemplateKey.StartsWith("identity.", StringComparison.Ordinal))
+                        {
+                            <button class="button button--secondary button--small" disabled="@Busy" @onclick="() => Select(item.Id)">Reprocessar</button>
+                        }
+                    </article>
+                }
+            </div>
+        }
+        @if (SelectedId.HasValue)
+        {
+            <div class="notification-operations__retry" role="group" aria-label="Confirmar reprocessamento">
+                <p>Confirme o reprocessamento da mensagem #@SelectedId. O provedor pode ter recebido uma tentativa anterior.</p>
+                <div class="field"><label for="retry-reason">Motivo</label><input id="retry-reason" @bind="RetryReason" minlength="5" maxlength="300" /></div>
+                <button class="button" disabled="@(Busy || RetryReason.Trim().Length < 5)" @onclick="Retry">Confirmar reprocessamento</button>
+                <button class="button button--secondary" @onclick="() => SelectedId = null">Voltar</button>
+            </div>
+        }
+    }
+    @if (Notice is not null) { <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="status">@Notice</p> }
+</details>
+
+@code {
+    private WebNotificationQueueSummary? Summary;
+    private IReadOnlyList<WebNotificationDeadLetter> DeadLetters = [];
+    private ulong? SelectedId;
+    private string RetryReason = "";
+
+    protected override async Task Load()
+    {
+        Summary = await Get<WebNotificationQueueSummary>("api/v1/administrator/notification-operations/summary");
+        DeadLetters = await Get<IReadOnlyList<WebNotificationDeadLetter>>(
+            "api/v1/administrator/notification-operations/dead-letters?limit=30") ?? [];
+    }
+
+    private Task Refresh() => Run(Load);
+    private void Select(ulong id) { SelectedId = id; RetryReason = ""; }
+    private Task Retry() => Run(async () =>
+    {
+        if (!SelectedId.HasValue || RetryReason.Trim().Length < 5) return;
+        await Request<object>(
+            $"api/v1/administrator/notification-operations/dead-letters/{SelectedId.Value}/retry",
+            "POST", new { reason = RetryReason.Trim() });
+        SelectedId = null;
+        RetryReason = "";
+        await Load();
+        Notice = "Mensagem devolvida à fila para uma nova tentativa.";
+    });
+}

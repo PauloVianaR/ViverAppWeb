@@ -299,7 +299,7 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("Entrar com senha", html, StringComparison.Ordinal);
         Assert.Contains("Continuar com Google", html, StringComparison.Ordinal);
-        Assert.Contains("Usar chave de acesso", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("Usar chave de acesso", html, StringComparison.Ordinal);
         Assert.Contains("Entrar com código", html, StringComparison.Ordinal);
         Assert.DoesNotContain("value=\"administrator\"", html, StringComparison.Ordinal);
     }

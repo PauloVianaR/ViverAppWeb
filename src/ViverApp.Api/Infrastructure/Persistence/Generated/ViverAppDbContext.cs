@@ -88,6 +88,10 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<MedicalReportVersion> MedicalReportVersions { get; set; }
 
+    public virtual DbSet<NotificationPreference> NotificationPreferences { get; set; }
+
+    public virtual DbSet<NotificationSuppression> NotificationSuppressions { get; set; }
+
     public virtual DbSet<OutboxMessage> OutboxMessages { get; set; }
 
     public virtual DbSet<PatientPreference> PatientPreferences { get; set; }
@@ -131,6 +135,8 @@ public partial class ViverAppDbContext : DbContext
     public virtual DbSet<ProfessionalWeeklyHour> ProfessionalWeeklyHours { get; set; }
 
     public virtual DbSet<Role> Roles { get; set; }
+
+    public virtual DbSet<ScheduledJob> ScheduledJobs { get; set; }
 
     public virtual DbSet<Specialty> Specialties { get; set; }
 
@@ -1908,21 +1914,82 @@ public partial class ViverAppDbContext : DbContext
                 .HasConstraintName("fk_medical_report_versions_report");
         });
 
+        modelBuilder.Entity<NotificationPreference>(entity =>
+        {
+            entity.HasKey(e => e.AccountId).HasName("PRIMARY");
+
+            entity.ToTable("notification_preferences");
+
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.PremiumUpdatesEnabled)
+                .IsRequired()
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("premium_updates_enabled");
+            entity.Property(e => e.ReminderEmailEnabled)
+                .IsRequired()
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("reminder_email_enabled");
+            entity.Property(e => e.ReminderSmsEnabled).HasColumnName("reminder_sms_enabled");
+            entity.Property(e => e.RowVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("row_version");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.Account).WithOne(p => p.NotificationPreference)
+                .HasForeignKey<NotificationPreference>(d => d.AccountId)
+                .HasConstraintName("fk_notification_preferences_account");
+        });
+
+        modelBuilder.Entity<NotificationSuppression>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("notification_suppressions");
+
+            entity.HasIndex(e => new { e.ChannelCode, e.RecipientHash }, "ux_notification_suppressions_destination").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ChannelCode)
+                .HasMaxLength(10)
+                .HasColumnName("channel_code");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.ExpiresAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("expires_at_utc");
+            entity.Property(e => e.ReasonCode)
+                .HasMaxLength(40)
+                .HasColumnName("reason_code");
+            entity.Property(e => e.RecipientHash)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("recipient_hash");
+        });
+
         modelBuilder.Entity<OutboxMessage>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
 
             entity.ToTable("outbox_messages");
 
+            entity.HasIndex(e => new { e.AccountId, e.CreatedAtUtc }, "ix_outbox_messages_account");
+
             entity.HasIndex(e => new { e.StatusCode, e.NextAttemptAtUtc, e.LeaseUntilUtc }, "ix_outbox_messages_claim");
 
             entity.HasIndex(e => e.IdempotencyKey, "ux_outbox_messages_idempotency").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
             entity.Property(e => e.AttemptCount).HasColumnName("attempt_count");
             entity.Property(e => e.ChannelCode)
                 .HasMaxLength(10)
                 .HasColumnName("channel_code");
+            entity.Property(e => e.CompletedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("completed_at_utc");
             entity.Property(e => e.CreatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("created_at_utc");
@@ -1945,6 +2012,9 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.PayloadJson)
                 .HasColumnType("json")
                 .HasColumnName("payload_json");
+            entity.Property(e => e.ProviderReference)
+                .HasMaxLength(150)
+                .HasColumnName("provider_reference");
             entity.Property(e => e.Recipient)
                 .HasMaxLength(254)
                 .HasColumnName("recipient");
@@ -1958,6 +2028,14 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.TemplateKey)
                 .HasMaxLength(100)
                 .HasColumnName("template_key");
+            entity.Property(e => e.TemplateVersion)
+                .HasDefaultValueSql("'1'")
+                .HasColumnName("template_version");
+
+            entity.HasOne(d => d.Account).WithMany(p => p.OutboxMessages)
+                .HasForeignKey(d => d.AccountId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_outbox_messages_account");
         });
 
         modelBuilder.Entity<PatientPreference>(entity =>
@@ -2669,7 +2747,7 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(6)
                 .HasColumnName("created_at_utc");
             entity.Property(e => e.DefaultAppointmentDurationMinutes)
-                .HasDefaultValueSql("'30'")
+                .HasDefaultValueSql("'10'")
                 .HasColumnName("default_appointment_duration_minutes");
             entity.Property(e => e.LicenseNumber)
                 .HasMaxLength(30)
@@ -2682,7 +2760,7 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(3)
                 .HasColumnName("license_type_code");
             entity.Property(e => e.ProfessionalTitle)
-                .HasMaxLength(4)
+                .HasMaxLength(30)
                 .HasDefaultValueSql("'Dr.'")
                 .HasColumnName("professional_title");
             entity.Property(e => e.RowVersion)
@@ -2878,6 +2956,62 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(50)
                 .HasColumnName("display_name");
             entity.Property(e => e.IsPrivileged).HasColumnName("is_privileged");
+        });
+
+        modelBuilder.Entity<ScheduledJob>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("scheduled_jobs");
+
+            entity.HasIndex(e => new { e.AppointmentId, e.DueAtUtc }, "ix_scheduled_jobs_appointment");
+
+            entity.HasIndex(e => new { e.StatusCode, e.NextAttemptAtUtc, e.LeaseUntilUtc }, "ix_scheduled_jobs_claim");
+
+            entity.HasIndex(e => e.JobKey, "ux_scheduled_jobs_key").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.AttemptCount).HasColumnName("attempt_count");
+            entity.Property(e => e.CompletedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("completed_at_utc");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.DueAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("due_at_utc");
+            entity.Property(e => e.JobKey)
+                .HasMaxLength(150)
+                .HasColumnName("job_key");
+            entity.Property(e => e.JobTypeCode)
+                .HasMaxLength(50)
+                .HasColumnName("job_type_code");
+            entity.Property(e => e.LastErrorCode)
+                .HasMaxLength(100)
+                .HasColumnName("last_error_code");
+            entity.Property(e => e.LeaseOwner)
+                .HasMaxLength(100)
+                .HasColumnName("lease_owner");
+            entity.Property(e => e.LeaseUntilUtc)
+                .HasMaxLength(6)
+                .HasColumnName("lease_until_utc");
+            entity.Property(e => e.MaxAttempts)
+                .HasDefaultValueSql("'5'")
+                .HasColumnName("max_attempts");
+            entity.Property(e => e.NextAttemptAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("next_attempt_at_utc");
+            entity.Property(e => e.StatusCode)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'pending'")
+                .HasColumnName("status_code");
+
+            entity.HasOne(d => d.Appointment).WithMany(p => p.ScheduledJobs)
+                .HasForeignKey(d => d.AppointmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_scheduled_jobs_appointment");
         });
 
         modelBuilder.Entity<Specialty>(entity =>

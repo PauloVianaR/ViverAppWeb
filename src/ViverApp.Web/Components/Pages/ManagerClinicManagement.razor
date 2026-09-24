@@ -31,7 +31,7 @@ else
         <section class="surface patient-panel patient-section">
             <div class="section-heading"><div><p class="eyebrow">Disponibilidade</p><h2>Horários dos profissionais</h2></div>@if(AvailabilityMode == "recurring"){<button class="button" @onclick="NewHour" disabled="@(DoctorId==0)">Adicionar horário</button>}</div>
             <div class="field"><label for="schedule-doctor">Profissional</label><select id="schedule-doctor" value="@DoctorId" @onchange="DoctorChanged"><option value="0">Selecione</option>@foreach(var doctor in Doctors){<option value="@doctor.AccountId">@doctor.FullName · @doctor.LicenseLabel</option>}</select></div>
-            @if(DoctorId!=0){<ProfessionalAvailabilityPlanner ProfessionalId="@DoctorId" OnModeChanged="mode => AvailabilityMode = mode" />}
+            @if(DoctorId!=0){<ProfessionalDailyLimitsEditor @key="DoctorId" ProfessionalId="@DoctorId" /><ProfessionalAvailabilityPlanner ProfessionalId="@DoctorId" OnModeChanged="mode => AvailabilityMode = mode" />}
             @if(AvailabilityMode == "recurring")
             {
                 @if(DoctorId!=0 && Hours.Count==0){<InterfaceState Title="Sem horários cadastrados" Description="Adicione a primeira faixa semanal para este profissional." Icon="calendar" />}
