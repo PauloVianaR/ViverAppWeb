@@ -130,6 +130,8 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         await db.Appointments.Where(x => x.Id == appointment).ExecuteUpdateAsync(update => update.SetProperty(x => x.CurrentPaymentId, (ulong?)null));
         await db.Payments.Where(x => x.AppointmentId == appointment).ExecuteDeleteAsync();
         await db.AppointmentStatusHistories.Where(x => x.AppointmentId == appointment).ExecuteDeleteAsync();
+        await db.TeleconsultationPeers.Where(x => x.AppointmentId == appointment).ExecuteDeleteAsync();
+        await db.TeleconsultationGuestLinks.Where(x => x.AppointmentId == appointment).ExecuteDeleteAsync();
         await db.Appointments.Where(x => x.Id == appointment).ExecuteDeleteAsync();
         await db.ProfessionalProfiles.Where(x => x.AccountId == doctor).ExecuteDeleteAsync();
         await db.AppointmentTypes.Where(x => x.Id == type).ExecuteDeleteAsync();
@@ -430,6 +432,74 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         await Assert.ThrowsAsync<HubException>(() => access.RequireAsync(principal, ulong.MaxValue, default));
         await db.AuthSessions.Where(x => x.AccountId == patient).ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAtUtc, now));
         await Assert.ThrowsAsync<HubException>(() => access.RequireAsync(principal, appointment, default));
+    }
+
+    [Fact]
+    public async Task Video_guest_invite_requires_host_and_revocation_blocks_existing_cookie()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ViverAppDbContext>();
+        var guests = scope.ServiceProvider.GetRequiredService<TeleconsultationGuestService>();
+        var now = DateTime.UtcNow;
+        var session = Guid.NewGuid();
+        db.AuthSessions.Add(new()
+        {
+            Id = session.ToByteArray(), AccountId = doctor,
+            RefreshTokenHash = RandomNumberGenerator.GetBytes(32), AuthenticationMethod = "password",
+            MfaSatisfied = true, CreatedAtUtc = now, ExpiresAtUtc = now.AddHours(1)
+        });
+        await db.SaveChangesAsync();
+        await db.Appointments.Where(x => x.Id == appointment).ExecuteUpdateAsync(s => s
+            .SetProperty(x => x.ModalityCode, "online").SetProperty(x => x.StatusCode, "confirmed")
+            .SetProperty(x => x.RequiresPayment, false).SetProperty(x => x.PriceAmount, 0m)
+            .SetProperty(x => x.StartsAtUtc, now).SetProperty(x => x.EndsAtUtc, now.AddMinutes(30)));
+        var principal = new ClaimsPrincipal(new ClaimsIdentity([
+            new Claim(ClaimTypes.NameIdentifier, doctor.ToString()),
+            new Claim(ClaimTypes.Role, "doctor"),
+            new Claim(ViverAppClaimTypes.SessionId, session.ToString())], "test"));
+        var link = await guests.RotateAsync(principal, appointment, default);
+        var parts = new Uri(link).Fragment.TrimStart('#').Split('.');
+        Assert.Null(await guests.ExchangeAsync(parts[0], parts[1], default));
+        db.TeleconsultationPeers.Add(new TeleconsultationPeer
+        {
+            AppointmentId = appointment, AccountId = doctor,
+            ConnectionId = $"test-{marker}", ExpiresAtUtc = now.AddMinutes(1)
+        });
+        await db.SaveChangesAsync();
+        var exchanged = await guests.ExchangeAsync(parts[0], parts[1], default);
+        Assert.Equal(appointment, exchanged?.AppointmentId);
+        var http = new DefaultHttpContext();
+        http.Request.Headers.Cookie = $"{TeleconsultationGuestService.CookieName}={guests.Protect(Guid.ParseExact(parts[0], "N"), exchanged!.Value.GuestId)}";
+        Assert.NotNull(await guests.RequireGuestAsync(http, appointment, default));
+        Assert.Null(await guests.RequireGuestAsync(http, appointment + 1, default));
+        Assert.Null(await guests.ExchangeAsync(parts[0], "invalid", default));
+        await guests.RevokeAsync(principal, appointment, default);
+        Assert.Null(await guests.RequireGuestAsync(http, appointment, default));
+        var replacement = (await guests.RotateAsync(principal, appointment, default)).Split('#')[1].Split('.');
+        Assert.Null(await guests.ExchangeAsync(parts[0], parts[1], default));
+        await db.TeleconsultationGuestLinks.Where(x => x.AppointmentId == appointment)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.CreatedAtUtc, now.AddMinutes(-2))
+                .SetProperty(x => x.ExpiresAtUtc, now.AddMinutes(-1)));
+        Assert.Null(await guests.ExchangeAsync(replacement[0], replacement[1], default));
+    }
+
+    [Fact]
+    public async Task Video_room_admits_host_and_three_guests_but_rejects_fifth_connection()
+    {
+        using var scope = factory.Services.CreateScope();
+        var presence = scope.ServiceProvider.GetRequiredService<TeleconsultationPresence>();
+        await Assert.ThrowsAsync<HubException>(() => presence.JoinAsync(appointment, null, Guid.NewGuid(), "early", default));
+        Assert.Empty(await presence.JoinAsync(appointment, doctor, null, "host", default));
+        var ids = Enumerable.Range(0, 4).Select(_ => Guid.NewGuid()).ToArray();
+        Assert.Single(await presence.JoinAsync(appointment, null, ids[0], "guest-1", default));
+        Assert.Equal(2, (await presence.JoinAsync(appointment, null, ids[1], "guest-2", default)).Length);
+        Assert.Equal(3, (await presence.JoinAsync(appointment, null, ids[2], "guest-3", default)).Length);
+        await Assert.ThrowsAsync<HubException>(() => presence.JoinAsync(appointment, null, ids[3], "guest-4", default));
+        Assert.True(await presence.ContainsAsync(appointment, "guest-3", default));
+        Assert.Equal(3, (await presence.JoinAsync(appointment, null, ids[2], "guest-3-reconnected", default)).Length);
+        Assert.False(await presence.ContainsAsync(appointment, "guest-3", default));
+        await presence.LeaveAsync(appointment, "guest-2", default);
+        Assert.Equal(3, (await presence.JoinAsync(appointment, null, ids[3], "guest-4", default)).Length);
     }
 
     [Theory]

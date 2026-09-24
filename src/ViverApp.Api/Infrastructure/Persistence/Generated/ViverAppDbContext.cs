@@ -140,6 +140,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<Specialty> Specialties { get; set; }
 
+    public virtual DbSet<TeleconsultationGuestLink> TeleconsultationGuestLinks { get; set; }
+
     public virtual DbSet<TeleconsultationPeer> TeleconsultationPeers { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -3041,22 +3043,76 @@ public partial class ViverAppDbContext : DbContext
                 .HasColumnName("updated_at_utc");
         });
 
+        modelBuilder.Entity<TeleconsultationGuestLink>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("teleconsultation_guest_links");
+
+            entity.HasIndex(e => e.CreatedByAccountId, "ix_teleconsultation_guest_links_creator");
+
+            entity.HasIndex(e => e.AppointmentId, "ux_teleconsultation_guest_links_appointment").IsUnique();
+
+            entity.HasIndex(e => e.TokenHash, "ux_teleconsultation_guest_links_hash").IsUnique();
+
+            entity.Property(e => e.Id)
+                .HasMaxLength(16)
+                .IsFixedLength()
+                .HasColumnName("id");
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.CreatedByAccountId).HasColumnName("created_by_account_id");
+            entity.Property(e => e.ExpiresAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("expires_at_utc");
+            entity.Property(e => e.RevokedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("revoked_at_utc");
+            entity.Property(e => e.TokenHash)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("token_hash");
+
+            entity.HasOne(d => d.Appointment).WithOne(p => p.TeleconsultationGuestLink)
+                .HasForeignKey<TeleconsultationGuestLink>(d => d.AppointmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_teleconsultation_guest_links_appointment");
+
+            entity.HasOne(d => d.CreatedByAccount).WithMany(p => p.TeleconsultationGuestLinks)
+                .HasForeignKey(d => d.CreatedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_teleconsultation_guest_links_creator");
+        });
+
         modelBuilder.Entity<TeleconsultationPeer>(entity =>
         {
-            entity.HasKey(e => new { e.AppointmentId, e.AccountId }).HasName("PRIMARY");
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
 
             entity.ToTable("teleconsultation_peers");
 
             entity.HasIndex(e => e.AccountId, "fk_teleconsultation_account");
 
-            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.HasIndex(e => new { e.AppointmentId, e.AccountId }, "ux_teleconsultation_peers_account").IsUnique();
+
+            entity.HasIndex(e => e.ConnectionId, "ux_teleconsultation_peers_connection").IsUnique();
+
+            entity.HasIndex(e => new { e.AppointmentId, e.GuestId }, "ux_teleconsultation_peers_guest").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
             entity.Property(e => e.ConnectionId)
                 .HasMaxLength(128)
                 .HasColumnName("connection_id");
             entity.Property(e => e.ExpiresAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("expires_at_utc");
+            entity.Property(e => e.GuestId)
+                .HasMaxLength(16)
+                .IsFixedLength()
+                .HasColumnName("guest_id");
 
             entity.HasOne(d => d.Account).WithMany(p => p.TeleconsultationPeers)
                 .HasForeignKey(d => d.AccountId)

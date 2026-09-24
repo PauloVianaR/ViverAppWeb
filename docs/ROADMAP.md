@@ -325,7 +325,7 @@ Cada fase deve:
 
 ## Fase 22 — E-mail, SMS e jobs dentro da API
 
-**Estado:** implementada na branch `codex/fase-22-email-sms-jobs-api`, ainda não integrada à `main`. Migrations 0040–0042 aplicadas no MySQL local. A entrega externa de notificações de negócio e o scheduler permanecem desligados por padrão até homologação autorizada; o processamento interno é local.
+**Estado:** integrada à `main` em merge da branch `codex/fase-22-email-sms-jobs-api`. Migrations 0040–0045 aplicadas e verificadas no MySQL local. A entrega externa de notificações de negócio e o scheduler permanecem desligados por padrão até homologação autorizada; o processamento interno é local. Passkeys foram removidas. As procedures de corte alfa e atendimento vencido estão preparadas em `database/procedures`, fora das migrations e sem instalação/execução.
 
 **Operação e ativação:** [runbook da Fase 22](fase-22/OPERACAO.md).
 
@@ -348,8 +348,13 @@ Cada fase deve:
 
 **Objetivo:** levar as jornadas WebRTC funcionais das Fases 11 e 12 a uma sinalização distribuída, resiliente e pronta para produção.
 
+**Plano de implementação e aceite:** [Videochamada segura](fase-23/PLANO.md). A implementação ocorre somente na branch `codex/fase-23-videochamada-segura`.
+
 **Entregas:**
 
+- o Médico ou Psicólogo hospedeiro pode abrir a reunião de um atendimento online elegível, copiar um link temporário e enviá-lo a uma pessoa **sem conta**, que entra pelo navegador sem cadastro; o link não revela dados clínicos nem concede acesso ao restante do sistema;
+- controles independentes para cada participante ligar/desligar o próprio microfone e câmera, além de escolher entre os dispositivos de entrada de áudio e vídeo disponíveis, inclusive durante a chamada;
+- até **quatro participantes simultâneos por link/sala**, contando o Médico ou Psicólogo hospedeiro, com recusa clara da quinta conexão e reconexão segura;
 - SignalR autenticado dentro da API e autorização por agendamento/sala;
 - identificadores imprevisíveis e credenciais de sala temporárias;
 - mensagens de sinalização com schema/limites, rate limiting e rejeição de payloads inválidos;

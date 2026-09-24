@@ -2,7 +2,44 @@
 @page "/psicologo/online/{Id:long}"
 @inherits DoctorPageBase
 <PageTitle>Videoatendimento | ViverApp</PageTitle>
-<header class="workspace-heading"><div><p class="eyebrow">@ProfessionalLabel</p><h1 class="page-title">Videoatendimento</h1><p class="page-description">Sala privada vinculada ao atendimento e ao profissional atribuído.</p></div><a class="button button--secondary" href="@ProfessionalRoot/atendimentos/@Id">Voltar ao atendimento</a></header>
-@if(Notice is not null){<p class="notice notice--error" role="alert">@Notice</p>}
-<section class="surface patient-panel"><p id="call-status" role="status" aria-live="polite">@StatusText</p><p id="call-quality">Qualidade: aguardando conexão.</p><div class="patient-video-grid"><figure><video id="remote-video" autoplay playsinline aria-label="Vídeo do paciente"></video><figcaption>Paciente</figcaption></figure><figure><video id="local-video" autoplay playsinline muted aria-label="Seu vídeo"></video><figcaption>Você</figcaption></figure></div><div class="patient-actions"><button class="button" disabled="@(Busy||Visit?.Appointment.CanJoinOnline!=true)" @onclick="Start">Entrar / reconectar</button><button id="call-microphone" class="button button--secondary" @onclick="ToggleMicrophone" disabled="@(!Started)" aria-pressed="@Microphone">@(Microphone?"Desligar microfone":"Ligar microfone")</button><button id="call-camera" class="button button--secondary" @onclick="ToggleCamera" disabled="@(!Started)" aria-pressed="@Camera">@(Camera?"Desligar câmera":"Ligar câmera")</button><button class="button button--danger" @onclick="Leave" disabled="@(!Started)">Sair</button></div><p class="doctor-callout">A chamada não é gravada. Permissão negada, dispositivo ausente e falhas de rede são informados sem expor detalhes internos.</p><details><summary>Resolver câmera, áudio ou conexão</summary><p>Autorize câmera e microfone nas permissões do navegador, feche outros aplicativos que estejam usando os dispositivos e tente reconectar. Em rede instável, desligue a câmera.</p></details></section>
-@code { [Parameter]public long Id{get;set;}private DoctorAppointmentDetail? Visit;private IJSObjectReference? VideoModule;private bool Started,Microphone=true,Camera=true;private string StatusText="Validando acesso à sala…";protected override async Task Load(){Visit=await Get<DoctorAppointmentDetail>($"api/v1/doctor/appointments/{Id}");StatusText=Visit?.Appointment.CanJoinOnline==true?"Tudo pronto. Entre quando estiver em local reservado.":"A sala abre 15 minutos antes e durante um atendimento online confirmado e pago.";VideoModule??=await JavaScript.InvokeAsync<IJSObjectReference>("import","/js/teleconsultation.js");}private Task Start()=>Run(async()=>{Started=await VideoModule!.InvokeAsync<bool>("start",Backend.BaseUrl.ToString(),Id);Microphone=Camera=true;});private async Task ToggleMicrophone()=>Microphone=await VideoModule!.InvokeAsync<bool>("toggle","audio");private async Task ToggleCamera()=>Camera=await VideoModule!.InvokeAsync<bool>("toggle","video");private async Task Leave(){await VideoModule!.InvokeVoidAsync("stop");Started=false;}public override async ValueTask DisposeAsync(){if(VideoModule is not null)try{await VideoModule.InvokeVoidAsync("stop");await VideoModule.DisposeAsync();}catch(JSDisconnectedException){}await base.DisposeAsync();}}
+<header class="workspace-heading"><div><p class="eyebrow">@ProfessionalLabel</p><h1 class="page-title">Videoatendimento</h1><p class="page-description">Sala privada para até quatro participantes, incluindo você.</p></div><a class="button button--secondary" href="@ProfessionalRoot/atendimentos/@Id">Voltar ao atendimento</a></header>
+@if (Notice is not null) { <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="alert">@Notice</p> }
+<section class="surface patient-panel">
+    <p id="call-status" role="status" aria-live="polite">@StatusText</p><p id="call-quality">Qualidade: aguardando conexão.</p>
+    <div class="patient-video-grid patient-video-grid--meeting"><figure><video id="local-video" autoplay playsinline muted aria-label="Seu vídeo"></video><figcaption>Você</figcaption></figure><div id="remote-videos" class="patient-video-grid patient-video-grid--remote" aria-label="Outros participantes"></div></div>
+    <div class="patient-actions"><button class="button" disabled="@(Busy || Visit?.Appointment.CanJoinOnline != true)" @onclick="Start">Entrar / reconectar</button><button class="button button--secondary" @onclick="ToggleMicrophone" disabled="@(!Started)" aria-pressed="@Microphone">@(Microphone ? "Desligar microfone" : "Ligar microfone")</button><button class="button button--secondary" @onclick="ToggleCamera" disabled="@(!Started)" aria-pressed="@Camera">@(Camera ? "Desligar câmera" : "Ligar câmera")</button><button class="button button--danger" @onclick="Leave" disabled="@(!Started)">Sair</button></div>
+    <div class="patient-actions"><label class="field">Microfone<select id="call-audio-device" disabled="@(!Started)"></select></label><label class="field">Câmera<select id="call-video-device" disabled="@(!Started)"></select></label></div>
+    <section class="doctor-callout"><h2>Convidar sem conta</h2><p>Abra a reunião antes de compartilhar. O link é temporário; gerar outro revoga o anterior. Envie-o somente a pessoas autorizadas.</p><div class="patient-actions"><button class="button button--secondary" disabled="@(!Started)" @onclick="Invite">Gerar e copiar link</button>@if (InviteLink is not null) { <button class="button button--danger" @onclick="Revoke">Revogar link</button> }</div>@if (InviteLink is not null) { <label class="field">Link de convidado<input readonly value="@InviteLink" aria-label="Link de convidado" /></label> }</section>
+    <p>A chamada não é gravada. Cada participante controla somente a própria câmera e o próprio microfone.</p>
+</section>
+@code {
+    [Parameter] public long Id { get; set; }
+    private DoctorAppointmentDetail? Visit;
+    private IJSObjectReference? VideoModule;
+    private bool Started, Microphone = true, Camera = true;
+    private string? InviteLink;
+    private string StatusText = "Validando acesso à sala…";
+    private sealed record Invitation(string Link);
+    protected override async Task Load()
+    {
+        Visit = await Get<DoctorAppointmentDetail>($"api/v1/doctor/appointments/{Id}");
+        StatusText = Visit?.Appointment.CanJoinOnline == true ? "Tudo pronto. Entre quando estiver em local reservado." : "A sala abre 15 minutos antes e durante um atendimento online confirmado.";
+        VideoModule ??= await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/teleconsultation.js");
+    }
+    private Task Start() => Run(async () => { Started = await VideoModule!.InvokeAsync<bool>("start", Backend.BaseUrl.ToString(), Id); Microphone = Camera = true; });
+    private Task Invite() => Run(async () =>
+    {
+        var result = await Request<Invitation>($"api/v1/teleconsultation/appointments/{Id}/invite", "POST", new { });
+        InviteLink = result?.Link;
+        if (InviteLink is not null)
+        {
+            try { await JavaScript.InvokeVoidAsync("navigator.clipboard.writeText", InviteLink); Notice = "Novo link copiado. Compartilhe apenas com convidados autorizados."; }
+            catch (JSException) { Notice = "Link gerado. Copie-o no campo abaixo e compartilhe apenas com convidados autorizados."; }
+        }
+    });
+    private Task Revoke() => Run(async () => { await Request<object>($"api/v1/teleconsultation/appointments/{Id}/invite", "DELETE", new { }); InviteLink = null; Notice = "Convite revogado."; });
+    private async Task ToggleMicrophone() => Microphone = await VideoModule!.InvokeAsync<bool>("toggle", "audio");
+    private async Task ToggleCamera() => Camera = await VideoModule!.InvokeAsync<bool>("toggle", "video");
+    private async Task Leave() { await VideoModule!.InvokeVoidAsync("stop"); Started = false; InviteLink = null; }
+    public override async ValueTask DisposeAsync() { if (VideoModule is not null) try { await VideoModule.InvokeVoidAsync("stop"); await VideoModule.DisposeAsync(); } catch (JSDisconnectedException) { } await base.DisposeAsync(); }
+}

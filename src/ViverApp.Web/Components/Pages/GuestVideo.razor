@@ -1,0 +1,49 @@
+@page "/convidado/reuniao"
+@implements IAsyncDisposable
+@inject IJSRuntime JavaScript
+@inject WebBackendOptions Backend
+<PageTitle>Convite de videochamada | ViverApp</PageTitle>
+<header class="workspace-heading"><div><p class="eyebrow">Convidado</p><h1 class="page-title">Videochamada</h1><p class="page-description">Entre pelo convite recebido, sem criar uma conta.</p></div></header>
+@if (Notice is not null) { <p class="notice notice--error" role="alert">@Notice</p> }
+<section class="surface patient-panel">
+    <p id="call-status" role="status" aria-live="polite">@StatusText</p>
+    @if (AppointmentId.HasValue)
+    {
+    <p id="call-quality">Qualidade: aguardando conexão.</p>
+    <div class="patient-video-grid patient-video-grid--meeting"><figure><video id="local-video" autoplay playsinline muted aria-label="Seu vídeo"></video><figcaption>Você</figcaption></figure><div id="remote-videos" class="patient-video-grid patient-video-grid--remote" aria-label="Outros participantes"></div></div>
+    <div class="patient-actions"><button class="button" disabled="@(!AppointmentId.HasValue || Started)" @onclick="Start">Entrar na reunião</button><button class="button button--secondary" @onclick="ToggleMicrophone" disabled="@(!Started)" aria-pressed="@Microphone">@(Microphone ? "Desligar microfone" : "Ligar microfone")</button><button class="button button--secondary" @onclick="ToggleCamera" disabled="@(!Started)" aria-pressed="@Camera">@(Camera ? "Desligar câmera" : "Ligar câmera")</button><button class="button button--danger" @onclick="Leave" disabled="@(!Started)">Sair</button></div>
+    <div class="patient-actions"><label class="field">Microfone<select id="call-audio-device" disabled="@(!Started)"></select></label><label class="field">Câmera<select id="call-video-device" disabled="@(!Started)"></select></label></div>
+    <p>O acesso é limitado a esta reunião. A chamada não é gravada. Não compartilhe seu link com outras pessoas.</p>
+    }
+</section>
+@code {
+    private sealed record GuestExchange(ulong AppointmentId, DateTime ExpiresAtUtc);
+    private IJSObjectReference? VideoModule;
+    private ulong? AppointmentId;
+    private bool Started, Microphone = true, Camera = true;
+    private string StatusText = "Validando convite…";
+    private string? Notice;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            VideoModule = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/teleconsultation.js");
+            var result = await VideoModule.InvokeAsync<PatientApiResult<GuestExchange>>("exchangeInvite", Backend.BaseUrl.ToString());
+            if (result.Ok && result.Data is not null) { AppointmentId = result.Data.AppointmentId; StatusText = "Convite válido. Autorize câmera e microfone para entrar."; }
+            else { Notice = result.Status == 401 ? "Convite inválido ou expirado. Abra novamente o link recebido." : result.Error ?? "Convite inválido ou expirado."; StatusText = "Não foi possível abrir o convite."; }
+        }
+        catch (JSException) { Notice = "Não foi possível validar o convite. Confira a conexão."; }
+        StateHasChanged();
+    }
+    private async Task Start()
+    {
+        if (!AppointmentId.HasValue || VideoModule is null) return;
+        try { Started = await VideoModule.InvokeAsync<bool>("start", Backend.BaseUrl.ToString(), AppointmentId.Value, true); Microphone = Camera = true; }
+        catch (JSException) { Notice = "Não foi possível entrar na reunião. Tente novamente."; }
+    }
+    private async Task ToggleMicrophone() => Microphone = await VideoModule!.InvokeAsync<bool>("toggle", "audio");
+    private async Task ToggleCamera() => Camera = await VideoModule!.InvokeAsync<bool>("toggle", "video");
+    private async Task Leave() { await VideoModule!.InvokeVoidAsync("stop"); Started = false; }
+    public async ValueTask DisposeAsync() { if (VideoModule is not null) try { await VideoModule.InvokeVoidAsync("stop"); await VideoModule.DisposeAsync(); } catch (JSDisconnectedException) { } }
+}

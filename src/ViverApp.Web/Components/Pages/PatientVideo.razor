@@ -1,24 +1,30 @@
 @page "/paciente/online/{Id:long}"
 @inherits PatientPageBase
 <PageTitle>Atendimento online | ViverApp</PageTitle>
-<header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Atendimento online</h1><p class="page-description">Um espaço privado para conversar com seu médico.</p></div><a class="button button--secondary" href="/paciente/atendimentos/@Id">Voltar ao atendimento</a></header>
-@if(Notice is not null){<p class="notice notice--error" role="alert">@Notice</p>}
-<section class="surface patient-panel"><p id="call-status" role="status" aria-live="polite">@StatusText</p><p id="call-quality">Qualidade: aguardando conexão.</p>
-    <div class="patient-video-grid"><figure><video id="remote-video" autoplay playsinline aria-label="Vídeo do profissional"></video><figcaption>Profissional</figcaption></figure><figure><video id="local-video" autoplay playsinline muted aria-label="Seu vídeo"></video><figcaption>Você</figcaption></figure></div>
-    <div class="patient-actions"><button class="button" disabled="@(Busy || Visit?.CanJoinOnline!=true)" @onclick="Start">Entrar / reconectar</button><button id="call-microphone" class="button button--secondary" @onclick="ToggleMicrophone" disabled="@(!Started)" aria-pressed="@Microphone">@(Microphone?"Desligar microfone":"Ligar microfone")</button><button id="call-camera" class="button button--secondary" @onclick="ToggleCamera" disabled="@(!Started)" aria-pressed="@Camera">@(Camera?"Desligar câmera":"Ligar câmera")</button><button class="button button--danger" @onclick="Leave" disabled="@(!Started)">Sair da chamada</button></div>
-    <p>Ao entrar, seu navegador pedirá acesso à câmera e ao microfone. Não há gravação. Use fones de ouvido e um local reservado.</p>
-    <details><summary>Ajuda com câmera, áudio ou conexão</summary><p>Se a permissão foi negada, use o ícone de permissões do navegador e autorize câmera e microfone. Confira se outro aplicativo está usando os dispositivos. Em rede instável, desligue a câmera ou tente reconectar. A sala fecha ao terminar a janela do atendimento.</p></details>
+<header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Atendimento online</h1><p class="page-description">Converse em uma sala privada com até quatro pessoas.</p></div><a class="button button--secondary" href="/paciente/atendimentos/@Id">Voltar ao atendimento</a></header>
+@if (Notice is not null) { <p class="notice notice--error" role="alert">@Notice</p> }
+<section class="surface patient-panel">
+    <p id="call-status" role="status" aria-live="polite">@StatusText</p><p id="call-quality">Qualidade: aguardando conexão.</p>
+    <div class="patient-video-grid patient-video-grid--meeting"><figure><video id="local-video" autoplay playsinline muted aria-label="Seu vídeo"></video><figcaption>Você</figcaption></figure><div id="remote-videos" class="patient-video-grid patient-video-grid--remote" aria-label="Outros participantes"></div></div>
+    <div class="patient-actions"><button class="button" disabled="@(Busy || Visit?.CanJoinOnline != true)" @onclick="Start">Entrar / reconectar</button><button class="button button--secondary" @onclick="ToggleMicrophone" disabled="@(!Started)" aria-pressed="@Microphone">@(Microphone ? "Desligar microfone" : "Ligar microfone")</button><button class="button button--secondary" @onclick="ToggleCamera" disabled="@(!Started)" aria-pressed="@Camera">@(Camera ? "Desligar câmera" : "Ligar câmera")</button><button class="button button--danger" @onclick="Leave" disabled="@(!Started)">Sair</button></div>
+    <div class="patient-actions"><label class="field">Microfone<select id="call-audio-device" disabled="@(!Started)"></select></label><label class="field">Câmera<select id="call-video-device" disabled="@(!Started)"></select></label></div>
+    <p>O navegador pedirá sua permissão para câmera e microfone. A chamada não é gravada.</p>
 </section>
 @code {
-    [Parameter] public long Id{get;set;}
+    [Parameter] public long Id { get; set; }
     private PatientAppointment? Visit;
     private IJSObjectReference? VideoModule;
-    private bool Started, Microphone=true, Camera=true;
-    private string StatusText="Validando acesso à sala…";
-    protected override async Task Load(){Visit=await Get<PatientAppointment>($"api/v1/patient/experience/appointments/{Id}");StatusText=Visit?.CanJoinOnline==true?"Tudo pronto. Entre quando estiver em um local reservado.":"A sala estará disponível 15 minutos antes e durante o atendimento confirmado e pago.";VideoModule=await JavaScript.InvokeAsync<IJSObjectReference>("import","/js/teleconsultation.js");}
-    private Task Start()=>Run(async()=>{Started=await VideoModule!.InvokeAsync<bool>("start",Backend.BaseUrl.ToString(),Id);Microphone=Camera=true;});
-    private async Task ToggleMicrophone(){Microphone=await VideoModule!.InvokeAsync<bool>("toggle","audio");}
-    private async Task ToggleCamera(){Camera=await VideoModule!.InvokeAsync<bool>("toggle","video");}
-    private async Task Leave(){await VideoModule!.InvokeVoidAsync("stop");Started=false;}
-    public override async ValueTask DisposeAsync(){if(VideoModule is not null){try{await VideoModule.InvokeVoidAsync("stop");await VideoModule.DisposeAsync();}catch(JSDisconnectedException){}}await base.DisposeAsync();}
+    private bool Started, Microphone = true, Camera = true;
+    private string StatusText = "Validando acesso à sala…";
+    protected override async Task Load()
+    {
+        Visit = await Get<PatientAppointment>($"api/v1/patient/experience/appointments/{Id}");
+        StatusText = Visit?.CanJoinOnline == true ? "Tudo pronto. Entre quando estiver em local reservado." : "A sala abre 15 minutos antes e durante o atendimento confirmado.";
+        VideoModule ??= await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/teleconsultation.js");
+    }
+    private Task Start() => Run(async () => { Started = await VideoModule!.InvokeAsync<bool>("start", Backend.BaseUrl.ToString(), Id); Microphone = Camera = true; });
+    private async Task ToggleMicrophone() => Microphone = await VideoModule!.InvokeAsync<bool>("toggle", "audio");
+    private async Task ToggleCamera() => Camera = await VideoModule!.InvokeAsync<bool>("toggle", "video");
+    private async Task Leave() { await VideoModule!.InvokeVoidAsync("stop"); Started = false; }
+    public override async ValueTask DisposeAsync() { if (VideoModule is not null) try { await VideoModule.InvokeVoidAsync("stop"); await VideoModule.DisposeAsync(); } catch (JSDisconnectedException) { } await base.DisposeAsync(); }
 }

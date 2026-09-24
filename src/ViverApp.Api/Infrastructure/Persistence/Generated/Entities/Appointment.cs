@@ -121,5 +121,7 @@ public partial class Appointment
 
     public virtual ICollection<ScheduledJob> ScheduledJobs { get; set; } = new List<ScheduledJob>();
 
+    public virtual TeleconsultationGuestLink? TeleconsultationGuestLink { get; set; }
+
     public virtual ICollection<TeleconsultationPeer> TeleconsultationPeers { get; set; } = new List<TeleconsultationPeer>();
 }

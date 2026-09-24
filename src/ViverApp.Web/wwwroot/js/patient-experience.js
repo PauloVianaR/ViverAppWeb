@@ -11,7 +11,7 @@ const fieldNames = {
     description: "descrição", reason: "motivo", typeCode: "tipo", directionCode: "direção", methodCode: "forma de pagamento"
 };
 function isGenericEnglish(value) {
-    return /one or more validation errors occurred|internal server error|^an error occurred|^the .+ field is required/i.test(value || "");
+    return /one or more validation errors occurred|internal server error|^an error occurred|^the .+ field is required|^unauthorized$|^forbidden$/i.test(value || "");
 }
 function validationError(data) {
     const entries = Object.entries(data?.errors || {});
