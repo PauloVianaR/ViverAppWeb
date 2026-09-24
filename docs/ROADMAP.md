@@ -366,22 +366,7 @@ Cada fase deve:
 
 **Saída:** somente participantes autorizados sinalizam na sala e a solução escala além de uma instância.
 
-## Fase 24 — Pagamentos internos, premium e documentos
-
-**Objetivo:** consolidar, reconciliar e preparar para produção o histórico financeiro, o fluxo Premium e seus documentos implementados funcionalmente nas Fases 11 a 14.
-
-**Entregas:**
-
-- histórico paginado, filtros e precisão monetária;
-- vínculo consistente entre checkout, pagamento e agendamento;
-- solicitação/análise de premium e documentos de plano de saúde;
-- autorização por ownership/papel e auditoria administrativa;
-- regras de retenção e acesso aos documentos;
-- reconciliação com registros legados.
-
-**Saída:** invariantes financeiras e de premium cobertas por testes e relatórios de reconciliação.
-
-## Fase 25 — Administração, analytics e operação
+## Fase 24 — Administração, analytics e operação
 
 **Objetivo:** endurecer o backoffice e os analytics funcionais da Fase 14 com controles elevados e recursos de operação de produção.
 
@@ -396,7 +381,7 @@ Cada fase deve:
 
 **Saída:** trilha auditável e testes de elevação horizontal/vertical de privilégio.
 
-## Fase 26 — Robustez, desempenho e segurança ofensiva
+## Fase 25 — Robustez, desempenho e segurança ofensiva
 
 **Objetivo:** preparar o conjunto funcional para tráfego e ataques reais.
 
@@ -412,7 +397,7 @@ Cada fase deve:
 
 **Saída:** nenhum achado crítico/alto aberto e metas de desempenho/SLO atendidas.
 
-## Fase 27 — Infraestrutura, Cloudflare e CI/CD
+## Fase 26 — Infraestrutura, Cloudflare e CI/CD
 
 **Objetivo:** publicar sem Azure, com entrega repetível e origem protegida.
 
@@ -428,13 +413,13 @@ Cada fase deve:
 
 **Saída:** ensaio de deploy/rollback/restore aprovado. Compra e alterações externas exigem autorização do usuário.
 
-## Fase 28 — Pentest autorizado com Strix
+## Fase 27 — Pentest autorizado com Strix
 
 **Estado:** planejada para a release candidate, depois do staging endurecido e antes da migração final.
 
-**Plano detalhado:** [Pentest autorizado com Strix](FASE-28-PENTEST-COM-STRIX.md).
+**Plano detalhado:** [Pentest autorizado com Strix](FASE-27-PENTEST-COM-STRIX.md).
 
-## Fase 29 — Migração final e lançamento gradual
+## Fase 28 — Migração final e lançamento gradual
 
 **Objetivo:** migrar dados e usuários com risco controlado.
 
@@ -450,7 +435,7 @@ Cada fase deve:
 
 **Saída:** reconciliação assinada, métricas saudáveis e rollback ainda possível.
 
-## Fase 30 — Desativação controlada do legado
+## Fase 29 — Desativação controlada do legado
 
 **Objetivo:** encerrar componentes antigos somente depois da estabilidade comprovada.
 
@@ -469,9 +454,9 @@ Cada fase deve:
 - **Marco A — Base confiável:** Fases 0 a 4.
 - **Marco B — MVP clínico web:** Fases 5 a 8.
 - **Marco C — Paridade funcional por perfil:** Fases 9 a 14.
-- **Marco D — Ecossistema integrado:** Fases 15 a 24.
-- **Marco E — Produção endurecida e validada:** Fases 25 a 28.
-- **Encerramento:** Fase 30.
+- **Marco D — Ecossistema integrado:** Fases 15 a 23.
+- **Marco E — Produção endurecida e validada:** Fases 24 a 27.
+- **Encerramento:** Fase 29.
 
 ## Decisões que deverão ser confirmadas com o proprietário
 
