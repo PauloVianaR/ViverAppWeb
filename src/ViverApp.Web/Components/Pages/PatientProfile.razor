@@ -2,7 +2,7 @@
 @inherits PatientPageBase
 @using static ViverApp.Web.PatientLabels
 <PageTitle>Meu perfil e Premium | ViverApp</PageTitle>
-<header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Meu perfil</h1><p class="page-description">Seus dados, suas preferências e os benefícios do seu cuidado.</p></div><a class="button button--secondary" href="/seguranca">Passkeys e sessões</a></header>
+<header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Meu perfil</h1><p class="page-description">Seus dados, suas preferências e os benefícios do seu cuidado.</p></div><a class="button button--secondary" href="/seguranca">Segurança e sessões</a></header>
 @if (Notice is not null) { <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="alert">@Notice</p> }
 <nav class="patient-tabs" aria-label="Seções do perfil"><a class="button button--secondary" href="#dados">Dados pessoais</a><a class="button button--secondary" href="#contatos">Contatos e segurança</a><a class="button button--secondary" href="#premium">Premium</a></nav>
 @if (Loading) { <LoadingSkeleton Lines="5" /> }
@@ -34,7 +34,7 @@ else if (Profile is not null)
         else if(Security?.RecentAuthentication == true) { <a class="button button--secondary" href="@Backend.GoogleLinkUrl">Vincular Google</a> }
         <h3>Senha</h3>
         <PasswordChangeButton Role="patient" />
-        <div class="patient-actions patient-section"><a class="button button--secondary" href="/seguranca">Gerenciar passkeys e dispositivos</a><button class="button button--secondary" disabled="@Busy" @onclick="RevokeOthers">Encerrar outras sessões</button></div>
+        <div class="patient-actions patient-section"><a class="button button--secondary" href="/seguranca">Gerenciar segurança da conta</a><button class="button button--secondary" disabled="@Busy" @onclick="RevokeOthers">Encerrar outras sessões</button></div>
     </section>
     @if (Premium is not null)
     {

@@ -127,7 +127,7 @@ Cada fase deve:
 - confirmação e recuperação por código curto, de uso único e armazenado como hash, enviado por e-mail ou SMSBarato; nunca enviar senha temporária em texto claro;
 - Google OpenID Connect/OAuth 2.0 com `state`, `nonce`, PKCE quando aplicável, e-mail verificado e vínculo explícito de conta para impedir account takeover;
 - exatamente um papel por conta entre Paciente, Médico, Gestor e Administrador, com policies e checagem de ownership na API;
-- passkeys/WebAuthn como login primário moderno e MFA obrigatório para administrador por TOTP ou recovery code de uso único, pois passkeys nativas do ASP.NET Core 10 não operam como segundo fator;
+- acesso por Google, e-mail/telefone com senha ou código de verificação, com MFA obrigatório para administrador por TOTP ou recovery code de uso único; chaves de acesso/WebAuthn foram desativadas na fase 22;
 - gestão de dispositivos/sessões, rotação, revogação e eventos de segurança;
 - testes para brute force, enumeração, CSRF, fixation, redirect indevido, privilege escalation e vínculo Google.
 

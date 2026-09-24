@@ -3,8 +3,10 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace ViverApp.Identity.Tests;
@@ -87,6 +89,17 @@ public sealed class IdentityApiSecurityTests : IAsyncLifetime
         using var response = await client.GetAsync("/api/v1/auth/sessions");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public void PasskeyRoutes_AreNoLongerRegistered()
+    {
+        using var client = CreateClient();
+        var routes = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Select(endpoint => endpoint.RoutePattern.RawText ?? string.Empty);
+        Assert.DoesNotContain(routes, route =>
+            route.Contains("auth/passkeys", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

@@ -17,7 +17,7 @@
         <div>
             <p class="eyebrow">Seu cuidado, seu acesso</p>
             <h1>Entre do seu jeito.</h1>
-            <p>Use Google, e-mail, telefone, senha ou uma chave de acesso. Cada pessoa vê apenas a área permitida para o seu papel.</p>
+            <p>Use Google, e-mail, telefone, senha ou código de verificação. Cada pessoa vê apenas a área permitida para o seu papel.</p>
         </div>
         <ul class="access-assurances">
             <li><AppIcon Name="shield" /> Senhas protegidas por hash adaptativo</li>
@@ -42,12 +42,10 @@
         {
             <header><p class="eyebrow">Boas-vindas</p><h2>Entrar</h2><p>Acesse com e-mail ou telefone.</p></header>
             <div class="access-form">
-                <div class="field"><label for="login-identifier">E-mail ou telefone</label><input id="login-identifier" autocomplete="username webauthn" @bind="Identifier" @bind:event="oninput" /></div>
+                <div class="field"><label for="login-identifier">E-mail ou telefone</label><input id="login-identifier" autocomplete="username" @bind="Identifier" @bind:event="oninput" /></div>
                 <div class="field"><label for="login-password">Senha</label><input id="login-password" type="password" autocomplete="current-password" @bind="Password" @bind:event="oninput" /></div>
                 <label class="check-field"><input type="checkbox" @bind="RememberMe" /> Manter acesso neste dispositivo</label>
                 <button class="button" type="button" @onclick="LoginAsync" disabled="@IsBusy">Entrar com senha</button>
-                <button class="button button--secondary" type="button" @onclick="PasskeyLoginAsync" disabled="@IsBusy">Usar chave de acesso</button>
-                <p class="field-hint">Esta opção só funciona se você já cadastrou uma passkey em Segurança e sessões. O navegador pode oferecer biometria, desbloqueio do dispositivo, celular ou chave física USB; não é necessário usar um pen drive comum.</p>
                 <a class="button google-button" href="@Backend.GoogleLoginUrl"><span aria-hidden="true">G</span> Continuar com Google</a>
                 <div class="access-links">
                     <button type="button" @onclick="ShowCodeRequest">Entrar com código</button>
@@ -326,12 +324,6 @@
             await HandleAuthenticationAsync(result);
         });
     }
-
-    private async Task PasskeyLoginAsync() => await RunAsync(async () =>
-    {
-        var result = await module!.InvokeAsync<WebAuthenticationResult>("passkeyLogin", Backend.BaseUrl.ToString(), string.IsNullOrWhiteSpace(Identifier) ? null : Identifier);
-        await HandleAuthenticationAsync(result);
-    });
 
     private async Task RegisterAsync()
     {

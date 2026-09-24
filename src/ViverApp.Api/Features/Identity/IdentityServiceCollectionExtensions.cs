@@ -60,13 +60,6 @@ public static class IdentityServiceCollectionExtensions
             })
             .AddSignInManager()
             .AddDefaultTokenProviders();
-        services.Configure<IdentityPasskeyOptions>(options =>
-        {
-            options.ServerDomain = configuration["Authentication:Passkeys:ServerDomain"];
-            options.UserVerificationRequirement = "required";
-            options.ResidentKeyRequirement = "preferred";
-        });
-
         var authentication = services.AddAuthentication(options =>
         {
             options.DefaultAuthenticateScheme = IdentityConstants.ApplicationScheme;

@@ -76,15 +76,6 @@ public sealed record MfaCodeRequest(
     [param: StringLength(20)] string? TotpCode,
     [param: StringLength(32)] string? RecoveryCode);
 
-[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record PasskeyCredentialRequest(
-    [param: Required, StringLength(131072)] string CredentialJson,
-    [param: StringLength(100)] string? DisplayName,
-    bool RememberMe = false);
-
-[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record PasskeyOptionsRequest([param: StringLength(254)] string? Identifier);
-
 public sealed record ChallengeAcceptedResponse(Guid RequestId, string Message);
 
 public sealed record AuthenticationResponse(
@@ -124,8 +115,3 @@ public sealed record SessionResponse(
     DateTime CreatedAtUtc,
     DateTime ExpiresAtUtc,
     DateTime? LastSeenAtUtc);
-
-public sealed record PasskeyResponse(
-    string CredentialId,
-    string DisplayName,
-    DateTime CreatedAtUtc);

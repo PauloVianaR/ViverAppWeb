@@ -335,7 +335,6 @@ public sealed class IdentitySecurityTests
         {
             ["Authentication:ChallengePepper"] = Convert.ToBase64String(new byte[32]),
             ["Authentication:WebReturnUrl"] = "https://localhost:7110/auth/result",
-            ["Authentication:Passkeys:ServerDomain"] = "localhost",
             ["Smtp:Host"] = "smtp.example.com",
             ["Smtp:Port"] = "587",
             ["Smtp:User"] = "sender@example.com",
