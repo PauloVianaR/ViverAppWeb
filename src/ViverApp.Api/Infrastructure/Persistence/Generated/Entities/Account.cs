@@ -149,5 +149,7 @@ public partial class Account
 
     public virtual Role RoleCodeNavigation { get; set; } = null!;
 
+    public virtual ICollection<TeleconsultationGuestLink> TeleconsultationGuestLinks { get; set; } = new List<TeleconsultationGuestLink>();
+
     public virtual ICollection<TeleconsultationPeer> TeleconsultationPeers { get; set; } = new List<TeleconsultationPeer>();
 }

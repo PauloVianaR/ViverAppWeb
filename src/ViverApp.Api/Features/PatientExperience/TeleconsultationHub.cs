@@ -3,7 +3,6 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using ViverApp.Api.Features.Identity;
@@ -23,6 +22,16 @@ public sealed class VideoInvocationLimiter : IDisposable
 
 public sealed class TeleconsultationAccess(ViverAppDbContext database, TimeProvider clock)
 {
+    public async Task<Appointment?> RequireAppointmentAsync(ulong id, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        var appointment = await database.Appointments.AsNoTracking().Include(x => x.CurrentPayment)
+            .SingleOrDefaultAsync(x => x.Id == id, ct);
+        return appointment is not null && appointment.ModalityCode == "online" && appointment.StatusCode == "confirmed"
+            && (!appointment.RequiresPayment || appointment.CurrentPayment?.StatusCode == "paid")
+            && appointment.StartsAtUtc <= now.AddMinutes(15) && appointment.EndsAtUtc >= now ? appointment : null;
+    }
+
     public async Task<Appointment> RequireAsync(ClaimsPrincipal user, ulong id, CancellationToken ct)
     {
         if (!ulong.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var actor)
@@ -30,87 +39,124 @@ public sealed class TeleconsultationAccess(ViverAppDbContext database, TimeProvi
         var session = sessionId.ToByteArray(); var now = clock.GetUtcNow().UtcDateTime;
         if (!await database.AuthSessions.AnyAsync(x => x.Id.SequenceEqual(session) && x.AccountId == actor && x.RevokedAtUtc == null
             && x.ExpiresAtUtc > now && x.Account.StatusCode == "active" && x.MfaSatisfied, ct)) throw new HubException("Sua sessão expirou. Entre novamente.");
-        var appointment = await database.Appointments.AsNoTracking().Include(x => x.CurrentPayment).SingleOrDefaultAsync(x => x.Id == id && (x.PatientAccountId == actor || x.ProfessionalAccountId == actor), ct);
-        if (appointment is null || appointment.ModalityCode != "online" || appointment.StatusCode != "confirmed"
-            || appointment.RequiresPayment && appointment.CurrentPayment?.StatusCode != "paid"
-            || appointment.StartsAtUtc > now.AddMinutes(15) || appointment.EndsAtUtc < now) throw new HubException("A sala não está disponível. A entrada é permitida 15 minutos antes e durante o atendimento confirmado.");
+        var appointment = await RequireAppointmentAsync(id, ct);
+        if (appointment is null || appointment.PatientAccountId != actor && appointment.ProfessionalAccountId != actor)
+            throw new HubException("A sala não está disponível. A entrada é permitida 15 minutos antes e durante o atendimento confirmado.");
         if (appointment.PatientAccountId == actor && !user.IsInRole(ViverAppRoles.Patient)
             || appointment.ProfessionalAccountId == actor && !(user.IsInRole(ViverAppRoles.Doctor) || user.IsInRole(ViverAppRoles.Psychologist))) throw new HubException("Atendimento indisponível.");
         return appointment;
     }
 }
 
-[Authorize(Roles = "patient,doctor,psychologist")]
-public sealed class TeleconsultationHub(ViverAppDbContext database, TeleconsultationAccess access,
-    IAntiforgery antiforgery, SecurityBaselineOptions options, VideoInvocationLimiter limiter,
-    IdentityAuditWriter audit) : Hub
+public sealed class TeleconsultationHub(TeleconsultationPresence presence, TeleconsultationAccess access,
+    TeleconsultationGuestService guests, IAntiforgery antiforgery, SecurityBaselineOptions options,
+    VideoInvocationLimiter limiter, IdentityAuditWriter audit) : Hub
 {
-    private ulong Actor => ulong.Parse(Context.User!.FindFirstValue(ClaimTypes.NameIdentifier)!, CultureInfo.InvariantCulture);
+    private ulong? Actor => ulong.TryParse(Context.User?.FindFirstValue(ClaimTypes.NameIdentifier), out var actor) ? actor : null;
+    private Guid? Guest => Context.Items.TryGetValue("guest", out var value) && value is Guid id ? id : null;
     public override async Task OnConnectedAsync()
     {
         var origin = Context.GetHttpContext()?.Request.Headers.Origin.ToString();
-        if (!options.AllowedCorsOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase)) { Context.Abort(); throw new HubException("Origem não permitida."); }
+        if (!options.AllowedCorsOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase))
+        { Context.Abort(); throw new HubException("Origem não permitida."); }
         await base.OnConnectedAsync();
     }
 
     public async Task<object> Join(ulong appointmentId, string csrfToken)
     {
-        Limit();
-        var http = Context.GetHttpContext()!;
         if (csrfToken.Length > 4096) throw new HubException("Validação inválida.");
+        var http = Context.GetHttpContext()!;
         http.Request.Headers["X-CSRF-TOKEN"] = csrfToken;
         try { await antiforgery.ValidateRequestAsync(http); }
         catch (AntiforgeryValidationException) { throw new HubException("Atualize a página antes de entrar."); }
-        var appointment = await access.RequireAsync(Context.User!, appointmentId, Context.ConnectionAborted);
+        var actor = Actor;
+        Guid? guest = null;
+        Appointment appointment;
+        if (actor is not null)
+            appointment = await access.RequireAsync(Context.User!, appointmentId, Context.ConnectionAborted);
+        else
+        {
+            var credential = await guests.RequireGuestAsync(http, appointmentId, Context.ConnectionAborted);
+            if (credential is null) throw new HubException("Convite inválido ou expirado.");
+            guest = credential.Value.GuestId;
+            appointment = await access.RequireAppointmentAsync(appointmentId, Context.ConnectionAborted)
+                ?? throw new HubException("A sala não está disponível.");
+        }
+        Limit(actor?.ToString(CultureInfo.InvariantCulture) ?? guest!.Value.ToString("N"));
         await Leave();
-        var until = DateTime.UtcNow.AddSeconds(45);
-        await database.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO teleconsultation_peers (appointment_id,account_id,connection_id,expires_at_utc) VALUES ({appointmentId},{Actor},{Context.ConnectionId},{until}) ON DUPLICATE KEY UPDATE connection_id={Context.ConnectionId},expires_at_utc={until}", Context.ConnectionAborted);
+        var existing = await presence.JoinAsync(appointmentId, actor, guest, Context.ConnectionId, Context.ConnectionAborted);
         Context.Items["appointment"] = appointmentId;
-        var peer = await OtherPeer(appointment, Context.ConnectionAborted);
-        if (peer is not null) await Clients.Client(peer).SendAsync("PeerReady", Context.ConnectionAborted);
-        await audit.WriteAsync("teleconsultation.joined", Actor, "appointment", appointmentId.ToString(CultureInfo.InvariantCulture), null, Context.ConnectionAborted);
-        return new { initiator = Actor == appointment.ProfessionalAccountId, peerPresent = peer is not null, endsAtUtc = DateTime.SpecifyKind(appointment.EndsAtUtc, DateTimeKind.Utc) };
+        if (guest is not null) Context.Items["guest"] = guest.Value;
+        foreach (var peer in existing) await Clients.Client(peer).SendAsync("PeerJoined", Context.ConnectionId, Context.ConnectionAborted);
+        await audit.WriteAsync("teleconsultation.joined", actor, "appointment", appointmentId.ToString(CultureInfo.InvariantCulture), null, Context.ConnectionAborted);
+        return new { peers = existing, endsAtUtc = DateTime.SpecifyKind(appointment.EndsAtUtc, DateTimeKind.Utc) };
     }
 
     public async Task Heartbeat()
     {
-        Limit();
         var appointment = await Joined();
-        await database.TeleconsultationPeers.Where(x => x.AppointmentId == appointment.Id && x.AccountId == Actor && x.ConnectionId == Context.ConnectionId)
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.ExpiresAtUtc, DateTime.UtcNow.AddSeconds(45)), Context.ConnectionAborted);
+        Limit(Actor?.ToString(CultureInfo.InvariantCulture) ?? Guest!.Value.ToString("N"));
+        if (await presence.HeartbeatAsync(appointment.Id, Context.ConnectionId, Context.ConnectionAborted) != 1)
+            throw new HubException("Esta conexão foi substituída. Reconecte para continuar.");
     }
 
-    public async Task Signal(string kind, string payload)
+    public async Task Signal(string targetConnectionId, string kind, string payload)
     {
-        Limit();
-        if (kind is not ("offer" or "answer" or "candidate") || payload.Length > 48000) throw new HubException("Sinal inválido.");
-        try { using var json = JsonDocument.Parse(payload, new JsonDocumentOptions { MaxDepth = 6 }); if (json.RootElement.ValueKind != JsonValueKind.Object) throw new JsonException(); }
-        catch (JsonException) { throw new HubException("Sinal inválido."); }
         var appointment = await Joined();
-        var peer = await OtherPeer(appointment, Context.ConnectionAborted);
-        if (peer is not null) await Clients.Client(peer).SendAsync("Signal", kind, payload, Context.ConnectionAborted);
+        Limit(Actor?.ToString(CultureInfo.InvariantCulture) ?? Guest!.Value.ToString("N"));
+        if (targetConnectionId.Length is < 1 or > 128 || targetConnectionId == Context.ConnectionId
+            || kind is not ("offer" or "answer" or "candidate") || payload.Length is < 2 or > 48000)
+            throw new HubException("Sinal inválido.");
+        try
+        {
+            using var json = JsonDocument.Parse(payload, new JsonDocumentOptions { MaxDepth = 6 });
+            if (json.RootElement.ValueKind != JsonValueKind.Object) throw new JsonException();
+            if (kind is "offer" or "answer")
+            {
+                if (json.RootElement.GetProperty("type").GetString() != kind ||
+                    json.RootElement.GetProperty("sdp").GetString() is not { Length: > 0 and <= 46000 }) throw new JsonException();
+            }
+            else if (json.RootElement.GetProperty("candidate").GetString() is not { Length: <= 8000 }) throw new JsonException();
+        }
+        catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException)
+        { throw new HubException("Sinal inválido."); }
+        var permitted = await presence.ContainsAsync(appointment.Id, targetConnectionId, Context.ConnectionAborted);
+        if (!permitted) throw new HubException("Participante indisponível nesta sala.");
+        await Clients.Client(targetConnectionId).SendAsync("Signal", Context.ConnectionId, kind, payload, Context.ConnectionAborted);
     }
 
     public async Task Leave()
     {
-        if (Context.Items.TryGetValue("appointment", out var value) && value is ulong id)
+        if (!Context.Items.TryGetValue("appointment", out var value) || value is not ulong id) return;
+        var others = await presence.LeaveAsync(id, Context.ConnectionId, CancellationToken.None);
+        var hostStillPresent = await guests.HostPresentAsync(id, CancellationToken.None);
+        foreach (var peer in others)
         {
-            var others = await database.TeleconsultationPeers.AsNoTracking().Where(x => x.AppointmentId == id && x.AccountId != Actor && x.ExpiresAtUtc > DateTime.UtcNow).Select(x => x.ConnectionId).ToArrayAsync();
-            await database.TeleconsultationPeers.Where(x => x.AppointmentId == id && x.AccountId == Actor && x.ConnectionId == Context.ConnectionId).ExecuteDeleteAsync();
-            foreach (var peer in others) await Clients.Client(peer).SendAsync("PeerLeft");
-            Context.Items.Remove("appointment");
+            await Clients.Client(peer).SendAsync("PeerLeft", Context.ConnectionId);
+            if (!hostStillPresent) await Clients.Client(peer).SendAsync("RoomClosed");
         }
+        Context.Items.Remove("appointment"); Context.Items.Remove("guest");
     }
     public override async Task OnDisconnectedAsync(Exception? exception) { await Leave(); await base.OnDisconnectedAsync(exception); }
-    private void Limit() { if (!limiter.Allow(Actor.ToString(CultureInfo.InvariantCulture))) throw new HubException("Aguarde antes de tentar novamente."); }
+
+    private void Limit(string identity)
+    {
+        if (!limiter.Allow(identity)) throw new HubException("Aguarde antes de tentar novamente.");
+    }
+
     private async Task<Appointment> Joined()
     {
-        if (!Context.Items.TryGetValue("appointment", out var value) || value is not ulong id) throw new HubException("Entre na sala primeiro.");
-        var appointment = await access.RequireAsync(Context.User!, id, Context.ConnectionAborted);
-        if (!await database.TeleconsultationPeers.AnyAsync(x => x.AppointmentId == id && x.AccountId == Actor && x.ConnectionId == Context.ConnectionId && x.ExpiresAtUtc > DateTime.UtcNow, Context.ConnectionAborted)) throw new HubException("Esta conexão foi substituída. Reconecte para continuar.");
+        if (!Context.Items.TryGetValue("appointment", out var value) || value is not ulong id)
+            throw new HubException("Entre na sala primeiro.");
+        var appointment = Actor is not null
+            ? await access.RequireAsync(Context.User!, id, Context.ConnectionAborted)
+            : await guests.RequireGuestAsync(Context.GetHttpContext()!, id, Context.ConnectionAborted) is not null
+                ? await access.RequireAppointmentAsync(id, Context.ConnectionAborted)
+                : null;
+        if (appointment is null || Guest is not null && !await guests.HostPresentAsync(id, Context.ConnectionAborted))
+            throw new HubException("A sala ou seu convite expirou.");
+        if (!await presence.ContainsAsync(id, Context.ConnectionId, Context.ConnectionAborted))
+            throw new HubException("Esta conexão foi substituída. Reconecte para continuar.");
         return appointment;
     }
-    private Task<string?> OtherPeer(Appointment appointment, CancellationToken ct) => database.TeleconsultationPeers.AsNoTracking()
-        .Where(x => x.AppointmentId == appointment.Id && x.AccountId == (Actor == appointment.PatientAccountId ? appointment.ProfessionalAccountId : appointment.PatientAccountId) && x.ExpiresAtUtc > DateTime.UtcNow)
-        .Select(x => x.ConnectionId).SingleOrDefaultAsync(ct);
 }

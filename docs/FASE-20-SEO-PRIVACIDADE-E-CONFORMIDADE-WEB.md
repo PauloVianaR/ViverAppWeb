@@ -10,7 +10,7 @@ Preparar o ViverApp para presença pública responsável em `viveralmenara.com`:
 
 Esta fase não transforma `robots.txt` em controle de segurança, não indexa áreas autenticadas e não publica textos jurídicos fictícios como se tivessem revisão profissional.
 
-**Evidências e bloqueios:** [inventário de cookies e portão de publicação](fase-20/PUBLICACAO-E-INVENTARIO.md). Como a Fase 20 foi antecipada antes da antiga Fase 24 (agora 25), as medições de produção, hardening final e revisão jurídica são critérios de liberação, não premissas consideradas já realizadas.
+**Evidências e bloqueios:** [inventário de cookies e portão de publicação](fase-20/PUBLICACAO-E-INVENTARIO.md). Como a Fase 20 foi antecipada antes da atual Fase 24 de Administração (antiga Fase 25), as medições de produção, hardening final e revisão jurídica são critérios de liberação, não premissas consideradas já realizadas.
 
 ## Dependências e limites
 

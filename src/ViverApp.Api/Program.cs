@@ -14,6 +14,7 @@ using ViverApp.Api.Features.Calendar;
 using ViverApp.Api.Features.Notifications;
 using ViverApp.Api.Infrastructure.Persistence;
 using ViverApp.Security;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 var allowInsecureLocalHttp = builder.Environment.IsDevelopment()
@@ -101,8 +102,15 @@ builder.Services.AddScoped<IDocumentMalwareScanner, WindowsDocumentMalwareScanne
 builder.Services.AddScoped<PatientExperienceExceptionFilter>();
 builder.Services.AddScoped<RecentAuthentication>();
 builder.Services.AddScoped<TeleconsultationAccess>();
+builder.Services.AddScoped<TeleconsultationGuestService>();
+builder.Services.AddScoped<TeleconsultationPresence>();
 builder.Services.AddSingleton<VideoInvocationLimiter>();
-builder.Services.AddSignalR(options => { options.EnableDetailedErrors = false; options.MaximumReceiveMessageSize = 65536; options.MaximumParallelInvocationsPerClient = 1; });
+var signalR = builder.Services.AddSignalR(options => { options.EnableDetailedErrors = false; options.MaximumReceiveMessageSize = 65536; options.MaximumParallelInvocationsPerClient = 1; });
+var redisConnection = builder.Configuration["SignalR:RedisConnectionString"];
+if (builder.Configuration.GetValue("SignalR:DistributedDeployment", false) && string.IsNullOrWhiteSpace(redisConnection))
+    throw new InvalidOperationException("SignalR:RedisConnectionString é obrigatório em implantação distribuída.");
+if (!string.IsNullOrWhiteSpace(redisConnection))
+    signalR.AddStackExchangeRedis(redisConnection, options => options.Configuration.ChannelPrefix = RedisChannel.Literal("ViverAppWeb"));
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), ["live"])
     .AddCheck<DatabaseReadinessHealthCheck>("database", tags: ["ready"]);

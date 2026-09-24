@@ -90,6 +90,7 @@ $tables = @(
     'private_documents'
     'contact_change_requests'
     'teleconsultation_peers'
+    'teleconsultation_guest_links'
     'administrator_notifications'
 )
 

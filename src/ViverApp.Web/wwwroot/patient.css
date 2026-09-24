@@ -52,6 +52,9 @@
 .patient-video-grid figure { margin: 0; min-width: 0; }
 .patient-video-grid video { display: block; width: 100%; aspect-ratio: 4/3; object-fit: contain; background: #102238; border-radius: .8rem; }
 .patient-video-grid figcaption { padding: .5rem; font-weight: 700; }
+.patient-video-grid--meeting { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.patient-video-grid--remote { display: contents; }
+.patient-video-grid--meeting figure { min-width: 0; }
 .notice { padding: 1rem; border: 1px solid var(--color-border); border-radius: .75rem; margin-block: 1rem; overflow-wrap: anywhere; }
 .notice--error { background: var(--color-danger-soft); color: var(--color-danger-strong); }
 .notice--success { background: var(--color-success-soft); color: var(--color-success); }

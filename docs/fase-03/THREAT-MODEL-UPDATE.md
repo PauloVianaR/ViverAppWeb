@@ -13,7 +13,7 @@ Esta atualização complementa o [threat model da Fase 1](../fase-01/THREAT-MODE
 | Vazamento por erro/log | Problem Details redigido, health mínimo e log próprio sem body/query/PII | revisar logs de cada integração futura |
 | Roubo/adulteração de chaves | key rings separados e protegidos; configuração fail-fast em produção | cofre/certificado e rotação operacional na Fase 26 |
 | Adulteração da trilha | tabela append-only por triggers | backup/exportação imutável e segregação operacional |
-| Supply chain | versões fixadas, warnings como erros e auditoria NuGet no gate | SBOM/proveniência nas Fases 24/26 |
+| Supply chain | versões fixadas, warnings como erros e auditoria NuGet no gate | SBOM/proveniência nas Fases 25/26 |
 | SSRF/path traversal/upload | padrão obrigatório documentado; superfície ainda inexistente | implementar e testar quando URLs/arquivos forem introduzidos |
 
 ## Novas fronteiras
