@@ -385,7 +385,9 @@ Cada fase deve:
 
 ## Fase 25 — Robustez, desempenho e segurança ofensiva
 
-**Execução e evidências:** [implementação e validação](fase-25/IMPLEMENTACAO-E-VALIDACAO.md) e [operação](fase-25/OPERACAO.md). A saída depende dos portões externos documentados; instrumentos locais não equivalem à aprovação final.
+**Estado:** concluída para o marco atual por decisão do proprietário em 28/09/2026. As verificações externas e de carga ainda não realizadas permanecem explicitamente registradas em `.local/PENDENCIAS.md`; esta decisão não equivale à aprovação desses portões para produção.
+
+**Execução e evidências:** [implementação e validação](fase-25/IMPLEMENTACAO-E-VALIDACAO.md) e [operação](fase-25/OPERACAO.md).
 
 **Objetivo:** preparar o conjunto funcional para tráfego e ataques reais.
 
