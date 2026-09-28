@@ -17,6 +17,7 @@ using ViverApp.Api.Features.ClinicAdministration;
 using ViverApp.Api.Features.AdministratorExperience;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.UserPreferences;
+using ViverApp.Api.Infrastructure.Persistence;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 using Xunit;
@@ -25,6 +26,49 @@ namespace ViverApp.ClinicAdministration.Tests;
 
 public sealed class ClinicAdministrationContractTests : IAsyncLifetime
 {
+    [Fact]
+    public void HomologationDatabase_RequiresExternalIntegrationsDisabled()
+    {
+        static IConfiguration Configuration(string? unsafeKey = null, string? unsafeValue = null)
+        {
+            var values = new Dictionary<string, string?>
+            {
+                ["Homologation:Enabled"] = "true",
+                ["Authentication:Delivery:Enabled"] = "false",
+                ["Notifications:BusinessDelivery:Enabled"] = "false",
+                ["Notifications:Scheduler:Enabled"] = "false",
+                ["PagBank:Enabled"] = "false",
+                ["Storage:Private:Provider"] = "Database",
+            };
+            if (unsafeKey is not null) values[unsafeKey] = unsafeValue;
+            return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+        }
+
+        Assert.Equal("viverappweb", DatabaseServiceCollectionExtensions.RequiredDatabase(
+            new ConfigurationBuilder().Build()));
+        Assert.Equal("viverappweb_homolog", DatabaseServiceCollectionExtensions.RequiredDatabase(Configuration()));
+        Assert.Throws<InvalidOperationException>(() => new ServiceCollection().AddViverAppDatabase(
+            Configuration("ConnectionStrings:LocalConnection", "Server=localhost;User ID=qa;Database=viverappweb")));
+        Assert.Throws<InvalidOperationException>(() => new ServiceCollection().AddViverAppDatabase(
+            new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:LocalConnection"] = "Server=localhost;User ID=qa;Database=viverappweb_homolog",
+            }).Build()));
+        foreach (var (key, value) in new[]
+        {
+            ("Authentication:Delivery:Enabled", "true"),
+            ("Notifications:BusinessDelivery:Enabled", "true"),
+            ("Notifications:Scheduler:Enabled", "true"),
+            ("PagBank:Enabled", "true"),
+            ("Storage:Private:Provider", "R2"),
+            ("GoogleOAuth:ClientID", "real-client"),
+        })
+        {
+            Assert.Throws<InvalidOperationException>(() =>
+                DatabaseServiceCollectionExtensions.RequiredDatabase(Configuration(key, value)));
+        }
+    }
+
     private readonly WebApplicationFactory<Program> factory = new WebApplicationFactory<Program>()
         .WithWebHostBuilder(builder =>
         {

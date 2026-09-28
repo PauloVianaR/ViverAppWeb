@@ -20,8 +20,14 @@ Os limiares são **provisórios**: ambiente local e dados alfa não produzem lin
 1. `dotnet run --project tools/ViverApp.Database -- status` e `-- verify` verificam schema e invariantes.
 2. `dotnet run --project tools/ViverApp.Database -- analyze-hot-paths` emite planos estimados de consultas fixas, sem alterar dados.
 3. `dotnet run --project tools/ViverApp.LoadProbe -- --help` mostra limites e cenários; somente loopback. Nunca usar cookie de usuário real em testes de carga.
-4. `./scripts/security-check.ps1` exige restore travado, build, testes, formatação, banco, auditoria NuGet e SBOM.
+4. `pwsh -NoProfile -File ./scripts/security-check.ps1` exige PowerShell 7, restore travado, build, testes, formatação, banco, auditoria NuGet e SBOM.
 5. `./scripts/dast-passive.ps1 -TargetUrl http://host.docker.internal:<porta>/ -PinnedImage 'ghcr.io/zaproxy/zaproxy@sha256:<digest>'` exige Docker e uma imagem aprovada. O host deve expor somente a aplicação local sintética para o contêiner.
+
+## Homologação sintética autorizada
+
+`dotnet run --project tools/ViverApp.Database -- inspect-homolog --homolog` confere a existência do banco. `bootstrap --homolog`, `status --homolog`, `apply --homolog` e `verify --homolog` criam/inspecionam/aplicam/verificam `viverappweb_homolog` no **mesmo MySQL local 8.0.41**. `seed-homolog --homolog` é reservado a contas sintéticas e invocado pelo script de DAST somente após verificação integral das migrations. O argumento `--homolog` não é aceito nas demais operações nem altera o user-secret de `viverappweb`.
+
+Para executar a homologação local, compilar API em Debug e Web em Release, iniciar `scripts/start-homolog-api.ps1` e `scripts/start-homolog-web.ps1` em terminais separados, conferir `/health/ready` e a página pública em `http://localhost:5198`, e então executar `scripts/dast-homolog-manager.ps1 -PinnedImage <digest aprovado>`. O script cria/rotaciona as contas sintéticas de Gestor/Paciente, valida autenticação real com resposta 200 **antes** de qualquer scan ativo, injeta o cookie apenas no contêiner efêmero e limita o ZAP à busca GET de pacientes (até 3 min, uma thread, 250 ms entre requisições). Não apontar para outras portas, produção ou dados reais. Interromper API/Web ao concluir; preservar o banco persistente para repetição. Não remover certificados/chaves DPAPI para obter HTTP local.
 
 Para o contêiner alcançar uma Web local que mantenha validação de Host, adicionar `host.docker.internal` apenas à variável `AllowedHosts` do **processo de homologação**, nunca ao arquivo de produção; conferir primeiro HTTP 200 com esse Host. O script retorna código 2 se o ZAP encontrar avisos, exigindo triagem do relatório antes de avançar. Não tornar esse código verde suprimindo regras sem justificativa.
 

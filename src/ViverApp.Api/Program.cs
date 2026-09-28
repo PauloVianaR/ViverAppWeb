@@ -17,6 +17,8 @@ using ViverApp.Security;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
+if (builder.Configuration.GetValue("Homologation:Enabled", false) && !builder.Environment.IsDevelopment())
+    throw new InvalidOperationException("A homologação local só pode ser executada em Development.");
 var allowInsecureLocalHttp = builder.Environment.IsDevelopment()
     && builder.Configuration.GetValue("Security:AllowInsecureLocalHttp", false);
 if (allowInsecureLocalHttp)
