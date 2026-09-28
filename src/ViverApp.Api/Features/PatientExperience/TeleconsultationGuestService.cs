@@ -46,8 +46,12 @@ public sealed class TeleconsultationGuestService(
         await database.TeleconsultationGuestLinks.Where(x => x.AppointmentId == appointmentId).ExecuteDeleteAsync(ct);
         database.TeleconsultationGuestLinks.Add(new TeleconsultationGuestLink
         {
-            Id = linkId.ToByteArray(), AppointmentId = appointmentId, CreatedByAccountId = actor,
-            TokenHash = SHA256.HashData(secret), CreatedAtUtc = now, ExpiresAtUtc = expiry
+            Id = linkId.ToByteArray(),
+            AppointmentId = appointmentId,
+            CreatedByAccountId = actor,
+            TokenHash = SHA256.HashData(secret),
+            CreatedAtUtc = now,
+            ExpiresAtUtc = expiry
         });
         await database.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);

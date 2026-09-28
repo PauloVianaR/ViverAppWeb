@@ -43,6 +43,7 @@ public sealed class SecurityHeadersMiddleware(
             headers["Content-Security-Policy"] = BuildWebContentSecurityPolicy(
                 nonce,
                 options.AllowedConnectSources,
+                context.Request.Host,
                 environment.IsDevelopment());
         }
 
@@ -59,10 +60,24 @@ public sealed class SecurityHeadersMiddleware(
     private static string BuildWebContentSecurityPolicy(
         string nonce,
         IReadOnlyCollection<string> allowedConnectSources,
+        HostString requestHost,
         bool isDevelopment)
     {
-        var connectSources = new List<string> { "'self'", "ws:", "wss:" };
+        var connectSources = new List<string> { "'self'" };
+        if (requestHost.HasValue)
+        {
+            connectSources.Add($"wss://{requestHost.Value}");
+            if (isDevelopment)
+            {
+                connectSources.Add($"ws://{requestHost.Value}");
+            }
+        }
         connectSources.AddRange(allowedConnectSources);
+        foreach (var source in allowedConnectSources)
+        {
+            var origin = new Uri(source);
+            connectSources.Add($"{(origin.Scheme == Uri.UriSchemeHttps ? "wss" : "ws")}://{origin.Authority}");
+        }
 
         var directives = new List<string>
         {
@@ -75,7 +90,7 @@ public sealed class SecurityHeadersMiddleware(
             "font-src 'self'",
             "style-src 'self'",
             $"script-src 'self' 'nonce-{nonce}' 'wasm-unsafe-eval'",
-            $"connect-src {string.Join(' ', connectSources)}",
+            $"connect-src {string.Join(' ', connectSources.Distinct(StringComparer.OrdinalIgnoreCase))}",
             "media-src 'self' blob:",
             "worker-src 'self' blob:",
             "manifest-src 'self'",

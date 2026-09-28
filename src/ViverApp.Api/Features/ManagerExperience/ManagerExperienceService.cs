@@ -117,17 +117,18 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         if (payment == "pending") query = query.Where(x => x.RequiresPayment && (x.CurrentPayment == null || x.CurrentPayment.StatusCode != "paid"));
         var term = Text(search); if (term is not null) { if (term.Length > 120) throw Invalid("A busca deve ter no máximo 120 caracteres."); var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.PatientAccount.FullName.Contains(term) || x.ProfessionalAccount.Account.FullName.Contains(term) || x.AppointmentType.Name.Contains(term) || isNumber && x.AppointmentNumber == number); }
         query = sort switch { "date_desc" => query.OrderByDescending(x => x.StartsAtUtc), "patient" => query.OrderBy(x => x.PatientAccount.FullName).ThenBy(x => x.StartsAtUtc), "doctor" => query.OrderBy(x => x.ProfessionalAccount.Account.FullName).ThenBy(x => x.StartsAtUtc), _ => query.OrderBy(x => x.StartsAtUtc) };
-        int total;
+        var summaries = await query.Select(x => new ManagerAgendaSummary(
+            x.Id, x.AppointmentNumber, x.StartsAtUtc, x.ModalityCode, x.RequiresPayment,
+            x.AppointmentRescheduleHistories.Any() || x.RescheduledFromAppointmentId != null,
+            x.CurrentPayment != null && x.CurrentPayment.StatusCode == "paid")).ToArrayAsync(ct);
+        var filtered = startTime.HasValue
+            ? summaries.Where(x => IsInsideLocalTimeRange(x.StartsAtUtc, timezone, startTime.Value, endTime!.Value)).ToArray()
+            : summaries;
+        var total = filtered.Length;
+        var pageIds = filtered.Skip((page - 1) * pageSize).Take(pageSize).Select(x => x.Id).ToArray();
         Appointment[] rows;
-        ulong[] filteredNumbers;
         if (startTime.HasValue)
         {
-            var candidates = await query.Select(x => new ManagerAgendaCandidate(x.Id, x.AppointmentNumber, x.StartsAtUtc)).ToArrayAsync(ct);
-            var matchingIds = candidates.Where(x => IsInsideLocalTimeRange(x.StartsAtUtc, timezone, startTime.Value, endTime!.Value))
-                .Select(x => x.Id).ToArray();
-            filteredNumbers = candidates.Where(x => matchingIds.Contains(x.Id)).Select(x => x.AppointmentNumber).ToArray();
-            total = matchingIds.Length;
-            var pageIds = matchingIds.Skip((page - 1) * pageSize).Take(pageSize).ToArray();
             if (pageIds.Length == 0)
             {
                 rows = [];
@@ -141,17 +142,14 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         }
         else
         {
-            total = await query.CountAsync(ct);
-            filteredNumbers = await query.Select(x => x.AppointmentNumber).ToArrayAsync(ct);
             rows = await query.Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(ct);
         }
-        var filteredNumberSet = filteredNumbers.ToHashSet();
-        var all = (await query.Select(x => new { x.AppointmentNumber, x.ModalityCode, x.RequiresPayment, Rescheduled = x.AppointmentRescheduleHistories.Any() || x.RescheduledFromAppointmentId != null, Paid = x.CurrentPayment != null && x.CurrentPayment.StatusCode == "paid" }).ToArrayAsync(ct))
-            .Where(x => filteredNumberSet.Contains(x.AppointmentNumber))
-            .ToArray();
-        var sources = new ManagerAgendaSources(filteredNumbers, all.Where(x => x.ModalityCode == "online").Select(x => x.AppointmentNumber).ToArray(),
-            all.Where(x => x.ModalityCode == "in_person").Select(x => x.AppointmentNumber).ToArray(), all.Where(x => x.Rescheduled).Select(x => x.AppointmentNumber).ToArray(),
-            all.Where(x => x.Paid).Select(x => x.AppointmentNumber).ToArray(), all.Where(x => x.RequiresPayment && !x.Paid).Select(x => x.AppointmentNumber).ToArray());
+        var sources = new ManagerAgendaSources(filtered.Select(x => x.AppointmentNumber).ToArray(),
+            filtered.Where(x => x.ModalityCode == "online").Select(x => x.AppointmentNumber).ToArray(),
+            filtered.Where(x => x.ModalityCode == "in_person").Select(x => x.AppointmentNumber).ToArray(),
+            filtered.Where(x => x.Rescheduled).Select(x => x.AppointmentNumber).ToArray(),
+            filtered.Where(x => x.Paid).Select(x => x.AppointmentNumber).ToArray(),
+            filtered.Where(x => x.RequiresPayment && !x.Paid).Select(x => x.AppointmentNumber).ToArray());
         var counters = new ManagerAgendaCounters(total, sources.Online.Count, sources.InPerson.Count, sources.Rescheduled.Count, sources.Paid.Count, sources.PendingPayment.Count);
         return new(counters, sources, new(rows.Select(MapAppointment).ToArray(), page, pageSize, total));
     }
@@ -514,6 +512,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
     internal static ManagerRuleException Forbidden(string message) => new(403, message);
     internal static ManagerRuleException Missing() => new(404, "Recurso não encontrado.");
     internal static ManagerRuleException Conflict(string message) => new(409, message);
-    private sealed record ManagerAgendaCandidate(ulong Id, ulong AppointmentNumber, DateTime StartsAtUtc);
+    private sealed record ManagerAgendaSummary(ulong Id, ulong AppointmentNumber, DateTime StartsAtUtc,
+        string ModalityCode, bool RequiresPayment, bool Rescheduled, bool Paid);
     private sealed record PatientHistoryRow(ulong PatientAccountId, DateTime StartsAtUtc, string StatusCode);
 }

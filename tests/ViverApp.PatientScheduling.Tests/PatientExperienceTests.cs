@@ -444,9 +444,13 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         var session = Guid.NewGuid();
         db.AuthSessions.Add(new()
         {
-            Id = session.ToByteArray(), AccountId = doctor,
-            RefreshTokenHash = RandomNumberGenerator.GetBytes(32), AuthenticationMethod = "password",
-            MfaSatisfied = true, CreatedAtUtc = now, ExpiresAtUtc = now.AddHours(1)
+            Id = session.ToByteArray(),
+            AccountId = doctor,
+            RefreshTokenHash = RandomNumberGenerator.GetBytes(32),
+            AuthenticationMethod = "password",
+            MfaSatisfied = true,
+            CreatedAtUtc = now,
+            ExpiresAtUtc = now.AddHours(1)
         });
         await db.SaveChangesAsync();
         await db.Appointments.Where(x => x.Id == appointment).ExecuteUpdateAsync(s => s
@@ -462,8 +466,10 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         Assert.Null(await guests.ExchangeAsync(parts[0], parts[1], default));
         db.TeleconsultationPeers.Add(new TeleconsultationPeer
         {
-            AppointmentId = appointment, AccountId = doctor,
-            ConnectionId = $"test-{marker}", ExpiresAtUtc = now.AddMinutes(1)
+            AppointmentId = appointment,
+            AccountId = doctor,
+            ConnectionId = $"test-{marker}",
+            ExpiresAtUtc = now.AddMinutes(1)
         });
         await db.SaveChangesAsync();
         var exchanged = await guests.ExchangeAsync(parts[0], parts[1], default);

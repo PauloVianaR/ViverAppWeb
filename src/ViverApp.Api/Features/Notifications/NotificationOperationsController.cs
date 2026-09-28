@@ -142,8 +142,11 @@ public sealed class NotificationOperationsController(
         await database.SaveChangesAsync(cancellationToken);
         await audit.WriteAsync("notifications.destination_suppressed", ActorId,
             "notification_suppression", null,
-            new Dictionary<string, string> { ["channel"] = request.Channel,
-                ["reasonCode"] = request.ReasonCode.Trim() }, cancellationToken);
+            new Dictionary<string, string>
+            {
+                ["channel"] = request.Channel,
+                ["reasonCode"] = request.ReasonCode.Trim()
+            }, cancellationToken);
         return NoContent();
     }
 

@@ -1,0 +1,45 @@
+# Apenas GET de uma rota de leitura, em banco persistente de homologação sintética.
+# O marcador de sessão é substituído somente no contêiner efêmero.
+env:
+  contexts:
+    - name: homolog-manager-readonly
+      urls:
+        - http://host.docker.internal:5197/api/v1/manager/patients
+      includePaths:
+        - '^http://host\.docker\.internal:5197/api/v1/manager/patients.*$'
+  parameters:
+    failOnError: true
+    failOnWarning: false
+    progressToStdout: true
+jobs:
+  - type: replacer
+    rules:
+      - description: synthetic-manager-session
+        url: ''
+        matchType: req_header
+        matchString: Cookie
+        replacementString: '__COOKIE__'
+  - type: requestor
+    requests:
+      - url: http://host.docker.internal:5197/api/v1/manager/patients?search=Paciente
+        method: GET
+        responseCode: 200
+  - type: activeScan
+    parameters:
+      context: homolog-manager-readonly
+      url: http://host.docker.internal:5197/api/v1/manager/patients?search=Paciente
+      defaultStrength: Low
+      defaultThreshold: Medium
+      maxRuleDurationInMins: 1
+      maxScanDurationInMins: 3
+      delayInMs: 250
+      threadPerHost: 1
+      addQueryParam: false
+      scanHeadersAllRequests: false
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: /zap/wrk
+      reportFile: phase25-homolog-manager-search-active.json
+      reportTitle: ViverAppWeb homologação sintética - busca de pacientes do Gestor
+      displayReport: false

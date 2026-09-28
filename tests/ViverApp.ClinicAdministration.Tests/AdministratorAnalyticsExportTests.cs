@@ -57,9 +57,15 @@ public sealed class AdministratorAnalyticsExportTests
         var email = $"phase24-export-{Guid.NewGuid():N}@example.test";
         var actor = new Account
         {
-            RoleCode = ViverAppRoles.Administrator, StatusCode = "active", FullName = "Administrador sintético de exportação",
-            Email = email, NormalizedEmail = email.ToUpperInvariant(), EmailVerified = true,
-            SecurityStamp = RandomNumberGenerator.GetBytes(32), CreatedAtUtc = now, UpdatedAtUtc = now,
+            RoleCode = ViverAppRoles.Administrator,
+            StatusCode = "active",
+            FullName = "Administrador sintético de exportação",
+            Email = email,
+            NormalizedEmail = email.ToUpperInvariant(),
+            EmailVerified = true,
+            SecurityStamp = RandomNumberGenerator.GetBytes(32),
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
             RowVersion = 1,
         };
         database.Accounts.Add(actor);
@@ -105,9 +111,15 @@ public sealed class AdministratorAnalyticsExportTests
             var email = $"phase24-confirm-{Guid.NewGuid():N}@example.test";
             return new Account
             {
-                RoleCode = role, StatusCode = "active", FullName = name,
-                Email = email, NormalizedEmail = email.ToUpperInvariant(), EmailVerified = true,
-                SecurityStamp = RandomNumberGenerator.GetBytes(32), CreatedAtUtc = now, UpdatedAtUtc = now,
+                RoleCode = role,
+                StatusCode = "active",
+                FullName = name,
+                Email = email,
+                NormalizedEmail = email.ToUpperInvariant(),
+                EmailVerified = true,
+                SecurityStamp = RandomNumberGenerator.GetBytes(32),
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
                 RowVersion = 1,
             };
         }

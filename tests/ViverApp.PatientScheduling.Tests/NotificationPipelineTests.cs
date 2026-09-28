@@ -25,12 +25,17 @@ public sealed class NotificationPipelineTests
             {
                 var message = new OutboxMessage
                 {
-                    ChannelCode = "internal", TemplateKey = "notification.queue_health",
-                    TemplateVersion = 1, Recipient = "administrator",
+                    ChannelCode = "internal",
+                    TemplateKey = "notification.queue_health",
+                    TemplateVersion = 1,
+                    Recipient = "administrator",
                     PayloadJson = "{\"deadLetters\":1,\"oldestPendingMinutes\":10}",
-                    StatusCode = "pending", IdempotencyKey = Guid.NewGuid(),
-                    AttemptCount = 0, MaxAttempts = 5,
-                    NextAttemptAtUtc = now.UtcDateTime, CreatedAtUtc = now.UtcDateTime,
+                    StatusCode = "pending",
+                    IdempotencyKey = Guid.NewGuid(),
+                    AttemptCount = 0,
+                    MaxAttempts = 5,
+                    NextAttemptAtUtc = now.UtcDateTime,
+                    CreatedAtUtc = now.UtcDateTime,
                 };
                 database.OutboxMessages.Add(message);
                 await database.SaveChangesAsync();
@@ -65,12 +70,19 @@ public sealed class NotificationPipelineTests
             {
                 var message = new OutboxMessage
                 {
-                    ChannelCode = "email", TemplateKey = "manager.premium.approved",
-                    TemplateVersion = 1, Recipient = "backoff-fixture@example.test",
-                    PayloadJson = "{}", StatusCode = "processing", IdempotencyKey = Guid.NewGuid(),
-                    LeaseOwner = "backoff-test", LeaseUntilUtc = now.UtcDateTime.AddMinutes(2),
-                    AttemptCount = 0, MaxAttempts = 5,
-                    NextAttemptAtUtc = now.UtcDateTime, CreatedAtUtc = now.UtcDateTime,
+                    ChannelCode = "email",
+                    TemplateKey = "manager.premium.approved",
+                    TemplateVersion = 1,
+                    Recipient = "backoff-fixture@example.test",
+                    PayloadJson = "{}",
+                    StatusCode = "processing",
+                    IdempotencyKey = Guid.NewGuid(),
+                    LeaseOwner = "backoff-test",
+                    LeaseUntilUtc = now.UtcDateTime.AddMinutes(2),
+                    AttemptCount = 0,
+                    MaxAttempts = 5,
+                    NextAttemptAtUtc = now.UtcDateTime,
+                    CreatedAtUtc = now.UtcDateTime,
                 };
                 database.OutboxMessages.Add(message);
                 await database.SaveChangesAsync();
@@ -122,10 +134,16 @@ public sealed class NotificationPipelineTests
             {
                 var message = new OutboxMessage
                 {
-                    ChannelCode = "email", TemplateKey = "manager.premium.approved",
-                    TemplateVersion = 1, Recipient = "notification-fixture@example.test",
-                    PayloadJson = "{}", StatusCode = "pending", IdempotencyKey = key,
-                    AttemptCount = 0, MaxAttempts = 5, NextAttemptAtUtc = now.UtcDateTime,
+                    ChannelCode = "email",
+                    TemplateKey = "manager.premium.approved",
+                    TemplateVersion = 1,
+                    Recipient = "notification-fixture@example.test",
+                    PayloadJson = "{}",
+                    StatusCode = "pending",
+                    IdempotencyKey = key,
+                    AttemptCount = 0,
+                    MaxAttempts = 5,
+                    NextAttemptAtUtc = now.UtcDateTime,
                     CreatedAtUtc = now.UtcDateTime,
                 };
                 database.OutboxMessages.Add(message);
@@ -183,13 +201,16 @@ public sealed class NotificationPipelineTests
                 email = $"notification-{marker}@example.test";
                 var account = new Account
                 {
-                    RoleCode = ViverAppRoles.Patient, StatusCode = "active",
+                    RoleCode = ViverAppRoles.Patient,
+                    StatusCode = "active",
                     FullName = $"Notificação Teste {marker}",
                     Email = email,
                     NormalizedEmail = $"NOTIFICATION-{marker}@EXAMPLE.TEST",
-                    EmailVerified = true, PhoneVerified = false,
+                    EmailVerified = true,
+                    PhoneVerified = false,
                     SecurityStamp = RandomNumberGenerator.GetBytes(32),
-                    CreatedAtUtc = DateTime.UtcNow, UpdatedAtUtc = DateTime.UtcNow,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    UpdatedAtUtc = DateTime.UtcNow,
                     RowVersion = 1,
                 };
                 database.Accounts.Add(account);
@@ -207,8 +228,11 @@ public sealed class NotificationPipelineTests
                 var policy = new NotificationDeliveryPolicy(database, TimeProvider.System);
                 var message = new OutboxMessage
                 {
-                    AccountId = accountId, ChannelCode = "email", TemplateKey = "manager.premium.approved",
-                    TemplateVersion = 1, Recipient = email!,
+                    AccountId = accountId,
+                    ChannelCode = "email",
+                    TemplateKey = "manager.premium.approved",
+                    TemplateVersion = 1,
+                    Recipient = email!,
                 };
                 Assert.Equal("premium_updates_disabled",
                     (await policy.EvaluateAsync(message, CancellationToken.None)).ReasonCode);
@@ -216,7 +240,8 @@ public sealed class NotificationPipelineTests
                 {
                     ChannelCode = "email",
                     RecipientHash = NotificationDeliveryPolicy.HashRecipient("email", message.Recipient),
-                    ReasonCode = "user_request", CreatedAtUtc = DateTime.UtcNow,
+                    ReasonCode = "user_request",
+                    CreatedAtUtc = DateTime.UtcNow,
                 };
                 database.NotificationSuppressions.Add(suppression);
                 await database.SaveChangesAsync();
@@ -247,8 +272,10 @@ public sealed class NotificationPipelineTests
         using var client = new HttpClient(handler) { BaseAddress = new Uri("https://sistema81.smsbarato.com.br/") };
         var options = new IdentityDeliveryOptions
         {
-            SmtpHost = "smtp.example.test", SmtpPort = 587,
-            SmtpUser = "test@example.test", SmtpPassword = "unused",
+            SmtpHost = "smtp.example.test",
+            SmtpPort = 587,
+            SmtpUser = "test@example.test",
+            SmtpPassword = "unused",
             SmsBaratoBaseUrl = client.BaseAddress,
             SmsBaratoApiKey = "fixture-key",
         };
@@ -270,8 +297,10 @@ public sealed class NotificationPipelineTests
             { BaseAddress = new Uri("https://sistema81.smsbarato.com.br/") };
             var sender = new SmsBaratoNotificationSender(client, new IdentityDeliveryOptions
             {
-                SmtpHost = "smtp.example.test", SmtpPort = 587,
-                SmtpUser = "test@example.test", SmtpPassword = "unused",
+                SmtpHost = "smtp.example.test",
+                SmtpPort = 587,
+                SmtpUser = "test@example.test",
+                SmtpPassword = "unused",
                 SmsBaratoBaseUrl = client.BaseAddress,
                 SmsBaratoApiKey = "fixture-key",
             });

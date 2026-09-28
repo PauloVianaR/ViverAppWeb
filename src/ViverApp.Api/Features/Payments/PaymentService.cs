@@ -1,4 +1,5 @@
 using System.Data;
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -8,6 +9,7 @@ using MySql.Data.MySqlClient;
 using ViverApp.Api.Features.CashManagement;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
+using ViverApp.Api.Infrastructure.Observability;
 
 namespace ViverApp.Api.Features.Payments;
 
@@ -105,7 +107,7 @@ public sealed class PaymentService(
                 StatusCode = "pending",
                 Amount = appointment.PriceAmount,
                 CurrencyCode = "BRL",
-                IdempotencyKey = Guid.NewGuid(),
+                IdempotencyKey = ProviderCheckoutIdempotencyKey(patientId, appointment.Id, appointment.RowVersion),
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now,
                 NextReconciliationAtUtc = now.AddMinutes(options.ReconciliationIntervalMinutes),
@@ -135,11 +137,22 @@ public sealed class PaymentService(
             returnUrl,
             returnUrl,
             options.WebhookUrl);
-        var provider = await pagBank.CreateCheckoutAsync(
-            command,
-            payment.IdempotencyKey.ToString("N", CultureInfo.InvariantCulture),
-            cancellationToken);
-        ValidateCheckout(provider, reference);
+        PagBankResource provider;
+        var providerWatch = Stopwatch.StartNew();
+        var providerSucceeded = false;
+        try
+        {
+            provider = await pagBank.CreateCheckoutAsync(
+                command,
+                payment.IdempotencyKey.ToString("N", CultureInfo.InvariantCulture),
+                cancellationToken);
+            ValidateCheckout(provider, reference);
+            providerSucceeded = true;
+        }
+        finally
+        {
+            OperationalTelemetry.RecordCheckout(providerSucceeded, providerWatch.Elapsed.TotalMilliseconds);
+        }
 
         payment.ProviderCheckoutId = provider.Id;
         appointment.PaymentLocationCode = "web";
@@ -568,6 +581,12 @@ public sealed class PaymentService(
         }
 
         return decimal.ToInt64(cents);
+    }
+
+    private Guid ProviderCheckoutIdempotencyKey(ulong patientId, ulong appointmentId, ulong appointmentVersion)
+    {
+        var operation = Encoding.UTF8.GetBytes($"checkout:{patientId}:{appointmentId}:{appointmentVersion}");
+        return new Guid(HMACSHA256.HashData(Encoding.UTF8.GetBytes(options.Token), operation).AsSpan(0, 16));
     }
 
     private static string NormalizeProviderIdempotencyKey(string value)

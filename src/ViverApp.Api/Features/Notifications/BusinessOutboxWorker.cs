@@ -87,7 +87,7 @@ internal sealed class BusinessOutboxWorker(
                         var permanent = exception is NotificationProviderException { Permanent: true }
                             or JsonException
                             || exception is HttpRequestException
-                                { StatusCode: >= HttpStatusCode.BadRequest and < HttpStatusCode.InternalServerError };
+                            { StatusCode: >= HttpStatusCode.BadRequest and < HttpStatusCode.InternalServerError };
                         var code = exception is NotificationProviderException provider
                             ? provider.Message
                             : $"provider_{exception.GetType().Name.ToLowerInvariant()}";

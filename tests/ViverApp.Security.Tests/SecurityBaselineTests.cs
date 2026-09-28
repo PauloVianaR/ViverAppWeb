@@ -78,6 +78,8 @@ public sealed class SecurityBaselineTests
             CreateEnvironment(Environments.Development),
             SecuritySurface.Web);
         var context = new DefaultHttpContext();
+        context.Request.Scheme = "https";
+        context.Request.Host = new HostString("viveralmenara.com");
 
         await middleware.InvokeAsync(context);
 
@@ -86,6 +88,10 @@ public sealed class SecurityBaselineTests
         Assert.False(string.IsNullOrWhiteSpace(nonce));
         Assert.Contains($"'nonce-{nonce}'", policy);
         Assert.Contains("https://localhost:7176", policy);
+        Assert.Contains("wss://viveralmenara.com", policy);
+        Assert.Contains("wss://localhost:7176", policy);
+        Assert.DoesNotContain(" ws: ", policy);
+        Assert.DoesNotContain(" wss: ", policy);
         Assert.DoesNotContain("'unsafe-inline'", policy);
     }
 

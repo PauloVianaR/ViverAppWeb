@@ -63,8 +63,11 @@ public sealed class TeleconsultationController(
         Response.Cookies.Append(TeleconsultationGuestService.CookieName,
             guests.Protect(Guid.ParseExact(request.LinkId, "N"), guestId), new CookieOptions
             {
-                HttpOnly = true, Secure = !environment.IsDevelopment() || !configuration.GetValue("Security:AllowInsecureLocalHttp", false),
-                SameSite = SameSiteMode.Strict, Path = "/", Expires = new DateTimeOffset(expiresAtUtc, TimeSpan.Zero),
+                HttpOnly = true,
+                Secure = !environment.IsDevelopment() || !configuration.GetValue("Security:AllowInsecureLocalHttp", false),
+                SameSite = SameSiteMode.Strict,
+                Path = "/",
+                Expires = new DateTimeOffset(expiresAtUtc, TimeSpan.Zero),
                 IsEssential = true
             });
         await audit.WriteAsync("teleconsultation.guest_exchanged", null, "appointment", appointmentId.ToString(), null, ct);

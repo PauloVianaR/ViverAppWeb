@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.UserSecrets;
 using MySql.Data.MySqlClient;
@@ -16,12 +17,15 @@ internal static partial class Program
 {
     private const string LegacyDatabase = "viverappmobile";
     private const string TargetDatabase = "viverappweb";
+    private const string HomologationDatabase = "viverappweb_homolog";
     private const string RequiredServerVersion = "8.0.41";
     private const string HistoryTable = "__schema_migrations";
 
     public static async Task<int> Main(string[] args)
     {
-        if (args.Length != 1)
+        var homologation = args.Length == 2 && string.Equals(args[1], "--homolog", StringComparison.Ordinal);
+        if ((args.Length != 1 && !homologation)
+            || (homologation && args[0] is not ("bootstrap" or "status" or "apply" or "verify" or "inspect-homolog" or "seed-homolog")))
         {
             PrintUsage();
             return 2;
@@ -30,24 +34,31 @@ internal static partial class Program
         try
         {
             var connectionSource = LoadConnectionSource();
-            using var cancellationSource = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            using var cancellationSource = new CancellationTokenSource(
+                homologation ? TimeSpan.FromMinutes(10) : TimeSpan.FromMinutes(2));
+            var selectedDatabase = homologation ? HomologationDatabase : TargetDatabase;
 
             return args[0].ToLowerInvariant() switch
             {
                 "inspect-legacy" => await InspectLegacyAsync(connectionSource, cancellationSource.Token),
                 "snapshot-legacy-schema" => await SnapshotLegacySchemaAsync(connectionSource, cancellationSource.Token),
                 "diagnose-configuration" => DiagnoseConfiguration(connectionSource),
-                "bootstrap" => await BootstrapAsync(connectionSource, cancellationSource.Token),
+                "bootstrap" => await BootstrapAsync(connectionSource, selectedDatabase, cancellationSource.Token),
                 "configure-target" => await ConfigureTargetAsync(connectionSource, cancellationSource.Token),
-                "status" => await ShowStatusAsync(connectionSource, cancellationSource.Token),
-                "apply" => await ApplyAsync(connectionSource, cancellationSource.Token),
-                "verify" => await VerifyAsync(connectionSource, cancellationSource.Token),
+                "status" => await ShowStatusAsync(connectionSource, selectedDatabase, cancellationSource.Token),
+                "inspect-homolog" when homologation => await InspectHomologationAsync(connectionSource, cancellationSource.Token),
+                "seed-homolog" when homologation => await SeedHomologationAsync(connectionSource, cancellationSource.Token),
+                "analyze-hot-paths" => await AnalyzeHotPathsAsync(connectionSource, cancellationSource.Token),
+                "apply" => await ApplyAsync(connectionSource, selectedDatabase, cancellationSource.Token),
+                "verify" => await VerifyAsync(connectionSource, selectedDatabase, cancellationSource.Token),
                 _ => UnknownCommand(args[0]),
             };
         }
         catch (OperationCanceledException)
         {
-            Console.Error.WriteLine("A operação excedeu o limite seguro de dois minutos.");
+            Console.Error.WriteLine(homologation
+                ? "A operação de homologação excedeu o limite de dez minutos."
+                : "A operação excedeu o limite seguro de dois minutos.");
             return 1;
         }
         catch (Exception exception)
@@ -313,28 +324,29 @@ internal static partial class Program
 
     private static async Task<int> BootstrapAsync(
         MySqlConnectionStringBuilder source,
+        string database,
         CancellationToken cancellationToken)
     {
         await using var serverConnection = CreateConnection(source, string.Empty);
         await serverConnection.OpenAsync(cancellationToken);
         await AssertServerAsync(serverConnection, cancellationToken);
 
-        var alreadyExists = await DatabaseExistsAsync(serverConnection, TargetDatabase, cancellationToken);
+        var alreadyExists = await DatabaseExistsAsync(serverConnection, database, cancellationToken);
         await using (var command = serverConnection.CreateCommand())
         {
             command.CommandText =
-                $"CREATE DATABASE IF NOT EXISTS `{TargetDatabase}` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci";
+                $"CREATE DATABASE IF NOT EXISTS `{database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci";
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        await using var targetConnection = CreateConnection(source, TargetDatabase);
+        await using var targetConnection = CreateConnection(source, database);
         await targetConnection.OpenAsync(cancellationToken);
         await AssertServerAsync(targetConnection, cancellationToken);
-        await AssertDatabaseAsync(targetConnection, TargetDatabase, cancellationToken);
+        await AssertDatabaseAsync(targetConnection, database, cancellationToken);
 
         Console.WriteLine(alreadyExists
-            ? $"Banco {TargetDatabase} já existia e foi validado."
-            : $"Banco {TargetDatabase} criado e validado.");
+            ? $"Banco {database} já existia e foi validado."
+            : $"Banco {database} criado e validado.");
         return 0;
     }
 
@@ -359,12 +371,13 @@ internal static partial class Program
 
     private static async Task<int> ShowStatusAsync(
         MySqlConnectionStringBuilder source,
+        string database,
         CancellationToken cancellationToken)
     {
-        await using var connection = CreateConnection(source, TargetDatabase);
+        await using var connection = CreateConnection(source, database);
         await connection.OpenAsync(cancellationToken);
         await AssertServerAsync(connection, cancellationToken);
-        await AssertDatabaseAsync(connection, TargetDatabase, cancellationToken);
+        await AssertDatabaseAsync(connection, database, cancellationToken);
 
         var migrations = LoadMigrations();
         var applied = await LoadAppliedMigrationsAsync(connection, cancellationToken);
@@ -385,12 +398,13 @@ internal static partial class Program
 
     private static async Task<int> ApplyAsync(
         MySqlConnectionStringBuilder source,
+        string database,
         CancellationToken cancellationToken)
     {
-        await using var connection = CreateConnection(source, TargetDatabase);
+        await using var connection = CreateConnection(source, database);
         await connection.OpenAsync(cancellationToken);
         await AssertServerAsync(connection, cancellationToken);
-        await AssertDatabaseAsync(connection, TargetDatabase, cancellationToken);
+        await AssertDatabaseAsync(connection, database, cancellationToken);
 
         var migrations = LoadMigrations();
         if (migrations.Count == 0)
@@ -406,7 +420,7 @@ internal static partial class Program
         var pending = migrations.Where(migration => !applied.ContainsKey(migration.Id)).ToArray();
         foreach (var migration in pending)
         {
-            Console.WriteLine($"Aplicando {migration.FileName} em {TargetDatabase}...");
+            Console.WriteLine($"Aplicando {migration.FileName} em {database}...");
             await using var command = connection.CreateCommand();
             command.CommandText = migration.Sql;
             command.CommandTimeout = 60;
@@ -431,12 +445,13 @@ internal static partial class Program
 
     private static async Task<int> VerifyAsync(
         MySqlConnectionStringBuilder source,
+        string database,
         CancellationToken cancellationToken)
     {
-        await using var connection = CreateConnection(source, TargetDatabase);
+        await using var connection = CreateConnection(source, database);
         await connection.OpenAsync(cancellationToken);
         await AssertServerAsync(connection, cancellationToken);
-        await AssertDatabaseAsync(connection, TargetDatabase, cancellationToken);
+        await AssertDatabaseAsync(connection, database, cancellationToken);
 
         var migrations = LoadMigrations();
         var applied = await LoadAppliedMigrationsAsync(connection, cancellationToken);
@@ -446,11 +461,140 @@ internal static partial class Program
         if (pending.Length != 0)
         {
             throw new InvalidOperationException(
-                $"Existem {pending.Length} migrations pendentes em {TargetDatabase}.");
+                $"Existem {pending.Length} migrations pendentes em {database}.");
         }
 
-        Console.WriteLine($"MySQL {RequiredServerVersion}, database {TargetDatabase} e migrations verificados.");
+        Console.WriteLine($"MySQL {RequiredServerVersion}, database {database} e migrations verificados.");
         return 0;
+    }
+
+    private static async Task<int> InspectHomologationAsync(
+        MySqlConnectionStringBuilder source,
+        CancellationToken cancellationToken)
+    {
+        await using var serverConnection = CreateConnection(source, string.Empty);
+        await serverConnection.OpenAsync(cancellationToken);
+        await AssertServerAsync(serverConnection, cancellationToken);
+        if (!await DatabaseExistsAsync(serverConnection, HomologationDatabase, cancellationToken))
+        {
+            Console.WriteLine($"Banco {HomologationDatabase} ainda não existe.");
+            return 0;
+        }
+
+        await using var command = serverConnection.CreateCommand();
+        command.CommandText = """
+            SELECT COUNT(*), COALESCE(SUM(table_rows), 0)
+            FROM information_schema.tables
+            WHERE table_schema = @schema AND table_type = 'BASE TABLE'
+            """;
+        command.Parameters.AddWithValue("@schema", HomologationDatabase);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        await reader.ReadAsync(cancellationToken);
+        Console.WriteLine($"Banco {HomologationDatabase}: {reader.GetInt64(0)} tabelas; cerca de {reader.GetInt64(1)} linhas (estimativa do MySQL).");
+        return 0;
+    }
+
+    private static async Task<int> SeedHomologationAsync(
+        MySqlConnectionStringBuilder source,
+        CancellationToken cancellationToken)
+    {
+        var password = Environment.GetEnvironmentVariable("VIVERAPP_HOMOLOG_QA_PASSWORD");
+        if (string.IsNullOrWhiteSpace(password) || password.Length is < 24 or > 128)
+            throw new InvalidOperationException("A senha sintética de homologação deve vir da variável de ambiente e conter 24–128 caracteres.");
+
+        await using var connection = CreateConnection(source, HomologationDatabase);
+        await connection.OpenAsync(cancellationToken);
+        await AssertServerAsync(connection, cancellationToken);
+        await AssertDatabaseAsync(connection, HomologationDatabase, cancellationToken);
+        var migrations = LoadMigrations();
+        var applied = await LoadAppliedMigrationsAsync(connection, cancellationToken);
+        ValidateAppliedChecksums(migrations, applied);
+        if (migrations.Any(migration => !applied.ContainsKey(migration.Id)))
+            throw new InvalidOperationException("Homologação sem todas as migrations; nenhuma conta foi criada.");
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await SeedQaAccountAsync(connection, transaction, "manager", "qa-manager@viverapp.invalid", password, cancellationToken);
+            await SeedQaAccountAsync(connection, transaction, "patient", "qa-patient@viverapp.invalid", password, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+
+        Console.WriteLine("Contas sintéticas de Gestor e Paciente preparadas somente em viverappweb_homolog; a senha não foi exibida.");
+        return 0;
+    }
+
+    private static async Task SeedQaAccountAsync(
+        MySqlConnection connection,
+        MySqlTransaction transaction,
+        string role,
+        string email,
+        string password,
+        CancellationToken cancellationToken)
+    {
+        var normalizedEmail = email.ToUpperInvariant();
+        ulong? accountId = null;
+        await using (var lookup = connection.CreateCommand())
+        {
+            lookup.Transaction = transaction;
+            lookup.CommandText = "SELECT id, role_code FROM accounts WHERE normalized_email = @email FOR UPDATE";
+            lookup.Parameters.AddWithValue("@email", normalizedEmail);
+            await using var reader = await lookup.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                accountId = Convert.ToUInt64(reader.GetValue(0), CultureInfo.InvariantCulture);
+                if (!string.Equals(reader.GetString(1), role, StringComparison.Ordinal))
+                    throw new InvalidOperationException("Conta sintética existente possui papel divergente; operação recusada.");
+            }
+        }
+
+        var hash = new PasswordHasher<object>().HashPassword(new object(), password);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        if (accountId is null)
+        {
+            command.CommandText = """
+                INSERT INTO accounts
+                    (role_code, status_code, full_name, email, normalized_email, password_hash,
+                     email_verified, portal_access_enabled, security_stamp, created_at_utc, updated_at_utc, row_version)
+                VALUES (@role, 'active', @name, @email, @normalized, @hash,
+                        1, 1, @stamp, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), 1)
+                """;
+            command.Parameters.AddWithValue("@role", role);
+            command.Parameters.AddWithValue("@name", role == "manager" ? "Gestor Sintético de Homologação" : "Paciente Sintético de Homologação");
+            command.Parameters.AddWithValue("@email", email);
+            command.Parameters.AddWithValue("@normalized", normalizedEmail);
+            command.Parameters.AddWithValue("@hash", hash);
+            command.Parameters.AddWithValue("@stamp", RandomNumberGenerator.GetBytes(32));
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            accountId = (ulong)command.LastInsertedId;
+        }
+        else
+        {
+            command.CommandText = """
+                UPDATE accounts
+                SET password_hash = @hash, security_stamp = @stamp, status_code = 'active',
+                    updated_at_utc = UTC_TIMESTAMP(6), row_version = row_version + 1
+                WHERE id = @id
+                """;
+            command.Parameters.AddWithValue("@hash", hash);
+            command.Parameters.AddWithValue("@stamp", RandomNumberGenerator.GetBytes(32));
+            command.Parameters.AddWithValue("@id", accountId.Value);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await using var profile = connection.CreateCommand();
+        profile.Transaction = transaction;
+        profile.Parameters.AddWithValue("@id", accountId.Value);
+        profile.CommandText = role == "manager"
+            ? "INSERT IGNORE INTO manager_preferences (manager_account_id, email_enabled, sms_enabled, updated_at_utc, row_version) VALUES (@id, 0, 0, UTC_TIMESTAMP(6), 1)"
+            : "INSERT IGNORE INTO patient_profiles (account_id, created_at_utc, updated_at_utc) VALUES (@id, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))";
+        await profile.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static MySqlConnection CreateConnection(MySqlConnectionStringBuilder source, string database)
@@ -707,7 +851,7 @@ internal static partial class Program
             FROM information_schema.tables
             WHERE table_schema = @schema AND table_name = @table
             """;
-        command.Parameters.AddWithValue("@schema", TargetDatabase);
+        command.Parameters.AddWithValue("@schema", connection.Database);
         command.Parameters.AddWithValue("@table", HistoryTable);
         return Convert.ToInt32(
             await command.ExecuteScalarAsync(cancellationToken),
@@ -836,7 +980,7 @@ internal static partial class Program
 
     private static void PrintUsage()
     {
-        Console.WriteLine("Uso: dotnet run --project tools/ViverApp.Database -- <diagnose-configuration|inspect-legacy|snapshot-legacy-schema|bootstrap|configure-target|status|apply|verify>");
+        Console.WriteLine("Uso: dotnet run --project tools/ViverApp.Database -- <diagnose-configuration|inspect-legacy|snapshot-legacy-schema|bootstrap|configure-target|status|analyze-hot-paths|apply|verify> [--homolog apenas para bootstrap/status/apply/verify/inspect-homolog/seed-homolog]");
     }
 
     [GeneratedRegex("^(?<id>[0-9]{4})__(?<description>[a-z0-9_]+)\\.sql$", RegexOptions.CultureInvariant)]

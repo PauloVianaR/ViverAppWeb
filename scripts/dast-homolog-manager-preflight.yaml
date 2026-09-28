@@ -1,0 +1,22 @@
+env:
+  contexts:
+    - name: homolog-manager-readonly
+      urls:
+        - http://host.docker.internal:5197/api/v1/manager/patients?search=Paciente
+  parameters:
+    failOnError: true
+    failOnWarning: true
+    progressToStdout: true
+jobs:
+  - type: replacer
+    rules:
+      - description: synthetic-manager-session
+        url: ''
+        matchType: req_header
+        matchString: Cookie
+        replacementString: '__COOKIE__'
+  - type: requestor
+    requests:
+      - url: http://host.docker.internal:5197/api/v1/manager/patients?search=Paciente
+        method: GET
+        responseCode: 200

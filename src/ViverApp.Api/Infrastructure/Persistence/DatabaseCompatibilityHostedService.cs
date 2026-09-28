@@ -5,9 +5,8 @@ using ViverApp.Api.Infrastructure.Persistence.Generated;
 
 namespace ViverApp.Api.Infrastructure.Persistence;
 
-internal sealed class DatabaseCompatibilityHostedService(IServiceScopeFactory scopeFactory) : IHostedService
+internal sealed class DatabaseCompatibilityHostedService(IServiceScopeFactory scopeFactory, IConfiguration configuration) : IHostedService
 {
-    private const string RequiredDatabase = "viverappweb";
     private const string RequiredServerVersion = "8.0.41";
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -20,10 +19,11 @@ internal sealed class DatabaseCompatibilityHostedService(IServiceScopeFactory sc
         try
         {
             var database = await ExecuteScalarAsync(connection, "SELECT DATABASE()", cancellationToken);
-            if (!string.Equals(database, RequiredDatabase, StringComparison.Ordinal))
+            var requiredDatabase = DatabaseServiceCollectionExtensions.RequiredDatabase(configuration);
+            if (!string.Equals(database, requiredDatabase, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
-                    $"A API recusou o database conectado. O único alvo permitido é {RequiredDatabase}.");
+                    $"A API recusou o database conectado. O único alvo permitido neste modo é {requiredDatabase}.");
             }
 
             var version = await ExecuteScalarAsync(connection, "SELECT VERSION()", cancellationToken);
