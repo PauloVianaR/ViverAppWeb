@@ -23,6 +23,8 @@ Os limiares são **provisórios**: ambiente local e dados alfa não produzem lin
 4. `./scripts/security-check.ps1` exige restore travado, build, testes, formatação, banco, auditoria NuGet e SBOM.
 5. `./scripts/dast-passive.ps1 -TargetUrl http://host.docker.internal:<porta>/ -PinnedImage 'ghcr.io/zaproxy/zaproxy@sha256:<digest>'` exige Docker e uma imagem aprovada. O host deve expor somente a aplicação local sintética para o contêiner.
 
+Para o contêiner alcançar uma Web local que mantenha validação de Host, adicionar `host.docker.internal` apenas à variável `AllowedHosts` do **processo de homologação**, nunca ao arquivo de produção; conferir primeiro HTTP 200 com esse Host. O script retorna código 2 se o ZAP encontrar avisos, exigindo triagem do relatório antes de avançar. Não tornar esse código verde suprimindo regras sem justificativa.
+
 ## Incidente
 
 Preservar evidências técnicas sem exportar prontuários, tokens, credenciais ou dados pessoais para logs. Conter a ação afetada, classificar escopo, conferir auditoria append-only e envolver responsável de privacidade/segurança. Decisões de comunicação ao titular/ANPD seguem o procedimento aprovado e a orientação vigente da [ANPD](https://www.gov.br/anpd/pt-br/canais_atendimento/agente-de-tratamento/comunicado-de-incidente-de-seguranca-cis); este texto não fixa prazo jurídico por conta própria.

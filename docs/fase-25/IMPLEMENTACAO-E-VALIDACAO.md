@@ -2,7 +2,7 @@
 
 ## Estado e limites
 
-Esta fase introduz instrumentos de medição e endurecimento verificáveis no ambiente local. **Ainda não satisfaz o critério de saída da fase**: a carga autenticada, os provedores externos, DAST, revisão independente, assinatura de artefatos e SLOs sob tráfego representativo dependem de um ambiente de homologação e/ou pessoas autorizadas. Não inferir aprovação desses itens a partir de testes unitários ou de uma medição em loopback.
+Esta fase introduz instrumentos de medição e endurecimento verificáveis no ambiente local. **Ainda não satisfaz o critério de saída da fase**: a carga autenticada, os provedores externos, DAST autenticado, revisão independente, assinatura de artefatos e SLOs sob tráfego representativo dependem de homologação isolada e/ou pessoas autorizadas. Não inferir aprovação desses itens a partir de testes unitários ou de uma medição em loopback.
 
 O MySQL usado foi exclusivamente o `viverappweb` local 8.0.41. Nenhum banco descartável, cobrança real ou dados clínicos reais foram usados.
 
@@ -21,7 +21,15 @@ No navegador integrado, a landing pública foi inspecionada em larguras de 1280,
 | Carga local | `tools/ViverApp.LoadProbe` limita alvo a loopback, duração, concorrência e quantidade; cenários `api-ready`, `landing` e `agenda` com cookie sintético fornecido pelo operador. | API pronta: 6.171 respostas/10 s, 8 clientes, nenhuma falha, p95 23,61 ms. Landing com espaçamento para não induzir rate limit: 78 respostas/10 s, 8 clientes, nenhuma falha, p95 78,97 ms. Hardware e dados locais; não extrapolar para produção. Agenda autenticada, login, checkout, SignalR e workers não medidos. |
 | Dependências | Lock files NuGet, restore em `--locked-mode`, auditoria de pacotes transitivos e configuração semanal de Dependabot. | A auditoria local não retornou vulnerabilidades conhecidas na data da execução; atualizar a checagem antes de release. Dependabot só operará após o repositório ser hospedado com a funcionalidade habilitada. |
 | Inventário | `scripts/generate-sbom.ps1` gera CycloneDX 1.6, hashes SHA-512 de pacotes e digest SHA-256 do documento, ligado a commit/estado Git. | Saída em `artifacts/` ignorada; digest não é assinatura. Gerar novamente após o commit final e em cada release. |
-| DAST | `scripts/dast-passive.ps1` prepara ZAP Baseline em alvo local explícito, com imagem fixada por digest e relatório. | Apenas scan passivo; não foi executado porque Docker não está disponível. Scan ativo só em staging isolado, com autorização e escopo próprios. |
+| DAST | `scripts/dast-passive.ps1` executa ZAP Baseline em alvo local explícito, com imagem fixada por digest e relatório. | Scan público passivo executado em 28/09/2026; detalhes abaixo. Scan autenticado/ativo ainda pendente. |
+
+### Ensaio ZAP em Docker — 28/09/2026
+
+Docker Desktop Linux Engine 29.6.2; imagem oficial `ghcr.io/zaproxy/zaproxy@sha256:781a2bdaea47324e7bab583e2263f21d257b0aee61ed51521a5be45f5f5081ef`. API e Web foram executadas em `Development` por HTTP local, na Web em porta separada `5196`; nenhum banco ou contêiner de banco foi criado. A permissão adicional de Host para `host.docker.internal` existiu somente na variável de ambiente desse processo. O primeiro scan retornou apenas HTTP 400 por Host não permitido e foi descartado como inválido.
+
+No scan válido inicial, 28 URLs públicas produziram 0 FAIL e 5 WARN, incluindo um alerta **médio** de CSP: `connect-src` aceitava `ws:` e `wss:` para qualquer host. A política foi alterada para origens WebSocket exatas do próprio Host e das origens HTTP(S) já permitidas, com teste automatizado. O reteste percorreu 28 URLs, retornou **0 FAIL, 4 WARN e 63 PASS**; o alerta médio de CSP desapareceu. O código 2 do script reflete avisos ainda presentes, não aprovação irrestrita.
+
+Triagem dos quatro avisos restantes: `Cross-Origin-Embedder-Policy` ausente (baixo; decidir em HTTPS/staging com Google e vídeo, pois `require-corp` pode bloquear recursos entre origens); comentário de reconexão Blazor (informativo, texto de interface sem segredo); `no-store` em páginas públicas (informativo, política conservadora de cache); identificação de cookie de antifalsificação (informativo, esperado, `HttpOnly` e `SameSite`). Os relatórios JSON/HTML estão em `artifacts/dast/`, ignorados pelo Git. A abertura no navegador integrado e a interação com as preferências de cookies funcionaram sem erros no console após o endurecimento da CSP; isso não valida todos os fluxos SignalR autenticados.
 
 ## Portões de segurança
 
