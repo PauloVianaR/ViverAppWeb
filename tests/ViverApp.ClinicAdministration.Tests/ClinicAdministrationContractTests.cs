@@ -96,9 +96,15 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
             var email = $"sidebar-{Guid.NewGuid():N}@example.test";
             return new Account
             {
-                RoleCode = ViverAppRoles.Manager, StatusCode = "active", FullName = "Teste de navegação",
-                Email = email, NormalizedEmail = email.ToUpperInvariant(), EmailVerified = true,
-                SecurityStamp = RandomNumberGenerator.GetBytes(32), CreatedAtUtc = now, UpdatedAtUtc = now,
+                RoleCode = ViverAppRoles.Manager,
+                StatusCode = "active",
+                FullName = "Teste de navegação",
+                Email = email,
+                NormalizedEmail = email.ToUpperInvariant(),
+                EmailVerified = true,
+                SecurityStamp = RandomNumberGenerator.GetBytes(32),
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
                 RowVersion = 1,
             };
         }).ToArray();

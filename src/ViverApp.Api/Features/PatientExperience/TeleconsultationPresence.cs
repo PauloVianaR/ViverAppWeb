@@ -35,8 +35,11 @@ public sealed class TeleconsultationPresence(ViverAppDbContext database, TimePro
         if (existing.Length >= 4) throw new HubException("A sala atingiu o limite de quatro participantes.");
         database.TeleconsultationPeers.Add(new TeleconsultationPeer
         {
-            AppointmentId = appointmentId, AccountId = accountId, GuestId = guestId?.ToByteArray(),
-            ConnectionId = connectionId, ExpiresAtUtc = Now.AddSeconds(45)
+            AppointmentId = appointmentId,
+            AccountId = accountId,
+            GuestId = guestId?.ToByteArray(),
+            ConnectionId = connectionId,
+            ExpiresAtUtc = Now.AddSeconds(45)
         });
         await database.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);

@@ -61,15 +61,31 @@ function Assert-NoSecretsInSettings {
 Push-Location $repositoryRoot
 try {
     Assert-NoSecretsInSettings
+    Invoke-CheckedCommand dotnet @('restore', $solution, '--locked-mode', '--verbosity', 'quiet')
     Invoke-CheckedCommand dotnet @('build', $solution, '--configuration', 'Release', '--no-restore')
-    Invoke-CheckedCommand dotnet @('test', $solution, '--configuration', 'Release', '--no-build', '--no-restore')
+    Invoke-CheckedCommand dotnet @('test', $solution, '--configuration', 'Release', '--no-build', '--no-restore', '-m:1')
     Invoke-CheckedCommand dotnet @('format', $solution, '--verify-no-changes', '--no-restore')
     Invoke-CheckedCommand dotnet @('run', '--project', 'tools/ViverApp.Database', '--no-build', '--', 'status')
     Invoke-CheckedCommand dotnet @('run', '--project', 'tools/ViverApp.Database', '--no-build', '--', 'verify')
 
     if (-not $SkipDependencyAudit) {
-        Invoke-CheckedCommand dotnet @('list', $solution, 'package', '--vulnerable', '--include-transitive')
+        $auditJson = & dotnet package list --project $solution --vulnerable --include-transitive --no-restore --format json
+        if ($LASTEXITCODE -ne 0) { throw 'A auditoria NuGet não foi concluída.' }
+        $audit = ($auditJson -join "`n") | ConvertFrom-Json
+        if (-not $audit.projects -or -not $audit.sources) { throw 'A auditoria NuGet retornou resultado incompleto.' }
+        foreach ($project in $audit.projects) {
+            foreach ($framework in $project.frameworks) {
+                foreach ($package in @($framework.topLevelPackages) + @($framework.transitivePackages)) {
+                    if ($package -and $package.vulnerabilities -and $package.vulnerabilities.Count -gt 0) {
+                        throw "Dependência vulnerável em $($project.path): $($package.id)."
+                    }
+                }
+            }
+        }
     }
+
+    & (Join-Path $PSScriptRoot 'generate-sbom.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'A geração do SBOM falhou.' }
 
     Write-Host 'Baseline automatizada de segurança aprovada.'
 }

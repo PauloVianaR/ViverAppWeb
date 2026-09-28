@@ -40,6 +40,7 @@ internal static partial class Program
                 "bootstrap" => await BootstrapAsync(connectionSource, cancellationSource.Token),
                 "configure-target" => await ConfigureTargetAsync(connectionSource, cancellationSource.Token),
                 "status" => await ShowStatusAsync(connectionSource, cancellationSource.Token),
+                "analyze-hot-paths" => await AnalyzeHotPathsAsync(connectionSource, cancellationSource.Token),
                 "apply" => await ApplyAsync(connectionSource, cancellationSource.Token),
                 "verify" => await VerifyAsync(connectionSource, cancellationSource.Token),
                 _ => UnknownCommand(args[0]),
@@ -836,7 +837,7 @@ internal static partial class Program
 
     private static void PrintUsage()
     {
-        Console.WriteLine("Uso: dotnet run --project tools/ViverApp.Database -- <diagnose-configuration|inspect-legacy|snapshot-legacy-schema|bootstrap|configure-target|status|apply|verify>");
+        Console.WriteLine("Uso: dotnet run --project tools/ViverApp.Database -- <diagnose-configuration|inspect-legacy|snapshot-legacy-schema|bootstrap|configure-target|status|analyze-hot-paths|apply|verify>");
     }
 
     [GeneratedRegex("^(?<id>[0-9]{4})__(?<description>[a-z0-9_]+)\\.sql$", RegexOptions.CultureInvariant)]

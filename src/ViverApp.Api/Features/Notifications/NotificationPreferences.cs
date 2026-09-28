@@ -33,7 +33,8 @@ internal sealed class NotificationRuleFilter : IExceptionFilter
         {
             Status = error.StatusCode,
             Title = error.Message,
-        }) { StatusCode = error.StatusCode };
+        })
+        { StatusCode = error.StatusCode };
         context.ExceptionHandled = true;
     }
 }

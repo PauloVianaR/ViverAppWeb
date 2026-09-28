@@ -188,7 +188,8 @@ internal sealed class ReminderScheduler(ViverAppDbContext database, TimeProvider
                     Recipient = "administrator",
                     PayloadJson = JsonSerializer.Serialize(new
                     {
-                        deadLetters, oldestPendingMinutes = age,
+                        deadLetters,
+                        oldestPendingMinutes = age,
                     }),
                     StatusCode = "pending",
                     IdempotencyKey = idempotencyKey,

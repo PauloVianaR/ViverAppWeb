@@ -622,6 +622,8 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => new { e.PatientAccountId, e.StatusCode, e.StartsAtUtc }, "ix_appointments_patient_status");
 
+            entity.HasIndex(e => new { e.StartsAtUtc, e.Id }, "ix_appointments_start_id");
+
             entity.HasIndex(e => new { e.StatusCode, e.StartsAtUtc }, "ix_appointments_status_start");
 
             entity.HasIndex(e => new { e.ArrivalBusinessDate, e.ArrivalQueueNumber }, "ux_appointments_arrival_queue").IsUnique();

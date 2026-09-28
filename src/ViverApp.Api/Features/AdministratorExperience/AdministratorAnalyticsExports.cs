@@ -1,4 +1,5 @@
 using System.Data;
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -7,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
+using ViverApp.Api.Infrastructure.Observability;
 
 namespace ViverApp.Api.Features.AdministratorExperience;
 
@@ -114,13 +116,14 @@ public sealed class AdministratorAnalyticsExportService(
                     .SetProperty(x => x.LeaseUntilUtc, leaseUntil), ct);
         if (claimed == 0) return false;
         var item = await database.AdministratorAnalyticsExports.AsNoTracking().SingleAsync(x => x.Id == id, ct);
+        var watch = Stopwatch.StartNew();
         try
         {
             var data = await analytics.AnalyticsAsync(DateOnly.FromDateTime(item.PeriodFrom), DateOnly.FromDateTime(item.PeriodTo), ct);
             var content = RenderCsv(data);
             if (content.Length > 2_000_000) throw new InvalidOperationException("Exportação acima do tamanho permitido.");
             var protectedContent = protector.Protect(content);
-            await database.AdministratorAnalyticsExports.Where(x => x.Id == id && x.StatusCode == "processing" &&
+            var completed = await database.AdministratorAnalyticsExports.Where(x => x.Id == id && x.StatusCode == "processing" &&
                     x.AttemptCount == item.AttemptCount && x.LeaseUntilUtc == leaseUntil && x.ExpiresAtUtc > Now)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.StatusCode, "ready")
                     .SetProperty(x => x.ProtectedContent, protectedContent)
@@ -129,10 +132,12 @@ public sealed class AdministratorAnalyticsExportService(
                     .SetProperty(x => x.LeaseUntilUtc, (DateTime?)null)
                     .SetProperty(x => x.CompletedAtUtc, Now)
                     .SetProperty(x => x.ErrorCode, (string?)null), ct);
+            OperationalTelemetry.RecordAnalyticsExport(completed == 1, watch.Elapsed.TotalMilliseconds);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception exception)
         {
+            OperationalTelemetry.RecordAnalyticsExport(false, watch.Elapsed.TotalMilliseconds);
             logger.LogWarning(exception, "Falha ao gerar exportação analítica {ExportId}.", id);
             await database.AdministratorAnalyticsExports.Where(x => x.Id == id && x.StatusCode == "processing" &&
                     x.AttemptCount == item.AttemptCount && x.LeaseUntilUtc == leaseUntil)

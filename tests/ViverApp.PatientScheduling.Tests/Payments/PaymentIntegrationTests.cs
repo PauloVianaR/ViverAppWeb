@@ -14,6 +14,38 @@ namespace ViverApp.Payments.Tests;
 public sealed class PaymentIntegrationTests
 {
     [Fact]
+    public async Task Checkout_timeout_after_provider_acceptance_reuses_provider_idempotency_key()
+    {
+        var configuration = LoadConfiguration();
+        var fixture = await CreateFixtureAsync(configuration);
+        try
+        {
+            var provider = new TimeoutOncePagBankClient(fixture.UtcNow.UtcDateTime);
+            await using (var database = CreateContext(configuration))
+            {
+                var service = CreateService(database, provider, fixture.UtcNow);
+                await Assert.ThrowsAsync<TimeoutException>(() => service.CreateCheckoutAsync(
+                    fixture.PatientId, fixture.AppointmentId, $"timeout-{Guid.NewGuid():N}", CancellationToken.None));
+            }
+
+            await using (var database = CreateContext(configuration))
+            {
+                var service = CreateService(database, provider, fixture.UtcNow);
+                var recovered = await service.CreateCheckoutAsync(
+                    fixture.PatientId, fixture.AppointmentId, $"retry-{Guid.NewGuid():N}", CancellationToken.None);
+                Assert.False(recovered.Replayed);
+                Assert.Equal(2, provider.Keys.Count);
+                Assert.Equal(provider.Keys[0], provider.Keys[1]);
+                Assert.Single(await database.Payments.Where(x => x.AppointmentId == fixture.AppointmentId).ToListAsync());
+            }
+        }
+        finally
+        {
+            await DeleteFixtureAsync(configuration, fixture);
+        }
+    }
+
+    [Fact]
     public async Task Checkout_rejects_an_appointment_without_charge()
     {
         var configuration = LoadConfiguration();
@@ -309,5 +341,23 @@ public sealed class PaymentIntegrationTests
             throw new NotSupportedException();
         public Task<PagBankResource> RefundChargeAsync(string chargeId, long amountCents, string idempotencyKey, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class TimeoutOncePagBankClient(DateTime now) : IPagBankClient
+    {
+        public List<string> Keys { get; } = [];
+
+        public Task<PagBankResource> CreateCheckoutAsync(PagBankCheckoutCommand command, string idempotencyKey, CancellationToken cancellationToken)
+        {
+            Keys.Add(idempotencyKey);
+            if (Keys.Count == 1) throw new TimeoutException("Resposta perdida depois do aceite simulado.");
+            return Task.FromResult(new PagBankResource("CHEC_RECOVERED", command.ReferenceId, "ACTIVE",
+                new Uri("https://pagamento.pagseguro.uol.com.br/pagamento?code=recovered"), now,
+                command.ExpirationDate.UtcDateTime, command.UnitAmount, 0, "checkout"));
+        }
+
+        public Task<PagBankResource> GetCheckoutAsync(string checkoutId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<PagBankResource> InactivateCheckoutAsync(string checkoutId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<PagBankResource> RefundChargeAsync(string chargeId, long amountCents, string idempotencyKey, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 }

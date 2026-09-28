@@ -40,16 +40,21 @@ public sealed class PatientSchedulingConcurrencyTests
                 patient.RowVersion++;
                 database.AccountConsents.Add(new AccountConsent
                 {
-                    AccountId = fixture.PatientId, TermsVersion = "test",
-                    PrivacyVersion = "test", SourceCode = "local",
+                    AccountId = fixture.PatientId,
+                    TermsVersion = "test",
+                    PrivacyVersion = "test",
+                    SourceCode = "local",
                     AcceptedAtUtc = fixture.UtcNow.UtcDateTime,
                 });
                 database.ScheduledJobs.Add(new ScheduledJob
                 {
                     JobKey = $"appointment_reminder:{appointment.Id}:{appointment.StartsAtUtc.Ticks}",
-                    JobTypeCode = "appointment_reminder", AppointmentId = appointment.Id,
-                    DueAtUtc = fixture.UtcNow.UtcDateTime, StatusCode = "pending",
-                    AttemptCount = 0, MaxAttempts = 5,
+                    JobTypeCode = "appointment_reminder",
+                    AppointmentId = appointment.Id,
+                    DueAtUtc = fixture.UtcNow.UtcDateTime,
+                    StatusCode = "pending",
+                    AttemptCount = 0,
+                    MaxAttempts = 5,
                     NextAttemptAtUtc = fixture.UtcNow.UtcDateTime,
                     CreatedAtUtc = fixture.UtcNow.UtcDateTime,
                 });
@@ -104,9 +109,15 @@ public sealed class PatientSchedulingConcurrencyTests
             {
                 preference = new ProfessionalPreference
                 {
-                    ProfessionalAccountId = fixture.DoctorId, EmailEnabled = true, SmsEnabled = true,
-                    OnlineEnabled = true, MaxOnlineDaily = 8, MaxInPersonDaily = 16,
-                    AvailabilityMode = "variable", UpdatedAtUtc = now, RowVersion = 1,
+                    ProfessionalAccountId = fixture.DoctorId,
+                    EmailEnabled = true,
+                    SmsEnabled = true,
+                    OnlineEnabled = true,
+                    MaxOnlineDaily = 8,
+                    MaxInPersonDaily = 16,
+                    AvailabilityMode = "variable",
+                    UpdatedAtUtc = now,
+                    RowVersion = 1,
                 };
                 database.ProfessionalPreferences.Add(preference);
             }
@@ -115,8 +126,12 @@ public sealed class PatientSchedulingConcurrencyTests
             {
                 ProfessionalAccountId = fixture.DoctorId,
                 AvailableDate = fixture.LocalDate.ToDateTime(TimeOnly.MinValue),
-                StartTime = TimeSpan.FromHours(13), EndTime = TimeSpan.FromHours(14),
-                ModalityCode = "online", CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1,
+                StartTime = TimeSpan.FromHours(13),
+                EndTime = TimeSpan.FromHours(14),
+                ModalityCode = "online",
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+                RowVersion = 1,
             });
             await database.SaveChangesAsync();
             var service = new PatientSchedulingService(database, new NullAuditWriter(), new FixedTimeProvider(fixture.UtcNow));
@@ -242,9 +257,15 @@ public sealed class PatientSchedulingConcurrencyTests
             {
                 database.ProfessionalPreferences.Add(new ProfessionalPreference
                 {
-                    ProfessionalAccountId = fixture.DoctorId, EmailEnabled = true, SmsEnabled = true,
-                    OnlineEnabled = true, MaxOnlineDaily = 8, MaxInPersonDaily = 16,
-                    AvailabilityMode = "recurring", UpdatedAtUtc = fixture.UtcNow.UtcDateTime, RowVersion = 1,
+                    ProfessionalAccountId = fixture.DoctorId,
+                    EmailEnabled = true,
+                    SmsEnabled = true,
+                    OnlineEnabled = true,
+                    MaxOnlineDaily = 8,
+                    MaxInPersonDaily = 16,
+                    AvailabilityMode = "recurring",
+                    UpdatedAtUtc = fixture.UtcNow.UtcDateTime,
+                    RowVersion = 1,
                 });
                 await database.SaveChangesAsync();
             }

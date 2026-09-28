@@ -240,9 +240,14 @@ public sealed class ProfessionalAvailabilityPlanController(
             foreach (var interval in ordered)
                 database.ProfessionalVariableHours.Add(new ProfessionalVariableHour
                 {
-                    ProfessionalAccountId = professionalId, AvailableDate = date,
-                    StartTime = interval.StartsAt.ToTimeSpan(), EndTime = interval.EndsAt.ToTimeSpan(),
-                    ModalityCode = interval.ModalityCode, CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1,
+                    ProfessionalAccountId = professionalId,
+                    AvailableDate = date,
+                    StartTime = interval.StartsAt.ToTimeSpan(),
+                    EndTime = interval.EndsAt.ToTimeSpan(),
+                    ModalityCode = interval.ModalityCode,
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now,
+                    RowVersion = 1,
                 });
         preference.RowVersion++;
         preference.UpdatedAtUtc = now;
