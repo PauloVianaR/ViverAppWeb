@@ -19,6 +19,8 @@ using StackExchange.Redis;
 var builder = WebApplication.CreateBuilder(args);
 if (builder.Configuration.GetValue("Homologation:Enabled", false) && !builder.Environment.IsDevelopment())
     throw new InvalidOperationException("A homologação local só pode ser executada em Development.");
+if (!builder.Environment.IsDevelopment())
+    WindowsDocumentMalwareScanner.AssertProductionReady(builder.Configuration, builder.Environment.ContentRootPath);
 var allowInsecureLocalHttp = builder.Environment.IsDevelopment()
     && builder.Configuration.GetValue("Security:AllowInsecureLocalHttp", false);
 if (allowInsecureLocalHttp)

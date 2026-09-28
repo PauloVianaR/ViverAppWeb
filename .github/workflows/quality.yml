@@ -1,0 +1,55 @@
+name: Quality gate
+
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Restore locked dependencies
+        run: dotnet restore ViverApp.slnx --locked-mode
+      - name: Build
+        run: dotnet build ViverApp.slnx --configuration Release --no-restore
+      - name: Verify formatting
+        run: dotnet format ViverApp.slnx --verify-no-changes --no-restore
+      - name: Security, Web and Identity tests without database
+        shell: pwsh
+        run: |
+          $projects = @(
+            'tests/ViverApp.Security.Tests/ViverApp.Security.Tests.csproj',
+            'tests/ViverApp.Web.Tests/ViverApp.Web.Tests.csproj',
+            'tests/ViverApp.Identity.Tests/ViverApp.Identity.Tests.csproj'
+          )
+          foreach ($project in $projects) {
+            dotnet test $project --configuration Release --no-build --no-restore
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Dependency audit
+        shell: pwsh
+        run: |
+          $result = dotnet package list --project ViverApp.slnx --vulnerable --include-transitive --no-restore --format json | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not $result.projects -or -not $result.sources) { throw 'NuGet audit incomplete.' }
+          foreach ($project in $result.projects) {
+            foreach ($framework in $project.frameworks) {
+              foreach ($package in @($framework.topLevelPackages) + @($framework.transitivePackages)) {
+                if ($package -and $package.vulnerabilities -and $package.vulnerabilities.Count -gt 0) {
+                  throw "Vulnerable dependency: $($package.id)"
+                }
+              }
+            }
+          }
+      # Database suites must run separately against a persistent MySQL 8.0.41
+      # viverappweb instance. Do not silently replace it with a CI container.

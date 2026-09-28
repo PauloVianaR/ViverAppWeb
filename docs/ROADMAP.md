@@ -405,6 +405,8 @@ Cada fase deve:
 
 ## Fase 26 — Infraestrutura, Cloudflare e CI/CD
 
+**Estado:** em execução na branch `codex/fase-26-infraestrutura-cloudflare-cicd`. O destino será uma máquina física Windows Server com MySQL 8.0.41 local; ainda não está preparada. O pacote, os portões e o runbook estão em [Windows Server, IIS e Cloudflare](fase-26/WINDOWS-SERVER-IIS.md). Publicação e alterações externas aguardam o servidor real e validação específica.
+
 **Objetivo:** publicar sem Azure, com entrega repetível e origem protegida.
 
 **Entregas:**
