@@ -1,5 +1,9 @@
 namespace ViverApp.Web;
 
+public sealed record AdministratorAnalyticsExportData(ulong Id, DateOnly From, DateOnly To,
+    string Status, DateTime CreatedAtUtc, DateTime ExpiresAtUtc, uint? SizeBytes);
+public sealed record AdministratorDownloadResult(bool Ok, string? Error);
+
 public sealed record AdministratorHomeData(AdministratorCounters Counters, IReadOnlyList<AdministratorPendingProfessional> Pending, AdministratorHomeSources Sources, IReadOnlyList<ManagerAppointment> Today);
 public sealed record AdministratorCounters(int ActiveUsers, int TodayAppointments, int ActivePremium, int PendingApprovals, int PendingPayments, int UnreadNotifications);
 public sealed record AdministratorHomeSources(IReadOnlyList<string> ActiveUsers, IReadOnlyList<ulong> TodayAppointments,

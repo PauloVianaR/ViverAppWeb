@@ -26,6 +26,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="ViverApp.PatientScheduling.Tests" />
     <InternalsVisibleTo Include="ViverApp.ClinicalOperations.Tests" />
+    <InternalsVisibleTo Include="ViverApp.ClinicAdministration.Tests" />
   </ItemGroup>
 
 </Project>

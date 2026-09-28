@@ -94,6 +94,8 @@ builder.Services.AddScoped<DoctorExperienceExceptionFilter>();
 builder.Services.AddScoped<ManagerExperienceService>();
 builder.Services.AddScoped<ManagerExperienceExceptionFilter>();
 builder.Services.AddScoped<AdministratorExperienceService>();
+builder.Services.AddScoped<AdministratorAnalyticsExportService>();
+builder.Services.AddHostedService<AdministratorAnalyticsExportWorker>();
 builder.Services.AddScoped<AdministratorExceptionFilter>();
 builder.Services.AddScoped<AdministratorStepUpFilter>();
 builder.Services.AddScoped<PatientExperienceService>();

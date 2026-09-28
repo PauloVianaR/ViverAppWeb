@@ -1,0 +1,25 @@
+-- Fase 24. Aplicar somente em viverappweb / MySQL 8.0.41.
+CREATE TABLE administrator_analytics_exports (
+    id bigint unsigned NOT NULL AUTO_INCREMENT,
+    requested_by_account_id bigint unsigned NOT NULL,
+    period_from date NOT NULL,
+    period_to date NOT NULL,
+    status_code varchar(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'queued',
+    attempt_count smallint unsigned NOT NULL DEFAULT 0,
+    lease_until_utc datetime(6) NULL,
+    protected_content longblob NULL,
+    content_sha256 binary(32) NULL,
+    content_size_bytes int unsigned NULL,
+    error_code varchar(40) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    created_at_utc datetime(6) NOT NULL,
+    completed_at_utc datetime(6) NULL,
+    expires_at_utc datetime(6) NOT NULL,
+    PRIMARY KEY (id),
+    KEY ix_administrator_analytics_exports_claim (status_code, lease_until_utc, created_at_utc),
+    KEY ix_administrator_analytics_exports_owner (requested_by_account_id, created_at_utc),
+    CONSTRAINT fk_administrator_analytics_exports_account FOREIGN KEY (requested_by_account_id) REFERENCES accounts (id) ON DELETE RESTRICT,
+    CONSTRAINT ck_administrator_analytics_exports_period CHECK (period_to >= period_from),
+    CONSTRAINT ck_administrator_analytics_exports_status CHECK (status_code IN ('queued', 'processing', 'ready', 'failed', 'expired')),
+    CONSTRAINT ck_administrator_analytics_exports_attempt CHECK (attempt_count <= 3),
+    CONSTRAINT ck_administrator_analytics_exports_expiry CHECK (expires_at_utc > created_at_utc)
+) ENGINE=InnoDB;

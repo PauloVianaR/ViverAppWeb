@@ -13,6 +13,7 @@ namespace ViverApp.Api.Features.AdministratorExperience;
 public sealed class AdministratorExperienceService(ViverAppDbContext database, ManagerExperienceService manager,
     IdentityAuditWriter audit, TimeProvider timeProvider)
 {
+    private const int MetricSourcePreviewLimit = 100;
     private static readonly HashSet<string> EditableSettings = new(StringComparer.Ordinal)
     {
         "web.maintenance_mode", "web.desktop_sidebar_enabled", "appointments.allow_clinic_payment", "appointments.online_calls_enabled",
@@ -38,14 +39,21 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         var local = TimeZoneInfo.ConvertTimeFromUtc(now, timezone);
         var from = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(local.Date, DateTimeKind.Unspecified), timezone);
         var to = from.AddDays(1);
-        var activeUsers = await database.Accounts.AsNoTracking().Where(x => x.StatusCode == "active").OrderBy(x => x.FullName).Select(x => x.FullName).ToArrayAsync(ct);
-        var todayNumbers = await database.Appointments.AsNoTracking().Where(x => x.StartsAtUtc >= from && x.StartsAtUtc < to && x.StatusCode != "canceled" && x.InverseRescheduledFromAppointment == null).OrderBy(x => x.StartsAtUtc).Select(x => x.AppointmentNumber).ToArrayAsync(ct);
-        var activePremium = await database.PremiumMemberships.AsNoTracking().Where(x => x.StatusCode == "active" && x.StartsAtUtc <= now && (x.EndsAtUtc == null || x.EndsAtUtc > now)).OrderBy(x => x.Account.FullName).Select(x => x.Account.FullName).ToArrayAsync(ct);
-        var pendingApprovalNames = await database.Accounts.AsNoTracking().Where(x => x.StatusCode == "pending_approval" && (x.RoleCode == "doctor" || x.RoleCode == "psychologist" || x.RoleCode == "manager")).OrderBy(x => x.FullName).Select(x => x.FullName).ToArrayAsync(ct);
-        var pendingPaymentNumbers = await database.Payments.AsNoTracking().Where(x => x.StatusCode == "pending").OrderBy(x => x.AppointmentNavigation.AppointmentNumber).Select(x => x.AppointmentNavigation.AppointmentNumber).ToArrayAsync(ct);
-        var unreadNotifications = await database.AdministratorNotifications.AsNoTracking().Where(x => x.AdministratorAccountId == actor && x.ReadAtUtc == null && x.DismissedAtUtc == null).OrderByDescending(x => x.CreatedAtUtc).Select(x => x.Title).ToArrayAsync(ct);
-        var counters = new AdministratorCounters(activeUsers.Length, todayNumbers.Length, activePremium.Length,
-            pendingApprovalNames.Length, pendingPaymentNumbers.Length, unreadNotifications.Length);
+        var activeUsersQuery = database.Accounts.AsNoTracking().Where(x => x.StatusCode == "active");
+        var todayQuery = database.Appointments.AsNoTracking().Where(x => x.StartsAtUtc >= from && x.StartsAtUtc < to && x.StatusCode != "canceled" && x.InverseRescheduledFromAppointment == null);
+        var premiumQuery = database.PremiumMemberships.AsNoTracking().Where(x => x.StatusCode == "active" && x.StartsAtUtc <= now && (x.EndsAtUtc == null || x.EndsAtUtc > now));
+        var approvalsQuery = database.Accounts.AsNoTracking().Where(x => x.StatusCode == "pending_approval" && (x.RoleCode == "doctor" || x.RoleCode == "psychologist" || x.RoleCode == "manager"));
+        var paymentsQuery = database.Payments.AsNoTracking().Where(x => x.StatusCode == "pending");
+        var unreadQuery = database.AdministratorNotifications.AsNoTracking().Where(x => x.AdministratorAccountId == actor && x.ReadAtUtc == null && x.DismissedAtUtc == null);
+        var counters = new AdministratorCounters(await activeUsersQuery.CountAsync(ct), await todayQuery.CountAsync(ct),
+            await premiumQuery.CountAsync(ct), await approvalsQuery.CountAsync(ct), await paymentsQuery.CountAsync(ct),
+            await unreadQuery.CountAsync(ct));
+        var activeUsers = await activeUsersQuery.OrderBy(x => x.FullName).Select(x => x.FullName).Take(MetricSourcePreviewLimit).ToArrayAsync(ct);
+        var todayNumbers = await todayQuery.OrderBy(x => x.StartsAtUtc).Select(x => x.AppointmentNumber).Take(MetricSourcePreviewLimit).ToArrayAsync(ct);
+        var activePremium = await premiumQuery.OrderBy(x => x.Account.FullName).Select(x => x.Account.FullName).Take(MetricSourcePreviewLimit).ToArrayAsync(ct);
+        var pendingApprovalNames = await approvalsQuery.OrderBy(x => x.FullName).Select(x => x.FullName).Take(MetricSourcePreviewLimit).ToArrayAsync(ct);
+        var pendingPaymentNumbers = await paymentsQuery.OrderBy(x => x.AppointmentNavigation.AppointmentNumber).Select(x => x.AppointmentNavigation.AppointmentNumber).Take(MetricSourcePreviewLimit).ToArrayAsync(ct);
+        var unreadNotifications = await unreadQuery.OrderByDescending(x => x.CreatedAtUtc).Select(x => x.Title).Take(MetricSourcePreviewLimit).ToArrayAsync(ct);
         var sources = new AdministratorHomeSources(activeUsers, todayNumbers, activePremium, pendingApprovalNames, pendingPaymentNumbers, unreadNotifications);
         var pending = await database.Accounts.AsNoTracking().Include(x => x.ProfessionalProfile).ThenInclude(x => x!.ProfessionalSpecialties).ThenInclude(x => x.Specialty)
             .Where(x => x.StatusCode == "pending_approval" && (x.RoleCode == "doctor" || x.RoleCode == "psychologist" || x.RoleCode == "manager"))
@@ -79,11 +87,16 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
     public Task<ManagerPremiumRequestResponse> DecidePremiumAsync(ulong actor, ulong id, ManagerPremiumDecisionRequest request, CancellationToken ct) => manager.DecidePremiumAsync(actor, id, request, ct, true);
     public async Task<ManagerPremiumRequestResponse> CancelPremiumAsync(ulong actor, ulong id, AdministratorPremiumCancelRequest request, CancellationToken ct)
     {
-        var item = await database.PremiumMemberships.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new AdministratorRuleException(404, "Benefício Premium não encontrado.");
+        await using var transaction = database.Database.CurrentTransaction is null
+            ? await database.Database.BeginTransactionAsync(ct) : null;
+        var item = await database.PremiumMemberships.Include(x => x.Account).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new AdministratorRuleException(404, "Benefício Premium não encontrado.");
+        if (!string.Equals(request.ConfirmationText?.Trim(), item.Account.FullName, StringComparison.Ordinal))
+            throw new AdministratorRuleException(400, "Digite o nome completo do paciente para confirmar o cancelamento.");
         if (item.RowVersion != request.RowVersion) throw new AdministratorRuleException(409, "A solicitação foi alterada por outra sessão.");
         if (item.StatusCode != "active") throw new AdministratorRuleException(409, "Somente um benefício ativo pode ser cancelado.");
         item.StatusCode = "canceled"; item.EndsAtUtc = Now; item.UpdatedAtUtc = Now; item.ReviewedAtUtc = Now; item.ReviewedByAccountId = actor; item.RejectionReason = request.Reason.Trim(); item.RowVersion++;
         await database.SaveChangesAsync(ct); await audit.WriteAsync("administrator.premium.canceled", actor, "premium_membership", id.ToString(CultureInfo.InvariantCulture), new Dictionary<string, string> { { "before", "active" }, { "after", "canceled" }, { "reason", request.Reason.Trim() } }, ct);
+        if (transaction is not null) await transaction.CommitAsync(ct);
         return await manager.PremiumRequestAsync(id, ct);
     }
 
@@ -187,15 +200,25 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
     public async Task<AdministratorSettingResponse> UpdateSettingAsync(ulong actor, string key, AdministratorSettingUpdateRequest request, CancellationToken ct)
     {
         if (!EditableSettings.Contains(key)) throw new AdministratorRuleException(404, "Configuração não encontrada.");
+        await using var transaction = database.Database.CurrentTransaction is null
+            ? await database.Database.BeginTransactionAsync(ct) : null;
         var setting = await database.ApplicationSettings.SingleOrDefaultAsync(x => x.SettingKey == key && !x.IsSecret, ct)
             ?? throw new AdministratorRuleException(404, "Configuração não encontrada.");
         if (setting.RowVersion != request.RowVersion) throw new AdministratorRuleException(409, "A configuração foi alterada por outra sessão.");
         try { using var json = JsonDocument.Parse(request.ValueJson); ValidateSetting(key, json.RootElement); }
         catch (JsonException) { throw new AdministratorRuleException(400, "Informe um valor JSON válido e tipado."); }
+        if (key == "web.maintenance_mode" &&
+            JsonSerializer.Deserialize<bool>(request.ValueJson) != JsonSerializer.Deserialize<bool>(setting.ValueJson))
+        {
+            var phrase = JsonSerializer.Deserialize<bool>(request.ValueJson) ? "ATIVAR MANUTENCAO" : "DESATIVAR MANUTENCAO";
+            if (!string.Equals(request.ConfirmationText?.Trim(), phrase, StringComparison.Ordinal))
+                throw new AdministratorRuleException(400, $"Digite {phrase} para confirmar esta alteração.");
+        }
         var before = setting.ValueJson; setting.ValueJson = request.ValueJson; setting.UpdatedAtUtc = Now; setting.UpdatedByAccountId = actor; setting.RowVersion++;
         await database.SaveChangesAsync(ct);
         await audit.WriteAsync("administrator.setting.updated", actor, "application_setting", key,
             new Dictionary<string, string> { ["before"] = before, ["after"] = setting.ValueJson }, ct);
+        if (transaction is not null) await transaction.CommitAsync(ct);
         return new(setting.SettingKey, setting.ValueJson, setting.Description, setting.UpdatedAtUtc, setting.RowVersion);
     }
 
@@ -203,10 +226,13 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         .OrderBy(x => x.Name).Select(x => new AdministratorPremiumPlanResponse(x.Id, x.Name, x.AppointmentDiscountPercent, x.ValidityDays, x.IsActive, x.RowVersion)).ToListAsync(ct);
     public async Task<AdministratorPremiumPlanResponse> UpdatePremiumPlanAsync(ulong actor, uint id, AdministratorPremiumPlanUpdateRequest request, CancellationToken ct)
     {
+        await using var transaction = database.Database.CurrentTransaction is null
+            ? await database.Database.BeginTransactionAsync(ct) : null;
         var plan = await database.PremiumPlans.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new AdministratorRuleException(404, "Plano Premium não encontrado.");
         if (plan.RowVersion != request.RowVersion) throw new AdministratorRuleException(409, "O plano foi alterado por outra sessão.");
         var before = $"{plan.AppointmentDiscountPercent}:{plan.ValidityDays}:{plan.IsActive}"; plan.AppointmentDiscountPercent = request.AppointmentDiscountPercent; plan.ValidityDays = request.ValidityDays; plan.IsActive = request.IsActive; plan.UpdatedAtUtc = Now; plan.RowVersion++;
         await database.SaveChangesAsync(ct); await audit.WriteAsync("administrator.premium_plan.updated", actor, "premium_plan", id.ToString(CultureInfo.InvariantCulture), new Dictionary<string, string> { { "before", before }, { "after", $"{plan.AppointmentDiscountPercent}:{plan.ValidityDays}:{plan.IsActive}" } }, ct);
+        if (transaction is not null) await transaction.CommitAsync(ct);
         return new(plan.Id, plan.Name, plan.AppointmentDiscountPercent, plan.ValidityDays, plan.IsActive, plan.RowVersion);
     }
 
@@ -219,12 +245,17 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         if (read == "read") query = query.Where(x => x.ReadAtUtc != null); else if (read == "unread") query = query.Where(x => x.ReadAtUtc == null);
         var items = await query.OrderByDescending(x => x.CreatedAtUtc).Take(100).Select(x => new AdministratorNotificationResponse(x.Id, x.TypeCode,
             x.SeverityCode, x.Title, x.Message, x.EntityType, x.EntityId, x.ReadAtUtc != null, x.CreatedAtUtc, x.RowVersion)).ToListAsync(ct);
-        var pendingPayments = await database.Payments.AsNoTracking().Where(x => x.StatusCode == "pending").OrderBy(x => x.AppointmentNavigation.AppointmentNumber).Select(x => x.AppointmentNavigation.AppointmentNumber).ToArrayAsync(ct);
-        var unread = await database.AdministratorNotifications.AsNoTracking().Where(x => x.AdministratorAccountId == actor && x.DismissedAtUtc == null && x.ReadAtUtc == null).OrderByDescending(x => x.CreatedAtUtc).Select(x => x.Title).ToArrayAsync(ct);
-        var high = await database.AdministratorNotifications.AsNoTracking().Where(x => x.AdministratorAccountId == actor && x.DismissedAtUtc == null && x.SeverityCode == "high").OrderByDescending(x => x.CreatedAtUtc).Select(x => x.Title).ToArrayAsync(ct);
-        var approvals = await database.Accounts.AsNoTracking().Where(x => x.StatusCode == "pending_approval" && (x.RoleCode == "doctor" || x.RoleCode == "psychologist" || x.RoleCode == "manager")).OrderBy(x => x.FullName).Select(x => x.FullName).ToArrayAsync(ct);
+        var paymentQuery = database.Payments.AsNoTracking().Where(x => x.StatusCode == "pending");
+        var unreadQuery = database.AdministratorNotifications.AsNoTracking().Where(x => x.AdministratorAccountId == actor && x.DismissedAtUtc == null && x.ReadAtUtc == null);
+        var highQuery = database.AdministratorNotifications.AsNoTracking().Where(x => x.AdministratorAccountId == actor && x.DismissedAtUtc == null && x.SeverityCode == "high");
+        var approvalsQuery = database.Accounts.AsNoTracking().Where(x => x.StatusCode == "pending_approval" && (x.RoleCode == "doctor" || x.RoleCode == "psychologist" || x.RoleCode == "manager"));
+        var counters = new AdministratorNotificationCounters(await paymentQuery.CountAsync(ct), await unreadQuery.CountAsync(ct),
+            await highQuery.CountAsync(ct), await approvalsQuery.CountAsync(ct));
+        var pendingPayments = await paymentQuery.OrderBy(x => x.AppointmentNavigation.AppointmentNumber).Select(x => x.AppointmentNavigation.AppointmentNumber).Take(MetricSourcePreviewLimit).ToArrayAsync(ct);
+        var unread = await unreadQuery.OrderByDescending(x => x.CreatedAtUtc).Select(x => x.Title).Take(MetricSourcePreviewLimit).ToArrayAsync(ct);
+        var high = await highQuery.OrderByDescending(x => x.CreatedAtUtc).Select(x => x.Title).Take(MetricSourcePreviewLimit).ToArrayAsync(ct);
+        var approvals = await approvalsQuery.OrderBy(x => x.FullName).Select(x => x.FullName).Take(MetricSourcePreviewLimit).ToArrayAsync(ct);
         var sources = new AdministratorNotificationSources(pendingPayments, unread, high, approvals);
-        var counters = new AdministratorNotificationCounters(pendingPayments.Length, unread.Length, high.Length, approvals.Length);
         return new(counters, sources, items);
     }
 
@@ -288,6 +319,8 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
 
     public async Task SetAccountStatusAsync(ulong actor, ulong id, AdministratorAccountStatusRequest request, CancellationToken ct)
     {
+        await using var transaction = database.Database.CurrentTransaction is null
+            ? await database.Database.BeginTransactionAsync(ct) : null;
         var account = await database.Accounts.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new AdministratorRuleException(404, "Usuário não encontrado.");
         if (request.DecisionCode == "blocked" && (request.Reason?.Trim().Length ?? 0) < 5) throw new AdministratorRuleException(400, "Informe uma justificativa com pelo menos cinco caracteres.");
         if (account.RoleCode == ViverAppRoles.Administrator && request.DecisionCode == "blocked")
@@ -296,12 +329,15 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
             if (await database.Accounts.CountAsync(x => x.RoleCode == ViverAppRoles.Administrator && x.StatusCode == "active", ct) <= 1)
                 throw new AdministratorRuleException(409, "O último Administrador recuperável não pode ser bloqueado.");
         }
+        if (!string.Equals(request.ConfirmationText?.Trim(), account.FullName, StringComparison.Ordinal))
+            throw new AdministratorRuleException(400, "Digite o nome completo da conta para confirmar a alteração.");
         if (account.RowVersion != request.RowVersion) throw new AdministratorRuleException(409, "Os dados foram alterados por outra sessão.");
         var expected = request.DecisionCode == "blocked" ? "active" : "blocked"; if (account.StatusCode != expected) throw new AdministratorRuleException(409, "A mudança não é válida para o estado atual.");
         var before = account.StatusCode; account.StatusCode = request.DecisionCode == "blocked" ? "blocked" : "active"; account.UpdatedAtUtc = Now; account.RowVersion++;
         if (account.StatusCode == "blocked") await database.AuthSessions.Where(x => x.AccountId == id && x.RevokedAtUtc == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAtUtc, Now).SetProperty(x => x.RevokeReasonCode, "account_status"), ct);
         await database.SaveChangesAsync(ct); await audit.WriteAsync("administrator.user.status_changed", actor, "account", id.ToString(CultureInfo.InvariantCulture),
             new Dictionary<string, string> { ["before"] = before, ["after"] = account.StatusCode, ["reason"] = request.Reason?.Trim() ?? "" }, ct);
+        if (transaction is not null) await transaction.CommitAsync(ct);
     }
 
     public async Task SetDoctorOnlineAsync(ulong actor, ulong id, AdministratorDoctorOnlineRequest request, CancellationToken ct)

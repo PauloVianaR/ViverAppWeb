@@ -61,6 +61,8 @@ public partial class Account
 
     public virtual AccountUiPreference? AccountUiPreference { get; set; }
 
+    public virtual ICollection<AdministratorAnalyticsExport> AdministratorAnalyticsExports { get; set; } = new List<AdministratorAnalyticsExport>();
+
     public virtual ICollection<AdministratorNotification> AdministratorNotifications { get; set; } = new List<AdministratorNotification>();
 
     public virtual ICollection<ApplicationSetting> ApplicationSettings { get; set; } = new List<ApplicationSetting>();

@@ -40,18 +40,20 @@ public sealed record AdministratorDoctorAccessResponse(ulong AccountId, string F
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AdministratorSettingUpdateRequest([param: Required, StringLength(2000)] string ValueJson,
-    [param: Range(1, long.MaxValue)] ulong RowVersion);
+    [param: Range(1, long.MaxValue)] ulong RowVersion,
+    [param: StringLength(40)] string? ConfirmationText = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AdministratorPremiumPlanUpdateRequest([param: Range(typeof(decimal), "0", "100",
     ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal AppointmentDiscountPercent,
     [param: Range(1, 3650)] ushort? ValidityDays, bool IsActive, [param: Range(1, long.MaxValue)] ulong RowVersion);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AdministratorAccountStatusRequest([param: Required, RegularExpression("^(blocked|reactivated)$")] string DecisionCode,
-    [param: StringLength(500)] string? Reason, [param: Range(1, long.MaxValue)] ulong RowVersion);
+    [param: StringLength(500)] string? Reason, [param: Range(1, long.MaxValue)] ulong RowVersion,
+    [param: StringLength(200)] string? ConfirmationText = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AdministratorDoctorOnlineRequest(bool Enabled, [param: Range(1, long.MaxValue)] ulong RowVersion);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AdministratorNotificationUpdateRequest([param: Range(1, long.MaxValue)] ulong RowVersion);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AdministratorPremiumCancelRequest([param: Required, StringLength(500, MinimumLength = 5)] string Reason,
-    [param: Range(1, long.MaxValue)] ulong RowVersion);
+    [param: Range(1, long.MaxValue)] ulong RowVersion, [param: StringLength(200)] string? ConfirmationText = null);

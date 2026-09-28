@@ -4,12 +4,17 @@
         <div><p class="eyebrow">Origem do indicador</p><h2>@Title</h2></div>
         @if (Items.Count == 0) { <p>Nenhum registro compõe este total.</p> }
         else { <ul class="metric-drilldown__list">@foreach (var item in Items) { <li>@item</li> }</ul> }
+        @if (TotalCount is int total && total > Items.Count)
+        {
+            <p>Exibindo os primeiros @Items.Count de @total registros. Use a área correspondente para consultar os demais.</p>
+        }
         <button class="button button--secondary button--small" type="button" @onclick="Close">Fechar detalhamento</button>
     </section>
 }
 @code {
     [Parameter] public string Title { get; set; } = "Detalhamento";
     [Parameter] public IReadOnlyList<string>? Items { get; set; }
+    [Parameter] public int? TotalCount { get; set; }
     [Parameter] public EventCallback Close { get; set; }
     [Parameter] public int MobileAfterCard { get; set; } = 100;
     private int MobileOrder => MobileAfterCard * 10 + 5;

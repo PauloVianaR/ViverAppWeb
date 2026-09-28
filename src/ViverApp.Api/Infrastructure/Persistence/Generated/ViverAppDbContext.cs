@@ -28,6 +28,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<AccountUiPreference> AccountUiPreferences { get; set; }
 
+    public virtual DbSet<AdministratorAnalyticsExport> AdministratorAnalyticsExports { get; set; }
+
     public virtual DbSet<AdministratorNotification> AdministratorNotifications { get; set; }
 
     public virtual DbSet<ApplicationSetting> ApplicationSettings { get; set; }
@@ -456,6 +458,57 @@ public partial class ViverAppDbContext : DbContext
             entity.HasOne(d => d.Account).WithOne(p => p.AccountUiPreference)
                 .HasForeignKey<AccountUiPreference>(d => d.AccountId)
                 .HasConstraintName("fk_account_ui_preferences_account");
+        });
+
+        modelBuilder.Entity<AdministratorAnalyticsExport>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("administrator_analytics_exports");
+
+            entity.HasIndex(e => new { e.StatusCode, e.LeaseUntilUtc, e.CreatedAtUtc }, "ix_administrator_analytics_exports_claim");
+
+            entity.HasIndex(e => new { e.RequestedByAccountId, e.CreatedAtUtc }, "ix_administrator_analytics_exports_owner");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AttemptCount).HasColumnName("attempt_count");
+            entity.Property(e => e.CompletedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("completed_at_utc");
+            entity.Property(e => e.ContentSha256)
+                .HasMaxLength(32)
+                .IsFixedLength()
+                .HasColumnName("content_sha256");
+            entity.Property(e => e.ContentSizeBytes).HasColumnName("content_size_bytes");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.ErrorCode)
+                .HasMaxLength(40)
+                .HasColumnName("error_code");
+            entity.Property(e => e.ExpiresAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("expires_at_utc");
+            entity.Property(e => e.LeaseUntilUtc)
+                .HasMaxLength(6)
+                .HasColumnName("lease_until_utc");
+            entity.Property(e => e.PeriodFrom)
+                .HasColumnType("date")
+                .HasColumnName("period_from");
+            entity.Property(e => e.PeriodTo)
+                .HasColumnType("date")
+                .HasColumnName("period_to");
+            entity.Property(e => e.ProtectedContent).HasColumnName("protected_content");
+            entity.Property(e => e.RequestedByAccountId).HasColumnName("requested_by_account_id");
+            entity.Property(e => e.StatusCode)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'queued'")
+                .HasColumnName("status_code");
+
+            entity.HasOne(d => d.RequestedByAccount).WithMany(p => p.AdministratorAnalyticsExports)
+                .HasForeignKey(d => d.RequestedByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_administrator_analytics_exports_account");
         });
 
         modelBuilder.Entity<AdministratorNotification>(entity =>

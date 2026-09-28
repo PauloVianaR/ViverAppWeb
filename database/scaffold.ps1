@@ -92,6 +92,7 @@ $tables = @(
     'teleconsultation_peers'
     'teleconsultation_guest_links'
     'administrator_notifications'
+    'administrator_analytics_exports'
 )
 
 $arguments = @(

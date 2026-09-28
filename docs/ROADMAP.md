@@ -370,6 +370,8 @@ Cada fase deve:
 
 **Objetivo:** endurecer o backoffice e os analytics funcionais da Fase 14 com controles elevados e recursos de operação de produção.
 
+**Implementação e validação:** [Administração, analytics e operação](fase-24/IMPLEMENTACAO.md). Implementação exclusiva da branch `codex/fase-24-administracao-analytics-operacao`.
+
 **Entregas:**
 
 - gestão de usuários, da clínica única, agendamentos, premium e notificações;
