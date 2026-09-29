@@ -197,8 +197,8 @@ public sealed class CatalogController(
         }
 
         var total = await query.CountAsync(cancellationToken);
-        var entities = await query.OrderBy(item => item.DisplayOrder)
-            .ThenBy(item => item.Name)
+        var entities = await query.OrderBy(item => item.Name)
+            .ThenBy(item => item.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
@@ -221,6 +221,30 @@ public sealed class CatalogController(
         [FromBody] AppointmentTypeWriteRequest request,
         CancellationToken cancellationToken)
     {
+        var professionalIds = request.ProfessionalAccountIds?.Distinct().ToArray() ?? [];
+        if (professionalIds.Length > 0 && User.IsInRole(ViverAppRoles.Manager))
+        {
+            var permission = await database.ApplicationSettings.AsNoTracking()
+                .Where(item => item.SettingKey == "manager.professional_services_enabled")
+                .Select(item => item.ValueJson).SingleOrDefaultAsync(cancellationToken);
+            if (permission is null || !ManagerFeatureGateFilter.TryReadBoolean(permission, out var allowed) || !allowed)
+                return Problem(statusCode: StatusCodes.Status403Forbidden,
+                    title: "O vínculo de profissionais está desabilitado para o Gestor.");
+        }
+        if (professionalIds.Length > 0)
+        {
+            var validCount = await database.ProfessionalProfiles.AsNoTracking()
+                .CountAsync(profile => professionalIds.Contains(profile.AccountId)
+                    && profile.Account.StatusCode == "active"
+                    && (profile.Account.RoleCode == ViverAppRoles.Doctor
+                        || profile.Account.RoleCode == ViverAppRoles.Psychologist), cancellationToken);
+            if (validCount != professionalIds.Length)
+            {
+                ModelState.AddModelError(nameof(request.ProfessionalAccountIds),
+                    "Selecione apenas médicos ou psicólogos ativos.");
+                return ValidationProblem(ModelState);
+            }
+        }
         if (request.RequiresPayment && request.PriceAmount <= 0)
         {
             ModelState.AddModelError(nameof(request.PriceAmount), "Informe um preço maior que zero para um atendimento cobrado.");
@@ -249,14 +273,48 @@ public sealed class CatalogController(
             UpdatedAtUtc = now,
             RowVersion = 1,
         };
+        await using var transaction = database.Database.CurrentTransaction is null
+            ? await database.Database.BeginTransactionAsync(cancellationToken) : null;
         database.AppointmentTypes.Add(entity);
         if (!await TrySave(cancellationToken))
         {
             return ConflictProblem("Não foi possível cadastrar o tipo de atendimento.");
         }
 
+        foreach (var professionalId in professionalIds)
+            database.ProfessionalServices.Add(new ProfessionalService
+            {
+                ProfessionalAccountId = professionalId,
+                AppointmentTypeId = entity.Id,
+                IsActive = true,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+                RowVersion = 1,
+            });
+        if (professionalIds.Length > 0 && !await TrySave(cancellationToken))
+            return ConflictProblem("Não foi possível vincular os profissionais. O tipo não foi cadastrado.");
+        if (transaction is not null) await transaction.CommitAsync(cancellationToken);
+
         await Audit("catalog.appointment_type.created", "appointment_type", entity.Id.ToString(), cancellationToken);
         return CreatedAtAction(nameof(GetAppointmentTypes), ToResponse(entity));
+    }
+
+    [HttpGet("professionals")]
+    [Authorize(Policy = ViverAppPolicies.Management)]
+    [ManagerFeatureGate("manager.professional_services_enabled")]
+    public async Task<ActionResult<IReadOnlyList<AppointmentTypeProfessionalResponse>>> GetProfessionals(
+        CancellationToken cancellationToken)
+    {
+        var professionals = await database.ProfessionalProfiles.AsNoTracking()
+            .Where(profile => profile.Account.StatusCode == "active"
+                && (profile.Account.RoleCode == ViverAppRoles.Doctor
+                    || profile.Account.RoleCode == ViverAppRoles.Psychologist))
+            .OrderBy(profile => profile.Account.FullName)
+            .Select(profile => new AppointmentTypeProfessionalResponse(
+                profile.AccountId, profile.Account.FullName, profile.Account.RoleCode,
+                profile.LicenseTypeCode + " " + profile.LicenseStateCode + " " + profile.LicenseNumber, false))
+            .ToArrayAsync(cancellationToken);
+        return Ok(professionals);
     }
 
     [HttpPut("appointment-types/{id}")]

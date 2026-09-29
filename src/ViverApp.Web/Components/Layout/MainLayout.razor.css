@@ -1,5 +1,17 @@
 .app-shell { min-height: 100dvh; }
 
+@media print {
+    .app-shell--desktop-new .shell-body,
+    .app-shell--desktop-new.app-shell--sidebar-collapsed .shell-body {
+        display: block !important;
+        grid-template-columns: none !important;
+        max-width: none !important;
+        width: 100% !important;
+    }
+    .app-shell--desktop-new .page-container { padding: 0 !important; margin: 0 !important; }
+    ::deep .desktop-sidebar { display: none !important; }
+}
+
 .skip-link {
     background: var(--color-brand-strong);
     border-radius: 0 0 var(--radius-md) 0;

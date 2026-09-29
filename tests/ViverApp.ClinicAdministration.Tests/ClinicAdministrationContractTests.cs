@@ -89,6 +89,7 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
     [InlineData("/api/v1/clinic")]
     [InlineData("/api/v1/catalog/specialties")]
     [InlineData("/api/v1/catalog/appointment-types")]
+    [InlineData("/api/v1/catalog/professionals")]
     [InlineData("/api/v1/catalog/appointment-types/1/professionals")]
     [InlineData("/api/v1/professionals")]
     [InlineData("/api/v1/professionals/1/availability-plan?from=2026-09-01&to=2026-09-30")]
@@ -473,6 +474,50 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
                 .Select(item => item.EventCode)
                 .ToListAsync(),
             eventCode => eventCode == "catalog.specialty.deactivated");
+
+        var clinician = new Account
+        {
+            RoleCode = ViverAppRoles.Psychologist,
+            StatusCode = "active",
+            FullName = "Psicóloga de teste",
+            Email = $"clinician-{Guid.NewGuid():N}@example.test",
+            NormalizedEmail = $"CLINICIAN-{Guid.NewGuid():N}@EXAMPLE.TEST",
+            EmailVerified = true,
+            SecurityStamp = RandomNumberGenerator.GetBytes(32),
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        };
+        database.Accounts.Add(clinician);
+        await database.SaveChangesAsync();
+        database.ProfessionalProfiles.Add(new ProfessionalProfile
+        {
+            AccountId = clinician.Id,
+            LicenseTypeCode = "CRP",
+            LicenseStateCode = "MG",
+            LicenseNumber = "TESTE-26",
+            DefaultAppointmentDurationMinutes = 10,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        });
+        await database.SaveChangesAsync();
+        var serviceCreated = await controller.CreateAppointmentType(
+            new AppointmentTypeWriteRequest($"Serviço {Guid.NewGuid():N}", null, "in_person", 30,
+                120m, true, 0, 0, "consultation", true, [clinician.Id]), CancellationToken.None);
+        var service = Assert.IsType<AppointmentTypeResponse>(Assert.IsType<CreatedAtActionResult>(serviceCreated.Result).Value);
+        Assert.True(await database.ProfessionalServices.AsNoTracking().AnyAsync(link =>
+            link.AppointmentTypeId == service.Id && link.ProfessionalAccountId == clinician.Id && link.IsActive));
+        var linked = await controller.GetAppointmentTypeProfessionals(service.Id, CancellationToken.None);
+        Assert.Contains(Assert.IsType<OkObjectResult>(linked.Result).Value as IReadOnlyList<AppointmentTypeProfessionalResponse> ?? [],
+            item => item.ProfessionalAccountId == clinician.Id && item.Linked);
+        var invalidName = $"Serviço inválido {Guid.NewGuid():N}";
+        var invalid = await controller.CreateAppointmentType(
+            new AppointmentTypeWriteRequest(invalidName, null, "in_person", 30,
+                120m, true, 0, 0, "consultation", true, [ulong.MaxValue]), CancellationToken.None);
+        var invalidProblem = Assert.IsType<ValidationProblemDetails>(Assert.IsAssignableFrom<ObjectResult>(invalid.Result).Value);
+        Assert.Contains(nameof(AppointmentTypeWriteRequest.ProfessionalAccountIds), invalidProblem.Errors.Keys);
+        Assert.False(await database.AppointmentTypes.AsNoTracking().AnyAsync(item => item.Name == invalidName));
 
         await transaction.RollbackAsync();
     }

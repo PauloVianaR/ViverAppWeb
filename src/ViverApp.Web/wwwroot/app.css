@@ -81,7 +81,7 @@
 @media(max-width:46rem){.cash-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media print{
 html,body{width:100%;min-height:0!important;background:#fff!important}
-.skip-link,.topbar,.sidebar,.mobile-navigation,.arrival-toast,#blazor-error-ui,.cash-no-print,.cash-print-area,.cash-summary,dialog{display:none!important}
+.skip-link,.topbar,.sidebar,.desktop-sidebar,.mobile-navigation,.arrival-toast,#blazor-error-ui,.cash-no-print,.cash-print-area,.cash-summary,.site-footer,dialog{display:none!important}
 .app-shell,.shell-body{display:block!important;min-height:0!important;background:#fff!important}
 .page-container{display:block!important;width:100%!important;max-width:none!important;min-height:0!important;margin:0!important;padding:0!important}
 .page-container>*:not(.cash-print-document){display:none!important}

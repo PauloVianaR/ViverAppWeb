@@ -92,7 +92,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
                 x.LicenseTypeCode + " " + x.LicenseStateCode + " " + x.LicenseNumber)).ToArrayAsync(ct);
 
     public async Task<IReadOnlyList<ManagerServiceOption>> ServicesAsync(CancellationToken ct) =>
-        await database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name)
+        await database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).ThenBy(x => x.Id)
             .Select(x => new ManagerServiceOption(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode, x.DurationMinutes, x.PriceAmount, x.RequiresPayment)).ToArrayAsync(ct);
 
     public async Task<ManagerAgendaResponse> AgendaAsync(DateOnly from, DateOnly to, string? status, string? modality,
@@ -464,7 +464,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
             h.PreviousStartsAtUtc, h.PreviousEndsAtUtc, h.NewStartsAtUtc, h.NewEndsAtUtc, h.Reason, h.OccurredAtUtc)).ToArray(),
         x.ModalityCode == "in_person" && x.StatusCode == "confirmed", x.StatusCode == "arrived", x.StatusCode is "pending" or "confirmed", x.StatusCode is "pending" or "confirmed",
         x.StatusCode is "confirmed" or "arrived" or "in_progress", x.StatusCode == "completed",
-        x.RequiresPayment && x.CurrentPayment?.StatusCode == "paid" && x.StatusCode is ("confirmed" or "arrived"),
+        x.RequiresPayment && x.CurrentPayment?.StatusCode == "paid" && x.StatusCode is ("confirmed" or "arrived" or "no_show"),
         x.RequiresPayment && x.ModalityCode == "in_person" && x.PaymentLocationCode == "clinic" && x.StatusCode is "pending" or "confirmed" && x.CurrentPayment?.StatusCode is not ("paid" or "reversal_pending"), x.RowVersion);
     private static ManagerProfileResponse MapProfile(Account x) => new(x.Id, x.FullName, x.Email, x.PhoneE164, x.TaxId, x.EmailVerified, x.PhoneVerified,
         x.ManagerPreference?.EmailEnabled ?? true, x.ManagerPreference?.SmsEnabled ?? true, x.RowVersion, x.ManagerPreference?.RowVersion ?? 1);

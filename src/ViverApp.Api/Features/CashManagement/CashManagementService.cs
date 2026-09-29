@@ -257,7 +257,10 @@ public sealed class CashManagementService(
         if (replay is not null)
         {
             if (transaction is not null) await transaction.CommitAsync(cancellationToken);
-            return MapReversal(replay);
+            var replayAppointmentStatus = await database.Appointments.AsNoTracking()
+                .Where(item => item.Id == replay.Payment.AppointmentId)
+                .Select(item => item.StatusCode).SingleAsync(cancellationToken);
+            return MapReversal(replay, replayAppointmentStatus);
         }
 
         var payment = await database.Payments.FromSqlInterpolated($"SELECT * FROM payments WHERE id={paymentId} FOR UPDATE")
@@ -267,8 +270,8 @@ public sealed class CashManagementService(
         if (payment.RowVersion != request.RowVersion) throw Conflict("O pagamento foi alterado por outra sessão.");
         if (appointment.CurrentPaymentId != payment.Id || payment.StatusCode != "paid")
             throw Conflict("Somente o pagamento quitado atual pode ser cancelado.");
-        if (appointment.StatusCode is not ("confirmed" or "arrived"))
-            throw Conflict("O pagamento só pode ser cancelado enquanto o atendimento estiver confirmado ou com a chegada registrada.");
+        if (appointment.StatusCode is not ("confirmed" or "arrived" or "no_show"))
+            throw Conflict("O pagamento só pode ser cancelado em atendimento confirmado, com chegada registrada ou marcado como não compareceu.");
         var operationalDate = await OperationalDateAsync(clock.GetUtcNow().UtcDateTime, cancellationToken);
         if (await IsClosedAsync(operationalDate, cancellationToken))
             throw Conflict("O caixa de hoje está fechado. Reabra-o antes de cancelar um pagamento.");
@@ -317,7 +320,7 @@ public sealed class CashManagementService(
         }
 
         var previousAppointmentStatus = appointment.StatusCode;
-        if (previousAppointmentStatus != "pending")
+        if (previousAppointmentStatus is "confirmed" or "arrived")
         {
             appointment.StatusCode = "pending";
             appointment.ArrivedAtUtc = null;
@@ -357,7 +360,9 @@ public sealed class CashManagementService(
             PaymentId = payment.Id,
             RelatedMovementId = original.Id,
             ResponsibleAccountId = actor,
-            Description = $"Cancelamento do pagamento do atendimento {appointment.AppointmentNumber}",
+            Description = previousAppointmentStatus == "no_show"
+                ? $"Estorno ao paciente do atendimento {appointment.AppointmentNumber} por não comparecimento"
+                : $"Cancelamento do pagamento do atendimento {appointment.AppointmentNumber}",
             Reason = reason,
             IdempotencyKey = $"payment-reversal-{reversal.Id}",
             OccurredAtUtc = now,
@@ -384,7 +389,7 @@ public sealed class CashManagementService(
                 ["previousAppointmentStatus"] = previousAppointmentStatus,
                 ["newAppointmentStatus"] = appointment.StatusCode
             }, cancellationToken);
-        return MapReversal(reversal);
+        return MapReversal(reversal, appointment.StatusCode);
     }
 
     public async Task RecordPaymentReceivedAsync(Payment payment, ulong? actor, DateTime occurredAtUtc, CancellationToken cancellationToken)
@@ -489,8 +494,9 @@ public sealed class CashManagementService(
         item.Payment?.CardLastFour, item.Payment?.AuthorizationReference, item.Description,
         item.Reason, DateTime.SpecifyKind(item.OccurredAtUtc, DateTimeKind.Utc), item.AfterClosure);
 
-    private static PaymentReversalResponse MapReversal(PaymentReversal item) => new(item.Id, item.PaymentId, item.Payment.AppointmentId,
-        item.StatusCode, item.Payment.StatusCode, item.RequestedAtUtc, item.CompletedAtUtc, item.StatusCode == "confirmed", item.Payment.RowVersion);
+    private static PaymentReversalResponse MapReversal(PaymentReversal item, string appointmentStatus) => new(item.Id, item.PaymentId, item.Payment.AppointmentId,
+        item.StatusCode, item.Payment.StatusCode, item.RequestedAtUtc, item.CompletedAtUtc,
+        item.StatusCode == "confirmed" && appointmentStatus == "pending", item.Payment.RowVersion);
 
     private async Task<(string LegalName, string TimezoneName)> ClinicAsync(CancellationToken cancellationToken) =>
         await database.Clinics.AsNoTracking().Select(item => new ValueTuple<string, string>(item.LegalName, item.TimezoneName)).SingleAsync(cancellationToken);

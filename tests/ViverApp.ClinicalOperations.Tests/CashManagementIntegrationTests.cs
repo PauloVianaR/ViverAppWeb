@@ -226,6 +226,45 @@ public sealed class CashManagementIntegrationTests
                 "Abertura complementar após fechamento"), CancellationToken.None);
         Assert.False(postClose.AfterClosure);
 
+        clock.AdvanceTo(now.AddDays(1));
+        appointment.StatusCode = "no_show";
+        appointment.NoShowRecordedByAccountId = manager.Id;
+        appointment.NoShowRecordedAtUtc = clock.GetUtcNow().UtcDateTime;
+        appointment.RowVersion++;
+        database.AppointmentStatusHistories.Add(new AppointmentStatusHistory
+        {
+            AppointmentId = appointment.Id,
+            ActorAccountId = manager.Id,
+            FromStatusCode = "confirmed",
+            ToStatusCode = "no_show",
+            StartsAtUtc = appointment.StartsAtUtc,
+            EndsAtUtc = appointment.EndsAtUtc,
+            OccurredAtUtc = clock.GetUtcNow().UtcDateTime,
+        });
+        await database.SaveChangesAsync();
+        var statusHistoryCountBeforeRefund = await database.AppointmentStatusHistories
+            .CountAsync(item => item.AppointmentId == appointment.Id);
+        var noShowPayment = await database.Payments.SingleAsync(item => item.Id == replacement.Id);
+        var noShowReversal = await cash.ReverseAsync(manager.Id, Guid.NewGuid().ToString("N"), noShowPayment.Id,
+            new PaymentReversalRequest(noShowPayment.RowVersion, "Estorno autorizado após ausência do paciente"), CancellationToken.None);
+        Assert.Equal("reversed", noShowReversal.PaymentStatusCode);
+        Assert.False(noShowReversal.CanCreateReplacementPayment);
+        Assert.Equal("no_show", appointment.StatusCode);
+        Assert.Equal(statusHistoryCountBeforeRefund,
+            await database.AppointmentStatusHistories.CountAsync(item => item.AppointmentId == appointment.Id));
+        var refundDate = date.AddDays(1);
+        var refundDay = await cash.DayAsync(refundDate, ViverAppRoles.Manager, null, null,
+            appointment.AppointmentNumber, null, null, null, null, 1, 25, CancellationToken.None);
+        Assert.Equal(-180m, refundDay.Summary.NetTotal);
+        var refundMovement = Assert.Single(refundDay.Page.Items);
+        Assert.Equal("payment_reversal", refundMovement.TypeCode);
+        Assert.Equal("outflow", refundMovement.DirectionCode);
+        Assert.Equal(noShowPayment.Id, refundMovement.PaymentId);
+        Assert.NotNull(refundMovement.RelatedMovementId);
+        var originalDayAfterRefund = await cash.DayAsync(date, ViverAppRoles.Manager, null, null,
+            appointment.AppointmentNumber, null, null, null, null, 1, 25, CancellationToken.None);
+        Assert.Equal(3, originalDayAfterRefund.Summary.MovementCount);
+
         await Assert.ThrowsAsync<MySqlException>(() => database.CashMovements
             .Where(item => item.Id == postClose.Id).ExecuteUpdateAsync(update => update.SetProperty(item => item.Amount, 30m)));
         await transaction.RollbackAsync();
@@ -262,6 +301,7 @@ public sealed class CashManagementIntegrationTests
 
     private sealed class FixedClock(DateTime value) : TimeProvider
     {
+        public void AdvanceTo(DateTime utc) => value = utc;
         public override DateTimeOffset GetUtcNow() => new(value, TimeSpan.Zero);
     }
 

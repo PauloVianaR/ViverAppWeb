@@ -106,7 +106,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         var offered = await database.ProfessionalServices.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor)
             .ToDictionaryAsync(x => x.AppointmentTypeId, ct);
         var types = await database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive)
-            .OrderBy(x => x.CategoryCode).ThenBy(x => x.DisplayOrder).ThenBy(x => x.Name).ToArrayAsync(ct);
+            .OrderBy(x => x.Name).ThenBy(x => x.Id).ToArrayAsync(ct);
         return types.Select(x => new ProfessionalServiceResponse(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode,
             x.DurationMinutes, x.PriceAmount, x.RequiresPayment, x.IsActive, offered.TryGetValue(x.Id, out var link) && link.IsActive,
             offered.TryGetValue(x.Id, out link) ? link.RowVersion : 0)).ToArray();
