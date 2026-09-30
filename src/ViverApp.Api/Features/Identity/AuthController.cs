@@ -78,7 +78,7 @@ public sealed class AuthController(
 
             return InvalidRequest(new Dictionary<string, string[]>
             {
-                ["contact"] = ["Informe telefone no formato E.164 e, quando escolhido, um e-mail válido."],
+                ["contact"] = ["Informe um telefone brasileiro válido com DDD e, quando escolhido, um e-mail válido."],
             });
         }
 
@@ -612,7 +612,7 @@ public sealed class AuthController(
 
             return InvalidRequest(new Dictionary<string, string[]>
             {
-                ["phone"] = ["Informe um telefone válido no formato E.164."],
+                ["phone"] = ["Informe um telefone brasileiro válido com DDD."],
             });
         }
 

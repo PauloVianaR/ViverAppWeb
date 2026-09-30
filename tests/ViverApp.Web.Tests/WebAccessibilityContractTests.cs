@@ -13,6 +13,14 @@ namespace ViverApp.Web.Tests;
 
 public sealed class WebAccessibilityContractTests : IAsyncLifetime
 {
+    [Theory]
+    [InlineData("1", "(1")]
+    [InlineData("119", "(11) 9")]
+    [InlineData("11999999999", "(11) 99999-9999")]
+    [InlineData("+5511999999999", "(11) 99999-9999")]
+    public void BrazilianPhoneInput_MasksAsTyped(string input, string expected) =>
+        Assert.Equal(expected, BrazilianPhoneInput.Mask(input));
+
     private readonly WebApplicationFactory<Program> factory = new WebApplicationFactory<Program>()
         .WithWebHostBuilder(builder => builder.UseEnvironment("Development"));
 

@@ -92,7 +92,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
                 x.LicenseTypeCode + " " + x.LicenseStateCode + " " + x.LicenseNumber)).ToArrayAsync(ct);
 
     public async Task<IReadOnlyList<ManagerServiceOption>> ServicesAsync(CancellationToken ct) =>
-        await database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name)
+        await database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).ThenBy(x => x.Id)
             .Select(x => new ManagerServiceOption(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode, x.DurationMinutes, x.PriceAmount, x.RequiresPayment)).ToArrayAsync(ct);
 
     public async Task<ManagerAgendaResponse> AgendaAsync(DateOnly from, DateOnly to, string? status, string? modality,
@@ -202,7 +202,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         var rawEmail = Text(request.Email); var email = rawEmail is null ? null : IdentifierNormalizer.NormalizeEmail(rawEmail);
         if (rawEmail is not null && email is null) throw Invalid("O e-mail informado é inválido.");
         var rawPhone = Text(request.PhoneE164); var phone = rawPhone is null ? null : IdentifierNormalizer.NormalizePhone(rawPhone);
-        if (rawPhone is not null && phone is null) throw Invalid("O telefone deve estar no formato brasileiro com país e DDD.");
+        if (rawPhone is not null && phone is null) throw Invalid("Informe um telefone brasileiro válido com DDD e 10 ou 11 dígitos.");
         if (request.SendOnboarding && email is null && phone is null) throw Invalid("Informe um e-mail ou telefone para enviar o onboarding.");
         if (await database.Accounts.AnyAsync(x => x.TaxId == taxId || email != null && x.NormalizedEmail == email || phone != null && x.PhoneE164 == phone, ct)
             || await database.PatientProfiles.AnyAsync(x => x.TaxId == taxId, ct))
@@ -254,7 +254,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         var email = Text(request.Email); var normalizedEmail = email is null ? null : IdentifierNormalizer.NormalizeEmail(email);
         if (email is not null && normalizedEmail is null) throw Invalid("O e-mail informado é inválido.");
         var phone = Text(request.PhoneE164); var normalizedPhone = phone is null ? null : IdentifierNormalizer.NormalizePhone(phone);
-        if (phone is not null && normalizedPhone is null) throw Invalid("O telefone deve estar no formato brasileiro com país e DDD.");
+        if (phone is not null && normalizedPhone is null) throw Invalid("Informe um telefone brasileiro válido com DDD e 10 ou 11 dígitos.");
         if (account.PortalAccessEnabled && normalizedEmail is null && normalizedPhone is null)
             throw Invalid("Desative o onboarding antes de remover todos os contatos de uma conta com acesso ao portal.");
         if (request.BirthDate > DateOnly.FromDateTime(now) || request.BirthDate < DateOnly.FromDateTime(now).AddYears(-125)) throw Invalid("A data de nascimento é inválida.");
@@ -464,7 +464,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
             h.PreviousStartsAtUtc, h.PreviousEndsAtUtc, h.NewStartsAtUtc, h.NewEndsAtUtc, h.Reason, h.OccurredAtUtc)).ToArray(),
         x.ModalityCode == "in_person" && x.StatusCode == "confirmed", x.StatusCode == "arrived", x.StatusCode is "pending" or "confirmed", x.StatusCode is "pending" or "confirmed",
         x.StatusCode is "confirmed" or "arrived" or "in_progress", x.StatusCode == "completed",
-        x.RequiresPayment && x.CurrentPayment?.StatusCode == "paid" && x.StatusCode is ("confirmed" or "arrived"),
+        x.RequiresPayment && x.CurrentPayment?.StatusCode == "paid" && x.StatusCode is ("confirmed" or "arrived" or "no_show"),
         x.RequiresPayment && x.ModalityCode == "in_person" && x.PaymentLocationCode == "clinic" && x.StatusCode is "pending" or "confirmed" && x.CurrentPayment?.StatusCode is not ("paid" or "reversal_pending"), x.RowVersion);
     private static ManagerProfileResponse MapProfile(Account x) => new(x.Id, x.FullName, x.Email, x.PhoneE164, x.TaxId, x.EmailVerified, x.PhoneVerified,
         x.ManagerPreference?.EmailEnabled ?? true, x.ManagerPreference?.SmsEnabled ?? true, x.RowVersion, x.ManagerPreference?.RowVersion ?? 1);

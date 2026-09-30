@@ -51,11 +51,16 @@ public sealed class IdentitySecurityTests
 
     [Theory]
     [InlineData("+5511999999999", "+5511999999999")]
+    [InlineData("11999999999", "+5511999999999")]
+    [InlineData("(11) 99999-9999", "+5511999999999")]
+    [InlineData("11 99999-9999", "+5511999999999")]
+    [InlineData("11+99999-9999", null)]
+    [InlineData("5511999999999", "+5511999999999")]
     [InlineData("+14155552671", null)]
-    [InlineData("5511999999999", null)]
     [InlineData("+550", null)]
     [InlineData("+55119999999999999", null)]
-    public void PhoneNormalization_RequiresE164(string input, string? expected)
+    [InlineData("11 99999 9999 ramal 2", null)]
+    public void PhoneNormalization_AcceptsBrazilianLocalAndE164(string input, string? expected)
     {
         Assert.Equal(expected, IdentifierNormalizer.NormalizePhone(input));
     }

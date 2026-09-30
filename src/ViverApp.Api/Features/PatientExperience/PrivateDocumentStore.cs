@@ -14,16 +14,50 @@ public interface IDocumentMalwareScanner
     Task<bool> IsCleanAsync(byte[] content, CancellationToken ct);
 }
 
-// Adaptador de desenvolvimento Windows: não remedia nem libera arquivo sem resultado limpo.
-public sealed class WindowsDocumentMalwareScanner(IWebHostEnvironment environment) : IDocumentMalwareScanner
+// MpCmdRun deve retornar limpo; falha, ausência ou timeout recusam o arquivo.
+public sealed class WindowsDocumentMalwareScanner(IWebHostEnvironment environment, IConfiguration configuration) : IDocumentMalwareScanner
 {
+    internal static void AssertProductionReady(IConfiguration configuration, string contentRootPath)
+    {
+        var executable = configuration["Security:MalwareScan:ExecutablePath"];
+        var workDirectory = configuration["Security:MalwareScan:WorkDirectory"];
+        if (!OperatingSystem.IsWindows()
+            || string.IsNullOrWhiteSpace(executable)
+            || !Path.IsPathFullyQualified(executable)
+            || !string.Equals(Path.GetFileName(executable), "MpCmdRun.exe", StringComparison.OrdinalIgnoreCase)
+            || !File.Exists(executable)
+            || string.IsNullOrWhiteSpace(workDirectory)
+            || !Path.IsPathFullyQualified(workDirectory)
+            || !Directory.Exists(workDirectory)
+            || IsWithinContentRoot(workDirectory, contentRootPath))
+        {
+            throw new InvalidOperationException(
+                "A verificação de anexos exige MpCmdRun.exe e diretório de trabalho privado, existente e fora da publicação.");
+        }
+    }
+
+    private static bool IsWithinContentRoot(string directory, string contentRootPath)
+    {
+        var root = Path.GetFullPath(contentRootPath).TrimEnd(Path.DirectorySeparatorChar);
+        var candidate = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar);
+        return string.Equals(candidate, root, StringComparison.OrdinalIgnoreCase)
+            || candidate.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
     public async Task<bool> IsCleanAsync(byte[] content, CancellationToken ct)
     {
-        if (!OperatingSystem.IsWindows() || !environment.IsDevelopment()) return false;
-        var scanner = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Windows Defender", "MpCmdRun.exe");
-        if (!File.Exists(scanner)) return false;
-        var root = Path.GetFullPath(Path.Combine(environment.ContentRootPath, "..", "..", ".local", "document-scan"));
-        Directory.CreateDirectory(root);
+        if (!OperatingSystem.IsWindows()) return false;
+        var scanner = environment.IsDevelopment()
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Windows Defender", "MpCmdRun.exe")
+            : configuration["Security:MalwareScan:ExecutablePath"];
+        var root = environment.IsDevelopment()
+            ? Path.GetFullPath(Path.Combine(environment.ContentRootPath, "..", "..", ".local", "document-scan"))
+            : configuration["Security:MalwareScan:WorkDirectory"];
+        if (string.IsNullOrWhiteSpace(scanner) || string.IsNullOrWhiteSpace(root)
+            || !Path.IsPathFullyQualified(scanner) || !Path.IsPathFullyQualified(root)
+            || !File.Exists(scanner)) return false;
+        if (environment.IsDevelopment()) Directory.CreateDirectory(root);
+        else if (!Directory.Exists(root) || IsWithinContentRoot(root, environment.ContentRootPath)) return false;
         var path = Path.Combine(root, Guid.NewGuid().ToString("N") + ".scan");
         try
         {

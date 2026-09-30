@@ -84,7 +84,7 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
         if (!string.IsNullOrWhiteSpace(search)) query = query.Where(x => x.Name.Contains(search.Trim()));
         var total = await query.CountAsync(ct);
         var discount = await DiscountAsync(actor, ct);
-        var items = await query.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        var items = await query.OrderBy(x => x.Name).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
         return new(items.Select(x => new PatientServiceResponse(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode,
             x.DurationMinutes, x.RequiresPayment ? x.PriceAmount : 0, x.RequiresPayment ? discount : 0,
             x.RequiresPayment ? DiscountedPrice(x.PriceAmount, discount) : 0, x.RequiresPayment)).ToArray(), page, pageSize, total);

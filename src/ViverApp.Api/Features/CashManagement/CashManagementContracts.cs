@@ -4,6 +4,11 @@ using ViverApp.Api.Features.PatientScheduling;
 
 namespace ViverApp.Api.Features.CashManagement;
 
+public sealed record CashPersonOptionResponse(ulong AccountId, string Name, string RoleCode);
+public sealed record CashFilterOptionsResponse(
+    IReadOnlyList<CashPersonOptionResponse> Professionals,
+    IReadOnlyList<CashPersonOptionResponse> Responsibles);
+
 public sealed record CashMethodTotalResponse(
     string MethodCode,
     decimal Entries,

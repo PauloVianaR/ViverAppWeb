@@ -75,7 +75,8 @@ public sealed record AppointmentTypeWriteRequest(
     ushort DisplayOrder,
     [param: Range(0, long.MaxValue)] ulong RowVersion = 0,
     [param: Required, RegularExpression("^(consultation|examination|surgery|procedure)$")] string CategoryCode = "consultation",
-    bool RequiresPayment = true);
+    bool RequiresPayment = true,
+    [param: MaxLength(500)] IReadOnlyList<ulong>? ProfessionalAccountIds = null);
 
 public sealed record AppointmentTypeResponse(
     uint Id,

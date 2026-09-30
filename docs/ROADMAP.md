@@ -405,6 +405,8 @@ Cada fase deve:
 
 ## Fase 26 — Infraestrutura, Cloudflare e CI/CD
 
+**Estado:** pausada a pedido do proprietário em 30/09/2026, com o trabalho local integrado à `main`. O destino será uma máquina física Windows Server com MySQL 8.0.41 local; ainda não está preparada. O pacote, os portões e o runbook estão em [Windows Server, IIS e Cloudflare](fase-26/WINDOWS-SERVER-IIS.md). Publicação, CI remoto, Cloudflare da aplicação e homologações visuais autenticadas permanecem em `.local/PENDENCIAS.md`; esta integração não equivale a deploy nem a saída concluída da fase.
+
 **Objetivo:** publicar sem Azure, com entrega repetível e origem protegida.
 
 **Entregas:**
