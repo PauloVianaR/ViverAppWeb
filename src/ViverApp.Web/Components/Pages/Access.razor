@@ -110,7 +110,7 @@
                         <div class="field field--wide"><label for="full-name">Nome completo</label><input id="full-name" autocomplete="name" maxlength="200" @bind="FullName" /></div>
                         <div class="field"><label for="email">E-mail (opcional)</label><input id="email" type="email" autocomplete="email" maxlength="254" @bind="Email" /></div>
                     }
-                    <div class="field"><label for="phone">Telefone com DDD</label><input id="phone" type="tel" autocomplete="tel" placeholder="+5511999999999" maxlength="16" @bind="Phone" /></div>
+                    <div class="field"><label for="phone">Telefone com DDD</label><input id="phone" type="tel" autocomplete="tel-national" inputmode="numeric" placeholder="(11) 99999-9999" maxlength="15" value="@Phone" @oninput="e=>Phone=BrazilianPhoneInput.Mask(e.Value?.ToString())" /></div>
                     <div class="field"><label for="tax-id">CPF</label><input id="tax-id" inputmode="numeric" autocomplete="off" maxlength="11" @bind="TaxId" /></div>
                     <div class="field"><label for="birth-date">Data de nascimento</label><input id="birth-date" type="date" autocomplete="bday" value="@BirthDateText" @onchange="UpdateBirthDate" /></div>
                     @if (Mode == "register")
@@ -217,7 +217,7 @@
     private string PasswordConfirmation = string.Empty;
     private string FullName = string.Empty;
     private string? Email;
-    private string Phone = "+55";
+    private string Phone = string.Empty;
     private string TaxId = string.Empty;
     private string BirthDateText = string.Empty;
     private string Channel = "sms";

@@ -1,5 +1,9 @@
 namespace ViverApp.Web;
 
+public sealed record CashPersonOption(ulong AccountId, string Name, string RoleCode);
+public sealed record CashFilterOptions(IReadOnlyList<CashPersonOption> Professionals,
+    IReadOnlyList<CashPersonOption> Responsibles);
+
 public sealed record CashMethodTotal(string MethodCode, decimal Entries, decimal Outflows, decimal Net, int MovementCount);
 public sealed record CashSummary(decimal GrossEntries, decimal PaymentReversals, decimal Supplies, decimal Withdrawals,
     decimal AdjustmentsNet, decimal NetTotal, int MovementCount, IReadOnlyList<CashMethodTotal> ByMethod);

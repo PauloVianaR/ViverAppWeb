@@ -197,6 +197,24 @@ public sealed class CashManagementIntegrationTests
         Assert.Equal(unfilteredDay.Page.Items.OrderBy(item => item.OccurredAtUtc).ThenBy(item => item.Id), unfilteredDay.Page.Items);
         Assert.Equal(unfilteredDay.Page.Items.Max(item => item.Id), unfilteredDay.LastMovementId);
 
+        var filterOptions = await cash.FilterOptionsAsync(CancellationToken.None);
+        Assert.Contains(filterOptions.Professionals, item => item.AccountId == doctor.Id && item.RoleCode == ViverAppRoles.Doctor);
+        Assert.Contains(filterOptions.Responsibles, item => item.AccountId == manager.Id);
+        var professionalDay = await cash.DayAsync(date, ViverAppRoles.Manager, null, null, null, null, null, null, null,
+            1, 25, CancellationToken.None, professionalAccountId: doctor.Id);
+        Assert.Equal(3, professionalDay.Page.Items.Count);
+        Assert.DoesNotContain(professionalDay.Page.Items, item => item.Id == withdrawal.Id);
+        Assert.Equal(180m, professionalDay.Summary.NetTotal);
+        var otherProfessionalDay = await cash.DayAsync(date, ViverAppRoles.Manager, null, null, null, null, null, null, null,
+            1, 25, CancellationToken.None, professionalAccountId: administrator.Id);
+        Assert.Empty(otherProfessionalDay.Page.Items);
+        var responsibleDay = await cash.DayAsync(date, ViverAppRoles.Manager, null, null, null, null, null, null, null,
+            1, 25, CancellationToken.None, responsibleAccountId: manager.Id);
+        Assert.Contains(responsibleDay.Page.Items, item => item.Id == withdrawal.Id);
+        var otherResponsibleDay = await cash.DayAsync(date, ViverAppRoles.Manager, null, null, null, null, null, null, null,
+            1, 25, CancellationToken.None, responsibleAccountId: administrator.Id);
+        Assert.Empty(otherResponsibleDay.Page.Items);
+
         var cardFiltered = await cash.DayAsync(date, ViverAppRoles.Manager, null, null, null, null, null, "4242", "PHASE17", 1, 25, CancellationToken.None);
         Assert.Equal(2, cardFiltered.Page.Items.Count);
         Assert.All(cardFiltered.Page.Items, item => Assert.Equal(original.Id, item.PaymentId));
@@ -206,6 +224,11 @@ public sealed class CashManagementIntegrationTests
         Assert.Equal(3, fullPrint.Movements.Count);
         Assert.Empty(totalsPrint.Movements);
         Assert.Equal(fullPrint.Summary.NetTotal, totalsPrint.Summary.NetTotal);
+        var professionalPrint = await cash.PrintAsync(manager.Id, date, null, null, null, null, null, null, null,
+            false, CancellationToken.None, professionalAccountId: doctor.Id);
+        Assert.Equal(3, professionalPrint.Movements.Count);
+        Assert.Equal(180m, professionalPrint.Summary.NetTotal);
+        Assert.Contains("Profissional: Dra. Caixa", professionalPrint.FilterDescription);
 
         var closure = await cash.CloseAsync(manager.Id, date, new CashCloseRequest(unfilteredDay.LastMovementId), CancellationToken.None);
         Assert.Equal(-20m, closure.Snapshot.NetTotal);

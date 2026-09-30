@@ -22,6 +22,21 @@ public sealed class CashManagementService(
     private static readonly string[] Methods = ["cash", "pix", "debit_card", "credit_card", "pagbank_online", "other"];
     private static readonly string[] Types = ["payment_received", "payment_reversal", "supply", "withdrawal", "adjustment", "provider_fee"];
 
+    public async Task<CashFilterOptionsResponse> FilterOptionsAsync(CancellationToken cancellationToken)
+    {
+        var professionals = await database.ProfessionalProfiles.AsNoTracking()
+            .Where(item => item.Account.RoleCode == ViverAppRoles.Doctor || item.Account.RoleCode == ViverAppRoles.Psychologist)
+            .OrderBy(item => item.Account.FullName).ThenBy(item => item.AccountId)
+            .Select(item => new CashPersonOptionResponse(item.AccountId, item.Account.FullName, item.Account.RoleCode))
+            .ToArrayAsync(cancellationToken);
+        var responsibles = await database.Accounts.AsNoTracking()
+            .Where(item => database.CashMovements.Any(movement => movement.ResponsibleAccountId == item.Id))
+            .OrderBy(item => item.FullName).ThenBy(item => item.Id)
+            .Select(item => new CashPersonOptionResponse(item.Id, item.FullName, item.RoleCode))
+            .ToArrayAsync(cancellationToken);
+        return new(professionals, responsibles);
+    }
+
     public async Task<CashDayResponse> DayAsync(
         DateOnly date,
         string actorRole,
@@ -34,14 +49,16 @@ public sealed class CashManagementService(
         string? authorizationReference,
         int page,
         int pageSize,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ulong? professionalAccountId = null,
+        ulong? responsibleAccountId = null)
     {
         var today = await OperationalDateAsync(clock.GetUtcNow().UtcDateTime, cancellationToken);
         ValidateQuery(date, today, method, type, page, pageSize);
         var normalizedCardLastFour = NormalizeCardLastFour(cardLastFour);
         var normalizedAuthorization = NormalizeAuthorization(authorizationReference);
         var query = Filtered(date, method, type, appointmentNumber, patient, responsible,
-            normalizedCardLastFour, normalizedAuthorization);
+            normalizedCardLastFour, normalizedAuthorization, professionalAccountId, responsibleAccountId);
         var total = await query.CountAsync(cancellationToken);
         var lastMovementId = await query.MaxAsync(item => (ulong?)item.Id, cancellationToken);
         var rows = await query.OrderBy(item => item.OccurredAtUtc).ThenBy(item => item.Id)
@@ -74,20 +91,30 @@ public sealed class CashManagementService(
         string? cardLastFour,
         string? authorizationReference,
         bool totalsOnly,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ulong? professionalAccountId = null,
+        ulong? responsibleAccountId = null)
     {
         var today = await OperationalDateAsync(clock.GetUtcNow().UtcDateTime, cancellationToken);
         ValidateQuery(date, today, method, type, 1, 100);
         var normalizedCardLastFour = NormalizeCardLastFour(cardLastFour);
         var normalizedAuthorization = NormalizeAuthorization(authorizationReference);
         var query = Filtered(date, method, type, appointmentNumber, patient, responsible,
-            normalizedCardLastFour, normalizedAuthorization);
+            normalizedCardLastFour, normalizedAuthorization, professionalAccountId, responsibleAccountId);
         var clinic = await ClinicAsync(cancellationToken);
         var actorName = await database.Accounts.AsNoTracking().Where(item => item.Id == actor)
             .Select(item => item.FullName).SingleAsync(cancellationToken);
         var movements = totalsOnly
             ? []
             : (await query.OrderBy(item => item.OccurredAtUtc).ThenBy(item => item.Id).ToArrayAsync(cancellationToken)).Select(Map).ToArray();
+        var professionalName = professionalAccountId.HasValue
+            ? await database.Accounts.AsNoTracking().Where(item => item.Id == professionalAccountId.Value)
+                .Select(item => item.FullName).SingleOrDefaultAsync(cancellationToken)
+            : null;
+        var responsibleName = responsibleAccountId.HasValue
+            ? await database.Accounts.AsNoTracking().Where(item => item.Id == responsibleAccountId.Value)
+                .Select(item => item.FullName).SingleOrDefaultAsync(cancellationToken)
+            : null;
         var filters = string.Join(" · ", new[]
         {
             method is null ? null : $"Forma: {method}",
@@ -95,6 +122,8 @@ public sealed class CashManagementService(
             appointmentNumber is null ? null : $"Atendimento: {appointmentNumber}",
             string.IsNullOrWhiteSpace(patient) ? null : $"Paciente: {patient.Trim()}",
             string.IsNullOrWhiteSpace(responsible) ? null : $"Responsável: {responsible.Trim()}",
+            professionalAccountId.HasValue ? $"Profissional: {professionalName ?? $"#{professionalAccountId.Value}"}" : null,
+            responsibleAccountId.HasValue ? $"Responsável: {responsibleName ?? $"#{responsibleAccountId.Value}"}" : null,
             normalizedCardLastFour is null ? null : $"Final do cartão: {normalizedCardLastFour}",
             normalizedAuthorization is null ? null : $"Autorização: {normalizedAuthorization}",
         }.Where(item => item is not null));
@@ -419,7 +448,8 @@ public sealed class CashManagementService(
     }
 
     private IQueryable<CashMovement> Filtered(DateOnly date, string? method, string? type, ulong? appointmentNumber,
-        string? patient, string? responsible, string? cardLastFour, string? authorizationReference)
+        string? patient, string? responsible, string? cardLastFour, string? authorizationReference,
+        ulong? professionalAccountId = null, ulong? responsibleAccountId = null)
     {
         var day = date.ToDateTime(TimeOnly.MinValue);
         IQueryable<CashMovement> query = database.CashMovements.AsNoTracking().Where(item => item.OperationalDate == day)
@@ -431,6 +461,8 @@ public sealed class CashManagementService(
         if (appointmentNumber.HasValue) query = query.Where(item => item.Appointment != null && item.Appointment.AppointmentNumber == appointmentNumber);
         var patientTerm = Text(patient); if (patientTerm is not null) query = query.Where(item => item.Appointment != null && item.Appointment.PatientAccount.FullName.Contains(patientTerm));
         var responsibleTerm = Text(responsible); if (responsibleTerm is not null) query = query.Where(item => item.ResponsibleAccount != null && item.ResponsibleAccount.FullName.Contains(responsibleTerm));
+        if (professionalAccountId.HasValue) query = query.Where(item => item.Appointment != null && item.Appointment.ProfessionalAccountId == professionalAccountId.Value);
+        if (responsibleAccountId.HasValue) query = query.Where(item => item.ResponsibleAccountId == responsibleAccountId.Value);
         if (cardLastFour is not null) query = query.Where(item => item.Payment != null && item.Payment.CardLastFour == cardLastFour);
         if (authorizationReference is not null) query = query.Where(item => item.Payment != null
             && item.Payment.AuthorizationReference != null && item.Payment.AuthorizationReference.Contains(authorizationReference));

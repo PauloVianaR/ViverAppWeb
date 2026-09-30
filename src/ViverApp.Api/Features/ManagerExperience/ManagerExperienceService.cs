@@ -202,7 +202,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         var rawEmail = Text(request.Email); var email = rawEmail is null ? null : IdentifierNormalizer.NormalizeEmail(rawEmail);
         if (rawEmail is not null && email is null) throw Invalid("O e-mail informado é inválido.");
         var rawPhone = Text(request.PhoneE164); var phone = rawPhone is null ? null : IdentifierNormalizer.NormalizePhone(rawPhone);
-        if (rawPhone is not null && phone is null) throw Invalid("O telefone deve estar no formato brasileiro com país e DDD.");
+        if (rawPhone is not null && phone is null) throw Invalid("Informe um telefone brasileiro válido com DDD e 10 ou 11 dígitos.");
         if (request.SendOnboarding && email is null && phone is null) throw Invalid("Informe um e-mail ou telefone para enviar o onboarding.");
         if (await database.Accounts.AnyAsync(x => x.TaxId == taxId || email != null && x.NormalizedEmail == email || phone != null && x.PhoneE164 == phone, ct)
             || await database.PatientProfiles.AnyAsync(x => x.TaxId == taxId, ct))
@@ -254,7 +254,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         var email = Text(request.Email); var normalizedEmail = email is null ? null : IdentifierNormalizer.NormalizeEmail(email);
         if (email is not null && normalizedEmail is null) throw Invalid("O e-mail informado é inválido.");
         var phone = Text(request.PhoneE164); var normalizedPhone = phone is null ? null : IdentifierNormalizer.NormalizePhone(phone);
-        if (phone is not null && normalizedPhone is null) throw Invalid("O telefone deve estar no formato brasileiro com país e DDD.");
+        if (phone is not null && normalizedPhone is null) throw Invalid("Informe um telefone brasileiro válido com DDD e 10 ou 11 dígitos.");
         if (account.PortalAccessEnabled && normalizedEmail is null && normalizedPhone is null)
             throw Invalid("Desative o onboarding antes de remover todos os contatos de uma conta com acesso ao portal.");
         if (request.BirthDate > DateOnly.FromDateTime(now) || request.BirthDate < DateOnly.FromDateTime(now).AddYears(-125)) throw Invalid("A data de nascimento é inválida.");
