@@ -21,8 +21,8 @@
 | P1 | Premium/financeiro | workflow e documentos protegidos | 18 |
 | P1 | Administração | segregação, step-up, analytics e auditoria | 19 |
 | P2 | Hardening e performance | load/chaos/DAST/pentest/SLO | 20/22 |
-| P2 | Pentest Strix autorizado | white/grey/black-box isolado, correção e re-scan | 22 |
-| P2 | Infra e lançamento | Cloudflare, CI/CD, Strix autorizado, rollback e cutover | 21–23 |
+| P2 | Pentest abrangente autorizado | white/grey/black-box isolado, correção e re-scan | 27 |
+| P2 | Infra e lançamento | Cloudflare, CI/CD, pentest abrangente, rollback e cutover | 26–29 |
 
 ## 2. Decisões pendentes do proprietário
 
@@ -45,7 +45,7 @@
 | DEC-015 | Quem é controlador, operador e encarregado LGPD? | registro de tratamento/incidentes/direitos | antes de staging com dados reais |
 | DEC-016 | Qual política para contas cuja senha legada não puder ser migrada? | segurança e suporte | antes da Fase 4 |
 | DEC-017 | Quais KPIs administrativos continuam úteis? | evitar migrar analytics incorretos/excessivos | antes da Fase 24 |
-| DEC-018 | Qual provedor LLM, orçamento e escopo escrito serão autorizados para o Strix? | custo, privacidade do código e risco de exploração ativa | antes da Fase 27 |
+| DEC-018 | Execução local da Fase 27 autorizada em 01/10/2026, limitada a loopback e homologação, com até 4 clientes, cerca de 10 req/s e 20 s por cenário. Definir janela, contato de emergência e allowlist novos antes de ampliar escopo ou testar a futura produção. | risco de exploração ativa e disponibilidade | antes de nova execução ampliada |
 
 ## 3. Recomendações técnicas já adotadas
 
