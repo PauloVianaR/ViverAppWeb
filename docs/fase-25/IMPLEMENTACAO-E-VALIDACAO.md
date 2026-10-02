@@ -47,7 +47,7 @@ Um probe autenticado adicional de Agenda usou a mesma conta sintética de Gestor
 
 O padrão de referência é **OWASP ASVS 5.0.0**, com versão explícita. A revisão deve cobrir, com evidências por requisito aplicável: autenticação/MFA e recuperação; sessão e CSRF; autorização por papel e ownership; validação/saída/CSP; dados clínicos, upload e R2 privado; criptografia/segredos; pagamento/webhook/idempotência; API/SignalR; logs/auditoria; disponibilidade e configuração. Os testes atuais são evidência parcial, **não** uma avaliação ASVS concluída. Uma pessoa independente da implementação deve registrar achados, severidade, reprodução e reteste. Achados críticos/altos abertos bloqueiam o critério de saída.
 
-DAST Baseline é passivo e não prova ausência de falhas. Antes do Strix, executar também DAST autenticado convencional em staging isolado, com contas sintéticas de todos os papéis, regras de exclusão de operações destrutivas e relatório revisado. Não apontar scanner para produção, provedores reais ou endpoints de pagamento sem autorização específica.
+DAST Baseline é passivo e não prova ausência de falhas. Antes do pentest abrangente da Fase 27, executar também DAST autenticado convencional em staging isolado, com contas sintéticas de todos os papéis, regras de exclusão de operações destrutivas e relatório revisado. Não apontar scanner para produção, provedores reais ou endpoints de pagamento sem autorização específica.
 
 ## Critérios de desempenho e operação a homologar
 

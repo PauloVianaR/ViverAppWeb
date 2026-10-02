@@ -396,7 +396,7 @@ Cada fase deve:
 - testes de carga para login, agenda, checkout, SignalR e workers;
 - otimização de queries/índices medida por evidência;
 - testes de caos de provedores e retomada de jobs;
-- DAST convencional, revisão OWASP ASVS, revisão humana/independente e correção dos achados antes do pentest Strix;
+- DAST convencional, revisão OWASP ASVS, revisão humana/independente e correção dos achados antes do pentest abrangente da Fase 27;
 - SBOM, dependências fixadas, assinatura/proveniência dos artefatos e pipeline de atualização;
 - revisão LGPD, acessibilidade e compatibilidade de navegadores;
 - SLOs, alertas acionáveis e runbooks.
@@ -421,11 +421,11 @@ Cada fase deve:
 
 **Saída:** ensaio de deploy/rollback/restore aprovado. Compra e alterações externas exigem autorização do usuário.
 
-## Fase 27 — Pentest autorizado com Strix
+## Fase 27 — Pentest abrangente conduzido pelo Codex
 
-**Estado:** planejada para a release candidate, depois do staging endurecido e antes da migração final.
+**Estado:** duas rodadas locais parciais autorizadas em 01–02/10/2026 na branch `codex/fase-27-pentest-abrangente`. Há três defeitos reproduzíveis, sem aprovação de segurança para produção. A Fase 26 permanece pausada e a origem de produção não existe.
 
-**Plano detalhado:** [Pentest autorizado com Strix](FASE-27-PENTEST-COM-STRIX.md).
+**Planos:** [pentest abrangente](FASE-27-PENTEST-ABRANGENTE.md) e [segunda campanha aprofundada](FASE-27-SEGUNDA-CAMPANHA-AGRESSIVA.md). **Evidências:** [primeira rodada](FASE-27-RELATORIO-PENTEST.md), [segunda rodada](FASE-27-RELATORIO-PENTEST-RODADA-2.md) e [matriz de cobertura](FASE-27-MATRIZ-COBERTURA.md). Não há aprovação de segurança para produção nesta etapa.
 
 ## Fase 28 — Migração final e lançamento gradual
 
@@ -474,5 +474,5 @@ Cada fase deve:
 - provedor definitivo de TURN e eventual substituição futura, se necessária, do SMTP ou SMSBarato já adotados;
 - necessidade de gravação de chamadas (recomendação inicial: não gravar);
 - política LGPD, prazos de retenção e responsáveis administrativos;
-- provedor LLM, orçamento, execução local/cloud e escopo escrito do pentest Strix;
+- janela, allowlist, contatos de emergência e limites da simulação controlada de DoS para o pentest da Fase 27;
 - estratégia de recuperação para contas cujo segredo legado não possa ser migrado com segurança.
