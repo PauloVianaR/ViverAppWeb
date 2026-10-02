@@ -44,9 +44,7 @@ public sealed class UsersController(
         var term = ClinicAdministrationSupport.OptionalText(search);
         if (term is not null)
         {
-            query = query.Where(item => item.FullName.Contains(term)
-                || item.Email != null && item.Email.Contains(term)
-                || item.PhoneE164 != null && item.PhoneE164.Contains(term));
+            query = query.WhereNameEmailOrPhoneContains(term);
         }
 
         if (role is not null)

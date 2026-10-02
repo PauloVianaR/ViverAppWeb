@@ -24,12 +24,19 @@ public sealed class MedicalRecordIntegrationTests
         var marker = Guid.NewGuid().ToString("N");
         var doctor = Account($"record-doctor-{marker}@example.test", ViverAppRoles.Doctor, "Dra. Registro");
         var otherDoctor = Account($"record-other-{marker}@example.test", ViverAppRoles.Doctor, "Dr. Sem Vínculo");
+        var psychologist = Account($"record-psychologist-{marker}@example.test", ViverAppRoles.Psychologist, "Psicóloga Vinculada");
+        var otherPsychologist = Account($"record-other-psychologist-{marker}@example.test", ViverAppRoles.Psychologist, "Psicóloga Sem Vínculo");
         var manager = Account($"record-manager-{marker}@example.test", ViverAppRoles.Manager, "Gestora Registro");
         var administrator = Account($"record-admin-{marker}@example.test", ViverAppRoles.Administrator, "Admin Registro");
         var patient = Account($"record-patient-{marker}@example.test", ViverAppRoles.Patient, "Paciente Registro");
-        context.Accounts.AddRange(doctor, otherDoctor, manager, administrator, patient);
+        context.Accounts.AddRange(doctor, otherDoctor, psychologist, otherPsychologist, manager, administrator, patient);
         await context.SaveChangesAsync();
         context.ProfessionalProfiles.AddRange(Doctor(doctor.Id, "18001"), Doctor(otherDoctor.Id, "18002"));
+        var psychologistProfile = Doctor(psychologist.Id, "18003");
+        psychologistProfile.LicenseTypeCode = "CRP";
+        var otherPsychologistProfile = Doctor(otherPsychologist.Id, "18004");
+        otherPsychologistProfile.LicenseTypeCode = "CRP";
+        context.ProfessionalProfiles.AddRange(psychologistProfile, otherPsychologistProfile);
         context.PatientProfiles.Add(new PatientProfile { AccountId = patient.Id, PreferredName = "Paciente", CreatedAtUtc = now, UpdatedAtUtc = now });
         var type = new AppointmentType
         {
@@ -96,6 +103,16 @@ public sealed class MedicalRecordIntegrationTests
             UpdatedAtUtc = now,
             RowVersion = 1,
         });
+        context.ProfessionalPatientLinks.Add(new ProfessionalPatientLink
+        {
+            ProfessionalAccountId = psychologist.Id,
+            PatientAccountId = patient.Id,
+            CreatedByAccountId = manager.Id,
+            StatusCode = "active",
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        });
         await context.SaveChangesAsync();
 
         var service = new MedicalRecordService(context, null!, new NoOpAudit(), new FixedTime(now));
@@ -133,6 +150,14 @@ public sealed class MedicalRecordIntegrationTests
         var otherDoctorDenied = await Assert.ThrowsAsync<MedicalRecordRuleException>(() => service.SummaryAsync(otherDoctor.Id,
             ViverAppRoles.Doctor, true, patient.Id, CancellationToken.None));
         Assert.Equal((int)HttpStatusCode.NotFound, otherDoctorDenied.StatusCode);
+        var psychologistSummary = await service.SummaryAsync(psychologist.Id,
+            ViverAppRoles.Psychologist, true, patient.Id, CancellationToken.None);
+        Assert.Equal(patient.Id, psychologistSummary.PatientAccountId);
+        var otherPsychologistDenied = await Assert.ThrowsAsync<MedicalRecordRuleException>(() => service.SummaryAsync(
+            otherPsychologist.Id, ViverAppRoles.Psychologist, true, patient.Id, CancellationToken.None));
+        Assert.Equal((int)HttpStatusCode.NotFound, otherPsychologistDenied.StatusCode);
+        Assert.Equal(2, await context.ClinicalAccessEvents.CountAsync(x => x.PatientAccountId == patient.Id
+            && x.ActorRoleCode == ViverAppRoles.Psychologist));
 
         var managerRead = await service.EntriesAsync(manager.Id, ViverAppRoles.Manager, true, patient.Id,
             "Continuidade do atendimento na clínica", true, CancellationToken.None);
@@ -163,7 +188,7 @@ public sealed class MedicalRecordIntegrationTests
         Assert.Equal(3U, rectified.VersionNumber);
         Assert.Equal(managerVersion.Id, rectified.SupersedesVersionId);
         Assert.Equal(3, await context.MedicalRecordVersions.CountAsync(x => x.MedicalRecordEntryId == rectified.EntryId));
-        Assert.Equal(2, await context.ClinicalAccessEvents.CountAsync(x => x.PatientAccountId == patient.Id && x.OutcomeCode == "denied"));
+        Assert.Equal(3, await context.ClinicalAccessEvents.CountAsync(x => x.PatientAccountId == patient.Id && x.OutcomeCode == "denied"));
 
         var mutation = await Assert.ThrowsAnyAsync<Exception>(() => context.Database.ExecuteSqlInterpolatedAsync(
             $"UPDATE medical_record_versions SET chief_complaint = 'alteracao proibida' WHERE id = {finalized.Id}"));

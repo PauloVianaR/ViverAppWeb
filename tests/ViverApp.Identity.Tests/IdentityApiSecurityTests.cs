@@ -1,12 +1,15 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ViverApp.Api.Features.Identity;
+using ViverApp.Api.Features.PatientExperience;
 using Xunit;
 
 namespace ViverApp.Identity.Tests;
@@ -89,6 +92,16 @@ public sealed class IdentityApiSecurityTests : IAsyncLifetime
         using var response = await client.GetAsync("/api/v1/auth/sessions");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public void AdministratorAccountAlias_UsesActualAdministratorRole()
+    {
+        var policy = Assert.Single(typeof(PatientAccountController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>());
+        var roles = policy.Roles!.Split(',', StringSplitOptions.TrimEntries);
+        Assert.Contains(ViverAppRoles.Administrator, roles);
+        Assert.DoesNotContain("admin", roles);
     }
 
     [Fact]

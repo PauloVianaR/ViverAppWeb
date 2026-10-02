@@ -48,6 +48,7 @@ Se health ou jornada crítica falhar, retirar tráfego e voltar os dois sites ao
 - A CI não está ativa porque o repositório Web não possui remoto Git configurado. O job hospedado não usa banco descartável, portanto os testes MySQL completos e migrations continuam no portão local até existir runner de homologação persistente e isolado, sem acesso ao banco de produção.
 - Assinatura/atestado de artefato, backup/restore real, monitoramento externo, Cloudflare Full (strict)/DNSSEC/WAF e scanner sob a identidade IIS exigem infraestrutura, responsáveis e validação posterior.
 - Fase 25 foi aceita como marco pelo proprietário, mas seus portões de segurança/carga externos permanecem em `.local/PENDENCIAS.md` e devem bloquear ativação pública se ainda houver risco crítico/alto.
+- Os defeitos F27-01/02/03 receberam a [correção vS1](../FASE-27-CORRECOES-PRODUCAO-VS1.md), mas o pentest da Fase 27 permanece parcial. Validar a implantação, a matriz ofensiva pendente e uma revisão humana independente antes de expor o domínio ou dados reais. A preparação de ZIPs não equivale a aprovação para produção.
 
 ## Fontes técnicas de referência
 

@@ -423,7 +423,7 @@ Cada fase deve:
 
 ## Fase 27 — Pentest abrangente conduzido pelo Codex
 
-**Estado:** duas rodadas locais parciais autorizadas em 01–02/10/2026 na branch `codex/fase-27-pentest-abrangente`. Há três defeitos reproduzíveis, sem aprovação de segurança para produção. A Fase 26 permanece pausada e a origem de produção não existe.
+**Estado:** duas rodadas locais parciais autorizadas em 01–02/10/2026 na branch `codex/fase-27-pentest-abrangente`. Os três defeitos reproduzidos receberam a [correção de produção vS1](FASE-27-CORRECOES-PRODUCAO-VS1.md) em branch própria; a cobertura ofensiva ainda é parcial e não há aprovação de segurança para produção. A Fase 26 permanece pausada e a origem de produção não existe.
 
 **Planos:** [pentest abrangente](FASE-27-PENTEST-ABRANGENTE.md) e [segunda campanha aprofundada](FASE-27-SEGUNDA-CAMPANHA-AGRESSIVA.md). **Evidências:** [primeira rodada](FASE-27-RELATORIO-PENTEST.md), [segunda rodada](FASE-27-RELATORIO-PENTEST-RODADA-2.md) e [matriz de cobertura](FASE-27-MATRIZ-COBERTURA.md). Não há aprovação de segurança para produção nesta etapa.
 

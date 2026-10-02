@@ -6,6 +6,7 @@ using MySql.Data.MySqlClient;
 using ViverApp.Api.Features.ClinicalOperations;
 using ViverApp.Api.Features.DoctorExperience;
 using ViverApp.Api.Features.Identity;
+using ViverApp.Api.Features.ManagerExperience;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 using Xunit;
@@ -64,6 +65,26 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
         Assert.Contains(managerAgenda.Items, item => item.Id == fixture.AppointmentId);
         Assert.Contains(managerAgenda.Items, item => item.Id == fixture.OtherAppointmentId);
         Assert.All(managerAgenda.Items, item => Assert.Null(item.PatientNotes));
+    }
+
+    [Fact]
+    public async Task PatientSearch_AcceptsAccentedNamesAcrossClinicalManagerAndDoctorViews()
+    {
+        await using var context = CreateContext(configuration);
+        var clinical = CreateService(context, fixture.NowUtc);
+        var doctor = new DoctorExperienceService(context, null!, null!, new NoOpAuditWriter(), new FixedTimeProvider(fixture.NowUtc));
+        var manager = new ManagerExperienceService(context, null!, null!, new NoOpAuditWriter(), new FixedTimeProvider(fixture.NowUtc));
+
+        var clinicalPatients = await clinical.GetPatientsAsync(
+            fixture.ManagerId, ViverAppRoles.Manager, "João", 1, 100, CancellationToken.None);
+        var doctorPatients = await doctor.PatientsAsync(
+            fixture.DoctorId, "João", null, null, 1, 100, CancellationToken.None);
+        var managerPatients = await manager.PatientsAsync(
+            "João", null, null, 1, 100, CancellationToken.None);
+
+        Assert.Contains(clinicalPatients.Items, item => item.AccountId == fixture.PatientId);
+        Assert.Contains(doctorPatients.Page.Items, item => item.AccountId == fixture.PatientId);
+        Assert.Contains(managerPatients.Page.Items, item => item.AccountId == fixture.PatientId);
     }
 
     [Fact]
@@ -333,7 +354,7 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
         var doctor = Account($"doctor-{marker}@phase8.example.test", ViverAppRoles.Doctor, "Dra. Fase Oito");
         var otherDoctor = Account($"other-{marker}@phase8.example.test", ViverAppRoles.Doctor, "Dr. Outro Médico");
         var manager = Account($"manager-{marker}@phase8.example.test", ViverAppRoles.Manager, "Gestora Fase Oito");
-        var patient = Account($"patient-{marker}@phase8.example.test", ViverAppRoles.Patient, "Paciente Vinculado");
+        var patient = Account($"patient-{marker}@phase8.example.test", ViverAppRoles.Patient, "Paciente João Vinculado");
         var otherPatient = Account($"patient2-{marker}@phase8.example.test", ViverAppRoles.Patient, "Segundo Paciente");
         context.Accounts.AddRange(doctor, otherDoctor, manager, patient, otherPatient);
         await context.SaveChangesAsync();
