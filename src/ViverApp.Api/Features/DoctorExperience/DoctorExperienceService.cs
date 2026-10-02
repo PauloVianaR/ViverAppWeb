@@ -177,7 +177,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         Page(page, pageSize); if (status is not null && status is not ("active" or "blocked")) throw Invalid("Estado inválido.");
         var visible = database.Accounts.AsNoTracking().Where(x => x.RoleCode == ViverAppRoles.Patient);
         var term = Text(search); if (term is { Length: > 120 }) throw Invalid("A busca deve ter no máximo 120 caracteres.");
-        if (term is not null) visible = visible.Where(x => x.FullName.Contains(term) || x.Email != null && x.Email.Contains(term) || x.PhoneE164 != null && x.PhoneE164.Contains(term));
+        if (term is not null) visible = visible.WhereNameEmailOrPhoneContains(term);
         if (status is not null) visible = visible.Where(x => x.StatusCode == status);
         var now = clock.GetUtcNow().UtcDateTime;
         if (premium.HasValue) visible = visible.Where(x => x.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)) == premium.Value);

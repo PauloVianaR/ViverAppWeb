@@ -168,9 +168,7 @@ public sealed class ClinicalOperationsService(
                 throw BadRequest("A busca deve ter no máximo 120 caracteres.");
             }
 
-            query = query.Where(item => item.FullName.Contains(term)
-                || item.Email != null && item.Email.Contains(term)
-                || item.PhoneE164 != null && item.PhoneE164.Contains(term));
+            query = query.WhereNameEmailOrPhoneContains(term);
         }
 
         var total = await query.CountAsync(cancellationToken);

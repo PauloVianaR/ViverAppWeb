@@ -167,7 +167,19 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
             .Include(x => x.PremiumMembershipAccounts).ThenInclude(x => x.PremiumPlan);
         if (status is not null) query = query.Where(x => x.StatusCode == status);
         if (premium.HasValue) query = premium.Value ? query.Where(x => x.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now))) : query.Where(x => !x.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)));
-        var term = Text(search); if (term is not null) { if (term.Length > 120) throw Invalid("A busca deve ter no máximo 120 caracteres."); var taxTerm = new string(term.Where(char.IsAsciiDigit).ToArray()); var hasTaxTerm = taxTerm.Length >= 3; query = query.Where(x => x.FullName.Contains(term) || x.Email != null && x.Email.Contains(term) || x.PhoneE164 != null && x.PhoneE164.Contains(term) || hasTaxTerm && x.TaxId != null && x.TaxId.Contains(taxTerm)); }
+        var term = Text(search);
+        if (term is not null)
+        {
+            if (term.Length > 120) throw Invalid("A busca deve ter no máximo 120 caracteres.");
+            var taxTerm = new string(term.Where(char.IsAsciiDigit).ToArray());
+            var hasTaxTerm = taxTerm.Length >= 3;
+            query = term.All(char.IsAscii)
+                ? query.Where(x => x.FullName.Contains(term) || x.Email != null && x.Email.Contains(term)
+                    || x.PhoneE164 != null && x.PhoneE164.Contains(term)
+                    || hasTaxTerm && x.TaxId != null && x.TaxId.Contains(taxTerm))
+                : query.Where(x => x.FullName.Contains(term) || x.Email != null && x.Email.Contains(term)
+                    || hasTaxTerm && x.TaxId != null && x.TaxId.Contains(taxTerm));
+        }
         var total = await query.CountAsync(ct); var accounts = await query.OrderBy(x => x.FullName).Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(ct);
         var ids = accounts.Select(x => x.Id).ToArray(); var appointments = await database.Appointments.AsNoTracking().Where(x => ids.Contains(x.PatientAccountId) && x.InverseRescheduledFromAppointment == null).Select(x => new PatientHistoryRow(x.PatientAccountId, x.StartsAtUtc, x.StatusCode)).ToArrayAsync(ct);
         var items = accounts.Select(x => MapPatient(x, appointments.Where(a => a.PatientAccountId == x.Id), now)).ToArray();

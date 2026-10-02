@@ -26,7 +26,7 @@ public sealed class RecentAuthentication(ViverAppDbContext database)
     }
 }
 
-[ApiController, Route("api/v1/patient/account"), Route("api/v1/doctor/account"), Route("api/v1/psychologist/account"), Route("api/v1/manager/account"), Route("api/v1/admin/account"), Authorize(Roles = "patient,doctor,psychologist,manager,admin")]
+[ApiController, Route("api/v1/patient/account"), Route("api/v1/doctor/account"), Route("api/v1/psychologist/account"), Route("api/v1/manager/account"), Route("api/v1/admin/account"), Authorize(Roles = "patient,doctor,psychologist,manager,administrator")]
 [ServiceFilter(typeof(PatientExperienceExceptionFilter))]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class PatientAccountController(ViverAppDbContext database, UserManager<ViverAppUser> users,
