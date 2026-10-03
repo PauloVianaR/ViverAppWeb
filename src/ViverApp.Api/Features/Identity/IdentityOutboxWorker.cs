@@ -12,7 +12,8 @@ public sealed partial class IdentityOutboxWorker(
     IServiceScopeFactory scopeFactory,
     IDataProtectionProvider dataProtectionProvider,
     SmtpIdentitySender emailSender,
-    SmsBaratoIdentitySender smsSender,
+    IServiceProvider serviceProvider,
+    IdentityDeliveryOptions deliveryOptions,
     IConfiguration configuration,
     ILogger<IdentityOutboxWorker> logger) : BackgroundService
 {
@@ -109,6 +110,7 @@ public sealed partial class IdentityOutboxWorker(
                 SELECT *
                 FROM outbox_messages
                 WHERE template_key LIKE 'identity.%'
+                  AND ({{deliveryOptions.SmsEnabled}} OR channel_code = 'email')
                   AND (
                     (status_code = 'pending' AND next_attempt_at_utc <= {{now}})
                     OR (status_code = 'processing' AND lease_until_utc < {{now}})
@@ -159,6 +161,9 @@ public sealed partial class IdentityOutboxWorker(
         }
         else if (message.ChannelCode == "sms")
         {
+            if (!deliveryOptions.SmsEnabled)
+                throw new InvalidOperationException("identity_sms_unavailable");
+            var smsSender = serviceProvider.GetRequiredService<SmsBaratoIdentitySender>();
             await smsSender.SendAsync(
                 message.Recipient,
                 template.SmsTemplate,

@@ -24,6 +24,7 @@ public sealed class AuthController(
     IdentityChallengeService challengeService,
     IdentityAuditWriter auditWriter,
     IdentitySecurityOptions securityOptions,
+    IConfiguration configuration,
     PasswordTimingProtector passwordTimingProtector,
     GoogleOnboardingProtector googleOnboardingProtector,
     ViverAppDbContext database,
@@ -54,6 +55,14 @@ public sealed class AuthController(
                 IdentityChallengeService.CreateOpaqueRequestId(),
                 GenericChallengeMessage));
         }
+
+        if (request.VerificationChannel == "sms"
+            && !configuration.GetValue("Authentication:Delivery:SmsEnabled", true))
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Status = StatusCodes.Status503ServiceUnavailable,
+                Title = "O envio por SMS está temporariamente indisponível. Use e-mail.",
+            });
 
         var email = string.IsNullOrWhiteSpace(request.Email)
             ? null
@@ -1124,7 +1133,12 @@ public sealed class AuthController(
             : user?.PhoneNumberConfirmed == true;
 
         Guid requestId;
-        if (user is not null
+        if (request.Channel == "sms"
+            && !configuration.GetValue("Authentication:Delivery:SmsEnabled", true))
+        {
+            requestId = IdentityChallengeService.CreateOpaqueRequestId();
+        }
+        else if (user is not null
             && user.StatusCode == requiredStatus
             && destination is not null
             && (!requireVerifiedContact || verified))

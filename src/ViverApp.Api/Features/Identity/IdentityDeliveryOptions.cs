@@ -12,6 +12,8 @@ public sealed class IdentityDeliveryOptions
 
     public required string SmtpPassword { get; init; }
 
+    public bool SmsEnabled { get; init; } = true;
+
     public required Uri SmsBaratoBaseUrl { get; init; }
 
     public required string SmsBaratoApiKey { get; init; }
@@ -21,7 +23,8 @@ public sealed class IdentityDeliveryOptions
         var smtpHost = Required(configuration, "Smtp:Host");
         var smtpUser = Required(configuration, "Smtp:User");
         var smtpPassword = Required(configuration, "Smtp:Password");
-        var smsApiKey = Required(configuration, "SmsBarato:ApiKey");
+        var smsEnabled = configuration.GetValue("Authentication:Delivery:SmsEnabled", true);
+        var smsApiKey = smsEnabled ? Required(configuration, "SmsBarato:ApiKey") : string.Empty;
         if (!int.TryParse(configuration["Smtp:Port"], out var smtpPort)
             || smtpPort is < 1 or > 65535)
         {
@@ -44,7 +47,9 @@ public sealed class IdentityDeliveryOptions
             throw new InvalidOperationException("Smtp:User deve ser um e-mail válido.", exception);
         }
 
-        var baseUrlValue = Required(configuration, "SmsBarato:BaseUrl");
+        var baseUrlValue = smsEnabled
+            ? Required(configuration, "SmsBarato:BaseUrl")
+            : "https://sistema81.smsbarato.com.br/";
         if (!Uri.TryCreate(baseUrlValue, UriKind.Absolute, out var smsBaseUrl)
             || smsBaseUrl.Scheme != Uri.UriSchemeHttps
             || !string.Equals(
@@ -63,6 +68,7 @@ public sealed class IdentityDeliveryOptions
             SmtpPort = smtpPort,
             SmtpUser = smtpUser,
             SmtpPassword = smtpPassword,
+            SmsEnabled = smsEnabled,
             SmsBaratoBaseUrl = new Uri(smsBaseUrl.GetLeftPart(UriPartial.Authority) + "/"),
             SmsBaratoApiKey = smsApiKey,
         };

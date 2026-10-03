@@ -17,7 +17,7 @@
         <div>
             <p class="eyebrow">Seu cuidado, seu acesso</p>
             <h1>Entre do seu jeito.</h1>
-            <p>Use Google, e-mail, telefone, senha ou código de verificação. Cada pessoa vê apenas a área permitida para o seu papel.</p>
+            <p>Use Google, e-mail, @(Backend.SmsEnabled ? "telefone, " : "")senha ou código de verificação. Cada pessoa vê apenas a área permitida para o seu papel.</p>
         </div>
         <ul class="access-assurances">
             <li><AppIcon Name="shield" /> Senhas protegidas por hash adaptativo</li>
@@ -95,7 +95,7 @@
                     <a class="button google-button google-button--primary" href="@GoogleRegistrationUrl"><span aria-hidden="true">G</span> Continuar com Google como @SelectedRole.Label</a>
                     <p>Primeiro você confirma sua conta Google. Em seguida, volta para preencher os dados de @SelectedRole.Label.ToLowerInvariant().</p>
                     <div class="method-divider"><span>ou</span></div>
-                    <button class="button button--secondary" type="button" @onclick="ShowClassicRegistration">Cadastrar com e-mail ou telefone</button>
+                    <button class="button button--secondary" type="button" @onclick="ShowClassicRegistration">@(Backend.SmsEnabled ? "Cadastrar com e-mail ou telefone" : "Cadastrar com e-mail")</button>
                 </div>
             }
             else
@@ -103,12 +103,12 @@
                 <div class="access-form form-grid">
                     @if (Mode == "register")
                     {
-                        <div class="classic-heading field--wide"><strong>Cadastro com e-mail ou telefone</strong><button type="button" @onclick="ShowGoogleRegistration">Preferir Google</button></div>
+                        <div class="classic-heading field--wide"><strong>@(Backend.SmsEnabled ? "Cadastro com e-mail ou telefone" : "Cadastro com e-mail")</strong><button type="button" @onclick="ShowGoogleRegistration">Preferir Google</button></div>
                     }
                     @if (Mode == "register")
                     {
                         <div class="field field--wide"><label for="full-name">Nome completo</label><input id="full-name" autocomplete="name" maxlength="200" @bind="FullName" /></div>
-                        <div class="field"><label for="email">E-mail (opcional)</label><input id="email" type="email" autocomplete="email" maxlength="254" @bind="Email" /></div>
+                        <div class="field"><label for="email">@(Backend.SmsEnabled ? "E-mail (opcional)" : "E-mail")</label><input id="email" type="email" autocomplete="email" maxlength="254" required="@(!Backend.SmsEnabled)" @bind="Email" /></div>
                     }
                     <div class="field"><label for="phone">Telefone com DDD</label><input id="phone" type="tel" autocomplete="tel-national" inputmode="numeric" placeholder="(11) 99999-9999" maxlength="15" value="@Phone" @oninput="e=>Phone=BrazilianPhoneInput.Mask(e.Value?.ToString())" /></div>
                     <div class="field"><label for="tax-id">CPF</label><input id="tax-id" inputmode="numeric" autocomplete="off" maxlength="11" @bind="TaxId" /></div>
@@ -117,7 +117,7 @@
                     {
                         <div class="field"><label for="password">Senha</label><input id="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" @bind="Password" /><p class="field-hint">8+ caracteres, maiúscula, minúscula, número e símbolo.</p></div>
                         <div class="field"><label for="password-confirm">Confirmar senha</label><input id="password-confirm" type="password" autocomplete="new-password" @bind="PasswordConfirmation" /></div>
-                        <div class="field"><label for="channel">Confirmar por</label><select id="channel" @bind="Channel"><option value="sms">SMS</option><option value="email">E-mail</option></select></div>
+                        <div class="field"><label for="channel">Confirmar por</label><select id="channel" @bind="Channel"><option value="email">E-mail</option>@if (Backend.SmsEnabled) { <option value="sms">SMS</option> }</select></div>
                     }
 
                     @if (RoleCode == "patient")
@@ -220,7 +220,7 @@
     private string Phone = string.Empty;
     private string TaxId = string.Empty;
     private string BirthDateText = string.Empty;
-    private string Channel = "sms";
+    private string Channel = "email";
     private string RoleCode = "patient";
     private string PostalCode = string.Empty;
     private string? LastPostalCodeLookup;
