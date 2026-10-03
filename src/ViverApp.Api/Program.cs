@@ -58,6 +58,7 @@ builder.Services.AddProblemDetails(options =>
             CorrelationIdMiddleware.GetCorrelationId(context.HttpContext);
     };
 });
+builder.Services.AddExceptionHandler<IdentitySmsUnavailableHandler>();
 builder.Services
     .AddControllersWithViews(options =>
         options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()))

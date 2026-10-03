@@ -34,11 +34,12 @@ public static class IdentityServiceCollectionExtensions
         {
             var deliveryOptions = IdentityDeliveryOptions.Load(configuration);
             services.AddSingleton(deliveryOptions);
-            services.AddHttpClient<SmsBaratoIdentitySender>(client =>
-            {
-                client.BaseAddress = deliveryOptions.SmsBaratoBaseUrl;
-                client.Timeout = TimeSpan.FromSeconds(10);
-            });
+            if (deliveryOptions.SmsEnabled)
+                services.AddHttpClient<SmsBaratoIdentitySender>(client =>
+                {
+                    client.BaseAddress = deliveryOptions.SmsBaratoBaseUrl;
+                    client.Timeout = TimeSpan.FromSeconds(10);
+                });
             services.AddSingleton<SmtpIdentitySender>();
             services.AddHostedService<IdentityOutboxWorker>();
         }

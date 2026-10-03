@@ -325,6 +325,21 @@ public sealed class IdentitySecurityTests
         Assert.Contains("codigo=123456", handler.Body, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void EmailOnlyDelivery_StartsWithoutSmsCredentials()
+    {
+        var options = IdentityDeliveryOptions.Load(CreateConfiguration(new Dictionary<string, string?>
+        {
+            ["Authentication:Delivery:SmsEnabled"] = "false",
+            ["SmsBarato:BaseUrl"] = null,
+            ["SmsBarato:ApiKey"] = null,
+        }));
+
+        Assert.False(options.SmsEnabled);
+        Assert.Empty(options.SmsBaratoApiKey);
+        Assert.Equal("sender@example.com", options.SmtpUser);
+    }
+
     private static void AssertMfaRequirement(AuthorizationPolicy policy)
     {
         Assert.Contains(

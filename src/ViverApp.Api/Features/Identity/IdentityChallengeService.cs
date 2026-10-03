@@ -11,7 +11,8 @@ namespace ViverApp.Api.Features.Identity;
 public sealed class IdentityChallengeService(
     ViverAppDbContext database,
     IDataProtectionProvider dataProtectionProvider,
-    IdentitySecurityOptions securityOptions)
+    IdentitySecurityOptions securityOptions,
+    IConfiguration configuration)
 {
     private static readonly TimeSpan ChallengeLifetime = TimeSpan.FromMinutes(10);
     private readonly IDataProtector outboxProtector = dataProtectionProvider.CreateProtector(
@@ -33,6 +34,9 @@ public sealed class IdentityChallengeService(
         {
             throw new ArgumentOutOfRangeException(nameof(channel));
         }
+
+        if (channel == "sms" && !configuration.GetValue("Authentication:Delivery:SmsEnabled", true))
+            throw new IdentitySmsUnavailableException();
 
         var now = DateTime.UtcNow;
         var challengeId = Guid.NewGuid();

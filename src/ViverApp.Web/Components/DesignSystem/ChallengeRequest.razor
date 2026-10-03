@@ -10,13 +10,14 @@
     </div>
     <div class="field">
         <label for="challenge-channel">Enviar por</label>
-        <select id="challenge-channel" value="@Channel" @onchange="UpdateChannel"><option value="email">E-mail</option><option value="sms">SMS</option></select>
+        <select id="challenge-channel" value="@Channel" @onchange="UpdateChannel"><option value="email">E-mail</option>@if (Backend.SmsEnabled) { <option value="sms">SMS</option> }</select>
     </div>
     <button class="button" type="button" @onclick="Submit" disabled="@Busy">Enviar código</button>
     <button class="link-button" type="button" @onclick="Back" disabled="@Busy">Voltar</button>
 </div>
 
 @code {
+    [Inject] private WebBackendOptions Backend { get; set; } = default!;
     [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
     [Parameter] public string Identifier { get; set; } = string.Empty;
     [Parameter] public EventCallback<string> IdentifierChanged { get; set; }
