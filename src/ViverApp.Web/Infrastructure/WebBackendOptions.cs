@@ -4,14 +4,17 @@ namespace ViverApp.Web;
 
 public sealed class WebBackendOptions
 {
-    private WebBackendOptions(Uri baseUrl)
+    private WebBackendOptions(Uri baseUrl, bool smsEnabled)
     {
         BaseUrl = baseUrl;
+        SmsEnabled = smsEnabled;
         GoogleLoginUrl = new Uri(baseUrl, "api/v1/auth/google/start").ToString();
         GoogleLinkUrl = new Uri(baseUrl, "api/v1/auth/google/link/start").ToString();
     }
 
     public Uri BaseUrl { get; }
+
+    public bool SmsEnabled { get; }
 
     public string GoogleLoginUrl { get; }
 
@@ -33,7 +36,9 @@ public sealed class WebBackendOptions
                 "Backend:BaseUrl deve ser uma URL HTTPS absoluta e sem credenciais; HTTP é aceito somente em loopback no Development.");
         }
 
-        return new WebBackendOptions(new Uri(baseUrl.ToString().TrimEnd('/') + "/"));
+        return new WebBackendOptions(
+            new Uri(baseUrl.ToString().TrimEnd('/') + "/"),
+            configuration.GetValue("Authentication:Delivery:SmsEnabled", true));
     }
 
     private static bool IsLoopback(string host) =>

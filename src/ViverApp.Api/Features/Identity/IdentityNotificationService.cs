@@ -7,7 +7,8 @@ namespace ViverApp.Api.Features.Identity;
 
 public sealed class IdentityNotificationService(
     ViverAppDbContext database,
-    IDataProtectionProvider dataProtectionProvider)
+    IDataProtectionProvider dataProtectionProvider,
+    IConfiguration configuration)
 {
     private readonly IDataProtector protector = dataProtectionProvider.CreateProtector(
         "ViverApp.Identity.OutboxMessage.v1");
@@ -15,6 +16,8 @@ public sealed class IdentityNotificationService(
     public void QueueProfessionalReview(Account account, string decisionCode)
     {
         var channel = account.EmailVerified && account.Email is not null ? "email" : "sms";
+        if (channel == "sms" && !configuration.GetValue("Authentication:Delivery:SmsEnabled", true))
+            return;
         var recipient = channel == "email" ? account.Email : account.PhoneE164;
         if (recipient is null)
         {
