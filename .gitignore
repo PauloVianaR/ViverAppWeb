@@ -9,6 +9,7 @@ AGENTS.md
 *.user
 *.suo
 artifacts/
+docs/
 TestResults/
 coverage/
 .env
