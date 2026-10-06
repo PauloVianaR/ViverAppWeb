@@ -455,8 +455,11 @@ public sealed class PatientSchedulingService(
         appointment.RowVersion++;
         await database.SaveChangesAsync(cancellationToken);
         await auditWriter.WriteAsync("appointment.point_discount_applied", actorId, appointment.Id,
-            new Dictionary<string, string> { ["kind"] = request.KindCode,
-                ["amount"] = appointment.PointDiscountAmount.ToString(CultureInfo.InvariantCulture) }, cancellationToken);
+            new Dictionary<string, string>
+            {
+                ["kind"] = request.KindCode,
+                ["amount"] = appointment.PointDiscountAmount.ToString(CultureInfo.InvariantCulture)
+            }, cancellationToken);
         if (transaction is not null) await transaction.CommitAsync(cancellationToken);
         var hydrated = await IncludeAppointmentGraph(database.Appointments.AsNoTracking())
             .SingleAsync(item => item.Id == appointmentId, cancellationToken);

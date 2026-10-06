@@ -37,9 +37,13 @@ public sealed class PatientSchedulingConcurrencyTests
                     $"manager-{marker}@example.test", now);
                 var plan = new PremiumPlan
                 {
-                    Name = $"Plano Teste {marker}", AppointmentDiscountPercent = 10,
-                    PriceAmount = 0, IsActive = true, CreatedAtUtc = now,
-                    UpdatedAtUtc = now, RowVersion = 1,
+                    Name = $"Plano Teste {marker}",
+                    AppointmentDiscountPercent = 10,
+                    PriceAmount = 0,
+                    IsActive = true,
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now,
+                    RowVersion = 1,
                 };
                 database.Accounts.Add(manager);
                 database.PremiumPlans.Add(plan);
@@ -47,9 +51,14 @@ public sealed class PatientSchedulingConcurrencyTests
                 managerId = manager.Id; planId = plan.Id;
                 database.PremiumMemberships.Add(new PremiumMembership
                 {
-                    AccountId = fixture.PatientId, PremiumPlanId = plan.Id, StatusCode = "active",
-                    StartsAtUtc = now.AddDays(-1), EndsAtUtc = now.AddDays(30),
-                    CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1,
+                    AccountId = fixture.PatientId,
+                    PremiumPlanId = plan.Id,
+                    StatusCode = "active",
+                    StartsAtUtc = now.AddDays(-1),
+                    EndsAtUtc = now.AddDays(30),
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now,
+                    RowVersion = 1,
                 });
                 await database.SaveChangesAsync();
             }
@@ -76,14 +85,21 @@ public sealed class PatientSchedulingConcurrencyTests
                 var pendingEntity = await database.Appointments.SingleAsync(x => x.Id == pending.Response.Id);
                 var reversed = new Payment
                 {
-                    AppointmentId = pendingEntity.Id, AppointmentRequiresPayment = true,
-                    ProviderReferenceAppointmentId = pendingEntity.Id, ProviderCode = "internal",
-                    StatusCode = "reversed", Amount = pendingEntity.PriceAmount, CurrencyCode = "BRL",
-                    IdempotencyKey = Guid.NewGuid(), MethodCode = "cash",
+                    AppointmentId = pendingEntity.Id,
+                    AppointmentRequiresPayment = true,
+                    ProviderReferenceAppointmentId = pendingEntity.Id,
+                    ProviderCode = "internal",
+                    StatusCode = "reversed",
+                    Amount = pendingEntity.PriceAmount,
+                    CurrencyCode = "BRL",
+                    IdempotencyKey = Guid.NewGuid(),
+                    MethodCode = "cash",
                     ReversalReason = "Lançamento cancelado para teste",
                     ReversalRequestedAtUtc = fixture.UtcNow.UtcDateTime,
-                    ReversedByAccountId = managerId, CreatedAtUtc = fixture.UtcNow.UtcDateTime,
-                    UpdatedAtUtc = fixture.UtcNow.UtcDateTime, RowVersion = 1,
+                    ReversedByAccountId = managerId,
+                    CreatedAtUtc = fixture.UtcNow.UtcDateTime,
+                    UpdatedAtUtc = fixture.UtcNow.UtcDateTime,
+                    RowVersion = 1,
                 };
                 database.Payments.Add(reversed);
                 await database.SaveChangesAsync();
@@ -134,17 +150,33 @@ public sealed class PatientSchedulingConcurrencyTests
                 var marker = Guid.NewGuid().ToString("N");
                 var second = new AppointmentType
                 {
-                    Name = $"Consulta adicional {marker}", Description = "Tipo de atendimento exclusivo do teste.",
-                    CategoryCode = "consultation", ModalityCode = "online", DurationMinutes = 20,
-                    PriceAmount = 75m, RequiresPayment = true, IsActive = true, DisplayOrder = 0,
-                    CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1,
+                    Name = $"Consulta adicional {marker}",
+                    Description = "Tipo de atendimento exclusivo do teste.",
+                    CategoryCode = "consultation",
+                    ModalityCode = "online",
+                    DurationMinutes = 20,
+                    PriceAmount = 75m,
+                    RequiresPayment = true,
+                    IsActive = true,
+                    DisplayOrder = 0,
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now,
+                    RowVersion = 1,
                 };
                 var different = new AppointmentType
                 {
-                    Name = $"Exame adicional {marker}", Description = "Tipo de atendimento exclusivo do teste.",
-                    CategoryCode = "examination", ModalityCode = "online", DurationMinutes = 20,
-                    PriceAmount = 80m, RequiresPayment = true, IsActive = true, DisplayOrder = 0,
-                    CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1,
+                    Name = $"Exame adicional {marker}",
+                    Description = "Tipo de atendimento exclusivo do teste.",
+                    CategoryCode = "examination",
+                    ModalityCode = "online",
+                    DurationMinutes = 20,
+                    PriceAmount = 80m,
+                    RequiresPayment = true,
+                    IsActive = true,
+                    DisplayOrder = 0,
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now,
+                    RowVersion = 1,
                 };
                 database.AppointmentTypes.AddRange(second, different);
                 await database.SaveChangesAsync();
@@ -155,12 +187,24 @@ public sealed class PatientSchedulingConcurrencyTests
                 await database.SaveChangesAsync();
                 managerId = manager.Id;
                 database.ProfessionalServices.AddRange(
-                    new ProfessionalService { ProfessionalAccountId = fixture.DoctorId,
-                        AppointmentTypeId = second.Id, IsActive = true, CreatedAtUtc = now,
-                        UpdatedAtUtc = now, RowVersion = 1 },
-                    new ProfessionalService { ProfessionalAccountId = fixture.DoctorId,
-                        AppointmentTypeId = different.Id, IsActive = true, CreatedAtUtc = now,
-                        UpdatedAtUtc = now, RowVersion = 1 });
+                    new ProfessionalService
+                    {
+                        ProfessionalAccountId = fixture.DoctorId,
+                        AppointmentTypeId = second.Id,
+                        IsActive = true,
+                        CreatedAtUtc = now,
+                        UpdatedAtUtc = now,
+                        RowVersion = 1
+                    },
+                    new ProfessionalService
+                    {
+                        ProfessionalAccountId = fixture.DoctorId,
+                        AppointmentTypeId = different.Id,
+                        IsActive = true,
+                        CreatedAtUtc = now,
+                        UpdatedAtUtc = now,
+                        RowVersion = 1
+                    });
                 await database.SaveChangesAsync();
             }
             await using (var database = CreateContext(configuration))
