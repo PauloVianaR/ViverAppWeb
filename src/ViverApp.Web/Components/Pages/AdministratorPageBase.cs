@@ -42,11 +42,13 @@ public abstract class AdministratorPageBase : ComponentBase, IAsyncDisposable
     }
     protected abstract Task Load();
     protected Task<T?> Get<T>(string path) => Request<T>(path, "GET", null);
+    protected Task<T?> GetOptional<T>(string path) => Request<T>(path, "GET", null, notFoundIsNull: true);
     protected async Task LoadAppointmentViewAsync() { if (appointmentViewLoaded) return; var preference = await Get<AppointmentViewPreference>("api/v1/me/preferences/appointment-view"); AppointmentViewMode = preference?.Mode == "compact" ? "compact" : "cards"; appointmentViewLoaded = true; }
     protected Task ChangeAppointmentView(string mode) => Run(async () => { var preference = await Request<AppointmentViewPreference>("api/v1/me/preferences/appointment-view", "PUT", new { mode }); AppointmentViewMode = preference?.Mode == "compact" ? "compact" : "cards"; });
-    protected async Task<T?> Request<T>(string path, string method, object? data, string? key = null)
+    protected async Task<T?> Request<T>(string path, string method, object? data, string? key = null, bool notFoundIsNull = false)
     {
         var result = await Module!.InvokeAsync<PatientApiResult<T>>("request", Backend.BaseUrl.ToString(), path, method, data, key);
+        if (notFoundIsNull && result.Status == 404) return default;
         if (!result.Ok) { if (result.Status == 401) Navigation.NavigateTo("/acesso?estado=sessao-expirada", true); if (result.Status == 403 && result.Error?.Contains("Confirme", StringComparison.OrdinalIgnoreCase) == true) Notice = "Sessão elevada expirada. Entre novamente com MFA e retorne para concluir a ação."; throw new AdministratorUiException(result.Error ?? "Não foi possível concluir."); }
         return result.Data;
     }
