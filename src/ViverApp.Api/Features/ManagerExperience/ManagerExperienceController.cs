@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using ViverApp.Api.Features.ClinicalOperations;
+using ViverApp.Api.Features.CashManagement;
 using ViverApp.Api.Features.ArrivalExperience;
 using ViverApp.Api.Features.DoctorExperience;
 using ViverApp.Api.Features.Identity;
@@ -24,6 +25,7 @@ public sealed class ManagerExperienceExceptionFilter : IExceptionFilter
             ManagerRuleException e => (e.StatusCode, e.Message),
             ArrivalRuleException e => (e.StatusCode, e.Message),
             SchedulingRuleException e => (e.StatusCode, e.Message),
+            CashRuleException e => (e.StatusCode, e.Message),
             PatientExperienceException e => (e.StatusCode, e.Message),
             DbUpdateConcurrencyException => (409, "Os dados foram alterados por outra sessão. Atualize a página."),
             _ => default,
@@ -59,16 +61,16 @@ public sealed class ManagerExperienceController(ManagerExperienceService service
     [HttpGet("appointments/{id:long}")] public Task<ManagerAppointmentResponse> Appointment(ulong id, CancellationToken ct) => service.AppointmentAsync(id, ct);
     [HttpGet("booking/slots"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
     public Task<IReadOnlyList<AvailableSlotResponse>> Slots(ulong patientAccountId, ulong doctorAccountId, uint appointmentTypeId,
-        string modality, DateOnly from, int days = 14, CancellationToken ct = default) =>
-        scheduling.GetAvailableSlotsAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct);
+        string modality, DateOnly from, int days = 14, [FromQuery] uint[]? additionalAppointmentTypeIds = null, CancellationToken ct = default) =>
+        scheduling.GetAvailableSlotsAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct, additionalAppointmentTypeIds);
     [HttpGet("booking/available-dates"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
     public Task<IReadOnlyList<DateOnly>> AvailableDates(ulong patientAccountId, ulong doctorAccountId,
-        uint appointmentTypeId, string modality, DateOnly from, int days = 31, CancellationToken ct = default) =>
-        scheduling.GetAvailableDatesAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct);
+        uint appointmentTypeId, string modality, DateOnly from, int days = 31, [FromQuery] uint[]? additionalAppointmentTypeIds = null, CancellationToken ct = default) =>
+        scheduling.GetAvailableDatesAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct, additionalAppointmentTypeIds);
     [HttpGet("booking/professionals"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
     public Task<SchedulingPage<BookingProfessionalResponse>> Professionals(uint appointmentTypeId, string modality,
-        string? search = null, int page = 1, int pageSize = 50, CancellationToken ct = default) =>
-        scheduling.SearchProfessionalsAsync(page, pageSize, search, null, appointmentTypeId, modality, ct);
+        string? search = null, int page = 1, int pageSize = 50, [FromQuery] uint[]? additionalAppointmentTypeIds = null, CancellationToken ct = default) =>
+        scheduling.SearchProfessionalsAsync(page, pageSize, search, null, appointmentTypeId, modality, ct, additionalAppointmentTypeIds);
     [HttpPost("appointments"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public async Task<ActionResult<AppointmentResponse>> Create([FromHeader(Name = "Idempotency-Key")] string key,
         ManagerAppointmentCreateRequest request, CancellationToken ct)
@@ -90,6 +92,9 @@ public sealed class ManagerExperienceController(ManagerExperienceService service
     [HttpPost("appointments/{id:long}/payment"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<ManagerPaymentResponse> ConfirmPayment(ulong id, [FromHeader(Name = "Idempotency-Key")] string key,
         ManagerPaymentConfirmRequest request, CancellationToken ct) => service.ConfirmPaymentAsync(Actor, id, key, request, ct);
+    [HttpPost("appointments/{id:long}/point-discount"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
+    public Task<AppointmentResponse> ApplyPointDiscount(ulong id, AppointmentPointDiscountRequest request, CancellationToken ct) =>
+        scheduling.ApplyPointDiscountForManagerAsync(Actor, id, request, ct);
     [HttpPost("appointments/{id:long}/arrival"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
     public Task<ArrivalResponse> RegisterArrival(ulong id, ArrivalRequest request, CancellationToken ct) => arrivals.RegisterAsync(Actor, id, request, ct);
     [HttpPost("appointments/{id:long}/arrival/cancel"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]

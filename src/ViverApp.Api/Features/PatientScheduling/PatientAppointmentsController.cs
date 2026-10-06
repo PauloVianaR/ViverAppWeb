@@ -21,6 +21,7 @@ public sealed class PatientAppointmentsController(PatientSchedulingService sched
         [FromQuery] uint? specialtyId = null,
         [FromQuery] uint? appointmentTypeId = null,
         [FromQuery] string? modality = null,
+        [FromQuery] uint[]? additionalAppointmentTypeIds = null,
         CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => scheduling.SearchProfessionalsAsync(
             page,
@@ -29,7 +30,7 @@ public sealed class PatientAppointmentsController(PatientSchedulingService sched
             specialtyId,
             appointmentTypeId,
             modality,
-            cancellationToken));
+            cancellationToken, additionalAppointmentTypeIds));
 
     [HttpGet("booking/slots")]
     [EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
@@ -39,6 +40,7 @@ public sealed class PatientAppointmentsController(PatientSchedulingService sched
         [FromQuery] string modality,
         [FromQuery] DateOnly from,
         [FromQuery] int days = 14,
+        [FromQuery] uint[]? additionalAppointmentTypeIds = null,
         CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => scheduling.GetAvailableSlotsAsync(
             ActorId,
@@ -47,16 +49,17 @@ public sealed class PatientAppointmentsController(PatientSchedulingService sched
             modality,
             from,
             days,
-            cancellationToken));
+            cancellationToken, additionalAppointmentTypeIds));
 
     [HttpGet("booking/available-dates")]
     [EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
     public Task<ActionResult<IReadOnlyList<DateOnly>>> GetAvailableDates(
         [FromQuery] ulong doctorAccountId, [FromQuery] uint appointmentTypeId,
         [FromQuery] string modality, [FromQuery] DateOnly from,
-        [FromQuery] int days = 31, CancellationToken cancellationToken = default) =>
+        [FromQuery] int days = 31, [FromQuery] uint[]? additionalAppointmentTypeIds = null,
+        CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => scheduling.GetAvailableDatesAsync(ActorId, doctorAccountId,
-            appointmentTypeId, modality, from, days, cancellationToken));
+            appointmentTypeId, modality, from, days, cancellationToken, additionalAppointmentTypeIds));
 
     [HttpGet("appointments")]
     public Task<ActionResult<SchedulingPage<AppointmentResponse>>> GetAppointments(

@@ -50,6 +50,9 @@ public sealed record WebAppointmentRescheduleHistory(
     string? Reason,
     DateTime OccurredAtUtc);
 
+public sealed record WebAppointmentService(uint AppointmentTypeId, string Name, string CategoryCode,
+    ushort DurationMinutes, decimal BasePriceAmount, bool RequiresPayment);
+
 public sealed record WebAppointment(
     ulong Id,
     ulong AppointmentNumber,
@@ -76,7 +79,15 @@ public sealed record WebAppointment(
     uint? ArrivalQueueNumber,
     IReadOnlyList<WebAppointmentRescheduleHistory> RescheduleHistory,
     bool RequiresPayment,
-    ulong RowVersion);
+    ulong RowVersion)
+{
+    public IReadOnlyList<WebAppointmentService> Services { get; init; } = [];
+    public decimal BasePriceAmount { get; init; }
+    public decimal PremiumDiscountPercent { get; init; }
+    public string? PointDiscountKindCode { get; init; }
+    public decimal? PointDiscountValue { get; init; }
+    public decimal PointDiscountAmount { get; init; }
+}
 
 public sealed record WebAppointmentCreateRequest(
     ulong ProfessionalAccountId,
@@ -84,7 +95,8 @@ public sealed record WebAppointmentCreateRequest(
     string ModalityCode,
     DateOnly LocalDate,
     TimeOnly LocalStartsAt,
-    string? PatientNotes);
+    string? PatientNotes,
+    IReadOnlyList<uint>? AdditionalAppointmentTypeIds = null);
 
 public sealed record WebAppointmentCancelRequest(string Reason, ulong RowVersion);
 

@@ -67,17 +67,17 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
     public Task<DoctorAppointmentDetailResponse> Appointment(ulong id, CancellationToken ct) => service.AppointmentAsync(Actor, id, ct);
     [HttpGet("booking/slots"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
     public async Task<IReadOnlyList<AvailableSlotResponse>> Slots(ulong patientAccountId, uint appointmentTypeId, string modality,
-        DateOnly from, int days = 14, CancellationToken ct = default)
+        DateOnly from, int days = 14, [FromQuery] uint[]? additionalAppointmentTypeIds = null, CancellationToken ct = default)
     {
         await service.EnsurePatientSchedulingEnabledAsync(ct);
-        return await scheduling.GetAvailableSlotsAsync(patientAccountId, Actor, appointmentTypeId, modality, from, days, ct);
+        return await scheduling.GetAvailableSlotsAsync(patientAccountId, Actor, appointmentTypeId, modality, from, days, ct, additionalAppointmentTypeIds);
     }
     [HttpGet("booking/available-dates"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
     public async Task<IReadOnlyList<DateOnly>> AvailableDates(ulong patientAccountId, uint appointmentTypeId,
-        string modality, DateOnly from, int days = 31, CancellationToken ct = default)
+        string modality, DateOnly from, int days = 31, [FromQuery] uint[]? additionalAppointmentTypeIds = null, CancellationToken ct = default)
     {
         await service.EnsurePatientSchedulingEnabledAsync(ct);
-        return await scheduling.GetAvailableDatesAsync(patientAccountId, Actor, appointmentTypeId, modality, from, days, ct);
+        return await scheduling.GetAvailableDatesAsync(patientAccountId, Actor, appointmentTypeId, modality, from, days, ct, additionalAppointmentTypeIds);
     }
     [HttpPost("appointments"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public async Task<ActionResult<AppointmentResponse>> Create([FromHeader(Name = "Idempotency-Key")] string key,

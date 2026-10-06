@@ -71,11 +71,23 @@ public partial class Appointment
 
     public ulong? CurrentPaymentId { get; set; }
 
+    public string? PointDiscountKindCode { get; set; }
+
+    public decimal PointDiscountValue { get; set; }
+
+    public decimal PointDiscountAmount { get; set; }
+
+    public ulong? PointDiscountByAccountId { get; set; }
+
+    public DateTime? PointDiscountAtUtc { get; set; }
+
     public virtual ICollection<AppointmentDocument> AppointmentDocuments { get; set; } = new List<AppointmentDocument>();
 
     public virtual ICollection<AppointmentRescheduleHistory> AppointmentRescheduleHistories { get; set; } = new List<AppointmentRescheduleHistory>();
 
     public virtual AppointmentReview? AppointmentReview { get; set; }
+
+    public virtual ICollection<AppointmentServiceItem> AppointmentServiceItems { get; set; } = new List<AppointmentServiceItem>();
 
     public virtual ICollection<AppointmentStatusHistory> AppointmentStatusHistories { get; set; } = new List<AppointmentStatusHistory>();
 
@@ -112,6 +124,8 @@ public partial class Appointment
     public virtual ICollection<Payment> PaymentAppointmentNavigations { get; set; } = new List<Payment>();
 
     public virtual ICollection<Payment> PaymentProviderReferenceAppointments { get; set; } = new List<Payment>();
+
+    public virtual Account? PointDiscountByAccount { get; set; }
 
     public virtual ProfessionalProfile ProfessionalAccount { get; set; } = null!;
 

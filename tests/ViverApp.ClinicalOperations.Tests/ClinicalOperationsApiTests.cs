@@ -3,10 +3,18 @@ using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ViverApp.Api.Features.ClinicalOperations;
+using ViverApp.Api.Features.CashManagement;
+using ViverApp.Api.Features.AdministratorExperience;
 using ViverApp.Api.Features.DoctorExperience;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.ManagerExperience;
@@ -31,6 +39,51 @@ public sealed class ClinicalOperationsApiTests : IAsyncLifetime
 
     public Task InitializeAsync() => Task.CompletedTask;
     public async Task DisposeAsync() => await factory.DisposeAsync();
+
+    [Fact]
+    public void SplitPaymentRequest_ValidatesNestedAllocationsWithoutServerError()
+    {
+        using var scope = factory.Services.CreateScope();
+        var http = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        var context = new ActionContext(http, new RouteData(), new ActionDescriptor());
+        var request = new ManagerPaymentConfirmRequest("cash", DateTime.UtcNow, null, null, 2,
+            [new ManagerPaymentAllocationRequest("cash", 400m, null, null),
+                new ManagerPaymentAllocationRequest("pix", 230m, null, null)]);
+        scope.ServiceProvider.GetRequiredService<IObjectModelValidator>()
+            .Validate(context, null, string.Empty, request);
+        Assert.True(context.ModelState.IsValid);
+
+        var invalidContext = new ActionContext(
+            new DefaultHttpContext { RequestServices = scope.ServiceProvider }, new RouteData(), new ActionDescriptor());
+        var invalidRequest = request with
+        {
+            Allocations = [new ManagerPaymentAllocationRequest("cash", 0m, null, null)],
+        };
+        scope.ServiceProvider.GetRequiredService<IObjectModelValidator>()
+            .Validate(invalidContext, null, string.Empty, invalidRequest);
+        Assert.False(invalidContext.ModelState.IsValid);
+    }
+
+    [Fact]
+    public void ManagementPayment_ReportsClosedCashAsConflictInsteadOfInternalError()
+    {
+        var action = new ActionContext(new DefaultHttpContext(), new RouteData(), new ActionDescriptor());
+        var manager = new ExceptionContext(action, [])
+        {
+            Exception = new CashRuleException(409, "O caixa de hoje está fechado."),
+        };
+        new ManagerExperienceExceptionFilter().OnException(manager);
+        Assert.True(manager.ExceptionHandled);
+        Assert.Equal(409, Assert.IsType<ObjectResult>(manager.Result).StatusCode);
+
+        var administrator = new ExceptionContext(action, [])
+        {
+            Exception = new CashRuleException(409, "O caixa de hoje está fechado."),
+        };
+        new AdministratorExceptionFilter().OnException(administrator);
+        Assert.True(administrator.ExceptionHandled);
+        Assert.Equal(409, Assert.IsType<ObjectResult>(administrator.Result).StatusCode);
+    }
 
     [Theory]
     [InlineData("/api/v1/clinical/context")]

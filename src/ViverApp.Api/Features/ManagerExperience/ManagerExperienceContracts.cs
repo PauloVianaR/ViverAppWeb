@@ -15,7 +15,7 @@ public sealed record ManagerProfileResponse(ulong AccountId, string FullName, st
 public sealed record ManagerDoctorOption(ulong AccountId, string FullName, string LicenseLabel);
 public sealed record ManagerCapabilitiesResponse(bool AppointmentTypesEnabled, bool DoctorSchedulesEnabled, bool ProfessionalServicesEnabled,
     bool PremiumManagementEnabled, bool MedicalRecordWriteEnabled, bool CashReopeningEnabled,
-    bool CashCumulativeTotalsEnabled);
+    bool CashCumulativeTotalsEnabled, bool PointDiscountsEnabled, decimal PointDiscountMaxPercent);
 public sealed record ManagerServiceOption(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode,
     ushort DurationMinutes, decimal BasePrice, bool RequiresPayment);
 public sealed record ManagerReportMetadata(bool Exists, string? StatusCode, uint VersionCount, DateTime? PublishedAtUtc);
@@ -29,7 +29,13 @@ public sealed record ManagerAppointmentResponse(ulong Id, ulong AppointmentNumbe
     ManagerReportMetadata Report, int AttachmentCount, DateTime? ArrivedAtUtc, DateOnly? ArrivalBusinessDate,
     uint? ArrivalQueueNumber, IReadOnlyList<AppointmentRescheduleHistoryResponse> RescheduleHistory,
     bool CanRegisterArrival, bool CanCancelArrival, bool CanCancel, bool CanReschedule, bool CanComplete,
-    bool CanReopen, bool CanCancelPayment, bool CanConfirmPayment, ulong RowVersion);
+    bool CanReopen, bool CanCancelPayment, bool CanConfirmPayment, ulong RowVersion)
+{
+    public IReadOnlyList<AppointmentServiceResponse> Services { get; init; } = [];
+    public string? PointDiscountKindCode { get; init; }
+    public decimal? PointDiscountValue { get; init; }
+    public decimal PointDiscountAmount { get; init; }
+}
 public sealed record ManagerAgendaCounters(int Total, int Online, int InPerson, int Rescheduled, int Paid, int PendingPayment);
 public sealed record ManagerAgendaSources(IReadOnlyList<ulong> Total, IReadOnlyList<ulong> Online,
     IReadOnlyList<ulong> InPerson, IReadOnlyList<ulong> Rescheduled, IReadOnlyList<ulong> Paid,
@@ -52,7 +58,10 @@ public sealed record ManagerPremiumRequestResponse(ulong Id, ulong PatientAccoun
     decimal DiscountPercent, string StatusCode, Guid? ProofDocumentId, string? ProofName, uint? ProofSizeBytes,
     string? ReviewNotes, string? RejectionReason, DateTime CreatedAtUtc, DateTime? ReviewedAtUtc, ulong RowVersion);
 public sealed record ManagerPaymentResponse(ulong Id, ulong AppointmentId, string StatusCode, decimal Amount,
-    string MethodCode, DateTime PaidAtUtc, string? CardLastFour, string? AuthorizationReference, ulong RowVersion);
+    string MethodCode, DateTime PaidAtUtc, string? CardLastFour, string? AuthorizationReference, ulong RowVersion)
+{
+    public IReadOnlyList<ManagerPaymentAllocationRequest> Allocations { get; init; } = [];
+}
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ManagerProfileUpdateRequest([param: Required, StringLength(200, MinimumLength = 3)] string FullName,
@@ -104,7 +113,9 @@ public sealed record ManagerPatientAddressRequest(
 public sealed record ManagerAppointmentCreateRequest([param: Range(1, long.MaxValue)] ulong PatientAccountId,
     [param: Range(1, long.MaxValue)] ulong ProfessionalAccountId, [param: Range(1, int.MaxValue)] uint AppointmentTypeId,
     [param: Required, RegularExpression("^(in_person|online)$")] string ModalityCode, DateOnly LocalDate,
-    TimeOnly LocalStartsAt, [param: StringLength(1000)] string? PatientNotes);
+    TimeOnly LocalStartsAt, [param: StringLength(1000)] string? PatientNotes,
+    IReadOnlyList<uint>? AdditionalAppointmentTypeIds = null,
+    string? PointDiscountKindCode = null, decimal? PointDiscountValue = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ManagerPremiumDecisionRequest(bool Approve, [param: StringLength(1000)] string? Notes,
@@ -118,7 +129,8 @@ public sealed record ManagerPremiumCancelRequest([param: Required, StringLength(
 public sealed record ManagerPaymentConfirmRequest([param: Required, RegularExpression("^(credit_card|debit_card|pix|cash)$")] string MethodCode,
     DateTime PaidAtUtc, [param: RegularExpression("^[0-9]{4}$")] string? CardLastFour,
     [param: StringLength(100), RegularExpression("^[A-Za-z0-9][A-Za-z0-9 ._/-]{0,99}$")]
-    string? AuthorizationReference, [param: Range(1, long.MaxValue)] ulong AppointmentRowVersion) : IValidatableObject
+    string? AuthorizationReference, [param: Range(1, long.MaxValue)] ulong AppointmentRowVersion,
+    IReadOnlyList<ManagerPaymentAllocationRequest>? Allocations = null) : IValidatableObject
 {
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -130,3 +142,10 @@ public sealed record ManagerPaymentConfirmRequest([param: Required, RegularExpre
             yield return new ValidationResult("A versão do atendimento é obrigatória.", [nameof(AppointmentRowVersion)]);
     }
 }
+
+public sealed record ManagerPaymentAllocationRequest(
+    [param: Required, RegularExpression("^(credit_card|debit_card|pix|cash)$")] string MethodCode,
+    [param: Range(typeof(decimal), "0.01", "99999999",
+        ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal Amount,
+    [param: RegularExpression("^[0-9]{4}$")] string? CardLastFour,
+    [param: StringLength(100)] string? AuthorizationReference);

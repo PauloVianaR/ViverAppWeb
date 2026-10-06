@@ -33,7 +33,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         var todayStart = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(local.Date, DateTimeKind.Unspecified), timezone);
         var tomorrow = todayStart.AddDays(1); var week = todayStart.AddDays(7);
         var query = database.Appointments.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor && x.StartsAtUtc >= todayStart && x.StartsAtUtc < week && x.InverseRescheduledFromAppointment == null);
-        var rows = await query.Include(x => x.PatientAccount).ThenInclude(x => x.PatientProfile).Include(x => x.AppointmentType).Include(x => x.CurrentPayment)
+        var rows = await query.Include(x => x.PatientAccount).ThenInclude(x => x.PatientProfile).Include(x => x.AppointmentType).Include(x => x.AppointmentServiceItems).Include(x => x.CurrentPayment)
             .Include(x => x.AppointmentReview).Include(x => x.AppointmentRescheduleHistories).OrderBy(x => x.StartsAtUtc).ToArrayAsync(ct);
         var sources = new DoctorHomeSources(rows.Where(x => x.StartsAtUtc < tomorrow).Select(x => x.AppointmentNumber).ToArray(),
             rows.Select(x => x.AppointmentNumber).ToArray(), rows.Where(x => x.ModalityCode == "online").Select(x => x.AppointmentNumber).ToArray(),
@@ -152,7 +152,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
             sourceRows.Where(x => x.Rescheduled).Select(x => x.AppointmentNumber).ToArray());
         var counters = new DoctorAgendaCounters(sources.Total.Count, sources.Online.Count, sources.InPerson.Count, sources.Rescheduled.Count);
         var total = totalNumbers.Length; var now = clock.GetUtcNow().UtcDateTime;
-        var rows = await query.Include(x => x.PatientAccount).ThenInclude(x => x.PatientProfile).Include(x => x.AppointmentType).Include(x => x.CurrentPayment)
+        var rows = await query.Include(x => x.PatientAccount).ThenInclude(x => x.PatientProfile).Include(x => x.AppointmentType).Include(x => x.AppointmentServiceItems).Include(x => x.CurrentPayment)
             .Include(x => x.AppointmentReview).Include(x => x.AppointmentRescheduleHistories).OrderBy(x => x.StartsAtUtc).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(ct);
         return new(counters, sources, new(rows.Select(x => MapAppointment(x, now)).ToArray(), page, pageSize, total));
     }
@@ -367,7 +367,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
     }
 
     private IQueryable<Appointment> AppointmentQuery(ulong doctor) => database.Appointments.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor && x.InverseRescheduledFromAppointment == null)
-        .Include(x => x.PatientAccount).ThenInclude(x => x.PatientProfile).Include(x => x.AppointmentType)
+        .Include(x => x.PatientAccount).ThenInclude(x => x.PatientProfile).Include(x => x.AppointmentType).Include(x => x.AppointmentServiceItems)
         .Include(x => x.CurrentPayment).Include(x => x.AppointmentReview).Include(x => x.MedicalReport)
         .Include(x => x.InverseRescheduledFromAppointment).Include(x => x.AppointmentRescheduleHistories);
     private static DoctorAppointmentResponse MapAppointment(Appointment x, DateTime now)
@@ -384,7 +384,15 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
             x.ModalityCode == "online" && x.StatusCode == "confirmed" && (!x.RequiresPayment || x.CurrentPayment?.StatusCode == "paid") && x.StartsAtUtc <= now.AddMinutes(15) && x.EndsAtUtc >= now,
             x.StatusCode is "pending" or "confirmed", x.StatusCode is "pending" or "confirmed",
             x.StatusCode is "confirmed" or "arrived", x.StatusCode == "in_progress",
-            x.StatusCode is "confirmed" or "arrived" or "in_progress", x.RowVersion);
+            x.StatusCode is "confirmed" or "arrived" or "in_progress", x.RowVersion)
+        {
+            Services = x.AppointmentServiceItems.OrderBy(item => item.Ordinal)
+                .Select(item => new AppointmentServiceResponse(item.AppointmentTypeId, item.NameSnapshot,
+                    item.CategoryCode, item.DurationMinutes, item.BasePriceAmount, item.RequiresPayment)).ToArray(),
+            PointDiscountKindCode = x.PointDiscountKindCode,
+            PointDiscountValue = x.PointDiscountKindCode is null ? null : x.PointDiscountValue,
+            PointDiscountAmount = x.PointDiscountAmount,
+        };
     }
     private async Task EnsureLinkAsync(ulong doctor, ulong patient, ulong creator, CancellationToken ct)
     {

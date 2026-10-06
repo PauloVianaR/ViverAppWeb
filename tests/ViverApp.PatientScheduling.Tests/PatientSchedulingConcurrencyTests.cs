@@ -9,6 +9,7 @@ using MySql.Data.MySqlClient;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.Calendar;
 using ViverApp.Api.Features.ClinicAdministration;
+using ViverApp.Api.Features.ManagerExperience;
 using ViverApp.Api.Features.PatientScheduling;
 using ViverApp.Api.Features.Notifications;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
@@ -19,6 +20,207 @@ namespace ViverApp.PatientScheduling.Tests;
 
 public sealed class PatientSchedulingConcurrencyTests
 {
+    [Fact]
+    public async Task PointDiscount_AppliesAfterPremium_AndRespectsConfiguredMaximum()
+    {
+        var configuration = LoadConfiguration();
+        var fixture = await CreateFixtureAsync(configuration);
+        ulong managerId = 0;
+        uint planId = 0;
+        try
+        {
+            await using (var database = CreateContext(configuration))
+            {
+                var now = fixture.UtcNow.UtcDateTime;
+                var marker = Guid.NewGuid().ToString("N");
+                var manager = NewAccount(ViverAppRoles.Manager, $"Gestor {marker}",
+                    $"manager-{marker}@example.test", now);
+                var plan = new PremiumPlan
+                {
+                    Name = $"Plano Teste {marker}", AppointmentDiscountPercent = 10,
+                    PriceAmount = 0, IsActive = true, CreatedAtUtc = now,
+                    UpdatedAtUtc = now, RowVersion = 1,
+                };
+                database.Accounts.Add(manager);
+                database.PremiumPlans.Add(plan);
+                await database.SaveChangesAsync();
+                managerId = manager.Id; planId = plan.Id;
+                database.PremiumMemberships.Add(new PremiumMembership
+                {
+                    AccountId = fixture.PatientId, PremiumPlanId = plan.Id, StatusCode = "active",
+                    StartsAtUtc = now.AddDays(-1), EndsAtUtc = now.AddDays(30),
+                    CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1,
+                });
+                await database.SaveChangesAsync();
+            }
+            await using (var database = CreateContext(configuration))
+            {
+                var scheduling = new PatientSchedulingService(database, new NullAuditWriter(),
+                    new FixedTimeProvider(fixture.UtcNow));
+                var created = await scheduling.CreateForManagerAsync(managerId,
+                    $"discount-{Guid.NewGuid():N}",
+                    new ManagerAppointmentCreateRequest(fixture.PatientId, fixture.DoctorId,
+                        fixture.AppointmentTypeId, "online", fixture.LocalDate, new TimeOnly(10, 0),
+                        null, null, "percent", 20m), CancellationToken.None);
+                Assert.Equal(100m, created.Response.BasePriceAmount);
+                Assert.Equal(10m, created.Response.PremiumDiscountPercent);
+                Assert.Equal(18m, created.Response.PointDiscountAmount);
+                Assert.Equal(72m, created.Response.PriceAmount);
+                var persisted = await database.Appointments.SingleAsync(x => x.Id == created.Response.Id);
+                Assert.Equal(managerId, persisted.PointDiscountByAccountId);
+                var pending = await scheduling.CreateForManagerAsync(managerId,
+                    $"discount-after-reversal-{Guid.NewGuid():N}",
+                    new ManagerAppointmentCreateRequest(fixture.PatientId, fixture.DoctorId,
+                        fixture.AppointmentTypeId, "online", fixture.LocalDate, new TimeOnly(11, 0),
+                        null), CancellationToken.None);
+                var pendingEntity = await database.Appointments.SingleAsync(x => x.Id == pending.Response.Id);
+                var reversed = new Payment
+                {
+                    AppointmentId = pendingEntity.Id, AppointmentRequiresPayment = true,
+                    ProviderReferenceAppointmentId = pendingEntity.Id, ProviderCode = "internal",
+                    StatusCode = "reversed", Amount = pendingEntity.PriceAmount, CurrencyCode = "BRL",
+                    IdempotencyKey = Guid.NewGuid(), MethodCode = "cash",
+                    ReversalReason = "Lançamento cancelado para teste",
+                    ReversalRequestedAtUtc = fixture.UtcNow.UtcDateTime,
+                    ReversedByAccountId = managerId, CreatedAtUtc = fixture.UtcNow.UtcDateTime,
+                    UpdatedAtUtc = fixture.UtcNow.UtcDateTime, RowVersion = 1,
+                };
+                database.Payments.Add(reversed);
+                await database.SaveChangesAsync();
+                pendingEntity.CurrentPaymentId = reversed.Id;
+                pendingEntity.RowVersion++;
+                await database.SaveChangesAsync();
+                var applied = await scheduling.ApplyPointDiscountForManagerAsync(managerId,
+                    pendingEntity.Id, new AppointmentPointDiscountRequest("percent", 10m,
+                        pendingEntity.RowVersion), CancellationToken.None);
+                Assert.Equal(9m, applied.PointDiscountAmount);
+                Assert.Equal(81m, applied.PriceAmount);
+                await Assert.ThrowsAsync<SchedulingRuleException>(() => scheduling.CreateForManagerAsync(
+                    managerId, $"excess-{Guid.NewGuid():N}",
+                    new ManagerAppointmentCreateRequest(fixture.PatientId, fixture.DoctorId,
+                        fixture.AppointmentTypeId, "online", fixture.LocalDate, new TimeOnly(11, 0),
+                        null, null, "percent", 31m), CancellationToken.None));
+            }
+        }
+        finally
+        {
+            await using (var database = CreateContext(configuration))
+            {
+                await database.PremiumMemberships.Where(x => x.AccountId == fixture.PatientId)
+                    .ExecuteDeleteAsync();
+                if (planId != 0) await database.PremiumPlans.Where(x => x.Id == planId).ExecuteDeleteAsync();
+            }
+            await DeleteFixtureAsync(configuration, fixture);
+            if (managerId != 0)
+            {
+                await using var database = CreateContext(configuration);
+                await database.Accounts.Where(x => x.Id == managerId).ExecuteDeleteAsync();
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CombinedServices_SumDurationAndPrice_AndRejectMixedBaseCategories()
+    {
+        var configuration = LoadConfiguration();
+        var fixture = await CreateFixtureAsync(configuration);
+        uint examinationId = 0, procedureId = 0;
+        ulong managerId = 0;
+        try
+        {
+            await using (var database = CreateContext(configuration))
+            {
+                var now = fixture.UtcNow.UtcDateTime;
+                var marker = Guid.NewGuid().ToString("N");
+                var second = new AppointmentType
+                {
+                    Name = $"Consulta adicional {marker}", Description = "Tipo de atendimento exclusivo do teste.",
+                    CategoryCode = "consultation", ModalityCode = "online", DurationMinutes = 20,
+                    PriceAmount = 75m, RequiresPayment = true, IsActive = true, DisplayOrder = 0,
+                    CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1,
+                };
+                var different = new AppointmentType
+                {
+                    Name = $"Exame adicional {marker}", Description = "Tipo de atendimento exclusivo do teste.",
+                    CategoryCode = "examination", ModalityCode = "online", DurationMinutes = 20,
+                    PriceAmount = 80m, RequiresPayment = true, IsActive = true, DisplayOrder = 0,
+                    CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1,
+                };
+                database.AppointmentTypes.AddRange(second, different);
+                await database.SaveChangesAsync();
+                examinationId = second.Id; procedureId = different.Id;
+                var manager = NewAccount(ViverAppRoles.Manager, "Gestora serviços combinados",
+                    $"manager-{marker}@example.test", now);
+                database.Accounts.Add(manager);
+                await database.SaveChangesAsync();
+                managerId = manager.Id;
+                database.ProfessionalServices.AddRange(
+                    new ProfessionalService { ProfessionalAccountId = fixture.DoctorId,
+                        AppointmentTypeId = second.Id, IsActive = true, CreatedAtUtc = now,
+                        UpdatedAtUtc = now, RowVersion = 1 },
+                    new ProfessionalService { ProfessionalAccountId = fixture.DoctorId,
+                        AppointmentTypeId = different.Id, IsActive = true, CreatedAtUtc = now,
+                        UpdatedAtUtc = now, RowVersion = 1 });
+                await database.SaveChangesAsync();
+            }
+            await using (var database = CreateContext(configuration))
+            {
+                var service = new PatientSchedulingService(database, new NullAuditWriter(),
+                    new FixedTimeProvider(fixture.UtcNow));
+                var professionals = await service.SearchProfessionalsAsync(1, 20, null, null,
+                    fixture.AppointmentTypeId, "online", CancellationToken.None, [examinationId]);
+                Assert.Contains(professionals.Items, item => item.AccountId == fixture.DoctorId);
+                var slots = await service.GetAvailableSlotsAsync(fixture.PatientId, fixture.DoctorId,
+                    fixture.AppointmentTypeId, "online", fixture.LocalDate, 1, CancellationToken.None,
+                    [examinationId]);
+                Assert.Contains(slots, slot => slot.StartsAt == new TimeOnly(10, 0)
+                    && slot.EndsAt == new TimeOnly(10, 50));
+                var created = await service.CreateAsync(fixture.PatientId, $"combined-{Guid.NewGuid():N}",
+                    new AppointmentCreateRequest(fixture.DoctorId, fixture.AppointmentTypeId,
+                        "online", fixture.LocalDate, new TimeOnly(10, 0), null, [examinationId]),
+                    CancellationToken.None);
+                Assert.Equal(175m, created.Response.PriceAmount);
+                Assert.Equal(2, created.Response.Services.Count);
+                Assert.Equal(50, (created.Response.EndsAtUtc - created.Response.StartsAtUtc).TotalMinutes);
+                Assert.Equal(2, await database.AppointmentServiceItems.CountAsync(
+                    item => item.AppointmentId == created.Response.Id));
+                var managerSlots = await service.GetAvailableSlotsAsync(fixture.PatientId,
+                    fixture.DoctorId, fixture.AppointmentTypeId, "online", fixture.LocalDate, 1,
+                    CancellationToken.None, [examinationId]);
+                Assert.Contains(managerSlots, item => item.StartsAt == new TimeOnly(11, 0));
+                var managed = await service.CreateForManagerAsync(managerId,
+                    $"manager-combined-{Guid.NewGuid():N}",
+                    new ManagerAppointmentCreateRequest(fixture.PatientId, fixture.DoctorId,
+                        fixture.AppointmentTypeId, "online", fixture.LocalDate, new TimeOnly(11, 0),
+                        null, [examinationId]), CancellationToken.None);
+                Assert.Equal(175m, managed.Response.PriceAmount);
+                Assert.Equal(50, (managed.Response.EndsAtUtc - managed.Response.StartsAtUtc).TotalMinutes);
+            }
+            var invalid = await AttemptCreateAsync(configuration, fixture.PatientId,
+                $"mixed-category-{Guid.NewGuid():N}",
+                new AppointmentCreateRequest(fixture.DoctorId, fixture.AppointmentTypeId,
+                    "online", fixture.LocalDate, new TimeOnly(11, 0), null, [procedureId]),
+                fixture.UtcNow, CancellationToken.None);
+            Assert.Null(invalid.Response);
+            Assert.Contains("mesmo tipo base", invalid.Error, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (managerId != 0)
+            {
+                await using var cleanup = CreateContext(configuration);
+                await cleanup.IdempotencyRecords.Where(item => item.ScopeCode == $"appointment.manager-create:{managerId}")
+                    .ExecuteDeleteAsync();
+            }
+            await DeleteFixtureAsync(configuration, fixture);
+            await using var database = CreateContext(configuration);
+            await database.AppointmentTypes.Where(item => item.Id == examinationId || item.Id == procedureId)
+                .ExecuteDeleteAsync();
+            if (managerId != 0)
+                await database.Accounts.Where(item => item.Id == managerId).ExecuteDeleteAsync();
+        }
+    }
+
     [Fact]
     public async Task ReminderJob_QueuesOneEmailIdempotently_WithoutContactingProvider()
     {
@@ -190,7 +392,7 @@ public sealed class PatientSchedulingConcurrencyTests
                 fixture.UtcNow,
                 CancellationToken.None);
             Assert.Null(attempt.Response);
-            Assert.Contains("não está mais disponível", attempt.Error, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("não oferece todos os serviços escolhidos", attempt.Error, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -616,6 +818,8 @@ public sealed class PatientSchedulingConcurrencyTests
         await database.Payments.Where(item => appointmentIds.Contains(item.AppointmentId)).ExecuteDeleteAsync();
         await database.AppointmentStatusHistories.Where(item => appointmentIds.Contains(item.AppointmentId))
             .ExecuteDeleteAsync();
+        await database.AppointmentServiceItems.Where(item => appointmentIds.Contains(item.AppointmentId))
+            .ExecuteDeleteAsync();
         await database.Appointments
             .Where(item => appointmentIds.Contains(item.Id) && item.RescheduledFromAppointmentId != null)
             .ExecuteUpdateAsync(update => update.SetProperty(item => item.RescheduledFromAppointmentId, (ulong?)null));
@@ -652,6 +856,8 @@ public sealed class PatientSchedulingConcurrencyTests
             .Where(item => scopes.Contains(item.ScopeCode))
             .ExecuteDeleteAsync();
         await database.AppointmentStatusHistories.Where(item => appointmentIds.Contains(item.AppointmentId))
+            .ExecuteDeleteAsync();
+        await database.AppointmentServiceItems.Where(item => appointmentIds.Contains(item.AppointmentId))
             .ExecuteDeleteAsync();
         await database.Appointments
             .Where(item => appointmentIds.Contains(item.Id) && item.RescheduledFromAppointmentId != null)

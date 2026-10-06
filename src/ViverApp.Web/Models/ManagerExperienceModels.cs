@@ -13,7 +13,7 @@ public sealed record ManagerProfessionalWeeklyHour(ulong Id, byte DayOfWeek, Tim
     DateOnly? ValidFrom, DateOnly? ValidUntil, bool IsActive, ulong RowVersion, string ModalityCode);
 public sealed record ManagerCapabilities(bool AppointmentTypesEnabled, bool DoctorSchedulesEnabled, bool ProfessionalServicesEnabled,
     bool PremiumManagementEnabled, bool MedicalRecordWriteEnabled, bool CashReopeningEnabled,
-    bool CashCumulativeTotalsEnabled);
+    bool CashCumulativeTotalsEnabled, bool PointDiscountsEnabled = true, decimal PointDiscountMaxPercent = 30);
 public sealed record ManagerService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal BasePrice, bool RequiresPayment);
 public sealed record ManagerAppointmentCreate(
     [property: JsonPropertyName("patientAccountId")] ulong PatientAccountId,
@@ -22,7 +22,9 @@ public sealed record ManagerAppointmentCreate(
     [property: JsonPropertyName("modalityCode")] string ModalityCode,
     [property: JsonPropertyName("localDate")] DateOnly LocalDate,
     [property: JsonPropertyName("localStartsAt")] TimeOnly LocalStartsAt,
-    [property: JsonPropertyName("patientNotes")] string? PatientNotes);
+    [property: JsonPropertyName("patientNotes")] string? PatientNotes,
+    IReadOnlyList<uint>? AdditionalAppointmentTypeIds = null,
+    string? PointDiscountKindCode = null, decimal? PointDiscountValue = null);
 public sealed record ManagerReportMetadata(bool Exists, string? StatusCode, uint VersionCount, DateTime? PublishedAtUtc);
 public sealed record ManagerPaymentMetadata(ulong? Id, string StatusCode, string? MethodCode, DateTime? PaidAtUtc,
     string? CardLastFour, string? AuthorizationReference, ulong RowVersion);
@@ -34,7 +36,13 @@ public sealed record ManagerAppointment(ulong Id, ulong AppointmentNumber, ulong
     ManagerReportMetadata Report, int AttachmentCount, DateTime? ArrivedAtUtc, DateOnly? ArrivalBusinessDate,
     uint? ArrivalQueueNumber, IReadOnlyList<WebAppointmentRescheduleHistory> RescheduleHistory,
     bool CanRegisterArrival, bool CanCancelArrival, bool CanCancel, bool CanReschedule, bool CanComplete,
-    bool CanReopen, bool CanCancelPayment, bool CanConfirmPayment, ulong RowVersion);
+    bool CanReopen, bool CanCancelPayment, bool CanConfirmPayment, ulong RowVersion)
+{
+    public IReadOnlyList<WebAppointmentService> Services { get; init; } = [];
+    public string? PointDiscountKindCode { get; init; }
+    public decimal? PointDiscountValue { get; init; }
+    public decimal PointDiscountAmount { get; init; }
+}
 public sealed record ManagerAgendaCounters(int Total, int Online, int InPerson, int Rescheduled, int Paid, int PendingPayment);
 public sealed record ManagerAgendaSources(IReadOnlyList<ulong> Total, IReadOnlyList<ulong> Online,
     IReadOnlyList<ulong> InPerson, IReadOnlyList<ulong> Rescheduled, IReadOnlyList<ulong> Paid,
@@ -62,5 +70,5 @@ public static class ManagerLabels
     public static string Category(string code) => PatientLabels.Category(code);
     public static string Modality(string code) => code == "online" ? "Online" : "Presencial";
     public static string Money(decimal value) => PatientLabels.Money(value);
-    public static string Method(string? code) => code switch { "credit_card" => "Cartão de crédito", "debit_card" => "Cartão de débito", "pix" => "Pix", "cash" => "Dinheiro", "pagbank_online" => "PagBank online", _ => "Não informado" };
+    public static string Method(string? code) => code switch { "credit_card" => "Cartão de crédito", "debit_card" => "Cartão de débito", "pix" => "Pix", "cash" => "Dinheiro", "mixed" => "Pagamento misto (detalhes no caixa)", "pagbank_online" => "PagBank online", _ => "Não informado" };
 }

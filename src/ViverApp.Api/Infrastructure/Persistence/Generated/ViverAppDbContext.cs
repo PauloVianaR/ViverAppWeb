@@ -44,6 +44,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<AppointmentReview> AppointmentReviews { get; set; }
 
+    public virtual DbSet<AppointmentServiceItem> AppointmentServiceItems { get; set; }
+
     public virtual DbSet<AppointmentStatusHistory> AppointmentStatusHistories { get; set; }
 
     public virtual DbSet<AppointmentType> AppointmentTypes { get; set; }
@@ -622,6 +624,8 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => new { e.PatientAccountId, e.StatusCode, e.StartsAtUtc }, "ix_appointments_patient_status");
 
+            entity.HasIndex(e => e.PointDiscountByAccountId, "ix_appointments_point_discount_actor");
+
             entity.HasIndex(e => new { e.StartsAtUtc, e.Id }, "ix_appointments_start_id");
 
             entity.HasIndex(e => new { e.StatusCode, e.StartsAtUtc }, "ix_appointments_status_start");
@@ -696,6 +700,19 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(10)
                 .HasDefaultValueSql("'web'")
                 .HasColumnName("payment_location_code");
+            entity.Property(e => e.PointDiscountAmount)
+                .HasPrecision(13)
+                .HasColumnName("point_discount_amount");
+            entity.Property(e => e.PointDiscountAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("point_discount_at_utc");
+            entity.Property(e => e.PointDiscountByAccountId).HasColumnName("point_discount_by_account_id");
+            entity.Property(e => e.PointDiscountKindCode)
+                .HasMaxLength(10)
+                .HasColumnName("point_discount_kind_code");
+            entity.Property(e => e.PointDiscountValue)
+                .HasPrecision(13)
+                .HasColumnName("point_discount_value");
             entity.Property(e => e.PriceAmount)
                 .HasPrecision(13)
                 .HasColumnName("price_amount");
@@ -755,6 +772,11 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey(d => d.PatientAccountId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_appointments_patient");
+
+            entity.HasOne(d => d.PointDiscountByAccount).WithMany(p => p.AppointmentPointDiscountByAccounts)
+                .HasForeignKey(d => d.PointDiscountByAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointments_point_discount_actor");
 
             entity.HasOne(d => d.ProfessionalAccount).WithMany(p => p.Appointments)
                 .HasForeignKey(d => d.ProfessionalAccountId)
@@ -907,6 +929,45 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey<AppointmentReview>(d => d.AppointmentId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_appointment_reviews_appointment");
+        });
+
+        modelBuilder.Entity<AppointmentServiceItem>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("appointment_service_items");
+
+            entity.HasIndex(e => e.AppointmentTypeId, "ix_appointment_service_items_type");
+
+            entity.HasIndex(e => new { e.AppointmentId, e.Ordinal }, "ux_appointment_service_items_order").IsUnique();
+
+            entity.HasIndex(e => new { e.AppointmentId, e.AppointmentTypeId }, "ux_appointment_service_items_type").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.AppointmentTypeId).HasColumnName("appointment_type_id");
+            entity.Property(e => e.BasePriceAmount)
+                .HasPrecision(13)
+                .HasColumnName("base_price_amount");
+            entity.Property(e => e.CategoryCode)
+                .HasMaxLength(20)
+                .HasColumnName("category_code");
+            entity.Property(e => e.DurationMinutes).HasColumnName("duration_minutes");
+            entity.Property(e => e.NameSnapshot)
+                .HasMaxLength(120)
+                .HasColumnName("name_snapshot");
+            entity.Property(e => e.Ordinal).HasColumnName("ordinal");
+            entity.Property(e => e.RequiresPayment).HasColumnName("requires_payment");
+
+            entity.HasOne(d => d.Appointment).WithMany(p => p.AppointmentServiceItems)
+                .HasForeignKey(d => d.AppointmentId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointment_service_items_appointment");
+
+            entity.HasOne(d => d.AppointmentType).WithMany(p => p.AppointmentServiceItems)
+                .HasForeignKey(d => d.AppointmentTypeId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_appointment_service_items_type");
         });
 
         modelBuilder.Entity<AppointmentStatusHistory>(entity =>
@@ -1168,11 +1229,11 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => new { e.OperationalDate, e.OccurredAtUtc }, "ix_cash_movements_operational_date");
 
+            entity.HasIndex(e => new { e.PaymentId, e.TypeCode }, "ix_cash_movements_payment_type");
+
             entity.HasIndex(e => new { e.ResponsibleAccountId, e.OperationalDate }, "ix_cash_movements_responsible");
 
             entity.HasIndex(e => e.IdempotencyKey, "ux_cash_movements_idempotency").IsUnique();
-
-            entity.HasIndex(e => new { e.PaymentId, e.TypeCode }, "ux_cash_movements_payment_type").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.AfterClosure).HasColumnName("after_closure");
@@ -1180,6 +1241,13 @@ public partial class ViverAppDbContext : DbContext
                 .HasPrecision(13)
                 .HasColumnName("amount");
             entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.AuthorizationReference)
+                .HasMaxLength(100)
+                .HasColumnName("authorization_reference");
+            entity.Property(e => e.CardLastFour)
+                .HasMaxLength(4)
+                .IsFixedLength()
+                .HasColumnName("card_last_four");
             entity.Property(e => e.CurrencyCode)
                 .HasMaxLength(3)
                 .HasDefaultValueSql("'BRL'")

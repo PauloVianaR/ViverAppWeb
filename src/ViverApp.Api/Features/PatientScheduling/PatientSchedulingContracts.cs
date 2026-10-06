@@ -42,6 +42,9 @@ public sealed record AppointmentRescheduleHistoryResponse(
     string? Reason,
     DateTime OccurredAtUtc);
 
+public sealed record AppointmentServiceResponse(uint AppointmentTypeId, string Name, string CategoryCode,
+    ushort DurationMinutes, decimal BasePriceAmount, bool RequiresPayment);
+
 public sealed record AppointmentResponse(
     ulong Id,
     ulong AppointmentNumber,
@@ -68,7 +71,15 @@ public sealed record AppointmentResponse(
     uint? ArrivalQueueNumber,
     IReadOnlyList<AppointmentRescheduleHistoryResponse> RescheduleHistory,
     bool RequiresPayment,
-    ulong RowVersion);
+    ulong RowVersion)
+{
+    public IReadOnlyList<AppointmentServiceResponse> Services { get; init; } = [];
+    public decimal BasePriceAmount { get; init; }
+    public decimal PremiumDiscountPercent { get; init; }
+    public string? PointDiscountKindCode { get; init; }
+    public decimal? PointDiscountValue { get; init; }
+    public decimal PointDiscountAmount { get; init; }
+}
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AppointmentCreateRequest(
@@ -77,7 +88,8 @@ public sealed record AppointmentCreateRequest(
     [param: Required, RegularExpression("^(in_person|online)$")] string ModalityCode,
     DateOnly LocalDate,
     TimeOnly LocalStartsAt,
-    [param: StringLength(1000)] string? PatientNotes);
+    [param: StringLength(1000)] string? PatientNotes,
+    IReadOnlyList<uint>? AdditionalAppointmentTypeIds = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record DoctorAppointmentCreateRequest(
@@ -86,7 +98,15 @@ public sealed record DoctorAppointmentCreateRequest(
     [param: Required, RegularExpression("^(in_person|online)$")] string ModalityCode,
     DateOnly LocalDate,
     TimeOnly LocalStartsAt,
-    [param: StringLength(1000)] string? PatientNotes);
+    [param: StringLength(1000)] string? PatientNotes,
+    IReadOnlyList<uint>? AdditionalAppointmentTypeIds = null);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record AppointmentPointDiscountRequest(
+    [param: Required, RegularExpression("^(percent|amount)$")] string KindCode,
+    [param: Range(typeof(decimal), "0.01", "99999999",
+        ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal Value,
+    [param: Range(1, long.MaxValue)] ulong RowVersion);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AppointmentCancelRequest(

@@ -14,12 +14,12 @@
             {
                 <div class="patient-tabs" aria-label="Tipo de atendimento">@foreach(var code in new[]{"consultation","examination","surgery","procedure"}){<button class="button @(CategoryCode == code ? null : "button--secondary")" aria-pressed="@(CategoryCode == code)" disabled="@Busy" @onclick="() => ChangeCategory(code)">@Category(code)</button>}</div>
                 <form @onsubmit="SearchServices" @onsubmit:preventDefault><div class="field"><label for="service-search">Pesquisar serviço</label><input id="service-search" @bind="ServiceSearch" maxlength="100" /></div><button class="button button--secondary" disabled="@Busy">Pesquisar</button></form>
-                <div class="manager-choice-list" aria-label="Serviços disponíveis">@foreach(var item in Services?.Items ?? []){<label><input type="radio" name="patient-service" checked="@(ServiceId==item.Id)" disabled="@Busy" @onchange="()=>SelectService(item)"/><span><strong>@item.Name</strong><br/><small>@item.DurationMinutes min · @if(!item.RequiresPayment){<strong>Sem cobrança</strong>}else if(item.DiscountPercent>0){<s>@Money(item.BasePrice)</s> <strong>@Money(item.PriceAmount)</strong> <span>· Premium @item.DiscountPercent.ToString("0.##")%</span>}else{@Money(item.PriceAmount)}</small></span></label>}</div>
+                <p>Selecione um ou mais serviços do mesmo tipo base.</p><div class="manager-choice-list" aria-label="Serviços disponíveis">@foreach(var item in Services?.Items ?? []){<label><input type="checkbox" checked="@ServiceSelections.ContainsKey(item.Id)" disabled="@(Busy || SelectedService is not null && item.ModalityCode is not "both" && item.ModalityCode != Modality)" @onchange="()=>SelectService(item)"/><span><strong>@item.Name</strong><br/><small>@item.DurationMinutes min · @if(!item.RequiresPayment){<strong>Sem cobrança</strong>}else if(item.DiscountPercent>0){<s>@Money(item.BasePrice)</s> <strong>@Money(item.PriceAmount)</strong> <span>· Premium @item.DiscountPercent.ToString("0.##")%</span>}else{@Money(item.PriceAmount)}</small></span></label>}</div>
                 <nav class="patient-pagination" aria-label="Páginas de serviços"><button class="button button--secondary" disabled="@(Busy || ServicePage == 1)" @onclick="() => ServicePageChange(-1)">Anteriores</button><span>@ServicePage</span><button class="button button--secondary" disabled="@(Busy || ServicePage * 50 >= (Services?.TotalCount ?? 0))" @onclick="() => ServicePageChange(1)">Mais serviços</button></nav>
             }
             @if (SelectedService is not null)
             {
-                <p>@SelectedService.Description</p><p>@SelectedService.DurationMinutes minutos · @(SelectedService.RequiresPayment?Money(SelectedService.PriceAmount):"Sem cobrança")</p>
+                <p>@SelectedService.Description</p><p>@CombinedDuration minutos · @(CombinedPrice>0?Money(CombinedPrice):"Sem cobrança")</p>
                 @if (SelectedService.DiscountPercent > 0) { <p class="badge badge--brand">Premium: @SelectedService.DiscountPercent% de desconto · antes @Money(SelectedService.BasePrice)</p> }
                 <div class="field"><label for="modality">Modalidade</label><select id="modality" @bind="Modality" @bind:after="ModalityChanged" disabled="@(Busy || Original is not null)">@if(SelectedService.ModalityCode is "both" or "in_person"){<option value="in_person">Presencial</option>}@if(SelectedService.ModalityCode is "both" or "online"){<option value="online">Online</option>}</select></div>
             }
@@ -41,7 +41,7 @@
             <div class="slot-days">@foreach(var day in Slots.GroupBy(x => x.Date)){<fieldset class="slot-day"><legend>@day.Key.ToString("dddd, dd/MM", CultureInfo.GetCultureInfo("pt-BR"))</legend><div class="slot-grid appointment-slot-grid">@foreach(var slot in day){<button class="slot-button @(SelectedSlot?.StartsAtUtc == slot.StartsAtUtc ? "slot-button--selected" : null)" aria-pressed="@(SelectedSlot?.StartsAtUtc == slot.StartsAtUtc)" disabled="@Busy" @onclick="() => SelectedSlot = slot">@slot.StartsAt.ToString("HH:mm")</button>}</div></fieldset>}</div>
         </section>
     </div>
-    <aside class="surface booking-summary"><h2>4. Revise e confirme</h2><dl><div><dt>Atendimento</dt><dd>@SelectedService?.Name</dd></div><div><dt>Profissional</dt><dd>@SelectedDoctor?.FullName</dd></div><div><dt>Modalidade</dt><dd>@(Modality == "online" ? "Online" : "Presencial")</dd></div><div><dt>Horário</dt><dd>@(SelectedSlot is null ? "Não selecionado" : $"{SelectedSlot.Date:dd/MM/yyyy} às {SelectedSlot.StartsAt:HH:mm}")</dd></div><div><dt>Duração</dt><dd>@SelectedService?.DurationMinutes minutos</dd></div><div><dt>Valor</dt><dd>@(SelectedService?.RequiresPayment==false?"Sem cobrança":Money(Original?.PriceAmount ?? SelectedService?.BasePrice ?? 0))</dd></div>@if(Original is null&&SelectedService?.DiscountPercent>0){<div><dt>Valor Premium</dt><dd><strong>@Money(SelectedService.PriceAmount)</strong> · @SelectedService.DiscountPercent.ToString("0.##")% de desconto</dd></div>}@if (Clinic is not null && Modality == "in_person") { <div><dt>Local</dt><dd>@Clinic.Name · @Clinic.Address</dd></div> }</dl>
+    <aside class="surface booking-summary"><h2>4. Revise e confirme</h2><dl><div><dt>Atendimento</dt><dd>@(Original is null?string.Join(" + ",ServiceSelections.Values.Select(x=>x.Name)):string.Join(" + ",Original.Services.Select(x=>x.Name)))</dd></div><div><dt>Profissional</dt><dd>@SelectedDoctor?.FullName</dd></div><div><dt>Modalidade</dt><dd>@(Modality == "online" ? "Online" : "Presencial")</dd></div><div><dt>Horário</dt><dd>@(SelectedSlot is null ? "Não selecionado" : $"{SelectedSlot.Date:dd/MM/yyyy} às {SelectedSlot.StartsAt:HH:mm}")</dd></div><div><dt>Duração</dt><dd>@CombinedDuration minutos</dd></div><div><dt>Valor</dt><dd>@(Original is null?(CombinedBasePrice>0?Money(CombinedBasePrice):"Sem cobrança"):Money(Original.PriceAmount))</dd></div>@if(Original is null&&SelectedService?.DiscountPercent>0){<div><dt>Valor Premium</dt><dd><strong>@Money(CombinedPrice)</strong> · @SelectedService.DiscountPercent.ToString("0.##")% de desconto</dd></div>}@if (Clinic is not null && Modality == "in_person") { <div><dt>Local</dt><dd>@Clinic.Name · @Clinic.Address</dd></div> }</dl>
         <div class="field"><label for="patient-notes">Observações</label><textarea id="patient-notes" @bind="Notes" maxlength="1000" disabled="@(Original is not null || Busy)"></textarea></div>
         @if(Original is not null){<div class="field"><label for="reschedule-reason">Motivo do reagendamento (opcional)</label><textarea id="reschedule-reason" @bind="Reason" maxlength="500"></textarea></div>}
         <button class="button summary-action" disabled="@(Busy || SelectedSlot is null || SelectedService is null || SelectedDoctor is null)" @onclick="Confirm">@(Original is null ? "Confirmar agendamento" : "Confirmar novo horário")</button><p class="summary-policy">Confira os dados antes de confirmar. O horário e o valor serão validados novamente no momento da reserva.</p>
@@ -59,11 +59,20 @@
     private PatientClinic? Clinic;
     private IReadOnlyList<WebAvailableSlot> Slots = [];
     private uint ServiceId;
+    private readonly Dictionary<uint, PatientService> ServiceSelections = [];
     private int ServicePage=1, DoctorPage=1;
     private string CategoryCode="consultation", ServiceSearch="", DoctorSearch="", Modality="in_person", Notes="", Reason="";
     private DateTime From=DateTime.Today;
-    private string CalendarKey=>$"{SelectedDoctor?.AccountId}-{ServiceId}-{Modality}";
-    private string CalendarApi=>$"api/v1/patient/booking/slots?doctorAccountId={SelectedDoctor?.AccountId}&appointmentTypeId={ServiceId}&modality={Modality}";
+    private uint[] AdditionalIds=>Original is not null
+        ? Original.Services.Where(x=>x.AppointmentTypeId!=ServiceId).Select(x=>x.AppointmentTypeId).ToArray()
+        : ServiceSelections.Keys.Where(id=>id!=ServiceId).ToArray();
+    private string AdditionalQuery=>string.Concat(AdditionalIds.Order().Select(id=>$"&additionalAppointmentTypeIds={id}"));
+    private int CombinedDuration=>Original is not null?Original.Services.Sum(x=>(int)x.DurationMinutes):ServiceSelections.Values.Sum(x=>(int)x.DurationMinutes);
+    private decimal CombinedBasePrice=>ServiceSelections.Values.Sum(x=>x.RequiresPayment?x.BasePrice:0);
+    private decimal CombinedPrice=>decimal.Round(CombinedBasePrice*
+        (1-(SelectedService?.DiscountPercent??0)/100m),2,MidpointRounding.AwayFromZero);
+    private string CalendarKey=>$"{SelectedDoctor?.AccountId}-{ServiceId}-{string.Join("-",AdditionalIds.Order())}-{Modality}";
+    private string CalendarApi=>$"api/v1/patient/booking/slots?doctorAccountId={SelectedDoctor?.AccountId}&appointmentTypeId={ServiceId}&modality={Modality}{AdditionalQuery}";
     private string? SubmissionFingerprint, SubmissionKey;
     protected override async Task Load()
     {
@@ -81,28 +90,28 @@
         else if(uint.TryParse(ServiceQuery,out var serviceId))
         {
             SelectedService=await Get<PatientService>($"api/v1/patient/experience/services/{serviceId}");
-            if(SelectedService is not null){CategoryCode=SelectedService.CategoryCode; ServiceId=SelectedService.Id; Modality=SelectedService.ModalityCode=="online"?"online":"in_person";}
+            if(SelectedService is not null){CategoryCode=SelectedService.CategoryCode; ServiceId=SelectedService.Id;ServiceSelections[ServiceId]=SelectedService; Modality=SelectedService.ModalityCode=="online"?"online":"in_person";}
             await LoadServices(); await LoadDoctors();
         }
         else await LoadServices();
     }
     private async Task LoadServices() { Services=await Get<WebPage<PatientService>>($"api/v1/patient/experience/services?page={ServicePage}&pageSize=50&category={CategoryCode}&search={Escape(ServiceSearch)}"); }
-    private void ClearSelection() { SelectedService=null; ServiceId=0; SelectedDoctor=null; SelectedSlot=null; Slots=[]; Doctors=null; }
+    private void ClearSelection() { SelectedService=null; ServiceId=0;ServiceSelections.Clear(); SelectedDoctor=null; SelectedSlot=null; Slots=[]; Doctors=null; }
     private Task ChangeCategory(string category)=>Run(async()=>{CategoryCode=category;ServicePage=1;ClearSelection();await LoadServices();});
-    private Task SearchServices()=>Run(async()=>{ServicePage=1;ClearSelection();await LoadServices();});
-    private Task ServicePageChange(int delta)=>Run(async()=>{ServicePage+=delta;ClearSelection();await LoadServices();});
-    private Task SelectService(PatientService service)=>Run(async()=>{ServiceId=service.Id;SelectedService=service;Modality=SelectedService.ModalityCode=="online"?"online":"in_person";SelectedDoctor=null;SelectedSlot=null;Slots=[];DoctorPage=1;await LoadDoctors();});
-    private Task ModalityChanged()=>Run(async()=>{SelectedDoctor=null;SelectedSlot=null;Slots=[];DoctorPage=1;await LoadDoctors();});
+    private Task SearchServices()=>Run(async()=>{ServicePage=1;await LoadServices();});
+    private Task ServicePageChange(int delta)=>Run(async()=>{ServicePage+=delta;await LoadServices();});
+    private Task SelectService(PatientService service)=>Run(async()=>{if(ServiceSelections.Remove(service.Id)){if(ServiceId==service.Id){SelectedService=ServiceSelections.Values.FirstOrDefault();ServiceId=SelectedService?.Id??0;}}else{ServiceSelections[service.Id]=service;if(SelectedService is null){SelectedService=service;ServiceId=service.Id;Modality=service.ModalityCode=="online"?"online":"in_person";}}SelectedDoctor=null;SelectedSlot=null;Slots=[];DoctorPage=1;await LoadDoctors();});
+    private Task ModalityChanged()=>Run(async()=>{foreach(var id in ServiceSelections.Where(x=>x.Value.ModalityCode!="both"&&x.Value.ModalityCode!=Modality).Select(x=>x.Key).ToArray())ServiceSelections.Remove(id);SelectedService=ServiceSelections.Values.FirstOrDefault();ServiceId=SelectedService?.Id??0;SelectedDoctor=null;SelectedSlot=null;Slots=[];DoctorPage=1;await LoadDoctors();});
     private Task SearchDoctors()=>Run(async()=>{DoctorPage=1;SelectedDoctor=null;SelectedSlot=null;Slots=[];await LoadDoctors();});
     private Task DoctorPageChange(int delta)=>Run(async()=>{DoctorPage+=delta;await LoadDoctors();});
-    private async Task LoadDoctors(){if(SelectedService is not null)Doctors=await Get<WebPage<WebBookingProfessional>>($"api/v1/patient/booking/professionals?page={DoctorPage}&pageSize=20&appointmentTypeId={ServiceId}&modality={Modality}&search={Escape(DoctorSearch)}");}
+    private async Task LoadDoctors(){if(SelectedService is not null)Doctors=await Get<WebPage<WebBookingProfessional>>($"api/v1/patient/booking/professionals?page={DoctorPage}&pageSize=20&appointmentTypeId={ServiceId}&modality={Modality}{AdditionalQuery}&search={Escape(DoctorSearch)}");else Doctors=null;}
     private Task ChooseDoctor(WebBookingProfessional doctor)=>Run(()=>{SelectedDoctor=doctor;SelectedSlot=null;Slots=[];return Task.CompletedTask;});
     private void SelectDate(BookingDaySelection selection){SelectedSlot=null;Slots=selection.Slots;if(selection.Date!=default)From=selection.Date.ToDateTime(TimeOnly.MinValue);}
     private async Task LoadSlots(){SelectedSlot=null;Slots=[];if(SelectedDoctor is not null)Slots=await Get<IReadOnlyList<WebAvailableSlot>>($"{CalendarApi}&from={From:yyyy-MM-dd}&days=1")??[];}
     private Task Confirm()=>Run(async()=>
     {
         if(SelectedSlot is null || SelectedDoctor is null || SelectedService is null)return;
-        object body=Original is null?new WebAppointmentCreateRequest(SelectedDoctor.AccountId,ServiceId,Modality,SelectedSlot.Date,SelectedSlot.StartsAt,Notes):new WebAppointmentRescheduleRequest(SelectedSlot.Date,SelectedSlot.StartsAt,Reason,Original.RowVersion);
+        object body=Original is null?new WebAppointmentCreateRequest(SelectedDoctor.AccountId,ServiceId,Modality,SelectedSlot.Date,SelectedSlot.StartsAt,Notes,AdditionalIds):new WebAppointmentRescheduleRequest(SelectedSlot.Date,SelectedSlot.StartsAt,Reason,Original.RowVersion);
         var fingerprint=System.Text.Json.JsonSerializer.Serialize(body);
         if(SubmissionFingerprint!=fingerprint){SubmissionFingerprint=fingerprint;SubmissionKey=$"patient-{Guid.NewGuid():N}";}
         try{var created=await Request<WebAppointment>(Original is null?"api/v1/patient/appointments":$"api/v1/patient/appointments/{Original.Id}/reschedule","POST",body,SubmissionKey);Navigation.NavigateTo($"/paciente/atendimentos/{created!.Id}");}

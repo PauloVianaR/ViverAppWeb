@@ -304,8 +304,11 @@ public sealed class CashManagementService(
         var operationalDate = await OperationalDateAsync(clock.GetUtcNow().UtcDateTime, cancellationToken);
         if (await IsClosedAsync(operationalDate, cancellationToken))
             throw Conflict("O caixa de hoje está fechado. Reabra-o antes de cancelar um pagamento.");
-        var original = await database.CashMovements.SingleOrDefaultAsync(item => item.PaymentId == payment.Id && item.TypeCode == "payment_received", cancellationToken)
-            ?? throw Conflict("O recebimento original não foi localizado no caixa.");
+        var originals = await database.CashMovements
+            .Where(item => item.PaymentId == payment.Id && item.TypeCode == "payment_received")
+            .OrderBy(item => item.Id).ToArrayAsync(cancellationToken);
+        if (originals.Length == 0 || originals.Sum(item => item.Amount) != payment.Amount)
+            throw Conflict("As parcelas do recebimento original não foram localizadas integralmente no caixa.");
         var now = clock.GetUtcNow().UtcDateTime;
         var reversal = new PaymentReversal
         {
@@ -377,23 +380,25 @@ public sealed class CashManagementService(
         }
 
         var date = await OperationalDateAsync(now, cancellationToken);
-        database.CashMovements.Add(new CashMovement
+        foreach (var original in originals) database.CashMovements.Add(new CashMovement
         {
             OperationalDate = date.ToDateTime(TimeOnly.MinValue),
             DirectionCode = "outflow",
             TypeCode = "payment_reversal",
-            MethodCode = LedgerMethod(payment),
-            Amount = payment.Amount,
+            MethodCode = original.MethodCode,
+            Amount = original.Amount,
             CurrencyCode = "BRL",
             AppointmentId = payment.AppointmentId,
             PaymentId = payment.Id,
             RelatedMovementId = original.Id,
+            CardLastFour = original.CardLastFour,
+            AuthorizationReference = original.AuthorizationReference,
             ResponsibleAccountId = actor,
             Description = previousAppointmentStatus == "no_show"
                 ? $"Estorno ao paciente do atendimento {appointment.AppointmentNumber} por não comparecimento"
                 : $"Cancelamento do pagamento do atendimento {appointment.AppointmentNumber}",
             Reason = reason,
-            IdempotencyKey = $"payment-reversal-{reversal.Id}",
+            IdempotencyKey = $"payment-reversal-{reversal.Id}-{original.Id}",
             OccurredAtUtc = now,
             AfterClosure = false,
         });
@@ -421,27 +426,41 @@ public sealed class CashManagementService(
         return MapReversal(reversal, appointment.StatusCode);
     }
 
-    public async Task RecordPaymentReceivedAsync(Payment payment, ulong? actor, DateTime occurredAtUtc, CancellationToken cancellationToken)
+    public async Task RecordPaymentReceivedAsync(Payment payment, ulong? actor, DateTime occurredAtUtc, CancellationToken cancellationToken,
+        IReadOnlyList<(string MethodCode, decimal Amount, string? CardLastFour, string? AuthorizationReference)>? allocations = null)
     {
-        if (await database.CashMovements.AnyAsync(item => item.PaymentId == payment.Id && item.TypeCode == "payment_received", cancellationToken)) return;
+        var existing = await database.CashMovements
+            .Where(item => item.PaymentId == payment.Id && item.TypeCode == "payment_received")
+            .Select(item => item.Amount).ToArrayAsync(cancellationToken);
+        if (existing.Length > 0)
+        {
+            if (existing.Sum() != payment.Amount)
+                throw Conflict("As parcelas do pagamento no caixa estão incompletas.");
+            return;
+        }
         var appointmentNumber = await database.Appointments.Where(item => item.Id == payment.AppointmentId)
             .Select(item => item.AppointmentNumber).SingleAsync(cancellationToken);
         var date = await OperationalDateAsync(occurredAtUtc, cancellationToken);
         if (await IsClosedAsync(date, cancellationToken))
             throw Conflict("O caixa de hoje está fechado. Reabra-o antes de confirmar um pagamento.");
-        database.CashMovements.Add(new CashMovement
+        var portions = allocations ?? [(LedgerMethod(payment), payment.Amount, payment.CardLastFour, payment.AuthorizationReference)];
+        if (portions.Count == 0 || portions.Sum(item => item.Amount) != payment.Amount)
+            throw Conflict("A soma das formas de pagamento não corresponde ao total do atendimento.");
+        for (var index = 0; index < portions.Count; index++) database.CashMovements.Add(new CashMovement
         {
             OperationalDate = date.ToDateTime(TimeOnly.MinValue),
             DirectionCode = "entry",
             TypeCode = "payment_received",
-            MethodCode = LedgerMethod(payment),
-            Amount = payment.Amount,
+            MethodCode = portions[index].MethodCode,
+            Amount = portions[index].Amount,
+            CardLastFour = portions[index].CardLastFour,
+            AuthorizationReference = portions[index].AuthorizationReference,
             CurrencyCode = "BRL",
             AppointmentId = payment.AppointmentId,
             PaymentId = payment.Id,
             ResponsibleAccountId = actor,
             Description = $"Pagamento do atendimento {appointmentNumber}",
-            IdempotencyKey = $"payment-received-{payment.Id}",
+            IdempotencyKey = $"payment-received-{payment.Id}-{index + 1}",
             OccurredAtUtc = occurredAtUtc,
             AfterClosure = false,
         });
@@ -463,9 +482,12 @@ public sealed class CashManagementService(
         var responsibleTerm = Text(responsible); if (responsibleTerm is not null) query = query.Where(item => item.ResponsibleAccount != null && item.ResponsibleAccount.FullName.Contains(responsibleTerm));
         if (professionalAccountId.HasValue) query = query.Where(item => item.Appointment != null && item.Appointment.ProfessionalAccountId == professionalAccountId.Value);
         if (responsibleAccountId.HasValue) query = query.Where(item => item.ResponsibleAccountId == responsibleAccountId.Value);
-        if (cardLastFour is not null) query = query.Where(item => item.Payment != null && item.Payment.CardLastFour == cardLastFour);
-        if (authorizationReference is not null) query = query.Where(item => item.Payment != null
-            && item.Payment.AuthorizationReference != null && item.Payment.AuthorizationReference.Contains(authorizationReference));
+        if (cardLastFour is not null) query = query.Where(item => item.CardLastFour == cardLastFour
+            || item.CardLastFour == null && item.Payment != null && item.Payment.CardLastFour == cardLastFour);
+        if (authorizationReference is not null) query = query.Where(item =>
+            item.AuthorizationReference != null && item.AuthorizationReference.Contains(authorizationReference)
+            || item.AuthorizationReference == null && item.Payment != null
+                && item.Payment.AuthorizationReference != null && item.Payment.AuthorizationReference.Contains(authorizationReference));
         return query;
     }
 
@@ -523,7 +545,7 @@ public sealed class CashManagementService(
     private static CashMovementResponse Map(CashMovement item) => new(item.Id, DateOnly.FromDateTime(item.OperationalDate), item.DirectionCode,
         item.TypeCode, item.MethodCode, item.Amount, item.AppointmentId, item.Appointment?.AppointmentNumber, item.PaymentId,
         item.RelatedMovementId, item.Appointment?.PatientAccount.FullName, item.ResponsibleAccount?.FullName,
-        item.Payment?.CardLastFour, item.Payment?.AuthorizationReference, item.Description,
+        item.CardLastFour ?? item.Payment?.CardLastFour, item.AuthorizationReference ?? item.Payment?.AuthorizationReference, item.Description,
         item.Reason, DateTime.SpecifyKind(item.OccurredAtUtc, DateTimeKind.Utc), item.AfterClosure);
 
     private static PaymentReversalResponse MapReversal(PaymentReversal item, string appointmentStatus) => new(item.Id, item.PaymentId, item.Payment.AppointmentId,
