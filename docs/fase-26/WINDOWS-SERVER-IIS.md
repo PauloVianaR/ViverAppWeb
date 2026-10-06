@@ -18,6 +18,8 @@ pwsh -NoProfile -File scripts/verify-windows-release.ps1 -ReleaseDirectory <cami
 
 O pacote ignorado em `artifacts/release/` contém ZIPs separados da API, Web e migrations/rollbacks, mais `manifest.json` com commit, tamanho e SHA-256. `-AllowDirty` existe só para ensaio local; o verificador de entrega recusa pacote sujo. Não inserir segredos nos ZIPs ou no Git. `security-check.ps1` executa a suíte completa **somente** contra o MySQL local 8.0.41 `viverappweb` do operador; nunca apontá-lo para produção. A CI em `.github/workflows/quality.yml` executa o subconjunto sem banco e declara explicitamente que isso não substitui a suíte local de integração.
 
+O fluxo manual de GitHub Actions, release imutável e instalação na máquina IIS está em [GITHUB-ACTIONS-PRODUCAO.md](GITHUB-ACTIONS-PRODUCAO.md). A exceção atual de Windows 10 Pro e backup apenas local foi aceita pelo proprietário; não confere conformidade integral com este guia de Windows Server.
+
 Antes de instalar no servidor, executar `scripts/test-windows-server-prerequisites.ps1` nele. O script verifica apenas Windows Server, IIS, ANCM V2/.NET Hosting Bundle, runtime ASP.NET Core 10 e WebSocket; não autoriza publicação. Transferir o pacote por canal autenticado, conferir o manifesto no servidor e manter a identidade da release anterior para retorno.
 
 ## Pré-requisitos para o servidor físico
