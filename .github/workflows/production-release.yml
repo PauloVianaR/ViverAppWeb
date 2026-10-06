@@ -1,0 +1,128 @@
+name: Production release
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_migrations:
+        description: 'IDs pendentes esperados em produção, em ordem (ex.: 0050,0051); vazio se nenhum'
+        required: false
+        type: string
+      rollback_compatible:
+        description: 'A versão anterior da API/Web funciona com o schema após estas migrations?'
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  package:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Restore, build, format and portable tests
+        shell: pwsh
+        run: |
+          dotnet restore ViverApp.slnx --locked-mode
+          if ($LASTEXITCODE -ne 0) { throw 'Restore falhou.' }
+          dotnet build ViverApp.slnx --configuration Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Build falhou.' }
+          dotnet format ViverApp.slnx --verify-no-changes --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Format falhou.' }
+          foreach ($project in @(
+            'tests/ViverApp.Security.Tests/ViverApp.Security.Tests.csproj',
+            'tests/ViverApp.Web.Tests/ViverApp.Web.Tests.csproj',
+            'tests/ViverApp.Identity.Tests/ViverApp.Identity.Tests.csproj'
+          )) {
+            dotnet test $project --configuration Release --no-build --no-restore
+            if ($LASTEXITCODE -ne 0) { throw "Testes falharam: $project" }
+          }
+      - name: Package API, Web and migrations
+        shell: pwsh
+        env:
+          EXPECTED_MIGRATIONS: ${{ inputs.expected_migrations }}
+        run: |
+          & ./scripts/package-windows-release.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Pacote falhou.' }
+          $release = Get-ChildItem artifacts/release -Directory | Sort-Object Name | Select-Object -Last 1
+          if (-not $release) { throw 'Pacote ausente.' }
+          & ./scripts/verify-windows-release.ps1 -ReleaseDirectory $release.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'Pacote inválido.' }
+          $ids = @()
+          if (-not [string]::IsNullOrWhiteSpace($env:EXPECTED_MIGRATIONS)) {
+            $ids = @($env:EXPECTED_MIGRATIONS.Split(',') | ForEach-Object { $_.Trim() })
+            if (@($ids | Where-Object { $_ -cnotmatch '^\d{4}$' }).Count -gt 0 -or
+                (@($ids | Sort-Object -Unique) -join ',') -cne ($ids -join ',')) {
+              throw 'IDs de migrations devem ser únicos, crescentes e no formato NNNN.'
+            }
+          }
+          foreach ($id in $ids) {
+            if (@(Get-ChildItem database/migrations -Filter "$id`__*.sql" -File).Count -ne 1) {
+              throw "Migration não encontrada ou ambígua: $id"
+            }
+          }
+          $out = Join-Path $env:RUNNER_TEMP 'production-package'
+          New-Item -ItemType Directory -Path $out | Out-Null
+          Copy-Item -LiteralPath (Join-Path $release.FullName 'manifest.json') -Destination $out
+          foreach ($name in @('api','web','database')) {
+            Copy-Item -LiteralPath (Join-Path $release.FullName "viverapp-$name.zip") -Destination $out
+          }
+          [ordered]@{
+            schema = 1
+            commit = '${{ github.sha }}'
+            expectedPendingMigrations = @($ids)
+            binaryRollbackCompatible = ('${{ inputs.rollback_compatible }}' -eq 'true')
+            createdUtc = [DateTime]::UtcNow.ToString('o')
+          } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $out 'deployment-plan.json') -Encoding utf8
+          "PACKAGE_DIRECTORY=$out" >> $env:GITHUB_ENV
+      - uses: actions/upload-artifact@v4
+        with:
+          name: production-${{ github.sha }}
+          path: ${{ env.PACKAGE_DIRECTORY }}/*
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: package
+    runs-on: windows-2022
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: production-${{ github.sha }}
+          path: package
+      - name: Verify immutable input and publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          & ./scripts/verify-windows-release.ps1 -ReleaseDirectory package
+          if ($LASTEXITCODE -ne 0) { throw 'Artefatos inválidos.' }
+          $manifest = Get-Content package/manifest.json -Raw | ConvertFrom-Json
+          $plan = Get-Content package/deployment-plan.json -Raw | ConvertFrom-Json
+          if ($manifest.commit -cne '${{ github.sha }}' -or $plan.commit -cne $manifest.commit -or $plan.schema -ne 1) {
+            throw 'Plano ou commit divergente.'
+          }
+          $tag = "viverapp-$($manifest.commit)"
+          $notes = "Release de $($manifest.commit). Migrations pendentes esperadas: $(@($plan.expectedPendingMigrations) -join ',')."
+          gh release create $tag package/manifest.json package/deployment-plan.json `
+            package/viverapp-api.zip package/viverapp-web.zip package/viverapp-database.zip `
+            --repo $env:GITHUB_REPOSITORY --target $manifest.commit --title $tag --notes $notes
+          if ($LASTEXITCODE -ne 0) { throw 'Publicação da release falhou.' }
