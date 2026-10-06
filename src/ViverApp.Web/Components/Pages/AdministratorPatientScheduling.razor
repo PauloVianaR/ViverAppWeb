@@ -1,0 +1,148 @@
+@page "/administracao/agendar"
+@page "/administracao/pacientes/{PatientId:long}/agendar"
+@inherits AdministratorPageBase
+@using static ViverApp.Web.ManagerLabels
+<PageTitle>Novo agendamento | ViverApp</PageTitle>
+<header class="workspace-heading"><div><p class="eyebrow">Administrador</p><h1 class="page-title">Novo atendimento</h1>
+<p class="page-description">Combine serviços da mesma categoria, escolha o profissional e confira o valor final.</p></div>
+<a class="button button--secondary" href="/administracao/atendimentos">Voltar aos atendimentos</a></header>
+@if(Notice is not null){<p class="notice @(NoticeError?"notice--error":"notice--success")" role="alert">@Notice</p>}
+@if(Loading){<LoadingSkeleton Lines="7" />}else{
+<section class="surface patient-panel patient-section">
+    <div class="field"><label for="admin-book-patient">Paciente</label><select id="admin-book-patient" @bind="PatientIdValue" @bind:after="PatientChanged">
+        <option value="0">Selecione</option>@foreach(var patient in Patients){<option value="@patient.AccountId">@patient.FullName@(patient.IsPremium?" · Premium":"")</option>}
+    </select></div>
+    @if(Patient is not null){<p>@(Patient.IsPremium?$"Premium: {Patient.PremiumDiscountPercent:0.##}% de desconto automático.":"Sem Premium ativo.")</p>}
+</section>
+@if(Patient is not null){
+<section class="surface patient-panel patient-section"><h2>1. Serviços e modalidade</h2>
+    <div class="patient-tabs">@foreach(var category in Categories){<button class="button @(Category==category.Code?null:"button--secondary")" @onclick="()=>ChooseCategory(category.Code)">@category.Label</button>}</div>
+    <div class="field"><label for="admin-book-search">Pesquisar serviço</label><input id="admin-book-search" @bind="ServiceSearch" @bind:event="oninput" maxlength="100" /></div>
+    <div class="manager-choice-list">@foreach(var service in VisibleServices){<label><input type="checkbox"
+        checked="@SelectedIds.Contains(service.Id)"
+        disabled="@(SelectedIds.Count>0&&service.ModalityCode!="both"&&service.ModalityCode!=ModalityCode)"
+        @onchange="()=>ToggleService(service)" /><span><strong>@service.Name</strong><br />
+        <small>@Modality(service.ModalityCode) · @service.DurationMinutes min · @(service.RequiresPayment?Money(service.BasePrice):"Sem cobrança")</small></span></label>}</div>
+    <div class="field"><label for="admin-book-modality">Modalidade</label><select id="admin-book-modality" @bind="ModalityCode" @bind:after="ModalityChanged">
+        <option value="in_person">Presencial</option><option value="online">Online</option></select></div>
+</section>
+<section class="surface patient-panel patient-section"><h2>2. Profissional, data e horário</h2>
+    <div class="field"><label for="admin-book-doctor">Profissional</label><select id="admin-book-doctor" @bind="DoctorId" @bind:after="ProfessionalChanged">
+        <option value="0">Selecione</option>@foreach(var doctor in Doctors){<option value="@doctor.AccountId">@doctor.FullName</option>}</select></div>
+    @if(DoctorId!=0){<BookingAvailabilityCalendar @key="CalendarKey" SlotsApiPrefix="@CalendarApi" DateSelected="SelectDate" />}
+    <div class="appointment-slot-grid">@foreach(var slot in Slots){<label class="appointment-slot-option"><input type="radio" name="admin-book-slot"
+        checked="@(Selected==slot.StartsAt)" @onchange="()=>Selected=slot.StartsAt" />
+        @slot.StartsAt.ToString("HH:mm")–@slot.EndsAt.ToString("HH:mm")</label>}</div>
+</section>
+<section class="surface patient-panel patient-section"><h2>3. Revisar e confirmar</h2>
+    <div class="field"><label for="admin-book-notes">Observações</label><textarea id="admin-book-notes" @bind="Notes" maxlength="1000" rows="3"></textarea></div>
+    @if(BaseTotal>0){<div class="field"><label for="admin-book-discount-kind">Desconto pontual (limite: @MaxDiscountPercent.ToString("0.##")% após Premium)</label>
+        <select id="admin-book-discount-kind" @bind="PointKind"><option value="">Sem desconto</option><option value="percent">Porcentagem</option><option value="amount">Reais</option></select></div>
+        @if(PointKind!=""){<div class="field"><label for="admin-book-discount-value">Valor do desconto</label><input id="admin-book-discount-value" type="number" min="0.01" step="0.01" @bind="PointValue" /></div>}}
+    <dl class="patient-facts">
+        <div><dt>Paciente</dt><dd>@Patient.FullName</dd></div>
+        <div><dt>Serviços</dt><dd>@string.Join(" + ",SelectedServices.Select(x=>x.Name))</dd></div>
+        <div><dt>Duração total</dt><dd>@SelectedServices.Sum(x=>(int)x.DurationMinutes) min</dd></div>
+        <div><dt>Profissional</dt><dd>@(Doctors.SingleOrDefault(x=>x.AccountId==DoctorId)?.FullName??"Selecione")</dd></div>
+        <div><dt>Data e horário</dt><dd>@(Selected.HasValue?$"{Date:dd/MM/yyyy} às {Selected:HH:mm}":"Selecione")</dd></div>
+        <div><dt>Valor base</dt><dd>@(BaseTotal>0?Money(BaseTotal):"Sem cobrança")</dd></div>
+        @if(BaseTotal>0&&Patient.IsPremium){<div><dt>Após Premium</dt><dd>@Money(PremiumTotal)</dd></div>}
+        @if(PointKind!=""&&PointValue>0){<div><dt>Desconto pontual</dt><dd>-@Money(PointPreview)</dd></div>}
+        <div><dt>Valor final estimado</dt><dd><strong>@Money(PremiumTotal-PointPreview)</strong></dd></div>
+    </dl>
+    <p class="field-hint">O servidor recalcula os valores e verifica o teto antes de salvar. Esta ação exige MFA recente.</p>
+    <button class="button" disabled="@(Busy||SelectedIds.Count==0||DoctorId==0||!Selected.HasValue)" @onclick="Confirm">Confirmar agendamento</button>
+</section>}}
+@code {
+    [Parameter] public long PatientId { get; set; }
+    [SupplyParameterFromQuery(Name="patient")] public long? PatientQuery { get; set; }
+    private ManagerPatient? Patient;
+    private IReadOnlyList<ManagerPatient> Patients=[];
+    private IReadOnlyList<ManagerService> Services=[];
+    private IReadOnlyList<WebBookingProfessional> Doctors=[];
+    private IReadOnlyList<WebAvailableSlot> Slots=[];
+    private readonly List<uint> SelectedIds=[];
+    private static readonly (string Code,string Label)[] Categories=[
+        ("consultation","Consulta"),("examination","Exame"),("surgery","Cirurgia"),("procedure","Procedimento")];
+    private string Category="consultation",ModalityCode="in_person",ServiceSearch="",Notes="",PointKind="";
+    private decimal PointValue,MaxDiscountPercent=30;
+    private ulong PatientIdValue,DoctorId;
+    private DateTime Date=DateTime.Today.AddDays(1);
+    private TimeOnly? Selected;
+    private uint PrimaryId=>SelectedIds.FirstOrDefault();
+    private string AdditionalQuery=>string.Concat(SelectedIds.Skip(1).Select(id=>$"&additionalAppointmentTypeIds={id}"));
+    private string CalendarKey=>$"{PatientIdValue}-{DoctorId}-{string.Join("-",SelectedIds)}-{ModalityCode}";
+    private string CalendarApi=>$"api/v1/administrator/booking/slots?patientAccountId={PatientIdValue}&doctorAccountId={DoctorId}&appointmentTypeId={PrimaryId}&modality={ModalityCode}{AdditionalQuery}";
+    private IEnumerable<ManagerService> VisibleServices=>Services.Where(x=>x.CategoryCode==Category
+        && (string.IsNullOrWhiteSpace(ServiceSearch)||x.Name.Contains(ServiceSearch,StringComparison.OrdinalIgnoreCase)
+            || (x.Description?.Contains(ServiceSearch,StringComparison.OrdinalIgnoreCase)??false)))
+        .OrderBy(x=>x.Name,StringComparer.CurrentCultureIgnoreCase);
+    private IReadOnlyList<ManagerService> SelectedServices=>SelectedIds
+        .Select(id=>Services.Single(x=>x.Id==id)).ToArray();
+    private decimal BaseTotal=>SelectedServices.Sum(x=>x.RequiresPayment?x.BasePrice:0);
+    private decimal PremiumTotal=>Patient?.IsPremium==true
+        ?decimal.Round(BaseTotal*(1-Patient.PremiumDiscountPercent/100m),2,MidpointRounding.AwayFromZero):BaseTotal;
+    private decimal PointPreview=>PointKind=="percent"
+        ?decimal.Round(PremiumTotal*PointValue/100m,2,MidpointRounding.AwayFromZero)
+        :PointKind=="amount"?PointValue:0;
+    protected override async Task Load()
+    {
+        var people=new List<ManagerPatient>();
+        for(var page=1;;page++)
+        {
+            var response=await Get<ManagerPatientsData>($"api/v1/administrator/patients?page={page}&pageSize=100");
+            if(response is null)break;
+            people.AddRange(response.Page.Items);
+            if(people.Count>=response.Page.TotalCount||response.Page.Items.Count==0)break;
+        }
+        Patients=people;
+        Services=await Get<IReadOnlyList<ManagerService>>("api/v1/administrator/services")??[];
+        var settings=await Get<IReadOnlyList<AdministratorSetting>>("api/v1/administrator/settings")??[];
+        var raw=settings.FirstOrDefault(x=>x.Key=="appointments.point_discount_max_percent")?.ValueJson;
+        if(decimal.TryParse(raw,System.Globalization.NumberStyles.Number,System.Globalization.CultureInfo.InvariantCulture,out var max))
+            MaxDiscountPercent=max;
+        PatientIdValue=(ulong)Math.Max(PatientId,PatientQuery??0);
+        await PatientChanged();
+    }
+    private async Task PatientChanged()
+    {
+        Patient=PatientIdValue==0?null:await Get<ManagerPatient>($"api/v1/administrator/patients/{PatientIdValue}");
+        ResetAvailability();
+    }
+    private Task ChooseCategory(string category)=>Run(async()=>{Category=category;ServiceSearch="";
+        SelectedIds.Clear();await LoadDoctors();});
+    private Task ToggleService(ManagerService service)=>Run(async()=>{
+        if(SelectedIds.Contains(service.Id))SelectedIds.Remove(service.Id);
+        else{if(SelectedIds.Count==0)ModalityCode=service.ModalityCode=="online"?"online":"in_person";SelectedIds.Add(service.Id);}
+        await LoadDoctors();
+    });
+    private Task ModalityChanged()=>Run(async()=>{
+        SelectedIds.RemoveAll(id=>Services.Any(x=>x.Id==id&&x.ModalityCode!="both"&&x.ModalityCode!=ModalityCode));
+        await LoadDoctors();
+    });
+    private async Task LoadDoctors()
+    {
+        ResetAvailability();
+        if(PrimaryId==0){Doctors=[];return;}
+        var people=new List<WebBookingProfessional>();
+        for(var page=1;;page++)
+        {
+            var response=await Get<WebPage<WebBookingProfessional>>($"api/v1/administrator/booking/professionals?appointmentTypeId={PrimaryId}&modality={ModalityCode}{AdditionalQuery}&page={page}&pageSize=50");
+            if(response is null)break;
+            people.AddRange(response.Items);
+            if(people.Count>=response.TotalCount||response.Items.Count==0)break;
+        }
+        Doctors=people;
+    }
+    private void ResetAvailability(){DoctorId=0;Slots=[];Selected=null;}
+    private void ProfessionalChanged(){Slots=[];Selected=null;}
+    private void SelectDate(BookingDaySelection selection){Slots=selection.Slots;Selected=null;
+        if(selection.Date!=default)Date=selection.Date.ToDateTime(TimeOnly.MinValue);}
+    private Task Confirm()=>Run(async()=>{
+        var request=new ManagerAppointmentCreate(PatientIdValue,DoctorId,PrimaryId,ModalityCode,
+            DateOnly.FromDateTime(Date),Selected!.Value,Notes,SelectedIds.Skip(1).ToArray(),
+            PointKind==""?null:PointKind,PointKind==""?null:PointValue);
+        var result=await Request<WebAppointment>("api/v1/administrator/appointments","POST",request,Guid.NewGuid().ToString("N"));
+        Navigation.NavigateTo($"/administracao/atendimentos/{result!.Id}");
+    });
+}

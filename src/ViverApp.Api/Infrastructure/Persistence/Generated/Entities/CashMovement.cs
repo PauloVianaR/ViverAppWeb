@@ -37,6 +37,10 @@ public partial class CashMovement
 
     public bool AfterClosure { get; set; }
 
+    public string? CardLastFour { get; set; }
+
+    public string? AuthorizationReference { get; set; }
+
     public virtual Appointment? Appointment { get; set; }
 
     public virtual ICollection<CashClosure> CashClosures { get; set; } = new List<CashClosure>();

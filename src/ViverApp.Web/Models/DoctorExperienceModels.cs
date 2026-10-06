@@ -18,7 +18,13 @@ public sealed record DoctorAppointment(ulong Id, ulong AppointmentNumber, ulong 
     ulong? RescheduledFromAppointmentId, ulong? RescheduledToAppointmentId, byte? Rating, string? ReviewComment,
     DateTime? ArrivedAtUtc, uint? ArrivalQueueNumber, IReadOnlyList<WebAppointmentRescheduleHistory> RescheduleHistory,
     bool CanJoinOnline, bool CanCancel, bool CanReschedule,
-    bool CanStart, bool CanUndoStart, bool CanComplete, ulong RowVersion);
+    bool CanStart, bool CanUndoStart, bool CanComplete, ulong RowVersion)
+{
+    public IReadOnlyList<WebAppointmentService> Services { get; init; } = [];
+    public string? PointDiscountKindCode { get; init; }
+    public decimal? PointDiscountValue { get; init; }
+    public decimal PointDiscountAmount { get; init; }
+}
 public sealed record ProfessionalNotification(ulong Id, ulong AppointmentId, ulong AppointmentNumber, uint? QueueNumber,
     DateTime? StartsAtUtc, bool IsRead, DateTime CreatedAtUtc, ulong RowVersion);
 public sealed record DoctorRealtimeNotification(ulong Id, ulong AppointmentId, ulong AppointmentNumber, uint? QueueNumber,

@@ -1,0 +1,33 @@
+@using static ViverApp.Web.ManagerLabels
+<div class="payment-split-editor">
+    <p>Distribua o valor entre até dez formas de pagamento. Cada parcela aparecerá separadamente no caixa.</p>
+    @foreach (var portion in Portions.ToArray())
+    {
+        <fieldset class="surface patient-panel">
+            <legend>Parcela @(Portions.IndexOf(portion) + 1)</legend>
+            <div class="field"><label>Forma</label><select @bind="portion.MethodCode">
+                <option value="pix">Pix</option><option value="cash">Dinheiro</option>
+                <option value="credit_card">Cartão de crédito</option><option value="debit_card">Cartão de débito</option>
+            </select></div>
+            <div class="field"><label>Valor</label><input type="number" min="0.01" step="0.01" @bind="portion.Amount" /></div>
+            @if (portion.IsCard)
+            {
+                <div class="field"><label>Últimos quatro dígitos</label><input inputmode="numeric" maxlength="4" @bind="portion.CardLastFour" /></div>
+                <div class="field"><label>Autorização</label><input maxlength="100" @bind="portion.AuthorizationReference" /></div>
+            }
+            @if (Portions.Count > 1) { <button type="button" class="button button--secondary" @onclick="()=>Remove(portion)">Remover parcela</button> }
+        </fieldset>
+    }
+    <p>Valor do atendimento: <strong>@Money(Total)</strong></p>
+    <button type="button" class="button button--secondary" disabled="@(Portions.Count>=10)" @onclick="Add">Adicionar forma de pagamento</button>
+</div>
+@code {
+    [Parameter, EditorRequired] public List<PaymentPortionEditor> Portions { get; set; } = [];
+    [Parameter] public decimal Total { get; set; }
+    private void Add()
+    {
+        if (Portions.Count < 10)
+            Portions.Add(new PaymentPortionEditor { Amount = Math.Max(0, Total - Portions.Sum(x => x.Amount)) });
+    }
+    private void Remove(PaymentPortionEditor portion) => Portions.Remove(portion);
+}

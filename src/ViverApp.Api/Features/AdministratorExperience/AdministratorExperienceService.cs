@@ -21,7 +21,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         "appointments.reschedule_cutoff_hours", "appointments.slot_interval_minutes", "appointments.patient_daily_limit",
         "appointments.default_consultation_minutes", "appointments.default_examination_minutes", "appointments.default_surgery_minutes",
         "appointments.default_procedure_minutes", "manager.appointment_types_enabled", "manager.professional_schedules_enabled",
-        "manager.professional_services_enabled",
+        "manager.professional_services_enabled", "manager.point_discounts_enabled", "appointments.point_discount_max_percent",
         "professional.patient_scheduling_enabled", "premium.manager_can_manage", "manager.medical_records_write_enabled",
         "cash.manager_can_reopen", "cash.manager_can_view_cumulative_totals",
         "appointments.interval_minutes", "communications.email_enabled", "communications.sms_enabled", "premium.manager_can_decide",
@@ -80,6 +80,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         manager.DeactivatePremiumAsync(actor, id, request, true, ct);
     public Task<ManagerPaymentResponse> ConfirmPaymentAsync(ulong actor, ulong id, string key, ManagerPaymentConfirmRequest request, CancellationToken ct) => manager.ConfirmPaymentAsync(actor, id, key, request, ct);
     public Task<IReadOnlyList<ManagerDoctorOption>> DoctorsAsync(CancellationToken ct) => manager.DoctorsAsync(ct);
+    public Task<IReadOnlyList<ManagerServiceOption>> ServicesAsync(CancellationToken ct) => manager.ServicesAsync(ct);
     public async Task<IReadOnlyList<AdministratorDoctorAccessResponse>> DoctorAccessAsync(CancellationToken ct) => await database.ProfessionalPreferences.AsNoTracking()
         .Where(x => x.ProfessionalAccount.Account.StatusCode == "active").OrderBy(x => x.ProfessionalAccount.Account.FullName)
         .Select(x => new AdministratorDoctorAccessResponse(x.ProfessionalAccountId, x.ProfessionalAccount.Account.FullName, x.OnlineEnabled, x.RowVersion)).ToListAsync(ct);
@@ -355,7 +356,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
     {
         if (key is "web.maintenance_mode" or "web.desktop_sidebar_enabled" or "appointments.allow_clinic_payment" or "appointments.online_calls_enabled" or "communications.email_enabled" or "communications.sms_enabled" or "premium.manager_can_decide"
             or "manager.appointment_types_enabled" or "manager.professional_schedules_enabled" or "manager.professional_services_enabled" or "professional.patient_scheduling_enabled"
-            or "premium.manager_can_manage" or "manager.medical_records_write_enabled"
+            or "premium.manager_can_manage" or "manager.medical_records_write_enabled" or "manager.point_discounts_enabled"
             or "cash.manager_can_reopen" or "cash.manager_can_view_cumulative_totals"
             or "appointments.arrival_notifications_enabled" or "appointments.arrival_popup_enabled" or "appointments.arrival_sound_enabled" or "appointments.arrival_mark_read_on_open")
         { if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw new JsonException(); return; }
@@ -369,6 +370,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
             "appointments.cancellation_cutoff_hours" or "appointments.reschedule_cutoff_hours" => number is >= 0 and <= 720,
             "appointments.slot_interval_minutes" or "appointments.interval_minutes" => number is >= 0 and <= 240,
             "appointments.patient_daily_limit" => number is >= 1 and <= 20,
+            "appointments.point_discount_max_percent" => number is >= 0 and <= 100,
             "appointments.default_consultation_minutes" or "appointments.default_examination_minutes" or "appointments.default_surgery_minutes" or "appointments.default_procedure_minutes" => number is >= 5 and <= 480,
             "appointments.arrival_sound_volume" => number is >= 0 and <= 100,
             "appointments.arrival_notification_retention_days" => number is >= 1 and <= 365,

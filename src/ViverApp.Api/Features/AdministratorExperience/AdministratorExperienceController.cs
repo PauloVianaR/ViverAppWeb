@@ -9,6 +9,7 @@ using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.PatientExperience;
 using ViverApp.Api.Features.PatientScheduling;
 using ViverApp.Api.Features.ClinicalOperations;
+using ViverApp.Api.Features.CashManagement;
 using ViverApp.Api.Features.ArrivalExperience;
 using ViverApp.Security;
 
@@ -18,7 +19,7 @@ public sealed class AdministratorExceptionFilter : IExceptionFilter
 {
     public void OnException(ExceptionContext context)
     {
-        var error = context.Exception switch { AdministratorRuleException e => (e.StatusCode, e.Message), ManagerRuleException e => (e.StatusCode, e.Message), PatientExperienceException e => (e.StatusCode, e.Message), ArrivalRuleException e => (e.StatusCode, e.Message), _ => default };
+        var error = context.Exception switch { AdministratorRuleException e => (e.StatusCode, e.Message), ManagerRuleException e => (e.StatusCode, e.Message), SchedulingRuleException e => (e.StatusCode, e.Message), CashRuleException e => (e.StatusCode, e.Message), PatientExperienceException e => (e.StatusCode, e.Message), ArrivalRuleException e => (e.StatusCode, e.Message), _ => default };
         if (error == default) return;
         context.Result = new ObjectResult(new ProblemDetails { Status = error.Item1, Title = error.Item2 }) { StatusCode = error.Item1 };
         context.ExceptionHandled = true;
@@ -50,17 +51,33 @@ public sealed class AdministratorExperienceController(AdministratorExperienceSer
     private ulong Actor => ulong.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!, CultureInfo.InvariantCulture);
     [HttpGet("home")] public Task<AdministratorHomeResponse> Home(CancellationToken ct) => service.HomeAsync(Actor, ct);
     [HttpGet("doctors")] public Task<IReadOnlyList<ManagerDoctorOption>> Doctors(CancellationToken ct) => service.DoctorsAsync(ct);
+    [HttpGet("services")] public Task<IReadOnlyList<ManagerServiceOption>> Services(CancellationToken ct) => service.ServicesAsync(ct);
+    [HttpGet("booking/professionals"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
+    public Task<SchedulingPage<BookingProfessionalResponse>> Professionals(uint appointmentTypeId, string modality,
+        string? search = null, int page = 1, int pageSize = 50, [FromQuery] uint[]? additionalAppointmentTypeIds = null,
+        CancellationToken ct = default) => scheduling.SearchProfessionalsAsync(page, pageSize, search,
+            null, appointmentTypeId, modality, ct, additionalAppointmentTypeIds);
     [HttpGet("doctor-access")] public Task<IReadOnlyList<AdministratorDoctorAccessResponse>> DoctorAccess(CancellationToken ct) => service.DoctorAccessAsync(ct);
     [HttpGet("agenda")]
     public Task<ManagerAgendaResponse> Agenda(DateOnly from, DateOnly to, string? status = null, string? modality = null, string? category = null,
         ulong? doctorAccountId = null, ulong? appointmentNumber = null, string? payment = null, string? search = null, string sort = "date_asc", int page = 1, int pageSize = 20, CancellationToken ct = default) =>
         service.AgendaAsync(from, to, status, modality, category, doctorAccountId, appointmentNumber, payment, search, sort, page, pageSize, ct);
     [HttpGet("appointments/{id:long}")] public Task<ManagerAppointmentResponse> Appointment(ulong id, CancellationToken ct) => service.AppointmentAsync(id, ct);
-    [HttpGet("booking/slots"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)] public Task<IReadOnlyList<AvailableSlotResponse>> Slots(ulong patientAccountId, ulong doctorAccountId, uint appointmentTypeId, string modality, DateOnly from, int days = 14, CancellationToken ct = default) => scheduling.GetAvailableSlotsAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct);
-    [HttpGet("booking/available-dates"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)] public Task<IReadOnlyList<DateOnly>> AvailableDates(ulong patientAccountId, ulong doctorAccountId, uint appointmentTypeId, string modality, DateOnly from, int days = 31, CancellationToken ct = default) => scheduling.GetAvailableDatesAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct);
+    [HttpPost("appointments"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
+    public async Task<ActionResult<AppointmentResponse>> Create([FromHeader(Name = "Idempotency-Key")] string key,
+        ManagerAppointmentCreateRequest request, CancellationToken ct)
+    {
+        var result = await scheduling.CreateForManagerAsync(Actor, key, request, ct);
+        if (result.Replayed) Response.Headers["Idempotent-Replayed"] = "true";
+        return result.Replayed ? Ok(result.Response)
+            : CreatedAtAction(nameof(Appointment), new { id = result.Response.Id }, result.Response);
+    }
+    [HttpGet("booking/slots"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)] public Task<IReadOnlyList<AvailableSlotResponse>> Slots(ulong patientAccountId, ulong doctorAccountId, uint appointmentTypeId, string modality, DateOnly from, int days = 14, [FromQuery] uint[]? additionalAppointmentTypeIds = null, CancellationToken ct = default) => scheduling.GetAvailableSlotsAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct, additionalAppointmentTypeIds);
+    [HttpGet("booking/available-dates"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)] public Task<IReadOnlyList<DateOnly>> AvailableDates(ulong patientAccountId, ulong doctorAccountId, uint appointmentTypeId, string modality, DateOnly from, int days = 31, [FromQuery] uint[]? additionalAppointmentTypeIds = null, CancellationToken ct = default) => scheduling.GetAvailableDatesAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct, additionalAppointmentTypeIds);
     [HttpPost("appointments/{id:long}/cancel"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)] public Task<AppointmentResponse> Cancel(ulong id, AppointmentCancelRequest request, CancellationToken ct) => scheduling.CancelForManagerAsync(Actor, id, request, ct);
     [HttpPost("appointments/{id:long}/reschedule"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)] public async Task<AppointmentResponse> Reschedule(ulong id, [FromHeader(Name = "Idempotency-Key")] string key, AppointmentRescheduleRequest request, CancellationToken ct) { var result = await scheduling.RescheduleForManagerAsync(Actor, id, key, request, ct); if (result.Replayed) Response.Headers["Idempotent-Replayed"] = "true"; return result.Response; }
     [HttpPost("appointments/{id:long}/payment"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)] public Task<ManagerPaymentResponse> Payment(ulong id, [FromHeader(Name = "Idempotency-Key")] string key, ManagerPaymentConfirmRequest request, CancellationToken ct) => service.ConfirmPaymentAsync(Actor, id, key, request, ct);
+    [HttpPost("appointments/{id:long}/point-discount"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)] public Task<AppointmentResponse> ApplyPointDiscount(ulong id, AppointmentPointDiscountRequest request, CancellationToken ct) => scheduling.ApplyPointDiscountForManagerAsync(Actor, id, request, ct);
     [HttpPost("appointments/{id:long}/arrival"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)] public Task<ArrivalResponse> RegisterArrival(ulong id, ArrivalRequest request, CancellationToken ct) => arrivals.RegisterAsync(Actor, id, request, ct);
     [HttpPost("appointments/{id:long}/arrival/cancel"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)] public Task<ArrivalResponse> CancelArrival(ulong id, ArrivalCancellationRequest request, CancellationToken ct) => arrivals.CancelAsync(Actor, id, request, ct);
     [HttpPost("appointments/{id:long}/complete"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)] public Task<ArrivalResponse> Complete(ulong id, AppointmentTransitionRequest request, CancellationToken ct) => arrivals.CompleteForManagementAsync(Actor, id, request, ct);

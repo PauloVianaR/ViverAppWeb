@@ -54,6 +54,7 @@ $tables = @(
     'holidays',
     'professional_reviews',
     'appointments',
+    'appointment_service_items',
     'appointment_number_sequence',
     'appointment_reschedule_history',
     'arrival_queue_sequences',

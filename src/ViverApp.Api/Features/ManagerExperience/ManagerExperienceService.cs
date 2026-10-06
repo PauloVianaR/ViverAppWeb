@@ -31,7 +31,9 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
                 || item.SettingKey == "premium.manager_can_manage"
                 || item.SettingKey == "manager.medical_records_write_enabled"
                 || item.SettingKey == "cash.manager_can_reopen"
-                || item.SettingKey == "cash.manager_can_view_cumulative_totals")
+                || item.SettingKey == "cash.manager_can_view_cumulative_totals"
+                || item.SettingKey == "manager.point_discounts_enabled"
+                || item.SettingKey == "appointments.point_discount_max_percent")
             .ToDictionaryAsync(item => item.SettingKey, item => item.ValueJson, ct);
         return new(
             ReadManagerCapability(values, "manager.appointment_types_enabled"),
@@ -40,7 +42,10 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
             ReadManagerCapability(values, "premium.manager_can_manage"),
             ReadManagerCapability(values, "manager.medical_records_write_enabled"),
             ReadManagerCapability(values, "cash.manager_can_reopen"),
-            ReadManagerCapability(values, "cash.manager_can_view_cumulative_totals"));
+            ReadManagerCapability(values, "cash.manager_can_view_cumulative_totals"),
+            ReadManagerCapability(values, "manager.point_discounts_enabled"),
+            decimal.TryParse(values.GetValueOrDefault("appointments.point_discount_max_percent"),
+                NumberStyles.Number, CultureInfo.InvariantCulture, out var maxDiscount) ? maxDiscount : 30m);
     }
 
     public async Task<ManagerHomeResponse> HomeAsync(ulong actor, CancellationToken ct)
@@ -424,10 +429,20 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
     public async Task<ManagerPaymentResponse> ConfirmPaymentAsync(ulong actor, ulong appointmentId, string key,
         ManagerPaymentConfirmRequest request, CancellationToken ct)
     {
-        ValidateIdempotency(key); if (!Methods.Contains(request.MethodCode, StringComparer.Ordinal)) throw Invalid("Forma de pagamento inválida.");
-        var isCard = request.MethodCode is "credit_card" or "debit_card";
-        if (isCard && (request.CardLastFour is null || string.IsNullOrWhiteSpace(request.AuthorizationReference))) throw Invalid("Informe os quatro últimos dígitos e a autorização do cartão.");
-        if (!isCard && (request.CardLastFour is not null || request.AuthorizationReference is not null)) throw Invalid("Dados de cartão só são permitidos para pagamentos com cartão.");
+        ValidateIdempotency(key);
+        var allocations = request.Allocations is { Count: > 0 }
+            ? request.Allocations.ToArray()
+            : [new ManagerPaymentAllocationRequest(request.MethodCode, 0, request.CardLastFour, request.AuthorizationReference)];
+        if (allocations.Length > 10) throw Invalid("Use no máximo dez formas de pagamento.");
+        foreach (var portion in allocations)
+        {
+            if (!Methods.Contains(portion.MethodCode, StringComparer.Ordinal)) throw Invalid("Forma de pagamento inválida.");
+            var isCard = portion.MethodCode is "credit_card" or "debit_card";
+            if (isCard && (portion.CardLastFour is null || string.IsNullOrWhiteSpace(portion.AuthorizationReference)))
+                throw Invalid("Informe os quatro últimos dígitos e a autorização de cada parcela em cartão.");
+            if (!isCard && (portion.CardLastFour is not null || portion.AuthorizationReference is not null))
+                throw Invalid("Dados de cartão só são permitidos em parcelas pagas com cartão.");
+        }
         var now = clock.GetUtcNow().UtcDateTime; var paidAt = DateTime.SpecifyKind(request.PaidAtUtc, DateTimeKind.Utc);
         if (paidAt > now.AddMinutes(5) || paidAt < now.AddYears(-1)) throw Invalid("A data do pagamento é inválida.");
         var scope = $"manager.payment:{actor}"; var hash = SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { actor, appointmentId, request })));
@@ -441,26 +456,35 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         if (appointment.ModalityCode != "in_person" || appointment.PaymentLocationCode != "clinic") throw Conflict("Somente pagamentos presenciais escolhidos para a clínica podem ser confirmados manualmente.");
         if (appointment.StatusCode is not ("pending" or "confirmed")) throw Conflict("O atendimento não aceita confirmação de pagamento.");
         if (!appointment.RequiresPayment) throw Conflict("Este atendimento não possui cobrança.");
+        if (request.Allocations is { Count: > 0 })
+        {
+            if (allocations.Any(portion => portion.Amount <= 0) || allocations.Sum(portion => portion.Amount) != appointment.PriceAmount)
+                throw Invalid("A soma das parcelas deve ser exatamente igual ao valor do atendimento.");
+        }
+        else allocations[0] = allocations[0] with { Amount = appointment.PriceAmount };
         var payment = await database.Payments.FromSqlInterpolated($"SELECT * FROM payments WHERE appointment_id={appointmentId} AND active_appointment_id IS NOT NULL ORDER BY id DESC LIMIT 1 FOR UPDATE").SingleOrDefaultAsync(ct);
         if (payment is not null && payment.StatusCode == "paid") throw Conflict("O pagamento já foi reconciliado.");
         if (payment is not null && payment.ProviderCode != "internal") throw Conflict("Existe uma cobrança online vinculada; faça a reconciliação pelo provedor.");
         payment ??= new Payment { AppointmentId = appointmentId, AppointmentRequiresPayment = true, SupersedesPaymentId = appointment.CurrentPaymentId, ProviderCode = "internal", StatusCode = "pending", Amount = appointment.PriceAmount, CurrencyCode = "BRL", IdempotencyKey = GuidFromKey(key), CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1, ProviderReferenceAppointmentId = appointmentId };
         if (payment.Id == 0) database.Payments.Add(payment);
-        payment.StatusCode = "paid"; payment.Amount = appointment.PriceAmount; payment.MethodCode = request.MethodCode; payment.PaidAtUtc = paidAt; payment.ConfirmedByAccountId = actor; payment.CardLastFour = request.CardLastFour; payment.AuthorizationReference = Text(request.AuthorizationReference); payment.UpdatedAtUtc = now; if (payment.Id != 0) payment.RowVersion++;
+        payment.StatusCode = "paid"; payment.Amount = appointment.PriceAmount; payment.MethodCode = allocations.Length == 1 ? allocations[0].MethodCode : "mixed"; payment.PaidAtUtc = paidAt; payment.ConfirmedByAccountId = actor; payment.CardLastFour = allocations.Length == 1 ? allocations[0].CardLastFour : null; payment.AuthorizationReference = allocations.Length == 1 ? Text(allocations[0].AuthorizationReference) : null; payment.UpdatedAtUtc = now; if (payment.Id != 0) payment.RowVersion++;
         var previous = appointment.StatusCode; if (appointment.StatusCode == "pending") { appointment.StatusCode = "confirmed"; appointment.UpdatedAtUtc = now; appointment.RowVersion++; database.AppointmentStatusHistories.Add(new AppointmentStatusHistory { AppointmentId = appointment.Id, ActorAccountId = actor, FromStatusCode = previous, ToStatusCode = "confirmed", Reason = "Pagamento presencial confirmado", StartsAtUtc = appointment.StartsAtUtc, EndsAtUtc = appointment.EndsAtUtc, OccurredAtUtc = now }); }
         await database.SaveChangesAsync(ct);
         appointment.CurrentPaymentId = payment.Id;
-        if (cash is not null) await cash.RecordPaymentReceivedAsync(payment, actor, paidAt, ct);
-        database.PaymentEvents.Add(new PaymentEvent { PaymentId = payment.Id, SourceCode = "manual", ProviderStatusCode = request.MethodCode, NormalizedStatusCode = "paid", EventFingerprint = SHA256.HashData(Encoding.UTF8.GetBytes($"{actor}:{appointmentId}:{key}")), ProviderOccurredAtUtc = paidAt, OccurredAtUtc = now, WasApplied = true });
-        var response = new ManagerPaymentResponse(payment.Id, appointmentId, payment.StatusCode, payment.Amount, payment.MethodCode!, paidAt, payment.CardLastFour, payment.AuthorizationReference, payment.RowVersion);
+        if (cash is not null) await cash.RecordPaymentReceivedAsync(payment, actor, paidAt, ct,
+            allocations.Select(portion => (portion.MethodCode, portion.Amount, portion.CardLastFour, portion.AuthorizationReference)).ToArray());
+        database.PaymentEvents.Add(new PaymentEvent { PaymentId = payment.Id, SourceCode = "manual", ProviderStatusCode = payment.MethodCode, NormalizedStatusCode = "paid", EventFingerprint = SHA256.HashData(Encoding.UTF8.GetBytes($"{actor}:{appointmentId}:{key}")), ProviderOccurredAtUtc = paidAt, OccurredAtUtc = now, WasApplied = true });
+        var response = new ManagerPaymentResponse(payment.Id, appointmentId, payment.StatusCode, payment.Amount, payment.MethodCode!, paidAt, payment.CardLastFour, payment.AuthorizationReference, payment.RowVersion)
+        { Allocations = allocations };
         database.IdempotencyRecords.Add(new IdempotencyRecord { ScopeCode = scope, IdempotencyKey = key, RequestHash = hash, ResponseStatusCode = 200, ResponseBodyJson = JsonSerializer.Serialize(response), CreatedAtUtc = now, ExpiresAtUtc = now.AddHours(24) });
-        await database.SaveChangesAsync(ct); await audit.WriteAsync("manager.payment.confirmed", actor, "payment", payment.Id.ToString(CultureInfo.InvariantCulture), new Dictionary<string, string> { ["appointmentId"] = appointmentId.ToString(CultureInfo.InvariantCulture), ["method"] = request.MethodCode, ["previousStatus"] = previous, ["newStatus"] = appointment.StatusCode }, ct);
+        await database.SaveChangesAsync(ct); await audit.WriteAsync("manager.payment.confirmed", actor, "payment", payment.Id.ToString(CultureInfo.InvariantCulture), new Dictionary<string, string> { ["appointmentId"] = appointmentId.ToString(CultureInfo.InvariantCulture), ["method"] = payment.MethodCode!, ["previousStatus"] = previous, ["newStatus"] = appointment.StatusCode }, ct);
         if (transaction is not null) await transaction.CommitAsync(ct); return response;
     }
 
     private IQueryable<Appointment> AppointmentQuery() => database.Appointments.AsNoTracking()
         .Where(x => x.InverseRescheduledFromAppointment == null)
         .Include(x => x.PatientAccount).Include(x => x.ProfessionalAccount).ThenInclude(x => x.Account).Include(x => x.AppointmentType)
+        .Include(x => x.AppointmentServiceItems)
         .Include(x => x.CurrentPayment).Include(x => x.AppointmentReview).Include(x => x.MedicalReport).ThenInclude(x => x!.MedicalReportVersions)
         .Include(x => x.AppointmentDocuments).Include(x => x.InverseRescheduledFromAppointment).Include(x => x.AppointmentRescheduleHistories);
     private static ManagerAppointmentResponse MapAppointment(Appointment x) => new(x.Id, x.AppointmentNumber, x.PatientAccountId, x.PatientAccount.FullName, x.PatientAccount.PhoneE164,
@@ -477,7 +501,15 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         x.ModalityCode == "in_person" && x.StatusCode == "confirmed", x.StatusCode == "arrived", x.StatusCode is "pending" or "confirmed", x.StatusCode is "pending" or "confirmed",
         x.StatusCode is "confirmed" or "arrived" or "in_progress", x.StatusCode == "completed",
         x.RequiresPayment && x.CurrentPayment?.StatusCode == "paid" && x.StatusCode is ("confirmed" or "arrived" or "no_show"),
-        x.RequiresPayment && x.ModalityCode == "in_person" && x.PaymentLocationCode == "clinic" && x.StatusCode is "pending" or "confirmed" && x.CurrentPayment?.StatusCode is not ("paid" or "reversal_pending"), x.RowVersion);
+        x.RequiresPayment && x.ModalityCode == "in_person" && x.PaymentLocationCode == "clinic" && x.StatusCode is "pending" or "confirmed" && x.CurrentPayment?.StatusCode is not ("paid" or "reversal_pending"), x.RowVersion)
+    {
+        Services = x.AppointmentServiceItems.OrderBy(item => item.Ordinal)
+            .Select(item => new AppointmentServiceResponse(item.AppointmentTypeId, item.NameSnapshot,
+                item.CategoryCode, item.DurationMinutes, item.BasePriceAmount, item.RequiresPayment)).ToArray(),
+        PointDiscountKindCode = x.PointDiscountKindCode,
+        PointDiscountValue = x.PointDiscountKindCode is null ? null : x.PointDiscountValue,
+        PointDiscountAmount = x.PointDiscountAmount,
+    };
     private static ManagerProfileResponse MapProfile(Account x) => new(x.Id, x.FullName, x.Email, x.PhoneE164, x.TaxId, x.EmailVerified, x.PhoneVerified,
         x.ManagerPreference?.EmailEnabled ?? true, x.ManagerPreference?.SmsEnabled ?? true, x.RowVersion, x.ManagerPreference?.RowVersion ?? 1);
     private static ManagerPatientResponse MapPatient(Account x, IEnumerable<PatientHistoryRow> history, DateTime now)

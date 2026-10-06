@@ -12,6 +12,7 @@ using ViverApp.Api.Features.ClinicalOperations;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.ManagerExperience;
 using ViverApp.Api.Features.Payments;
+using ViverApp.Api.Features.PatientScheduling;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 using Xunit;
@@ -20,6 +21,32 @@ namespace ViverApp.ClinicalOperations.Tests;
 
 public sealed class CashManagementIntegrationTests
 {
+    [Fact]
+    public void PointDiscountAndSplitPaymentRangesUseInvariantLimitsUnderBrazilianCulture()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("pt-BR");
+            var ranges = new[]
+            {
+                typeof(AppointmentPointDiscountRequest).GetConstructors().Single().GetParameters()
+                    .Single(x => x.Name == nameof(AppointmentPointDiscountRequest.Value))
+                    .GetCustomAttribute<RangeAttribute>()!,
+                typeof(ManagerPaymentAllocationRequest).GetConstructors().Single().GetParameters()
+                    .Single(x => x.Name == nameof(ManagerPaymentAllocationRequest.Amount))
+                    .GetCustomAttribute<RangeAttribute>()!,
+            };
+            foreach (var range in ranges)
+            {
+                Assert.True(range.IsValid(0.01m));
+                Assert.True(range.IsValid(10m));
+                Assert.False(range.IsValid(0m));
+            }
+        }
+        finally { CultureInfo.CurrentCulture = previous; }
+    }
+
     [Fact]
     public void ManualMovementAmountRangeUsesInvariantLimitsUnderBrazilianCulture()
     {
@@ -143,6 +170,42 @@ public sealed class CashManagementIntegrationTests
             new HttpContextAccessor { HttpContext = httpContext },
             IdentitySecurityOptions.Load(configuration, allowInsecureLoopbackHttp: true)));
         var cash = new CashManagementService(database, new NoOpPagBank(), options, audit, clock);
+        var pendingAppointment = new Appointment
+        {
+            AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
+            PatientAccountId = patient.Id,
+            ProfessionalAccountId = doctor.Id,
+            AppointmentTypeId = appointmentType.Id,
+            CreatedByAccountId = manager.Id,
+            StatusCode = "pending",
+            ModalityCode = "in_person",
+            StartsAtUtc = now.AddDays(2),
+            EndsAtUtc = now.AddDays(2).AddMinutes(30),
+            PriceAmount = 180m,
+            BasePriceAmount = 180m,
+            RequiresPayment = true,
+            CurrencyCode = "BRL",
+            PaymentLocationCode = "clinic",
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        };
+        database.Appointments.Add(pendingAppointment);
+        await database.SaveChangesAsync();
+        var schedulingAudit = new SchedulingAuditAdapter(new IdentityAuditWriter(database,
+            new HttpContextAccessor { HttpContext = httpContext },
+            IdentitySecurityOptions.Load(configuration, allowInsecureLoopbackHttp: true)));
+        var scheduling = new PatientSchedulingService(database, schedulingAudit, clock);
+        var discounted = await scheduling.ApplyPointDiscountForManagerAsync(manager.Id, pendingAppointment.Id,
+            new AppointmentPointDiscountRequest("percent", 10m, pendingAppointment.RowVersion), CancellationToken.None);
+        Assert.Equal(162m, discounted.PriceAmount);
+        Assert.Equal(18m, discounted.PointDiscountAmount);
+        var firstPayment = await new ManagerExperienceService(database, null!, null!, audit, clock, cash)
+            .ConfirmPaymentAsync(manager.Id, pendingAppointment.Id, Guid.NewGuid().ToString("N"),
+                new ManagerPaymentConfirmRequest("cash", now.AddDays(-1), null, null, discounted.RowVersion,
+                [new("cash", 100m, null, null), new("pix", 62m, null, null)]), CancellationToken.None);
+        Assert.Equal("mixed", firstPayment.MethodCode);
+        Assert.Equal(2, await database.CashMovements.CountAsync(item => item.PaymentId == firstPayment.Id));
         await cash.RecordPaymentReceivedAsync(original, manager.Id, now, CancellationToken.None);
         await database.SaveChangesAsync();
         var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(now,
@@ -166,7 +229,14 @@ public sealed class CashManagementIntegrationTests
 
         var managerService = new ManagerExperienceService(database, null!, null!, audit, clock, cash);
         var replacement = await managerService.ConfirmPaymentAsync(manager.Id, appointment.Id, Guid.NewGuid().ToString("N"),
-            new ManagerPaymentConfirmRequest("pix", now, null, null, appointment.RowVersion), CancellationToken.None);
+            new ManagerPaymentConfirmRequest("cash", now, null, null, appointment.RowVersion,
+            [
+                new("cash", 50m, null, null),
+                new("credit_card", 20m, "1234", "AUTH-MISTO"),
+                new("pix", 110m, null, null),
+            ]), CancellationToken.None);
+        Assert.Equal("mixed", replacement.MethodCode);
+        Assert.Equal(3, replacement.Allocations.Count);
         Assert.NotEqual(original.Id, replacement.Id);
         Assert.Equal(original.Id, await database.Payments.Where(item => item.Id == replacement.Id)
             .Select(item => item.SupersedesPaymentId).SingleAsync());
@@ -186,13 +256,18 @@ public sealed class CashManagementIntegrationTests
         Assert.Equal(360m, day.Summary.GrossEntries);
         Assert.Equal(180m, day.Summary.PaymentReversals);
         Assert.Equal(180m, day.Summary.NetTotal);
-        Assert.Equal(3, day.Summary.MovementCount);
+        Assert.Equal(5, day.Summary.MovementCount);
+        Assert.Equal(50m, day.Summary.ByMethod.Single(item => item.MethodCode == "cash").Net);
+        Assert.Equal(20m, day.Summary.ByMethod.Single(item => item.MethodCode == "credit_card").Net);
+        Assert.Equal(110m, day.Summary.ByMethod.Single(item => item.MethodCode == "pix").Net);
+        Assert.Contains(day.Page.Items, item => item.MethodCode == "credit_card"
+            && item.CardLastFour == "1234" && item.AuthorizationReference == "AUTH-MISTO");
         Assert.Contains(day.Page.Items, item => item.TypeCode == "payment_reversal" && item.RelatedMovementId.HasValue);
 
         var unfilteredDay = await cash.DayAsync(date, ViverAppRoles.Manager, null, null, null, null, null, null, null, 1, 25, CancellationToken.None);
         Assert.Equal(200m, unfilteredDay.Summary.Withdrawals);
         Assert.Equal(-20m, unfilteredDay.Summary.NetTotal);
-        Assert.Equal(4, unfilteredDay.Summary.MovementCount);
+        Assert.Equal(6, unfilteredDay.Summary.MovementCount);
         Assert.Contains(unfilteredDay.Page.Items, item => item.Id == withdrawal.Id && item.TypeCode == "withdrawal");
         Assert.Equal(unfilteredDay.Page.Items.OrderBy(item => item.OccurredAtUtc).ThenBy(item => item.Id), unfilteredDay.Page.Items);
         Assert.Equal(unfilteredDay.Page.Items.Max(item => item.Id), unfilteredDay.LastMovementId);
@@ -202,7 +277,7 @@ public sealed class CashManagementIntegrationTests
         Assert.Contains(filterOptions.Responsibles, item => item.AccountId == manager.Id);
         var professionalDay = await cash.DayAsync(date, ViverAppRoles.Manager, null, null, null, null, null, null, null,
             1, 25, CancellationToken.None, professionalAccountId: doctor.Id);
-        Assert.Equal(3, professionalDay.Page.Items.Count);
+        Assert.Equal(5, professionalDay.Page.Items.Count);
         Assert.DoesNotContain(professionalDay.Page.Items, item => item.Id == withdrawal.Id);
         Assert.Equal(180m, professionalDay.Summary.NetTotal);
         var otherProfessionalDay = await cash.DayAsync(date, ViverAppRoles.Manager, null, null, null, null, null, null, null,
@@ -221,12 +296,12 @@ public sealed class CashManagementIntegrationTests
 
         var fullPrint = await cash.PrintAsync(manager.Id, date, null, null, appointment.AppointmentNumber, null, null, null, null, false, CancellationToken.None);
         var totalsPrint = await cash.PrintAsync(manager.Id, date, null, null, appointment.AppointmentNumber, null, null, null, null, true, CancellationToken.None);
-        Assert.Equal(3, fullPrint.Movements.Count);
+        Assert.Equal(5, fullPrint.Movements.Count);
         Assert.Empty(totalsPrint.Movements);
         Assert.Equal(fullPrint.Summary.NetTotal, totalsPrint.Summary.NetTotal);
         var professionalPrint = await cash.PrintAsync(manager.Id, date, null, null, null, null, null, null, null,
             false, CancellationToken.None, professionalAccountId: doctor.Id);
-        Assert.Equal(3, professionalPrint.Movements.Count);
+        Assert.Equal(5, professionalPrint.Movements.Count);
         Assert.Equal(180m, professionalPrint.Summary.NetTotal);
         Assert.Contains("Profissional: Dra. Caixa", professionalPrint.FilterDescription);
 
@@ -279,14 +354,20 @@ public sealed class CashManagementIntegrationTests
         var refundDay = await cash.DayAsync(refundDate, ViverAppRoles.Manager, null, null,
             appointment.AppointmentNumber, null, null, null, null, 1, 25, CancellationToken.None);
         Assert.Equal(-180m, refundDay.Summary.NetTotal);
-        var refundMovement = Assert.Single(refundDay.Page.Items);
-        Assert.Equal("payment_reversal", refundMovement.TypeCode);
-        Assert.Equal("outflow", refundMovement.DirectionCode);
-        Assert.Equal(noShowPayment.Id, refundMovement.PaymentId);
-        Assert.NotNull(refundMovement.RelatedMovementId);
+        Assert.Equal(3, refundDay.Page.Items.Count);
+        Assert.All(refundDay.Page.Items, refundMovement =>
+        {
+            Assert.Equal("payment_reversal", refundMovement.TypeCode);
+            Assert.Equal("outflow", refundMovement.DirectionCode);
+            Assert.Equal(noShowPayment.Id, refundMovement.PaymentId);
+            Assert.NotNull(refundMovement.RelatedMovementId);
+        });
+        Assert.Equal(50m, refundDay.Summary.ByMethod.Single(item => item.MethodCode == "cash").Outflows);
+        Assert.Equal(20m, refundDay.Summary.ByMethod.Single(item => item.MethodCode == "credit_card").Outflows);
+        Assert.Equal(110m, refundDay.Summary.ByMethod.Single(item => item.MethodCode == "pix").Outflows);
         var originalDayAfterRefund = await cash.DayAsync(date, ViverAppRoles.Manager, null, null,
             appointment.AppointmentNumber, null, null, null, null, 1, 25, CancellationToken.None);
-        Assert.Equal(3, originalDayAfterRefund.Summary.MovementCount);
+        Assert.Equal(5, originalDayAfterRefund.Summary.MovementCount);
 
         await Assert.ThrowsAsync<MySqlException>(() => database.CashMovements
             .Where(item => item.Id == postClose.Id).ExecuteUpdateAsync(update => update.SetProperty(item => item.Amount, 30m)));
@@ -320,6 +401,14 @@ public sealed class CashManagementIntegrationTests
         public Task WriteAsync(string eventCode, ulong actorAccountId, string entityType, string entityId,
             IReadOnlyDictionary<string, string>? safeData, CancellationToken cancellationToken) =>
             writer.WriteAsync(eventCode, actorAccountId, entityType, entityId, safeData, cancellationToken);
+    }
+
+    private sealed class SchedulingAuditAdapter(IdentityAuditWriter writer) : IPatientSchedulingAuditWriter
+    {
+        public Task WriteAsync(string eventCode, ulong actorAccountId, ulong appointmentId,
+            IReadOnlyDictionary<string, string>? safeData, CancellationToken cancellationToken) =>
+            writer.WriteAsync(eventCode, actorAccountId, "appointment",
+                appointmentId.ToString(CultureInfo.InvariantCulture), safeData, cancellationToken);
     }
 
     private sealed class FixedClock(DateTime value) : TimeProvider

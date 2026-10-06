@@ -5,10 +5,15 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.ManagerExperience;
+using ViverApp.Api.Features.AdministratorExperience;
+using ViverApp.Api.Features.DoctorExperience;
 using ViverApp.Api.Features.PatientScheduling;
 using Xunit;
 
@@ -105,5 +110,30 @@ public sealed class PatientSchedulingApiTests : IAsyncLifetime
         var pageSize = Assert.Single(method!.GetParameters(), parameter => parameter.Name == "pageSize");
 
         Assert.Equal(50, pageSize.DefaultValue);
+    }
+
+    [Theory]
+    [InlineData(typeof(ManagerExperienceController), nameof(ManagerExperienceController.Slots))]
+    [InlineData(typeof(ManagerExperienceController), nameof(ManagerExperienceController.AvailableDates))]
+    [InlineData(typeof(ManagerExperienceController), nameof(ManagerExperienceController.Professionals))]
+    [InlineData(typeof(AdministratorExperienceController), nameof(AdministratorExperienceController.Slots))]
+    [InlineData(typeof(AdministratorExperienceController), nameof(AdministratorExperienceController.AvailableDates))]
+    [InlineData(typeof(AdministratorExperienceController), nameof(AdministratorExperienceController.Professionals))]
+    [InlineData(typeof(DoctorExperienceController), nameof(DoctorExperienceController.Slots))]
+    [InlineData(typeof(DoctorExperienceController), nameof(DoctorExperienceController.AvailableDates))]
+    public void CombinedBookingEndpoints_BindAdditionalServicesFromQuery(Type controller, string action)
+    {
+        using var scope = factory.Services.CreateScope();
+        var actions = scope.ServiceProvider.GetRequiredService<IActionDescriptorCollectionProvider>();
+        var descriptors = actions.ActionDescriptors.Items.OfType<ControllerActionDescriptor>()
+            .Where(item => item.ControllerTypeInfo.AsType() == controller && item.ActionName == action)
+            .ToArray();
+        Assert.NotEmpty(descriptors);
+        foreach (var descriptor in descriptors)
+        {
+            var parameter = Assert.Single(descriptor.Parameters,
+                item => item.Name == "additionalAppointmentTypeIds");
+            Assert.Equal(BindingSource.Query, parameter.BindingInfo?.BindingSource);
+        }
     }
 }

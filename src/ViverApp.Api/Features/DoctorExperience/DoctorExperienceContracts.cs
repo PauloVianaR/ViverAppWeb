@@ -26,7 +26,13 @@ public sealed record DoctorAppointmentResponse(ulong Id, ulong AppointmentNumber
     byte? Rating, string? ReviewComment, DateTime? ArrivedAtUtc, uint? ArrivalQueueNumber,
     IReadOnlyList<AppointmentRescheduleHistoryResponse> RescheduleHistory,
     bool CanJoinOnline, bool CanCancel, bool CanReschedule, bool CanStart, bool CanUndoStart, bool CanComplete,
-    ulong RowVersion);
+    ulong RowVersion)
+{
+    public IReadOnlyList<AppointmentServiceResponse> Services { get; init; } = [];
+    public string? PointDiscountKindCode { get; init; }
+    public decimal? PointDiscountValue { get; init; }
+    public decimal PointDiscountAmount { get; init; }
+}
 public sealed record DoctorAgendaResponse(DoctorAgendaCounters Counters, DoctorAgendaSources Sources,
     SchedulingPage<DoctorAppointmentResponse> Page);
 public sealed record DoctorAgendaCounters(int Total, int Online, int InPerson, int Rescheduled);
