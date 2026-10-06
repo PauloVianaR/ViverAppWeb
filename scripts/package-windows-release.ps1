@@ -80,7 +80,7 @@ try {
         commit = $commit
         dirty = $dirty.Count -gt 0
         createdUtc = (Get-Date).ToUniversalTime().ToString('O')
-        target = 'Windows Server / IIS / .NET 10'
+        target = 'Windows / IIS / .NET 10'
         artifacts = $artifacts
     }
     $manifestPath = Join-Path $releaseRoot 'manifest.json'
