@@ -61,12 +61,14 @@ public sealed class ManagerExperienceController(ManagerExperienceService service
     [HttpGet("appointments/{id:long}")] public Task<ManagerAppointmentResponse> Appointment(ulong id, CancellationToken ct) => service.AppointmentAsync(id, ct);
     [HttpGet("booking/slots"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
     public Task<IReadOnlyList<AvailableSlotResponse>> Slots(ulong patientAccountId, ulong doctorAccountId, uint appointmentTypeId,
-        string modality, DateOnly from, int days = 14, [FromQuery] uint[]? additionalAppointmentTypeIds = null, CancellationToken ct = default) =>
-        scheduling.GetAvailableSlotsAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct, additionalAppointmentTypeIds);
+        string modality, DateOnly from, int days = 14, [FromQuery] uint[]? additionalAppointmentTypeIds = null,
+        int? durationMinutes = null, CancellationToken ct = default) =>
+        scheduling.GetAvailableSlotsAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct, additionalAppointmentTypeIds, durationMinutes);
     [HttpGet("booking/available-dates"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
     public Task<IReadOnlyList<DateOnly>> AvailableDates(ulong patientAccountId, ulong doctorAccountId,
-        uint appointmentTypeId, string modality, DateOnly from, int days = 31, [FromQuery] uint[]? additionalAppointmentTypeIds = null, CancellationToken ct = default) =>
-        scheduling.GetAvailableDatesAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct, additionalAppointmentTypeIds);
+        uint appointmentTypeId, string modality, DateOnly from, int days = 31, [FromQuery] uint[]? additionalAppointmentTypeIds = null,
+        int? durationMinutes = null, CancellationToken ct = default) =>
+        scheduling.GetAvailableDatesAsync(patientAccountId, doctorAccountId, appointmentTypeId, modality, from, days, ct, additionalAppointmentTypeIds, durationMinutes);
     [HttpGet("booking/professionals"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
     public Task<SchedulingPage<BookingProfessionalResponse>> Professionals(uint appointmentTypeId, string modality,
         string? search = null, int page = 1, int pageSize = 50, [FromQuery] uint[]? additionalAppointmentTypeIds = null, CancellationToken ct = default) =>

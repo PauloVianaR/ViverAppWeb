@@ -72,7 +72,7 @@
     private decimal CombinedPrice=>decimal.Round(CombinedBasePrice*
         (1-(SelectedService?.DiscountPercent??0)/100m),2,MidpointRounding.AwayFromZero);
     private string CalendarKey=>$"{SelectedDoctor?.AccountId}-{ServiceId}-{string.Join("-",AdditionalIds.Order())}-{Modality}";
-    private string CalendarApi=>$"api/v1/patient/booking/slots?doctorAccountId={SelectedDoctor?.AccountId}&appointmentTypeId={ServiceId}&modality={Modality}{AdditionalQuery}";
+    private string CalendarApi=>$"api/v1/patient/booking/slots?doctorAccountId={SelectedDoctor?.AccountId}&appointmentTypeId={ServiceId}&modality={Modality}{AdditionalQuery}"+(Original is not null&&Original.Services.Count>1?$"&durationMinutes={(int)(Original.EndsAtUtc-Original.StartsAtUtc).TotalMinutes}":"");
     private string? SubmissionFingerprint, SubmissionKey;
     protected override async Task Load()
     {

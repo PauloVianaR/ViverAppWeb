@@ -103,34 +103,23 @@ else
                     <div class="record-appointment-list">
                         @foreach (var appointment in AppointmentReports)
                         {
-                            <details class="surface record-appointment">
-                                <summary>
+                            <article class="surface record-appointment" @key="appointment.Id">
+                                <button type="button" class="record-appointment-toggle" aria-expanded="@ExpandedAppointments.Contains(appointment.Id)"
+                                    aria-controls="@($"report-{appointment.Id}")" @onclick="() => ToggleAppointment(appointment.Id)">
+                                    <span class="record-appointment-chevron" aria-hidden="true">@(ExpandedAppointments.Contains(appointment.Id) ? "▾" : "▸")</span>
                                     <span><strong>Atendimento #@appointment.AppointmentNumber</strong><small>@appointment.AppointmentTypeName · @appointment.ProfessionalName</small></span>
                                     <span><strong>@Local(appointment.StartsAtUtc)</strong><small>@StatusLabel(appointment.StatusCode)</small></span>
-                                </summary>
-                                <div class="clinical-content">
-                                    @if (appointment.IsOphthalmology)
-                                    {
-                                        <ContentField Label="História oftalmológica" Value="@appointment.Ophthalmology?.OphthalmicHistory" />
-                                        <ContentField Label="Acuidade visual" Value="@appointment.Ophthalmology?.VisualAcuity" />
-                                        <ContentField Label="Refração" Value="@appointment.Ophthalmology?.Refraction" />
-                                        <ContentField Label="Biomicroscopia" Value="@appointment.Ophthalmology?.Biomicroscopy" />
-                                        <ContentField Label="Tonometria" Value="@appointment.Ophthalmology?.Tonometry" />
-                                        <ContentField Label="Fundo de olho" Value="@appointment.Ophthalmology?.FundusExam" />
-                                    }
-                                    else
-                                    {
-                                        <ContentField Label="Resumo clínico" Value="@appointment.ClinicalSummary" />
-                                    }
-                                    <ContentField Label="Recomendações" Value="@appointment.Recommendations" />
-                                </div>
-                                @if (appointment.Ophthalmology is null && appointment.ClinicalSummary is null && appointment.Recommendations is null)
+                                </button>
+                                @if (ExpandedAppointments.Contains(appointment.Id))
                                 {
-                                    <p class="field-hint">Nenhum laudo foi registrado neste atendimento.</p>
+                                    <div id="@($"report-{appointment.Id}")" class="record-appointment-body">
+                                        <AppointmentReportEditor @key="appointment.Id" AppointmentId="@((long)appointment.Id)"
+                                            ExpectedPatientId="@((ulong)PatientId)" Embedded="true" />
+                                        <button type="button" class="button button--secondary button--small" disabled="@Busy"
+                                            @onclick="() => DownloadAppointmentPdfAsync(appointment)">Gerar PDF deste atendimento</button>
+                                    </div>
                                 }
-                                <button type="button" class="button button--secondary button--small" disabled="@Busy"
-                                    @onclick="() => DownloadAppointmentPdfAsync(appointment)">Gerar PDF deste atendimento</button>
-                            </details>
+                            </article>
                         }
                     </div>
                     @if (AppointmentReports.Count < AppointmentReportTotal)
@@ -258,6 +247,7 @@ else
     private readonly List<WebMedicalRecordEntry> Entries = [];
     private readonly List<WebMedicalRecordAppointmentOption> Appointments = [];
     private readonly List<WebMedicalRecordAppointmentReport> AppointmentReports = [];
+    private readonly HashSet<ulong> ExpandedAppointments = [];
     private int AppointmentReportPage, AppointmentReportTotal;
     private readonly List<WebMedicalRecordDocument> Documents = [];
     private readonly List<WebMedicalRecordAccessEvent> AccessEvents = [];
@@ -309,6 +299,10 @@ else
         AppointmentReports.AddRange(data?.Items??[]);
         AppointmentReportPage=nextPage;
         AppointmentReportTotal=data?.Total??0;
+    }
+    private void ToggleAppointment(ulong appointmentId)
+    {
+        if (!ExpandedAppointments.Add(appointmentId)) ExpandedAppointments.Remove(appointmentId);
     }
     private Task LoadMoreAppointmentReportsAsync()=>RunAsync(()=>LoadAppointmentReportsAsync(true));
     private Task DownloadAppointmentPdfAsync(WebMedicalRecordAppointmentReport appointment)=>RunAsync(async()=>

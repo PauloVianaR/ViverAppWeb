@@ -29,7 +29,8 @@ public sealed record WebOphthalmologyReportFields(
 
 public sealed record WebClinicalReportVersion(
     uint VersionNumber, DateTime CreatedAtUtc, string EditorName, string EditorRoleCode,
-    string? ChangeReason, WebOphthalmologyReportFields Ophthalmology, string? Recommendations);
+    string? ChangeReason, string? ClinicalSummary, WebOphthalmologyReportFields? Ophthalmology,
+    string? Recommendations);
 
 public sealed class WebOphthalmologyReportDraft
 {

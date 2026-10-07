@@ -41,6 +41,7 @@ public sealed class PatientAppointmentsController(PatientSchedulingService sched
         [FromQuery] DateOnly from,
         [FromQuery] int days = 14,
         [FromQuery] uint[]? additionalAppointmentTypeIds = null,
+        [FromQuery] int? durationMinutes = null,
         CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => scheduling.GetAvailableSlotsAsync(
             ActorId,
@@ -49,7 +50,7 @@ public sealed class PatientAppointmentsController(PatientSchedulingService sched
             modality,
             from,
             days,
-            cancellationToken, additionalAppointmentTypeIds));
+            cancellationToken, additionalAppointmentTypeIds, durationMinutes));
 
     [HttpGet("booking/available-dates")]
     [EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
@@ -57,9 +58,10 @@ public sealed class PatientAppointmentsController(PatientSchedulingService sched
         [FromQuery] ulong doctorAccountId, [FromQuery] uint appointmentTypeId,
         [FromQuery] string modality, [FromQuery] DateOnly from,
         [FromQuery] int days = 31, [FromQuery] uint[]? additionalAppointmentTypeIds = null,
+        [FromQuery] int? durationMinutes = null,
         CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => scheduling.GetAvailableDatesAsync(ActorId, doctorAccountId,
-            appointmentTypeId, modality, from, days, cancellationToken, additionalAppointmentTypeIds));
+            appointmentTypeId, modality, from, days, cancellationToken, additionalAppointmentTypeIds, durationMinutes));
 
     [HttpGet("appointments")]
     public Task<ActionResult<SchedulingPage<AppointmentResponse>>> GetAppointments(

@@ -99,7 +99,8 @@ public sealed record DoctorAppointmentCreateRequest(
     DateOnly LocalDate,
     TimeOnly LocalStartsAt,
     [param: StringLength(1000)] string? PatientNotes,
-    IReadOnlyList<uint>? AdditionalAppointmentTypeIds = null);
+    IReadOnlyList<uint>? AdditionalAppointmentTypeIds = null,
+    [param: Range(5, 720)] int? DurationMinutes = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AppointmentPointDiscountRequest(

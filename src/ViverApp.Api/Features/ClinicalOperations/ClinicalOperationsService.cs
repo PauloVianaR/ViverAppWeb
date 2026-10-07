@@ -134,7 +134,7 @@ public sealed class ClinicalOperationsService(
         var isOphthalmology = await OphthalmologyReportMapping.IsOphthalmologyAsync(
             database, appointment.ProfessionalAccountId, cancellationToken);
         var includeReportContent = IsClinicalProfessional(roleCode) && appointment.ProfessionalAccountId == actorId
-            || isOphthalmology && roleCode is ViverAppRoles.Manager or ViverAppRoles.Administrator;
+            || roleCode is ViverAppRoles.Manager or ViverAppRoles.Administrator;
         if (includeReportContent && appointment.MedicalReport is not null)
         {
             await auditWriter.WriteAsync(
@@ -225,8 +225,6 @@ public sealed class ClinicalOperationsService(
             throw Forbidden();
         var isOphthalmology = await OphthalmologyReportMapping.IsOphthalmologyAsync(
             database, appointment.ProfessionalAccountId, cancellationToken);
-        if (!isOphthalmology && !IsClinicalProfessional(roleCode))
-            throw Forbidden();
         if (!isOphthalmology && request.Ophthalmology is not null)
             throw BadRequest("Campos oftalmológicos não pertencem à especialidade deste atendimento.");
         var ophthalmology = isOphthalmology
@@ -309,7 +307,7 @@ public sealed class ClinicalOperationsService(
         return MapReport(report, includeContent: true);
     }
 
-    public async Task<IReadOnlyList<ClinicalReportVersionResponse>> GetOphthalmologyVersionsAsync(
+    public async Task<IReadOnlyList<ClinicalReportVersionResponse>> GetReportVersionsAsync(
         ulong actorId, string roleCode, ulong appointmentId, CancellationToken ct)
     {
         EnsureClinicalRole(roleCode);
@@ -317,8 +315,8 @@ public sealed class ClinicalOperationsService(
             .Where(item => item.Id == appointmentId)
             .Select(item => new { item.ProfessionalAccountId })
             .SingleOrDefaultAsync(ct) ?? throw NotFound("Consulta não encontrada.");
-        if (!await OphthalmologyReportMapping.IsOphthalmologyAsync(database, appointment.ProfessionalAccountId, ct))
-            throw NotFound("Relatório oftalmológico não encontrado.");
+        var isOphthalmology = await OphthalmologyReportMapping.IsOphthalmologyAsync(
+            database, appointment.ProfessionalAccountId, ct);
         var versions = await database.MedicalReportVersions.AsNoTracking()
             .Include(version => version.EditorAccount)
             .Where(version => version.MedicalReport.AppointmentId == appointmentId)
@@ -329,8 +327,9 @@ public sealed class ClinicalOperationsService(
         return versions.Select(version => new ClinicalReportVersionResponse(
             version.VersionNumber, version.CreatedAtUtc, version.EditorAccount.FullName,
             version.EditorAccount.RoleCode, version.ChangeReason,
-            OphthalmologyReportMapping.From(version)
-                ?? new OphthalmologyReportFields(version.ClinicalSummary, null, null, null, null, null),
+            isOphthalmology ? null : version.ClinicalSummary,
+            isOphthalmology ? OphthalmologyReportMapping.From(version)
+                ?? new OphthalmologyReportFields(version.ClinicalSummary, null, null, null, null, null) : null,
             version.Recommendations)).ToArray();
     }
 

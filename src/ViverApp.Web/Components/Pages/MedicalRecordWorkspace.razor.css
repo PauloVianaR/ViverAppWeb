@@ -5,8 +5,11 @@
 .patient-record-facts div{display:grid;grid-template-columns:5rem minmax(0,1fr);gap:.5rem}.patient-record-facts dt,.patient-record-facts dd{margin:0}.patient-record-overview{display:grid;gap:.6rem;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--color-border)}.patient-record-overview div{display:grid;gap:.15rem}.patient-record-overview span{font-size:.75rem;color:var(--color-text-muted)}.patient-record-overview strong{font-size:.85rem}
 .record-appointment-list{display:grid;gap:.75rem;margin-bottom:1rem}
 .record-appointment{padding:1rem;min-width:0}
-.record-appointment>summary{display:flex;justify-content:space-between;gap:1rem;cursor:pointer}
-.record-appointment>summary span{display:grid;gap:.2rem}
-.record-appointment>summary small{color:var(--color-text-muted);overflow-wrap:anywhere}
+.record-appointment-toggle{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:1rem;width:100%;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer;font:inherit;padding:0}
+.record-appointment-toggle:focus-visible{outline:3px solid var(--color-brand);outline-offset:4px;border-radius:var(--radius-sm)}
+.record-appointment-toggle>span:not(.record-appointment-chevron){display:grid;gap:.2rem;min-width:0}
+.record-appointment-toggle small{color:var(--color-text-muted);overflow-wrap:anywhere}
+.record-appointment-chevron{display:inline-grid;place-items:center;width:1.75rem;height:1.75rem;border-radius:50%;background:var(--color-brand-soft);color:var(--color-brand-strong);font-size:1.25rem;font-weight:900}
+.record-appointment-body{margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--color-border)}
 .record-appointment .clinical-content{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin:1rem 0}
-@media(max-width:700px){.record-appointment>summary{flex-direction:column}.record-appointment .clinical-content{grid-template-columns:1fr}}
+@media(max-width:700px){.record-appointment-toggle{grid-template-columns:auto minmax(0,1fr)}.record-appointment-toggle>span:last-child{grid-column:2}.record-appointment .clinical-content{grid-template-columns:1fr}}

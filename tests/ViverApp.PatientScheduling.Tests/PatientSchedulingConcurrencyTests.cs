@@ -230,15 +230,21 @@ public sealed class PatientSchedulingConcurrencyTests
                     item => item.AppointmentId == created.Response.Id));
                 var managerSlots = await service.GetAvailableSlotsAsync(fixture.PatientId,
                     fixture.DoctorId, fixture.AppointmentTypeId, "online", fixture.LocalDate, 1,
-                    CancellationToken.None, [examinationId]);
-                Assert.Contains(managerSlots, item => item.StartsAt == new TimeOnly(11, 0));
+                    CancellationToken.None, [examinationId], 40);
+                Assert.Contains(managerSlots, item => item.StartsAt == new TimeOnly(11, 0)
+                    && item.EndsAt == new TimeOnly(11, 40));
+                var invalidSingleDuration = await Assert.ThrowsAnyAsync<Exception>(() =>
+                    service.GetAvailableSlotsAsync(fixture.PatientId, fixture.DoctorId,
+                        fixture.AppointmentTypeId, "online", fixture.LocalDate, 1,
+                        CancellationToken.None, null, 40));
+                Assert.Contains("único serviço", invalidSingleDuration.Message, StringComparison.OrdinalIgnoreCase);
                 var managed = await service.CreateForManagerAsync(managerId,
                     $"manager-combined-{Guid.NewGuid():N}",
                     new ManagerAppointmentCreateRequest(fixture.PatientId, fixture.DoctorId,
                         fixture.AppointmentTypeId, "online", fixture.LocalDate, new TimeOnly(11, 0),
-                        null, [examinationId]), CancellationToken.None);
+                        null, [examinationId], DurationMinutes: 40), CancellationToken.None);
                 Assert.Equal(175m, managed.Response.PriceAmount);
-                Assert.Equal(50, (managed.Response.EndsAtUtc - managed.Response.StartsAtUtc).TotalMinutes);
+                Assert.Equal(40, (managed.Response.EndsAtUtc - managed.Response.StartsAtUtc).TotalMinutes);
             }
             var invalid = await AttemptCreateAsync(configuration, fixture.PatientId,
                 $"mixed-category-{Guid.NewGuid():N}",

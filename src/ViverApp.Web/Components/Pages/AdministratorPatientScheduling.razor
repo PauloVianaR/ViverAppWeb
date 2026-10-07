@@ -23,13 +23,16 @@
         disabled="@(SelectedIds.Count>0&&service.ModalityCode!="both"&&service.ModalityCode!=ModalityCode)"
         @onchange="()=>ToggleService(service)" /><span><strong>@service.Name</strong><br />
         <small>@Modality(service.ModalityCode) · @service.DurationMinutes min · @(service.RequiresPayment?Money(service.BasePrice):"Sem cobrança")</small></span></label>}</div>
+    @if(SelectedIds.Count>1){<div class="field"><label for="admin-book-duration">Duração deste atendimento (minutos)</label>
+        <input id="admin-book-duration" type="number" min="5" max="720" step="1" @bind="CustomDurationMinutes" @bind:after="DurationChanged" />
+        <p class="field-hint">Soma padrão: @DefaultDuration min. A duração informada define os horários disponíveis.</p></div>}
     <div class="field"><label for="admin-book-modality">Modalidade</label><select id="admin-book-modality" @bind="ModalityCode" @bind:after="ModalityChanged">
         <option value="in_person">Presencial</option><option value="online">Online</option></select></div>
 </section>
 <section class="surface patient-panel patient-section"><h2>2. Profissional, data e horário</h2>
     <div class="field"><label for="admin-book-doctor">Profissional</label><select id="admin-book-doctor" @bind="DoctorId" @bind:after="ProfessionalChanged">
         <option value="0">Selecione</option>@foreach(var doctor in Doctors){<option value="@doctor.AccountId">@doctor.FullName</option>}</select></div>
-    @if(DoctorId!=0){<BookingAvailabilityCalendar @key="CalendarKey" SlotsApiPrefix="@CalendarApi" DateSelected="SelectDate" />}
+    @if(DoctorId!=0&&DurationValid){<BookingAvailabilityCalendar @key="CalendarKey" SlotsApiPrefix="@CalendarApi" DateSelected="SelectDate" />}
     <div class="appointment-slot-grid">@foreach(var slot in Slots){<label class="appointment-slot-option"><input type="radio" name="admin-book-slot"
         checked="@(Selected==slot.StartsAt)" @onchange="()=>Selected=slot.StartsAt" />
         @slot.StartsAt.ToString("HH:mm")–@slot.EndsAt.ToString("HH:mm")</label>}</div>
@@ -42,7 +45,7 @@
     <dl class="patient-facts">
         <div><dt>Paciente</dt><dd>@Patient.FullName</dd></div>
         <div><dt>Serviços</dt><dd>@string.Join(" + ",SelectedServices.Select(x=>x.Name))</dd></div>
-        <div><dt>Duração total</dt><dd>@SelectedServices.Sum(x=>(int)x.DurationMinutes) min</dd></div>
+        <div><dt>Duração total</dt><dd>@EffectiveDuration min</dd></div>
         <div><dt>Profissional</dt><dd>@(Doctors.SingleOrDefault(x=>x.AccountId==DoctorId)?.FullName??"Selecione")</dd></div>
         <div><dt>Data e horário</dt><dd>@(Selected.HasValue?$"{Date:dd/MM/yyyy} às {Selected:HH:mm}":"Selecione")</dd></div>
         <div><dt>Valor base</dt><dd>@(BaseTotal>0?Money(BaseTotal):"Sem cobrança")</dd></div>
@@ -51,7 +54,7 @@
         <div><dt>Valor final estimado</dt><dd><strong>@Money(PremiumTotal-PointPreview)</strong></dd></div>
     </dl>
     <p class="field-hint">O servidor recalcula os valores e verifica o teto antes de salvar. Esta ação exige MFA recente.</p>
-    <button class="button" disabled="@(Busy||SelectedIds.Count==0||DoctorId==0||!Selected.HasValue)" @onclick="Confirm">Confirmar agendamento</button>
+    <button class="button" disabled="@(Busy||SelectedIds.Count==0||DoctorId==0||!Selected.HasValue||!DurationValid)" @onclick="Confirm">Confirmar agendamento</button>
 </section>}}
 @code {
     [Parameter] public long PatientId { get; set; }
@@ -68,11 +71,18 @@
     private decimal PointValue,MaxDiscountPercent=30;
     private ulong PatientIdValue,DoctorId;
     private DateTime Date=DateTime.Today.AddDays(1);
+    private int? CustomDurationMinutes;
     private TimeOnly? Selected;
     private uint PrimaryId=>SelectedIds.FirstOrDefault();
     private string AdditionalQuery=>string.Concat(SelectedIds.Skip(1).Select(id=>$"&additionalAppointmentTypeIds={id}"));
-    private string CalendarKey=>$"{PatientIdValue}-{DoctorId}-{string.Join("-",SelectedIds)}-{ModalityCode}";
-    private string CalendarApi=>$"api/v1/administrator/booking/slots?patientAccountId={PatientIdValue}&doctorAccountId={DoctorId}&appointmentTypeId={PrimaryId}&modality={ModalityCode}{AdditionalQuery}";
+    private string CalendarKey=>$"{PatientIdValue}-{DoctorId}-{string.Join("-",SelectedIds)}-{ModalityCode}-{CustomDurationMinutes}";
+    private string CalendarApi=>$"api/v1/administrator/booking/slots?patientAccountId={PatientIdValue}&doctorAccountId={DoctorId}&appointmentTypeId={PrimaryId}&modality={ModalityCode}{AdditionalQuery}{DurationQuery}";
+    private int DefaultDuration=>SelectedServices.Sum(x=>(int)x.DurationMinutes);
+    private int EffectiveDuration=>SelectedIds.Count>1?CustomDurationMinutes??0:DefaultDuration;
+    private bool DurationValid=>SelectedIds.Count<=1||CustomDurationMinutes is >=5 and <=720;
+    private string DurationQuery=>SelectedIds.Count>1&&DurationValid?$"&durationMinutes={CustomDurationMinutes}":"";
+    private void DurationChanged(){Slots=[];Selected=null;}
+    private void RefreshDuration(){CustomDurationMinutes=SelectedIds.Count>1?DefaultDuration:null;DurationChanged();}
     private IEnumerable<ManagerService> VisibleServices=>Services.Where(x=>x.CategoryCode==Category
         && (string.IsNullOrWhiteSpace(ServiceSearch)||x.Name.Contains(ServiceSearch,StringComparison.OrdinalIgnoreCase)
             || (x.Description?.Contains(ServiceSearch,StringComparison.OrdinalIgnoreCase)??false)))
@@ -110,14 +120,16 @@
         ResetAvailability();
     }
     private Task ChooseCategory(string category)=>Run(async()=>{Category=category;ServiceSearch="";
-        SelectedIds.Clear();await LoadDoctors();});
+        SelectedIds.Clear();RefreshDuration();await LoadDoctors();});
     private Task ToggleService(ManagerService service)=>Run(async()=>{
         if(SelectedIds.Contains(service.Id))SelectedIds.Remove(service.Id);
         else{if(SelectedIds.Count==0)ModalityCode=service.ModalityCode=="online"?"online":"in_person";SelectedIds.Add(service.Id);}
+        RefreshDuration();
         await LoadDoctors();
     });
     private Task ModalityChanged()=>Run(async()=>{
         SelectedIds.RemoveAll(id=>Services.Any(x=>x.Id==id&&x.ModalityCode!="both"&&x.ModalityCode!=ModalityCode));
+        RefreshDuration();
         await LoadDoctors();
     });
     private async Task LoadDoctors()
@@ -141,7 +153,8 @@
     private Task Confirm()=>Run(async()=>{
         var request=new ManagerAppointmentCreate(PatientIdValue,DoctorId,PrimaryId,ModalityCode,
             DateOnly.FromDateTime(Date),Selected!.Value,Notes,SelectedIds.Skip(1).ToArray(),
-            PointKind==""?null:PointKind,PointKind==""?null:PointValue);
+            PointKind==""?null:PointKind,PointKind==""?null:PointValue,
+            SelectedIds.Count>1?CustomDurationMinutes:null);
         var result=await Request<WebAppointment>("api/v1/administrator/appointments","POST",request,Guid.NewGuid().ToString("N"));
         Navigation.NavigateTo($"/administracao/atendimentos/{result!.Id}");
     });

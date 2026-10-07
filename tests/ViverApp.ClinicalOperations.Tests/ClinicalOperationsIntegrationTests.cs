@@ -88,7 +88,7 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AssignedDoctorCanDraftThenComplete_PublishedReportIsVisibleToPatientAndRedactedForManager()
+    public async Task AssignedDoctorCanDraftThenComplete_PublishedReportIsVisibleToPatientAndAuthorizedManager()
     {
         await using var context = CreateContext(configuration);
         var service = CreateService(context, fixture.NowUtc);
@@ -118,8 +118,8 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
 
         var managerView = await service.GetAppointmentAsync(
             fixture.ManagerId, ViverAppRoles.Manager, fixture.AppointmentId, CancellationToken.None);
-        Assert.False(managerView.MedicalReport!.ContentVisible);
-        Assert.Null(managerView.MedicalReport.ClinicalSummary);
+        Assert.True(managerView.MedicalReport!.ContentVisible);
+        Assert.Contains("sem sinais de alarme", managerView.MedicalReport.ClinicalSummary, StringComparison.Ordinal);
 
         var patientView = await service.GetPublishedPatientReportAsync(
             fixture.PatientId, fixture.AppointmentId, CancellationToken.None);
@@ -174,13 +174,13 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
                 ChangeReason = "Correção operacional da acuidade visual",
             }, CancellationToken.None);
         Assert.Equal("OD 20/25", second.Ophthalmology?.VisualAcuity);
-        var versions = await service.GetOphthalmologyVersionsAsync(
+        var versions = await service.GetReportVersionsAsync(
             fixture.ManagerId, ViverAppRoles.Manager, fixture.AppointmentId, CancellationToken.None);
         Assert.Equal(2, versions.Count);
         Assert.Equal(fixture.ManagerId, await context.MedicalReportVersions
             .Where(x => x.MedicalReport.AppointmentId == fixture.AppointmentId)
             .OrderByDescending(x => x.VersionNumber).Select(x => x.EditorAccountId).FirstAsync());
-        Assert.Equal("OD 20/20", versions[1].Ophthalmology.VisualAcuity);
+        Assert.Equal("OD 20/20", versions[1].Ophthalmology?.VisualAcuity);
 
         var administratorView = await service.GetAppointmentAsync(
             fixture.AdministratorId, ViverAppRoles.Administrator, fixture.AppointmentId, CancellationToken.None);
@@ -205,6 +205,41 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
                 Ophthalmology = new OphthalmologyReportFields("Acesso indevido", null, null, null, null, null),
             }, CancellationToken.None));
         Assert.Equal((int)HttpStatusCode.Forbidden, outsider.StatusCode);
+    }
+
+    [Fact]
+    public async Task GeneralReport_IsEditableFromPatientRecordByDoctorManagerAndAdministrator_WithVersions()
+    {
+        await using var context = CreateContext(configuration);
+        var service = CreateService(context, fixture.NowUtc);
+        var doctor = await service.SaveDraftAsync(fixture.DoctorId, ViverAppRoles.Doctor,
+            fixture.AppointmentId, new MedicalReportWriteRequest(0,
+                "Resumo clínico inicial do atendimento registrado pelo médico.", "Retornar se necessário."),
+            CancellationToken.None);
+        var managerView = await service.GetAppointmentAsync(fixture.ManagerId, ViverAppRoles.Manager,
+            fixture.AppointmentId, CancellationToken.None);
+        Assert.False(managerView.IsOphthalmology);
+        Assert.Equal(doctor.ClinicalSummary, managerView.MedicalReport?.ClinicalSummary);
+
+        var manager = await service.SaveDraftAsync(fixture.ManagerId, ViverAppRoles.Manager,
+            fixture.AppointmentId, new MedicalReportWriteRequest(doctor.RowVersion,
+                "Resumo clínico revisado no prontuário pelo gestor autorizado.", "Recomendação atualizada.")
+            { ChangeReason = "Correção do resumo clínico" }, CancellationToken.None);
+        var administrator = await service.SaveDraftAsync(fixture.AdministratorId,
+            ViverAppRoles.Administrator, fixture.AppointmentId,
+            new MedicalReportWriteRequest(manager.RowVersion,
+                "Resumo clínico conferido pelo administrador autorizado.", "Acompanhamento mantido.")
+            { ChangeReason = "Conferência administrativa do laudo" }, CancellationToken.None);
+        Assert.Equal("Acompanhamento mantido.", administrator.Recommendations);
+
+        var versions = await service.GetReportVersionsAsync(fixture.ManagerId, ViverAppRoles.Manager,
+            fixture.AppointmentId, CancellationToken.None);
+        Assert.Equal(3, versions.Count);
+        Assert.Null(versions[0].Ophthalmology);
+        Assert.Contains("administrador", versions[0].ClinicalSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ViverAppRoles.Administrator, versions[0].EditorRoleCode);
+        Assert.Equal(ViverAppRoles.Manager, versions[1].EditorRoleCode);
+        Assert.Equal(ViverAppRoles.Doctor, versions[2].EditorRoleCode);
     }
 
     [Fact]

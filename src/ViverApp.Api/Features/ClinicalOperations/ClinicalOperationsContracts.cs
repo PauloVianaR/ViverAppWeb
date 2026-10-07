@@ -40,7 +40,8 @@ public sealed record ClinicalReportVersionResponse(
     string EditorName,
     string EditorRoleCode,
     string? ChangeReason,
-    OphthalmologyReportFields Ophthalmology,
+    string? ClinicalSummary,
+    OphthalmologyReportFields? Ophthalmology,
     string? Recommendations);
 
 public sealed record ClinicalAppointmentResponse(

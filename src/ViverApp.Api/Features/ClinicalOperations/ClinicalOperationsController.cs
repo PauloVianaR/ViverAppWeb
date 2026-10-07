@@ -66,7 +66,7 @@ public sealed class ClinicalOperationsController(
         ulong id, CancellationToken cancellationToken)
     {
         if (!await AdminAccessIsRecentAsync(cancellationToken)) return Forbid();
-        return await ExecuteAsync(() => operations.GetOphthalmologyVersionsAsync(ActorId, RoleCode, id, cancellationToken));
+        return await ExecuteAsync(() => operations.GetReportVersionsAsync(ActorId, RoleCode, id, cancellationToken));
     }
 
     private Task<bool> AdminAccessIsRecentAsync(CancellationToken ct) =>
