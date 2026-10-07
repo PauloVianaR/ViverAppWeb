@@ -24,7 +24,8 @@ public sealed record ManagerAppointmentCreate(
     [property: JsonPropertyName("localStartsAt")] TimeOnly LocalStartsAt,
     [property: JsonPropertyName("patientNotes")] string? PatientNotes,
     IReadOnlyList<uint>? AdditionalAppointmentTypeIds = null,
-    string? PointDiscountKindCode = null, decimal? PointDiscountValue = null);
+    string? PointDiscountKindCode = null, decimal? PointDiscountValue = null,
+    int? DurationMinutes = null);
 public sealed record ManagerReportMetadata(bool Exists, string? StatusCode, uint VersionCount, DateTime? PublishedAtUtc);
 public sealed record ManagerPaymentMetadata(ulong? Id, string StatusCode, string? MethodCode, DateTime? PaidAtUtc,
     string? CardLastFour, string? AuthorizationReference, ulong RowVersion);

@@ -107,7 +107,8 @@ public sealed class PatientSchedulingService(
         DateOnly from,
         int days,
         CancellationToken cancellationToken,
-        IReadOnlyList<uint>? additionalAppointmentTypeIds = null)
+        IReadOnlyList<uint>? additionalAppointmentTypeIds = null,
+        int? durationMinutes = null)
     {
         ValidateModality(modality, allowNull: false);
         if (days is < 1 or > MaximumAvailabilityDays)
@@ -116,7 +117,7 @@ public sealed class PatientSchedulingService(
         }
 
         var (type, _, _, _) = await ResolveServicesAsync(appointmentTypeId, additionalAppointmentTypeIds,
-            modality, doctorId, cancellationToken);
+            modality, doctorId, cancellationToken, durationMinutes);
         await RequireActiveDoctorAsync(doctorId, cancellationToken);
         var (policy, timezoneName, timezone) = await LoadConfigurationAsync(cancellationToken);
         var today = LocalDate(timeProvider.GetUtcNow(), timezone);
@@ -149,10 +150,11 @@ public sealed class PatientSchedulingService(
     public async Task<IReadOnlyList<DateOnly>> GetAvailableDatesAsync(
         ulong patientId, ulong doctorId, uint appointmentTypeId, string modality,
         DateOnly from, int days, CancellationToken cancellationToken,
-        IReadOnlyList<uint>? additionalAppointmentTypeIds = null)
+        IReadOnlyList<uint>? additionalAppointmentTypeIds = null,
+        int? durationMinutes = null)
     {
         var slots = await GetAvailableSlotsAsync(patientId, doctorId, appointmentTypeId,
-            modality, from, days, cancellationToken, additionalAppointmentTypeIds);
+            modality, from, days, cancellationToken, additionalAppointmentTypeIds, durationMinutes);
         return slots.Select(slot => slot.Date).Distinct().Order().ToArray();
     }
 
@@ -321,7 +323,7 @@ public sealed class PatientSchedulingService(
         await LockDoctorAsync(doctorId, cancellationToken);
         var (type, serviceItems, basePrice, requiresPayment) = await ResolveServicesAsync(
             request.AppointmentTypeId, request.AdditionalAppointmentTypeIds, request.ModalityCode,
-            doctorId, cancellationToken);
+            doctorId, cancellationToken, request.DurationMinutes);
         var doctor = await RequireActiveDoctorAsync(doctorId, cancellationToken);
         if (!await database.ProfessionalServices.AnyAsync(x => x.ProfessionalAccountId == doctorId
             && x.AppointmentTypeId == type.Id && x.IsActive && x.AppointmentType.IsActive, cancellationToken))
@@ -385,7 +387,7 @@ public sealed class PatientSchedulingService(
         await LockDoctorAsync(request.ProfessionalAccountId, cancellationToken);
         var (type, serviceItems, basePrice, requiresPayment) = await ResolveServicesAsync(
             request.AppointmentTypeId, request.AdditionalAppointmentTypeIds, request.ModalityCode,
-            request.ProfessionalAccountId, cancellationToken);
+            request.ProfessionalAccountId, cancellationToken, request.DurationMinutes);
         var doctor = await RequireActiveDoctorAsync(request.ProfessionalAccountId, cancellationToken);
         if (!await database.ProfessionalServices.AnyAsync(x => x.ProfessionalAccountId == request.ProfessionalAccountId
             && x.AppointmentTypeId == type.Id && x.IsActive && x.AppointmentType.IsActive, cancellationToken))
@@ -938,7 +940,7 @@ public sealed class PatientSchedulingService(
 
     private async Task<(AppointmentType SlotType, AppointmentServiceItem[] Items, decimal BasePrice, bool RequiresPayment)>
         ResolveServicesAsync(uint primaryId, IReadOnlyList<uint>? additionalIds, string modality,
-            ulong professionalId, CancellationToken cancellationToken)
+            ulong professionalId, CancellationToken cancellationToken, int? durationMinutes = null)
     {
         if (additionalIds is { Count: > 19 })
             throw BadRequest("Selecione no máximo 20 serviços para um atendimento.");
@@ -956,7 +958,11 @@ public sealed class PatientSchedulingService(
             .Select(link => link.AppointmentTypeId).ToArrayAsync(cancellationToken);
         if (linkedIds.Distinct().Count() != ids.Length)
             throw Conflict("O profissional selecionado não oferece todos os serviços escolhidos.");
-        var totalMinutes = types.Sum(type => (int)type.DurationMinutes);
+        if (durationMinutes.HasValue && ids.Length == 1)
+            throw BadRequest("A duração de um único serviço é definida pelo catálogo e não pode ser alterada no agendamento.");
+        if (durationMinutes is < 5 or > 720)
+            throw BadRequest("A duração personalizada deve ficar entre 5 e 720 minutos.");
+        var totalMinutes = durationMinutes ?? types.Sum(type => (int)type.DurationMinutes);
         if (totalMinutes > 720)
             throw BadRequest("A duração combinada dos serviços não pode ultrapassar 12 horas.");
         var items = types.Select((type, index) => new AppointmentServiceItem

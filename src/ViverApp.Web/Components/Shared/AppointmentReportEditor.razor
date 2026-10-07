@@ -1,0 +1,168 @@
+@implements IAsyncDisposable
+@using ViverApp.Web.Components.Pages
+@inject IJSRuntime JavaScript
+@inject WebBackendOptions Backend
+@inject UiErrorNotifier Errors
+
+<section class="@(Embedded ? "appointment-report-editor appointment-report-editor--embedded" : "surface patient-panel patient-section appointment-report-editor")">
+    @if (Embedded) { <h3>@(Appointment?.IsOphthalmology == true ? "Laudo oftalmológico" : "Laudo clínico")</h3> }
+    else { <h2>@(Appointment?.IsOphthalmology == true ? "Laudo oftalmológico" : "Laudo clínico")</h2> }
+    @if (Loading)
+    {
+        <LoadingSkeleton Lines="5" />
+    }
+    else if (Appointment is null)
+    {
+        <p class="notice notice--error">Não foi possível carregar o laudo deste atendimento.</p>
+    }
+    else
+    {
+        @if (Notice is not null)
+        {
+            <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="status">@Notice</p>
+        }
+        <p class="field-hint">Cada salvamento preserva uma versão anterior e identifica quem editou o laudo.</p>
+        @if (Appointment.IsOphthalmology)
+        {
+        <div class="appointment-report-fields">
+            <div class="field"><label for="@FieldId("history")">História oftalmológica</label><textarea id="@FieldId("history")" rows="1" maxlength="12000" @bind="Draft.OphthalmicHistory" @bind:event="oninput"></textarea></div>
+            <div class="field"><label for="@FieldId("acuity")">Acuidade visual</label><textarea id="@FieldId("acuity")" rows="1" maxlength="12000" @bind="Draft.VisualAcuity" @bind:event="oninput"></textarea></div>
+            <div class="field"><label for="@FieldId("refraction")">Refração</label><textarea id="@FieldId("refraction")" rows="1" maxlength="12000" @bind="Draft.Refraction" @bind:event="oninput"></textarea></div>
+            <div class="field"><label for="@FieldId("biomicroscopy")">Biomicroscopia</label><textarea id="@FieldId("biomicroscopy")" rows="1" maxlength="12000" @bind="Draft.Biomicroscopy" @bind:event="oninput"></textarea></div>
+            <div class="field"><label for="@FieldId("tonometry")">Tonometria</label><textarea id="@FieldId("tonometry")" rows="1" maxlength="12000" @bind="Draft.Tonometry" @bind:event="oninput"></textarea></div>
+            <div class="field"><label for="@FieldId("fundus")">Fundo de olho</label><textarea id="@FieldId("fundus")" rows="1" maxlength="12000" @bind="Draft.FundusExam" @bind:event="oninput"></textarea></div>
+            <div class="field"><label for="@FieldId("recommendations")">Recomendações</label><textarea id="@FieldId("recommendations")" rows="1" maxlength="8000" @bind="Recommendations" @bind:event="oninput"></textarea></div>
+        </div>
+        }
+        else
+        {
+        <div class="appointment-report-fields">
+            <div class="field"><label for="@FieldId("summary")">Resumo clínico</label><textarea id="@FieldId("summary")" rows="1" maxlength="12000" @bind="Summary" @bind:event="oninput"></textarea></div>
+            <div class="field"><label for="@FieldId("recommendations")">Recomendações</label><textarea id="@FieldId("recommendations")" rows="1" maxlength="8000" @bind="Recommendations" @bind:event="oninput"></textarea></div>
+        </div>
+        }
+        @if (Versions.Count > 0)
+        {
+            <div class="field"><label for="@FieldId("reason")">Motivo da atualização (opcional)</label><input id="@FieldId("reason")" minlength="5" maxlength="1000" @bind="ChangeReason" /></div>
+        }
+        @if (Appointment.StatusCode is not ("pending" or "canceled"))
+        {
+            <button type="button" class="button" disabled="@Busy" @onclick="SaveAsync">Salvar laudo e versão</button>
+        }
+        else
+        {
+            <p class="field-hint">Laudos não podem ser alterados em atendimentos pendentes ou cancelados.</p>
+        }
+        @foreach (var version in Versions)
+        {
+            <details class="appointment-report-version">
+                <summary>Versão @version.VersionNumber · @version.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @RoleLabel(version.EditorRoleCode): @version.EditorName</summary>
+                @if (version.ChangeReason is not null) { <p><strong>Motivo:</strong> @version.ChangeReason</p> }
+                <div class="clinical-content">
+                    @if (Appointment.IsOphthalmology)
+                    {
+                    <ContentField Label="História oftalmológica" Value="@version.Ophthalmology?.OphthalmicHistory" />
+                    <ContentField Label="Acuidade visual" Value="@version.Ophthalmology?.VisualAcuity" />
+                    <ContentField Label="Refração" Value="@version.Ophthalmology?.Refraction" />
+                    <ContentField Label="Biomicroscopia" Value="@version.Ophthalmology?.Biomicroscopy" />
+                    <ContentField Label="Tonometria" Value="@version.Ophthalmology?.Tonometry" />
+                    <ContentField Label="Fundo de olho" Value="@version.Ophthalmology?.FundusExam" />
+                    }
+                    else
+                    {
+                        <ContentField Label="Resumo clínico" Value="@version.ClinicalSummary" />
+                    }
+                    <ContentField Label="Recomendações" Value="@version.Recommendations" />
+                </div>
+            </details>
+        }
+    }
+</section>
+
+@code {
+    [Parameter] public long AppointmentId { get; set; }
+    [Parameter] public ulong ExpectedPatientId { get; set; }
+    [Parameter] public bool Embedded { get; set; }
+    private IJSObjectReference? Module;
+    private WebClinicalAppointment? Appointment;
+    private readonly List<WebClinicalReportVersion> Versions = [];
+    private readonly WebOphthalmologyReportDraft Draft = new();
+    private string Summary = "", Recommendations = "", ChangeReason = "";
+    private string? Notice;
+    private bool Loading = true, Busy, NoticeError;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            Module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/medical-records.js");
+            await LoadAsync();
+        }
+        catch (Exception error) { ShowError(error); }
+        finally { Loading = false; StateHasChanged(); }
+    }
+
+    private async Task LoadAsync()
+    {
+        Appointment = await Module!.InvokeAsync<WebClinicalAppointment?>("get", Backend.BaseUrl.ToString(),
+            $"api/v1/clinical/appointments/{AppointmentId}", (string?)null);
+        if (Appointment is null || ExpectedPatientId != 0 && Appointment.PatientAccountId != ExpectedPatientId)
+            throw new InvalidOperationException("Laudo deste atendimento não disponível.");
+        var previous = Appointment.MedicalReport;
+        Draft.Load(previous?.Ophthalmology ?? (previous?.ClinicalSummary is { } legacy
+            ? new WebOphthalmologyReportFields(legacy, null, null, null, null, null)
+            : null));
+        Recommendations = Appointment.MedicalReport?.Recommendations ?? "";
+        Summary = Appointment.IsOphthalmology ? "" : previous?.ClinicalSummary ?? "";
+        var versions = await Module!.InvokeAsync<IReadOnlyList<WebClinicalReportVersion>>("get",
+            Backend.BaseUrl.ToString(), $"api/v1/clinical/appointments/{AppointmentId}/medical-report/versions",
+            (string?)null);
+        Versions.Clear();
+        Versions.AddRange(versions ?? []);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (Busy || Appointment is null) return;
+        Busy = true;
+        Notice = null;
+        try
+        {
+            await Module!.InvokeAsync<WebClinicalReport>("send", Backend.BaseUrl.ToString(),
+                $"api/v1/clinical/appointments/{AppointmentId}/medical-report", "PUT",
+                new { rowVersion = Appointment.MedicalReport?.RowVersion ?? 0,
+                    clinicalSummary = Appointment.IsOphthalmology ? null : Summary,
+                    recommendations = Recommendations,
+                    ophthalmology = Appointment.IsOphthalmology ? Draft.ToContent() : null,
+                    changeReason = string.IsNullOrWhiteSpace(ChangeReason) ? null : ChangeReason.Trim() },
+                (string?)null);
+            await LoadAsync();
+            ChangeReason = "";
+            Notice = "Laudo salvo em uma nova versão auditada.";
+            NoticeError = false;
+        }
+        catch (Exception error) { ShowError(error); }
+        finally { Busy = false; StateHasChanged(); }
+    }
+
+    private void ShowError(Exception error)
+    {
+        Notice = UiErrorNotifier.Normalize(error is JSException ? error.Message : UiErrorNotifier.UnexpectedMessage);
+        NoticeError = true;
+        Errors.Show(Notice);
+    }
+
+    private string FieldId(string name) => $"appointment-report-{AppointmentId}-{name}";
+    private static string RoleLabel(string code) => code switch
+    {
+        "doctor" => "Médico", "psychologist" => "Psicólogo",
+        "manager" => "Gestor", "administrator" => "Admin", _ => "Responsável"
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (Module is not null)
+            try { await Module.DisposeAsync(); } catch (JSDisconnectedException) { }
+    }
+}

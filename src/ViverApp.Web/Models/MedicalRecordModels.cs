@@ -14,6 +14,9 @@ public sealed record WebMedicalRecordFinancialSummary(decimal Received, decimal 
     IReadOnlyList<WebMedicalRecordFinancialItem> Items);
 public sealed record WebMedicalRecordAppointmentOption(ulong Id, ulong AppointmentNumber, DateTime StartsAtUtc,
     string StatusCode, string AppointmentTypeName);
+public sealed record WebMedicalRecordAppointmentReport(ulong Id, ulong AppointmentNumber, DateTime StartsAtUtc,
+    string StatusCode, string AppointmentTypeName, string ProfessionalName, bool IsOphthalmology,
+    string? ClinicalSummary, string? Recommendations, WebOphthalmologyReportFields? Ophthalmology);
 public sealed record WebMedicalRecordContent(string? ChiefComplaint, string? PresentIllnessHistory, string? PersonalHistory,
     string? FamilyHistory, string? Allergies, string? Medications, string? RelevantHabits, string? PhysicalExamination,
     string? DiagnosticHypotheses, string? ConductAndGuidance, string? FollowUpPlan, string? ClinicalEvolution,

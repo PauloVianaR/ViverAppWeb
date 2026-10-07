@@ -1967,18 +1967,30 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
             entity.Property(e => e.AuthorProfessionalAccountId).HasColumnName("author_professional_account_id");
+            entity.Property(e => e.Biomicroscopy)
+                .HasColumnType("text")
+                .HasColumnName("biomicroscopy");
             entity.Property(e => e.ClinicalSummary)
                 .HasColumnType("text")
                 .HasColumnName("clinical_summary");
             entity.Property(e => e.CreatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("created_at_utc");
+            entity.Property(e => e.FundusExam)
+                .HasColumnType("text")
+                .HasColumnName("fundus_exam");
+            entity.Property(e => e.OphthalmicHistory)
+                .HasColumnType("text")
+                .HasColumnName("ophthalmic_history");
             entity.Property(e => e.PublishedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("published_at_utc");
             entity.Property(e => e.Recommendations)
                 .HasColumnType("text")
                 .HasColumnName("recommendations");
+            entity.Property(e => e.Refraction)
+                .HasColumnType("text")
+                .HasColumnName("refraction");
             entity.Property(e => e.RowVersion)
                 .HasDefaultValueSql("'1'")
                 .HasColumnName("row_version");
@@ -1986,9 +1998,15 @@ public partial class ViverAppDbContext : DbContext
                 .HasMaxLength(20)
                 .HasDefaultValueSql("'draft'")
                 .HasColumnName("status_code");
+            entity.Property(e => e.Tonometry)
+                .HasColumnType("text")
+                .HasColumnName("tonometry");
             entity.Property(e => e.UpdatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");
+            entity.Property(e => e.VisualAcuity)
+                .HasColumnType("text")
+                .HasColumnName("visual_acuity");
 
             entity.HasOne(d => d.Appointment).WithOne(p => p.MedicalReport)
                 .HasForeignKey<MedicalReport>(d => d.AppointmentId)
@@ -2009,10 +2027,15 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => new { e.AuthorProfessionalAccountId, e.CreatedAtUtc }, "ix_medical_report_versions_author");
 
+            entity.HasIndex(e => new { e.EditorAccountId, e.CreatedAtUtc }, "ix_medical_report_versions_editor");
+
             entity.HasIndex(e => new { e.MedicalReportId, e.VersionNumber }, "ux_medical_report_versions_number").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.AuthorProfessionalAccountId).HasColumnName("author_professional_account_id");
+            entity.Property(e => e.Biomicroscopy)
+                .HasColumnType("text")
+                .HasColumnName("biomicroscopy");
             entity.Property(e => e.ChangeReason)
                 .HasMaxLength(1000)
                 .HasColumnName("change_reason");
@@ -2022,16 +2045,37 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.CreatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("created_at_utc");
+            entity.Property(e => e.EditorAccountId).HasColumnName("editor_account_id");
+            entity.Property(e => e.FundusExam)
+                .HasColumnType("text")
+                .HasColumnName("fundus_exam");
             entity.Property(e => e.MedicalReportId).HasColumnName("medical_report_id");
+            entity.Property(e => e.OphthalmicHistory)
+                .HasColumnType("text")
+                .HasColumnName("ophthalmic_history");
             entity.Property(e => e.Recommendations)
                 .HasColumnType("text")
                 .HasColumnName("recommendations");
+            entity.Property(e => e.Refraction)
+                .HasColumnType("text")
+                .HasColumnName("refraction");
+            entity.Property(e => e.Tonometry)
+                .HasColumnType("text")
+                .HasColumnName("tonometry");
             entity.Property(e => e.VersionNumber).HasColumnName("version_number");
+            entity.Property(e => e.VisualAcuity)
+                .HasColumnType("text")
+                .HasColumnName("visual_acuity");
 
             entity.HasOne(d => d.AuthorProfessionalAccount).WithMany(p => p.MedicalReportVersions)
                 .HasForeignKey(d => d.AuthorProfessionalAccountId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_medical_report_versions_author_professional");
+
+            entity.HasOne(d => d.EditorAccount).WithMany(p => p.MedicalReportVersions)
+                .HasForeignKey(d => d.EditorAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_medical_report_versions_editor");
 
             entity.HasOne(d => d.MedicalReport).WithMany(p => p.MedicalReportVersions)
                 .HasForeignKey(d => d.MedicalReportId)

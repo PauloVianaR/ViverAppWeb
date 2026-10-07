@@ -21,7 +21,28 @@ public sealed record ClinicalReportResponse(
     DateTime UpdatedAtUtc,
     DateTime? PublishedAtUtc,
     ulong RowVersion,
-    bool ContentVisible);
+    bool ContentVisible)
+{
+    public OphthalmologyReportFields? Ophthalmology { get; init; }
+}
+
+public sealed record OphthalmologyReportFields(
+    string? OphthalmicHistory,
+    string? VisualAcuity,
+    string? Refraction,
+    string? Biomicroscopy,
+    string? Tonometry,
+    string? FundusExam);
+
+public sealed record ClinicalReportVersionResponse(
+    uint VersionNumber,
+    DateTime CreatedAtUtc,
+    string EditorName,
+    string EditorRoleCode,
+    string? ChangeReason,
+    string? ClinicalSummary,
+    OphthalmologyReportFields? Ophthalmology,
+    string? Recommendations);
 
 public sealed record ClinicalAppointmentResponse(
     ulong Id,
@@ -41,7 +62,10 @@ public sealed record ClinicalAppointmentResponse(
     ulong RowVersion,
     ClinicalReportResponse? MedicalReport,
     bool CanComplete,
-    bool CanMarkNoShow);
+    bool CanMarkNoShow)
+{
+    public bool IsOphthalmology { get; init; }
+}
 
 public sealed record ClinicalPatientResponse(
     ulong AccountId,
@@ -57,16 +81,33 @@ public sealed record ClinicalPatientResponse(
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record MedicalReportWriteRequest(
     [param: Range(0, long.MaxValue)] ulong RowVersion,
-    [param: Required, StringLength(12000, MinimumLength = 20)] string ClinicalSummary,
+    [param: StringLength(12000)] string? ClinicalSummary,
     [param: StringLength(8000)] string? Recommendations) : IValidatableObject
 {
+    public OphthalmologyReportFields? Ophthalmology { get; init; }
+    [StringLength(1000, MinimumLength = 5)]
+    public string? ChangeReason { get; init; }
+
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        if ((ClinicalSummary?.Trim().Length ?? 0) is < 20 or > 12000)
+        if (Ophthalmology is null && (ClinicalSummary?.Trim().Length ?? 0) is < 20 or > 12000)
         {
             yield return new ValidationResult(
                 "O resumo clínico deve ter entre 20 e 12.000 caracteres.",
                 [nameof(ClinicalSummary)]);
+        }
+
+        if (Ophthalmology is not null)
+        {
+            var fields = new[] { Ophthalmology.OphthalmicHistory, Ophthalmology.VisualAcuity,
+                Ophthalmology.Refraction, Ophthalmology.Biomicroscopy, Ophthalmology.Tonometry,
+                Ophthalmology.FundusExam };
+            if (fields.All(string.IsNullOrWhiteSpace))
+                yield return new ValidationResult("Preencha pelo menos um campo do relatório oftalmológico.",
+                    [nameof(Ophthalmology)]);
+            if (fields.Any(value => value?.Trim().Length > 12000))
+                yield return new ValidationResult("Cada campo oftalmológico deve ter no máximo 12.000 caracteres.",
+                    [nameof(Ophthalmology)]);
         }
 
         if (Recommendations?.Trim().Length > 8000)
@@ -75,6 +116,9 @@ public sealed record MedicalReportWriteRequest(
                 "As recomendações devem ter no máximo 8.000 caracteres.",
                 [nameof(Recommendations)]);
         }
+        if (ChangeReason is not null && ChangeReason.Trim().Length is < 5 or > 1000)
+            yield return new ValidationResult("O motivo da retificação deve ter entre 5 e 1.000 caracteres.",
+                [nameof(ChangeReason)]);
     }
 }
 

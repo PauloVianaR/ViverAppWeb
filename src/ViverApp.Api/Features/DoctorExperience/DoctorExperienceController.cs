@@ -67,17 +67,19 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
     public Task<DoctorAppointmentDetailResponse> Appointment(ulong id, CancellationToken ct) => service.AppointmentAsync(Actor, id, ct);
     [HttpGet("booking/slots"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
     public async Task<IReadOnlyList<AvailableSlotResponse>> Slots(ulong patientAccountId, uint appointmentTypeId, string modality,
-        DateOnly from, int days = 14, [FromQuery] uint[]? additionalAppointmentTypeIds = null, CancellationToken ct = default)
+        DateOnly from, int days = 14, [FromQuery] uint[]? additionalAppointmentTypeIds = null,
+        int? durationMinutes = null, CancellationToken ct = default)
     {
         await service.EnsurePatientSchedulingEnabledAsync(ct);
-        return await scheduling.GetAvailableSlotsAsync(patientAccountId, Actor, appointmentTypeId, modality, from, days, ct, additionalAppointmentTypeIds);
+        return await scheduling.GetAvailableSlotsAsync(patientAccountId, Actor, appointmentTypeId, modality, from, days, ct, additionalAppointmentTypeIds, durationMinutes);
     }
     [HttpGet("booking/available-dates"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
     public async Task<IReadOnlyList<DateOnly>> AvailableDates(ulong patientAccountId, uint appointmentTypeId,
-        string modality, DateOnly from, int days = 31, [FromQuery] uint[]? additionalAppointmentTypeIds = null, CancellationToken ct = default)
+        string modality, DateOnly from, int days = 31, [FromQuery] uint[]? additionalAppointmentTypeIds = null,
+        int? durationMinutes = null, CancellationToken ct = default)
     {
         await service.EnsurePatientSchedulingEnabledAsync(ct);
-        return await scheduling.GetAvailableDatesAsync(patientAccountId, Actor, appointmentTypeId, modality, from, days, ct, additionalAppointmentTypeIds);
+        return await scheduling.GetAvailableDatesAsync(patientAccountId, Actor, appointmentTypeId, modality, from, days, ct, additionalAppointmentTypeIds, durationMinutes);
     }
     [HttpPost("appointments"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public async Task<ActionResult<AppointmentResponse>> Create([FromHeader(Name = "Idempotency-Key")] string key,
@@ -99,7 +101,7 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
         return result.Response;
     }
     [HttpPut("appointments/{id:long}/report"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
-    public Task<ClinicalReportResponse> Draft(ulong id, MedicalReportWriteRequest request, CancellationToken ct) => clinical.SaveDraftAsync(Actor, id, request, ct);
+    public Task<ClinicalReportResponse> Draft(ulong id, MedicalReportWriteRequest request, CancellationToken ct) => clinical.SaveDraftAsync(Actor, Role, id, request, ct);
     [HttpPost("appointments/{id:long}/complete"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public Task<ClinicalAppointmentResponse> Complete(ulong id, CompleteAppointmentRequest request, CancellationToken ct) => clinical.CompleteAsync(Actor, id, request, ct);
     [HttpPost("appointments/{id:long}/start"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]

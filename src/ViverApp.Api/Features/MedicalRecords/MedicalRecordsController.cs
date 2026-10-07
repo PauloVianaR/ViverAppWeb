@@ -50,6 +50,26 @@ public sealed class MedicalRecordsController(
     public async Task<IReadOnlyList<MedicalRecordAppointmentOption>> Appointments(ulong patientId, CancellationToken ct) =>
         await records.AppointmentsAsync(Actor, Role, await IsRecentAsync(ct), patientId, ct);
 
+    [HttpGet("patients/{patientId:long}/appointment-reports")]
+    [Authorize(Policy = ViverAppPolicies.MedicalRecordClinicalRead)]
+    public async Task<MedicalRecordPage<MedicalRecordAppointmentReport>> AppointmentReports(
+        ulong patientId, int page = 1, int pageSize = 50, CancellationToken ct = default) =>
+        await records.AppointmentReportsAsync(Actor, Role, await IsRecentAsync(ct), patientId, page, pageSize, ct);
+
+    [HttpPost("patients/{patientId:long}/appointments/{appointmentId:long}/pdf")]
+    [Authorize(Policy = ViverAppPolicies.MedicalRecordExport)]
+    [EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
+    public async Task<IActionResult> AppointmentPdf(ulong patientId, ulong appointmentId, CancellationToken ct)
+    {
+        var snapshot = await records.AppointmentReportPdfAsync(
+            Actor, Role, await IsRecentAsync(ct), patientId, appointmentId, ct);
+        var content = pdf.RenderAppointment(snapshot);
+        PrivateResponse();
+        return File(content, "application/pdf",
+            $"prontuario-atendimento-{snapshot.Appointment.AppointmentNumber}.pdf",
+            enableRangeProcessing: false);
+    }
+
     [HttpGet("patients/{patientId:long}/entries")]
     [Authorize(Policy = ViverAppPolicies.MedicalRecordClinicalRead)]
     public async Task<IReadOnlyList<MedicalRecordEntryResponse>> Entries(ulong patientId,

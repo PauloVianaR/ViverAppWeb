@@ -1,0 +1,9 @@
+.appointment-report-editor{min-width:0}
+.appointment-report-editor--embedded{padding:1rem 0 0}
+.appointment-report-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem;margin:1rem 0}
+.appointment-report-fields .field:first-child,.appointment-report-fields .field:last-child{grid-column:1/-1}
+.appointment-report-fields textarea{width:100%;min-height:3rem;field-sizing:content;resize:vertical}
+.appointment-report-version{margin-top:1rem;padding-top:1rem;border-top:1px solid var(--color-border)}
+.appointment-report-version summary{cursor:pointer;font-weight:800}
+.appointment-report-version .clinical-content{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin-top:1rem}
+@media(max-width:700px){.appointment-report-fields,.appointment-report-version .clinical-content{grid-template-columns:1fr}.appointment-report-fields .field:first-child,.appointment-report-fields .field:last-child{grid-column:auto}}

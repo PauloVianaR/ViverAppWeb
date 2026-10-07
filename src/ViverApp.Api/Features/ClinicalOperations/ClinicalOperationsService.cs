@@ -131,7 +131,10 @@ public sealed class ClinicalOperationsService(
             .Include(item => item.MedicalReport)
             .SingleOrDefaultAsync(item => item.Id == appointmentId, cancellationToken)
             ?? throw NotFound("Consulta não encontrada.");
-        var includeReportContent = IsClinicalProfessional(roleCode) && appointment.ProfessionalAccountId == actorId;
+        var isOphthalmology = await OphthalmologyReportMapping.IsOphthalmologyAsync(
+            database, appointment.ProfessionalAccountId, cancellationToken);
+        var includeReportContent = IsClinicalProfessional(roleCode) && appointment.ProfessionalAccountId == actorId
+            || roleCode is ViverAppRoles.Manager or ViverAppRoles.Administrator;
         if (includeReportContent && appointment.MedicalReport is not null)
         {
             await auditWriter.WriteAsync(
@@ -143,7 +146,9 @@ public sealed class ClinicalOperationsService(
                 cancellationToken);
         }
 
-        return MapAppointment(appointment, actorId, roleCode, includeReportContent);
+        return MapAppointment(appointment, actorId, roleCode, includeReportContent)
+            with
+        { IsOphthalmology = isOphthalmology };
     }
 
     public async Task<ClinicalPage<ClinicalPatientResponse>> GetPatientsAsync(
@@ -204,17 +209,34 @@ public sealed class ClinicalOperationsService(
 
     public async Task<ClinicalReportResponse> SaveDraftAsync(
         ulong actorId,
+        string roleCode,
         ulong appointmentId,
         MedicalReportWriteRequest request,
         CancellationToken cancellationToken)
     {
-        var summary = ValidateSummary(request.ClinicalSummary);
         var recommendations = ValidateRecommendations(request.Recommendations);
         await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
         var appointment = await database.Appointments
             .Include(item => item.MedicalReport)
-            .SingleOrDefaultAsync(item => item.Id == appointmentId && item.ProfessionalAccountId == actorId, cancellationToken)
+            .SingleOrDefaultAsync(item => item.Id == appointmentId, cancellationToken)
             ?? throw NotFound("Consulta não encontrada.");
+        EnsureClinicalRole(roleCode);
+        if (IsClinicalProfessional(roleCode) && appointment.ProfessionalAccountId != actorId)
+            throw Forbidden();
+        var isOphthalmology = await OphthalmologyReportMapping.IsOphthalmologyAsync(
+            database, appointment.ProfessionalAccountId, cancellationToken);
+        if (!isOphthalmology && request.Ophthalmology is not null)
+            throw BadRequest("Campos oftalmológicos não pertencem à especialidade deste atendimento.");
+        var ophthalmology = isOphthalmology
+            ? OphthalmologyReportMapping.Normalize(request.Ophthalmology
+                ?? new OphthalmologyReportFields(request.ClinicalSummary, null, null, null, null, null))
+            : null;
+        if (ophthalmology is not null && (!OphthalmologyReportMapping.HasContent(ophthalmology)
+                || !OphthalmologyReportMapping.WithinLimit(ophthalmology)))
+            throw BadRequest("Preencha ao menos um campo oftalmológico, com até 12.000 caracteres por campo.");
+        var summary = ophthalmology is null
+            ? ValidateSummary(request.ClinicalSummary ?? "")
+            : OphthalmologyReportMapping.LegacySummary(ophthalmology);
         if (appointment.StatusCode is "pending" or "canceled")
         {
             throw Conflict("O relatório não pode ser alterado no estado atual da consulta.");
@@ -232,7 +254,7 @@ public sealed class ClinicalOperationsService(
             report = new MedicalReport
             {
                 AppointmentId = appointmentId,
-                AuthorProfessionalAccountId = actorId,
+                AuthorProfessionalAccountId = appointment.ProfessionalAccountId,
                 StatusCode = "published",
                 ClinicalSummary = summary,
                 Recommendations = recommendations,
@@ -242,6 +264,7 @@ public sealed class ClinicalOperationsService(
                 RowVersion = 1,
             };
             database.MedicalReports.Add(report);
+            if (ophthalmology is not null) OphthalmologyReportMapping.Assign(report, ophthalmology);
             await SaveAsync(cancellationToken);
         }
         else
@@ -249,6 +272,7 @@ public sealed class ClinicalOperationsService(
             SetConcurrency(report, request.RowVersion);
             report.ClinicalSummary = summary;
             report.Recommendations = recommendations;
+            if (ophthalmology is not null) OphthalmologyReportMapping.Assign(report, ophthalmology);
             report.UpdatedAtUtc = now;
             report.StatusCode = "published";
             report.PublishedAtUtc ??= now;
@@ -257,16 +281,19 @@ public sealed class ClinicalOperationsService(
         var nextVersion = await database.MedicalReportVersions
             .Where(x => x.MedicalReportId == report.Id)
             .MaxAsync(x => (uint?)x.VersionNumber, cancellationToken) ?? 0;
-        database.MedicalReportVersions.Add(new MedicalReportVersion
+        var newVersion = new MedicalReportVersion
         {
             MedicalReportId = report.Id,
             VersionNumber = nextVersion + 1,
-            AuthorProfessionalAccountId = actorId,
+            AuthorProfessionalAccountId = appointment.ProfessionalAccountId,
+            EditorAccountId = actorId,
             ClinicalSummary = summary,
             Recommendations = recommendations,
-            ChangeReason = nextVersion == 0 ? null : "Laudo atualizado pelo médico",
+            ChangeReason = nextVersion == 0 ? null : request.ChangeReason?.Trim() ?? "Laudo atualizado pela equipe autorizada",
             CreatedAtUtc = now,
-        });
+        };
+        if (ophthalmology is not null) OphthalmologyReportMapping.Assign(newVersion, ophthalmology);
+        database.MedicalReportVersions.Add(newVersion);
 
         await SaveAsync(cancellationToken);
         await auditWriter.WriteAsync(
@@ -278,6 +305,32 @@ public sealed class ClinicalOperationsService(
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return MapReport(report, includeContent: true);
+    }
+
+    public async Task<IReadOnlyList<ClinicalReportVersionResponse>> GetReportVersionsAsync(
+        ulong actorId, string roleCode, ulong appointmentId, CancellationToken ct)
+    {
+        EnsureClinicalRole(roleCode);
+        var appointment = await VisibleAppointments(actorId, roleCode).AsNoTracking()
+            .Where(item => item.Id == appointmentId)
+            .Select(item => new { item.ProfessionalAccountId })
+            .SingleOrDefaultAsync(ct) ?? throw NotFound("Consulta não encontrada.");
+        var isOphthalmology = await OphthalmologyReportMapping.IsOphthalmologyAsync(
+            database, appointment.ProfessionalAccountId, ct);
+        var versions = await database.MedicalReportVersions.AsNoTracking()
+            .Include(version => version.EditorAccount)
+            .Where(version => version.MedicalReport.AppointmentId == appointmentId)
+            .OrderByDescending(version => version.VersionNumber)
+            .ToArrayAsync(ct);
+        await auditWriter.WriteAsync("medical_report.versions_viewed", actorId, "appointment",
+            appointmentId.ToString(System.Globalization.CultureInfo.InvariantCulture), null, ct);
+        return versions.Select(version => new ClinicalReportVersionResponse(
+            version.VersionNumber, version.CreatedAtUtc, version.EditorAccount.FullName,
+            version.EditorAccount.RoleCode, version.ChangeReason,
+            isOphthalmology ? null : version.ClinicalSummary,
+            isOphthalmology ? OphthalmologyReportMapping.From(version)
+                ?? new OphthalmologyReportFields(version.ClinicalSummary, null, null, null, null, null) : null,
+            version.Recommendations)).ToArray();
     }
 
     public async Task<ClinicalAppointmentResponse> CompleteAsync(
@@ -300,6 +353,10 @@ public sealed class ClinicalOperationsService(
         {
             throw Forbidden();
         }
+
+        if (hasReport && await OphthalmologyReportMapping.IsOphthalmologyAsync(
+                database, appointment.ProfessionalAccountId, cancellationToken))
+            throw BadRequest("Salve os campos do laudo oftalmológico antes de finalizar o atendimento.");
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
         if (appointment.StatusCode is not ("confirmed" or "arrived" or "in_progress"))
@@ -342,6 +399,7 @@ public sealed class ClinicalOperationsService(
                 MedicalReport = report,
                 VersionNumber = nextVersion + 1,
                 AuthorProfessionalAccountId = actorId,
+                EditorAccountId = actorId,
                 ClinicalSummary = summary!,
                 Recommendations = recommendations,
                 ChangeReason = nextVersion == 0 ? null : "Laudo atualizado na finalização do atendimento",
@@ -530,7 +588,10 @@ public sealed class ClinicalOperationsService(
         report.UpdatedAtUtc,
         report.PublishedAtUtc,
         report.RowVersion,
-        includeContent);
+        includeContent)
+    {
+        Ophthalmology = includeContent ? OphthalmologyReportMapping.From(report) : null,
+    };
 
     private static string ValidateSummary(string value)
     {

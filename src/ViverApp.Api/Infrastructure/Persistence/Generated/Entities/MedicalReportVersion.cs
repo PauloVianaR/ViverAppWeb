@@ -21,7 +21,23 @@ public partial class MedicalReportVersion
 
     public DateTime CreatedAtUtc { get; set; }
 
+    public string? OphthalmicHistory { get; set; }
+
+    public string? VisualAcuity { get; set; }
+
+    public string? Refraction { get; set; }
+
+    public string? Biomicroscopy { get; set; }
+
+    public string? Tonometry { get; set; }
+
+    public string? FundusExam { get; set; }
+
+    public ulong EditorAccountId { get; set; }
+
     public virtual ProfessionalProfile AuthorProfessionalAccount { get; set; } = null!;
+
+    public virtual Account EditorAccount { get; set; } = null!;
 
     public virtual MedicalReport MedicalReport { get; set; } = null!;
 }
