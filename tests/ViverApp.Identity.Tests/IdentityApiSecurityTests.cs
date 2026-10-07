@@ -3,11 +3,14 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.PatientExperience;
 using Xunit;
@@ -20,16 +23,27 @@ public sealed class IdentityApiSecurityTests : IAsyncLifetime
         .WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
-            builder.ConfigureAppConfiguration(configuration =>
-                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            builder.UseSetting("ConnectionStrings:LocalConnection", "Server=127.0.0.1;Port=1;Database=viverappweb;User ID=test");
+            builder.UseSetting("Authentication:Delivery:Enabled", "false");
+            builder.UseSetting("Authentication:ChallengePepper", Convert.ToBase64String(Enumerable.Range(1, 32).Select(value => (byte)value).ToArray()));
+            builder.UseSetting("GoogleOAuth:ClientID", "test-client-id");
+            builder.UseSetting("GoogleOAuth:ProjectID", "test-project-id");
+            builder.UseSetting("GoogleOAuth:ClientSecret", "test-client-secret");
+            builder.UseSetting("GoogleOAuth:RedirectURI", "https://localhost:7176/signin-google");
+            builder.UseSetting("Storage:Private:Provider", "Database");
+            builder.ConfigureTestServices(services =>
+            {
+                // These HTTP contract tests must not start database workers or open a MySQL connection.
+                foreach (var service in services.Where(descriptor =>
+                    descriptor.ServiceType == typeof(IHostedService)
+                    && descriptor.ImplementationType?.Assembly == typeof(Program).Assembly).ToArray())
                 {
-                    ["Authentication:Delivery:Enabled"] = "false",
-                    ["GoogleOAuth:ClientID"] = "test-client-id",
-                    ["GoogleOAuth:ProjectID"] = "test-project-id",
-                    ["GoogleOAuth:ClientSecret"] = "test-client-secret",
-                    ["GoogleOAuth:RedirectURI"] = "https://localhost:7176/signin-google",
-                    ["Storage:Private:Provider"] = "Database",
-                }));
+                    services.Remove(service);
+                }
+
+                services.RemoveAll<IUserStore<ViverAppUser>>();
+                services.AddScoped<IUserStore<ViverAppUser>, EmptyUserStore>();
+            });
         });
 
     public Task InitializeAsync()
@@ -203,5 +217,46 @@ public sealed class IdentityApiSecurityTests : IAsyncLifetime
             BaseAddress = new Uri("https://localhost:7176"),
             HandleCookies = true,
         });
+    }
+
+    private sealed class EmptyUserStore : IUserStore<ViverAppUser>
+    {
+        public Task<IdentityResult> CreateAsync(ViverAppUser user, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<IdentityResult> DeleteAsync(ViverAppUser user, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<ViverAppUser?> FindByIdAsync(string userId, CancellationToken cancellationToken) =>
+            Task.FromResult<ViverAppUser?>(null);
+
+        public Task<ViverAppUser?> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken) =>
+            Task.FromResult<ViverAppUser?>(null);
+
+        public Task<string> GetUserIdAsync(ViverAppUser user, CancellationToken cancellationToken) =>
+            Task.FromResult(user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        public Task<string?> GetUserNameAsync(ViverAppUser user, CancellationToken cancellationToken) =>
+            Task.FromResult(user.UserName);
+
+        public Task<string?> GetNormalizedUserNameAsync(ViverAppUser user, CancellationToken cancellationToken) =>
+            Task.FromResult(user.NormalizedUserName);
+
+        public Task SetUserNameAsync(ViverAppUser user, string? userName, CancellationToken cancellationToken)
+        {
+            user.UserName = userName;
+            return Task.CompletedTask;
+        }
+
+        public Task SetNormalizedUserNameAsync(ViverAppUser user, string? normalizedName, CancellationToken cancellationToken)
+        {
+            user.NormalizedUserName = normalizedName;
+            return Task.CompletedTask;
+        }
+
+        public Task<IdentityResult> UpdateAsync(ViverAppUser user, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public void Dispose() { }
     }
 }
