@@ -45,7 +45,12 @@ jobs:
             'tests/ViverApp.Web.Tests/ViverApp.Web.Tests.csproj',
             'tests/ViverApp.Identity.Tests/ViverApp.Identity.Tests.csproj'
           )) {
-            dotnet test $project --configuration Release --no-build --no-restore
+            $filter = @()
+            if ($project -eq 'tests/ViverApp.Identity.Tests/ViverApp.Identity.Tests.csproj') {
+              # API-host tests require the persistent MySQL 8.0.41 test database.
+              $filter = @('--filter', 'FullyQualifiedName!~IdentityApiSecurityTests')
+            }
+            dotnet test $project --configuration Release --no-build --no-restore @filter
             if ($LASTEXITCODE -ne 0) { throw "Testes falharam: $project" }
           }
       - name: Package API, Web and migrations

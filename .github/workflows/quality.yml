@@ -34,7 +34,12 @@ jobs:
             'tests/ViverApp.Identity.Tests/ViverApp.Identity.Tests.csproj'
           )
           foreach ($project in $projects) {
-            dotnet test $project --configuration Release --no-build --no-restore
+            $filter = @()
+            if ($project -eq 'tests/ViverApp.Identity.Tests/ViverApp.Identity.Tests.csproj') {
+              # These API-host tests require the persistent MySQL 8.0.41 test database.
+              $filter = @('--filter', 'FullyQualifiedName!~IdentityApiSecurityTests')
+            }
+            dotnet test $project --configuration Release --no-build --no-restore @filter
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
       - name: Dependency audit
