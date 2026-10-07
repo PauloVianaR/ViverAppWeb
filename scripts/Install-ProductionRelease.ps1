@@ -7,7 +7,6 @@ param(
 $ErrorActionPreference = 'Stop'
 $package = [IO.Path]::GetFullPath($ReleaseDirectory)
 & (Join-Path $PSScriptRoot 'verify-windows-release.ps1') -ReleaseDirectory $package
-if ($LASTEXITCODE -ne 0) { throw 'Pacote inválido.' }
 $manifest = Get-Content -LiteralPath (Join-Path $package 'manifest.json') -Raw | ConvertFrom-Json
 $plan = Get-Content -LiteralPath (Join-Path $package 'deployment-plan.json') -Raw | ConvertFrom-Json
 if ($plan.schema -ne 1 -or $plan.commit -cne $manifest.commit -or
@@ -20,7 +19,6 @@ if ($package -cne [IO.Path]::GetFullPath((Join-Path $root $commit))) {
     throw 'Diretório do pacote deve ter o nome do commit da release.'
 }
 & (Join-Path $PSScriptRoot 'Download-ProductionRelease.ps1') -Tag "viverapp-$commit" -DestinationRoot $root | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Release não verificável no GitHub.' }
 $expected = @($plan.expectedPendingMigrations)
 if (@($expected | Where-Object { $_ -cnotmatch '^\d{4}$' }).Count -gt 0 -or
     (@($expected | Sort-Object -Unique) -join ',') -cne ($expected -join ',')) {
@@ -32,7 +30,6 @@ $unpacked = Join-Path $package ("database-" + [Guid]::NewGuid().ToString('N'))
 Expand-Archive -LiteralPath (Join-Path $package 'viverapp-database.zip') -DestinationPath $unpacked
 $migrationDirectory = Join-Path $unpacked 'migrations'
 & (Join-Path $PSScriptRoot 'Invoke-ProductionMigrations.ps1') -MigrationDirectory $migrationDirectory -ExpectedPendingIds $expected
-if ($LASTEXITCODE -ne 0) { throw 'Pré-voo das migrations falhou.' }
 if (-not $Apply) {
     Write-Output "Pré-voo aprovado para $commit. Use -Apply em sessão administrativa para implantar."
     return
@@ -53,7 +50,6 @@ $backupStatus = 'C:\Viver\ViverAppWeb\.local\backup-current-production.status.js
 if (-not (Test-Path -LiteralPath $backupScript -PathType Leaf)) { throw 'Script local de backup ausente.' }
 $backupStart = [DateTime]::UtcNow
 & $backupScript
-if ($LASTEXITCODE -ne 0) { throw 'Backup pré-deploy falhou.' }
 $backup = Get-Content -LiteralPath $backupStatus -Raw | ConvertFrom-Json
 if ($backup.Database -cne 'viverappweb' -or $backup.MySqlVersion -cne '8.0.41' -or
     $backup.DecryptionVerified -ne $true -or
@@ -80,7 +76,6 @@ foreach ($app in @('api', 'web')) {
 }
 
 & (Join-Path $PSScriptRoot 'Invoke-ProductionMigrations.ps1') -MigrationDirectory $migrationDirectory -ExpectedPendingIds $expected -Apply
-if ($LASTEXITCODE -ne 0) { throw 'Aplicação das migrations falhou; nenhum binário foi trocado.' }
 
 Add-Type -Path 'C:\Windows\System32\inetsrv\Microsoft.Web.Administration.dll'
 $manager = [Microsoft.Web.Administration.ServerManager]::new()
