@@ -47,8 +47,8 @@ jobs:
           )) {
             $filter = @()
             if ($project -eq 'tests/ViverApp.Identity.Tests/ViverApp.Identity.Tests.csproj') {
-              # API-host tests require the persistent MySQL 8.0.41 test database.
-              $filter = @('--filter', 'FullyQualifiedName!~IdentityApiSecurityTests')
+              # The medical specialty list is read from persistent MySQL 8.0.41.
+              $filter = @('--filter', 'FullyQualifiedName!~RegistrationOptions_ListEveryRecognizedMedicalSpecialty')
             }
             dotnet test $project --configuration Release --no-build --no-restore @filter
             if ($LASTEXITCODE -ne 0) { throw "Testes falharam: $project" }
