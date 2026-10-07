@@ -159,6 +159,67 @@ public sealed class MedicalRecordService(
                 x.StatusCode, x.AppointmentType.Name)).ToArrayAsync(ct);
     }
 
+    public async Task<MedicalRecordPage<MedicalRecordAppointmentReport>> AppointmentReportsAsync(
+        ulong actorId, string roleCode, bool recentAuthentication, ulong patientId,
+        int page, int pageSize, CancellationToken ct)
+    {
+        ValidatePage(page, pageSize);
+        await AuthorizeAsync(actorId, roleCode, recentAuthentication, patientId, "clinical", null, ct);
+        var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == patientId
+            && x.StatusCode != "pending" && x.StatusCode != "canceled");
+        if (IsClinicalProfessional(roleCode))
+            query = query.Where(x => x.ProfessionalAccountId == actorId);
+        var total = await query.CountAsync(ct);
+        var appointments = await query
+            .Include(x => x.ProfessionalAccount).ThenInclude(x => x.Account)
+            .Include(x => x.AppointmentType)
+            .Include(x => x.MedicalReport)
+            .OrderByDescending(x => x.StartsAtUtc).ThenByDescending(x => x.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(ct);
+        var professionalIds = appointments.Select(x => x.ProfessionalAccountId).Distinct().ToArray();
+        var ophthalmologists = (await database.ProfessionalSpecialties.AsNoTracking()
+            .Where(x => professionalIds.Contains(x.ProfessionalAccountId)
+                && x.Specialty.NormalizedName == "OFTALMOLOGIA")
+            .Select(x => x.ProfessionalAccountId).Distinct().ToArrayAsync(ct)).ToHashSet();
+        return new(appointments.Select(x => MapAppointmentReport(x,
+            ophthalmologists.Contains(x.ProfessionalAccountId))).ToArray(), page, pageSize, total);
+    }
+
+    public async Task<MedicalRecordAppointmentPdfSnapshot> AppointmentReportPdfAsync(
+        ulong actorId, string roleCode, bool recentAuthentication, ulong patientId,
+        ulong appointmentId, CancellationToken ct)
+    {
+        await AuthorizeAsync(actorId, roleCode, recentAuthentication, patientId, "pdf", null, ct);
+        var query = database.Appointments.AsNoTracking()
+            .Include(x => x.ProfessionalAccount).ThenInclude(x => x.Account)
+            .Include(x => x.AppointmentType).Include(x => x.MedicalReport)
+            .Where(x => x.Id == appointmentId && x.PatientAccountId == patientId
+                && x.StatusCode != "pending" && x.StatusCode != "canceled");
+        if (IsClinicalProfessional(roleCode))
+            query = query.Where(x => x.ProfessionalAccountId == actorId);
+        var appointment = await query.SingleOrDefaultAsync(ct)
+            ?? throw Missing("Atendimento não encontrado neste prontuário.");
+        var ophthalmology = await OphthalmologyReportMapping.IsOphthalmologyAsync(
+            database, appointment.ProfessionalAccountId, ct);
+        var patient = await SummaryWithoutAuditAsync(patientId, roleCode, ct);
+        await audit.WriteAsync("medical_record.appointment_pdf_generated", actorId,
+            "appointment", appointmentId.ToString(CultureInfo.InvariantCulture), null, ct);
+        return new(patient, MapAppointmentReport(appointment, ophthalmology), UtcNow);
+    }
+
+    private static MedicalRecordAppointmentReport MapAppointmentReport(Appointment appointment, bool ophthalmology)
+    {
+        var report = appointment.MedicalReport;
+        var fields = ophthalmology && report is not null
+            ? OphthalmologyReportMapping.From(report)
+                ?? new OphthalmologyReportFields(report.ClinicalSummary, null, null, null, null, null)
+            : null;
+        return new(appointment.Id, appointment.AppointmentNumber, appointment.StartsAtUtc,
+            appointment.StatusCode, appointment.AppointmentType.Name,
+            appointment.ProfessionalAccount.Account.FullName, ophthalmology,
+            ophthalmology ? null : report?.ClinicalSummary, report?.Recommendations, fields);
+    }
+
     public async Task<IReadOnlyList<MedicalRecordEntryResponse>> EntriesAsync(
         ulong actorId, string roleCode, bool recentAuthentication, ulong patientId,
         string? purpose, bool includeVersions, CancellationToken ct)

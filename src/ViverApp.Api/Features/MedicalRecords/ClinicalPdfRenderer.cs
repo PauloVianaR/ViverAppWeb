@@ -5,6 +5,57 @@ namespace ViverApp.Api.Features.MedicalRecords;
 
 public sealed class ClinicalPdfRenderer
 {
+    public byte[] RenderAppointment(MedicalRecordAppointmentPdfSnapshot snapshot)
+    {
+        var appointment = snapshot.Appointment;
+        var lines = new List<string>
+        {
+            "ViverApp - Centro Medico Viver",
+            appointment.IsOphthalmology ? "PRONTUARIO OFTALMOLOGICO - DOCUMENTO CONFIDENCIAL"
+                : "REGISTRO DE ATENDIMENTO - DOCUMENTO CONFIDENCIAL",
+            $"Paciente: {snapshot.Patient.FullName}",
+            $"Nascimento: {snapshot.Patient.BirthDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "Nao informado"}",
+            $"Atendimento #{appointment.AppointmentNumber} - {Local(appointment.StartsAtUtc):dd/MM/yyyy HH:mm}",
+            $"Servico: {appointment.AppointmentTypeName}",
+            $"Profissional: {appointment.ProfessionalName}",
+            $"Situacao: {AppointmentStatus(appointment.StatusCode)}",
+            $"Emitido em: {Local(snapshot.GeneratedAtUtc):dd/MM/yyyy HH:mm}",
+            string.Empty,
+        };
+        if (appointment.IsOphthalmology)
+        {
+            Add(lines, "Historia oftalmologica", appointment.Ophthalmology?.OphthalmicHistory);
+            Add(lines, "Acuidade visual", appointment.Ophthalmology?.VisualAcuity);
+            Add(lines, "Refracao", appointment.Ophthalmology?.Refraction);
+            Add(lines, "Biomicroscopia", appointment.Ophthalmology?.Biomicroscopy);
+            Add(lines, "Tonometria", appointment.Ophthalmology?.Tonometry);
+            Add(lines, "Fundo de olho", appointment.Ophthalmology?.FundusExam);
+        }
+        else
+        {
+            Add(lines, "Resumo clinico", appointment.ClinicalSummary);
+        }
+        Add(lines, "Recomendacoes", appointment.Recommendations);
+        if (appointment.Ophthalmology is null && appointment.ClinicalSummary is null
+            && appointment.Recommendations is null)
+            lines.Add("Nenhum laudo foi registrado para este atendimento.");
+        lines.Add(string.Empty);
+        lines.Add("Documento clinico privado. Acesso e compartilhamento sao restritos.");
+        lines.Add($"Identificador: PEP-{snapshot.Patient.PatientAccountId}-{appointment.AppointmentNumber}-{snapshot.GeneratedAtUtc:yyyyMMddHHmmss}");
+        var pages = Wrap(lines, 104).Chunk(48).Select(page => page.ToArray()).ToArray();
+        return BuildPdf(pages.Length == 0 ? [[]] : pages);
+    }
+
+    private static string AppointmentStatus(string code) => code switch
+    {
+        "confirmed" => "Confirmado",
+        "arrived" => "Paciente chegou",
+        "in_progress" => "Em atendimento",
+        "completed" => "Concluido",
+        "no_show" => "Nao compareceu",
+        _ => "Outro estado",
+    };
+
     public byte[] Render(MedicalRecordPdfSnapshot snapshot)
     {
         var lines = BuildLines(snapshot);

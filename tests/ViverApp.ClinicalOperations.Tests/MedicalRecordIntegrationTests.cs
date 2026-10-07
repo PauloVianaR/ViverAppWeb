@@ -121,6 +121,46 @@ public sealed class MedicalRecordIntegrationTests
         Assert.Single(selectableAppointments);
         Assert.Equal(appointment.Id, selectableAppointments[0].Id);
 
+        var ophthalmologySpecialty = await context.Specialties.SingleAsync(
+            x => x.NormalizedName == "OFTALMOLOGIA");
+        context.ProfessionalSpecialties.Add(new ProfessionalSpecialty
+        {
+            ProfessionalAccountId = doctor.Id,
+            SpecialtyId = ophthalmologySpecialty.Id,
+            IsPrimary = true,
+        });
+        await context.SaveChangesAsync();
+        var appointmentReports = await service.AppointmentReportsAsync(
+            manager.Id, ViverAppRoles.Manager, true, patient.Id, 1, 50, CancellationToken.None);
+        Assert.Single(appointmentReports.Items);
+        Assert.Equal(appointment.Id, appointmentReports.Items[0].Id);
+        Assert.True(appointmentReports.Items[0].IsOphthalmology);
+        Assert.DoesNotContain(appointmentReports.Items, x => x.Id == pendingAppointment.Id);
+        var appointmentSnapshot = await service.AppointmentReportPdfAsync(
+            manager.Id, ViverAppRoles.Manager, true, patient.Id, appointment.Id, CancellationToken.None);
+        var pdfBytes = new ClinicalPdfRenderer().RenderAppointment(appointmentSnapshot);
+        Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(pdfBytes[..4]));
+        var populatedPdf = new ClinicalPdfRenderer().RenderAppointment(appointmentSnapshot with
+        {
+            Appointment = appointmentSnapshot.Appointment with
+            {
+                Ophthalmology = new OphthalmologyReportFields(
+                    "Histórico clínico da consulta", "OD 20/20", null, null, null, null),
+            },
+        });
+        Assert.Contains("Acuidade visual: OD 20/20", System.Text.Encoding.Latin1.GetString(populatedPdf));
+        var administratorReports = await service.AppointmentReportsAsync(
+            administrator.Id, ViverAppRoles.Administrator, true, patient.Id, 1, 50, CancellationToken.None);
+        Assert.Single(administratorReports.Items);
+        var pendingPdf = await Assert.ThrowsAsync<MedicalRecordRuleException>(() =>
+            service.AppointmentReportPdfAsync(manager.Id, ViverAppRoles.Manager, true,
+                patient.Id, pendingAppointment.Id, CancellationToken.None));
+        Assert.Equal((int)HttpStatusCode.NotFound, pendingPdf.StatusCode);
+        var adminWithoutStepUpPdf = await Assert.ThrowsAsync<MedicalRecordRuleException>(() =>
+            service.AppointmentReportPdfAsync(administrator.Id, ViverAppRoles.Administrator, false,
+                patient.Id, appointment.Id, CancellationToken.None));
+        Assert.Equal((int)HttpStatusCode.Forbidden, adminWithoutStepUpPdf.StatusCode);
+
         var firstContent = OptionalContent();
         var draft = await service.SaveDraftAsync(doctor.Id, ViverAppRoles.Doctor, patient.Id, appointment.Id,
             new MedicalRecordDraftWriteRequest(0, firstContent), CancellationToken.None);
@@ -188,11 +228,11 @@ public sealed class MedicalRecordIntegrationTests
         Assert.Equal(3U, rectified.VersionNumber);
         Assert.Equal(managerVersion.Id, rectified.SupersedesVersionId);
         Assert.Equal(3, await context.MedicalRecordVersions.CountAsync(x => x.MedicalRecordEntryId == rectified.EntryId));
-        Assert.Equal(3, await context.ClinicalAccessEvents.CountAsync(x => x.PatientAccountId == patient.Id && x.OutcomeCode == "denied"));
+        Assert.Equal(4, await context.ClinicalAccessEvents.CountAsync(x => x.PatientAccountId == patient.Id && x.OutcomeCode == "denied"));
 
         var mutation = await Assert.ThrowsAnyAsync<Exception>(() => context.Database.ExecuteSqlInterpolatedAsync(
             $"UPDATE medical_record_versions SET chief_complaint = 'alteracao proibida' WHERE id = {finalized.Id}"));
-        Assert.Contains("append-only", mutation.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.True(mutation.ToString().Contains("append-only", StringComparison.OrdinalIgnoreCase), mutation.ToString());
         await transaction.RollbackAsync();
     }
 

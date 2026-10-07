@@ -18,7 +18,41 @@ public sealed record WebClinicalReport(
     DateTime UpdatedAtUtc,
     DateTime? PublishedAtUtc,
     ulong RowVersion,
-    bool ContentVisible);
+    bool ContentVisible)
+{
+    public WebOphthalmologyReportFields? Ophthalmology { get; init; }
+}
+
+public sealed record WebOphthalmologyReportFields(
+    string? OphthalmicHistory, string? VisualAcuity, string? Refraction,
+    string? Biomicroscopy, string? Tonometry, string? FundusExam);
+
+public sealed record WebClinicalReportVersion(
+    uint VersionNumber, DateTime CreatedAtUtc, string EditorName, string EditorRoleCode,
+    string? ChangeReason, WebOphthalmologyReportFields Ophthalmology, string? Recommendations);
+
+public sealed class WebOphthalmologyReportDraft
+{
+    public string OphthalmicHistory { get; set; } = "";
+    public string VisualAcuity { get; set; } = "";
+    public string Refraction { get; set; } = "";
+    public string Biomicroscopy { get; set; } = "";
+    public string Tonometry { get; set; } = "";
+    public string FundusExam { get; set; } = "";
+
+    public void Load(WebOphthalmologyReportFields? content)
+    {
+        OphthalmicHistory = content?.OphthalmicHistory ?? "";
+        VisualAcuity = content?.VisualAcuity ?? "";
+        Refraction = content?.Refraction ?? "";
+        Biomicroscopy = content?.Biomicroscopy ?? "";
+        Tonometry = content?.Tonometry ?? "";
+        FundusExam = content?.FundusExam ?? "";
+    }
+
+    public WebOphthalmologyReportFields ToContent() => new(
+        OphthalmicHistory, VisualAcuity, Refraction, Biomicroscopy, Tonometry, FundusExam);
+}
 
 public sealed record WebClinicalAppointment(
     ulong Id,
@@ -38,7 +72,10 @@ public sealed record WebClinicalAppointment(
     ulong RowVersion,
     WebClinicalReport? MedicalReport,
     bool CanComplete,
-    bool CanMarkNoShow);
+    bool CanMarkNoShow)
+{
+    public bool IsOphthalmology { get; init; }
+}
 
 public sealed record WebClinicalPatient(
     ulong AccountId,

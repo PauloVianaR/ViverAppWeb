@@ -457,6 +457,12 @@ Cada fase deve:
 
 **Saída:** ausência de tráfego/dependências legadas confirmada e plano de recuperação arquivado.
 
+## Fase 30 — Laudo oftalmológico e atendimentos no prontuário
+
+**Estado:** implementação antecipada a pedido do proprietário na branch `codex/fase-30-prontuario-oftalmologico`, sem executar as fases 28 e 29. Escopo, migrações e validações estão em [Fase 30 — Prontuário oftalmológico](FASE-30-PRONTUARIO-OFTALMOLOGICO.md). A inspeção visual autenticada continua pendente; não há merge ou publicação implícitos.
+
+**Objetivo:** substituir o resumo único por campos oftalmológicos estruturados quando o profissional possuir Oftalmologia e consultar cada atendimento elegível diretamente no prontuário do paciente, com PDF individual.
+
 ## Marcos sugeridos
 
 - **Marco A — Base confiável:** Fases 0 a 4.

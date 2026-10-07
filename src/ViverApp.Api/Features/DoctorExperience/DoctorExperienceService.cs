@@ -343,6 +343,8 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var report = await database.MedicalReports.FromSqlInterpolated($"SELECT mr.* FROM medical_reports mr JOIN appointments a ON a.id=mr.appointment_id WHERE mr.appointment_id={appointment} AND a.professional_account_id={doctor} FOR UPDATE")
             .SingleOrDefaultAsync(ct) ?? throw Missing();
+        if (await OphthalmologyReportMapping.IsOphthalmologyAsync(database, doctor, ct))
+            throw Conflict("Use o laudo oftalmológico estruturado para retificar este atendimento.");
         if (report.StatusCode != "published") throw Conflict("Somente um laudo publicado pode ser retificado.");
         RequireVersion(report.RowVersion, request.ReportRowVersion);
         var version = (await database.MedicalReportVersions.Where(x => x.MedicalReportId == report.Id).MaxAsync(x => (uint?)x.VersionNumber, ct) ?? 0) + 1;
@@ -353,6 +355,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
             MedicalReportId = report.Id,
             VersionNumber = version,
             AuthorProfessionalAccountId = doctor,
+            EditorAccountId = doctor,
             ClinicalSummary = summary,
             Recommendations = recommendations,
             ChangeReason = reason,

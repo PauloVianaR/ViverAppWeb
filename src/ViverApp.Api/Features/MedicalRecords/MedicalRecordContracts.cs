@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using ViverApp.Api.Features.ClinicalOperations;
 
 namespace ViverApp.Api.Features.MedicalRecords;
 
@@ -61,6 +62,23 @@ public sealed record MedicalRecordAppointmentOption(
     DateTime StartsAtUtc,
     string StatusCode,
     string AppointmentTypeName);
+
+public sealed record MedicalRecordAppointmentReport(
+    ulong Id,
+    ulong AppointmentNumber,
+    DateTime StartsAtUtc,
+    string StatusCode,
+    string AppointmentTypeName,
+    string ProfessionalName,
+    bool IsOphthalmology,
+    string? ClinicalSummary,
+    string? Recommendations,
+    OphthalmologyReportFields? Ophthalmology);
+
+public sealed record MedicalRecordAppointmentPdfSnapshot(
+    MedicalRecordPatientSummary Patient,
+    MedicalRecordAppointmentReport Appointment,
+    DateTime GeneratedAtUtc);
 
 public sealed record MedicalRecordContent(
     string? ChiefComplaint,

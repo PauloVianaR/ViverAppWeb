@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using ViverApp.Api.Features.Identity;
+using ViverApp.Api.Features.PatientExperience;
 using ViverApp.Security;
 
 namespace ViverApp.Api.Features.ClinicalOperations;
@@ -11,7 +12,9 @@ namespace ViverApp.Api.Features.ClinicalOperations;
 [ApiController]
 [Route("api/v1/clinical")]
 [Authorize(Policy = ViverAppPolicies.ClinicalStaff)]
-public sealed class ClinicalOperationsController(ClinicalOperationsService operations) : ControllerBase
+public sealed class ClinicalOperationsController(
+    ClinicalOperationsService operations,
+    RecentAuthentication recent) : ControllerBase
 {
     [HttpGet("context")]
     public Task<ActionResult<ClinicalContextResponse>> GetContext(CancellationToken cancellationToken) =>
@@ -31,10 +34,13 @@ public sealed class ClinicalOperationsController(ClinicalOperationsService opera
             ActorId, RoleCode, from, to, status, doctorAccountId, search, page, pageSize, cancellationToken));
 
     [HttpGet("appointments/{id:long}")]
-    public Task<ActionResult<ClinicalAppointmentResponse>> GetAppointment(
+    public async Task<ActionResult<ClinicalAppointmentResponse>> GetAppointment(
         ulong id,
-        CancellationToken cancellationToken) =>
-        ExecuteAsync(() => operations.GetAppointmentAsync(ActorId, RoleCode, id, cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        if (!await AdminAccessIsRecentAsync(cancellationToken)) return Forbid();
+        return await ExecuteAsync(() => operations.GetAppointmentAsync(ActorId, RoleCode, id, cancellationToken));
+    }
 
     [HttpGet("patients")]
     public Task<ActionResult<ClinicalPage<ClinicalPatientResponse>>> GetPatients(
@@ -45,13 +51,26 @@ public sealed class ClinicalOperationsController(ClinicalOperationsService opera
         ExecuteAsync(() => operations.GetPatientsAsync(ActorId, RoleCode, search, page, pageSize, cancellationToken));
 
     [HttpPut("appointments/{id:long}/medical-report")]
-    [Authorize(Policy = ViverAppPolicies.ClinicalProfessional)]
     [EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
-    public Task<ActionResult<ClinicalReportResponse>> SaveDraft(
+    public async Task<ActionResult<ClinicalReportResponse>> SaveDraft(
         ulong id,
         [FromBody] MedicalReportWriteRequest request,
-        CancellationToken cancellationToken) =>
-        ExecuteAsync(() => operations.SaveDraftAsync(ActorId, id, request, cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        if (!await AdminAccessIsRecentAsync(cancellationToken)) return Forbid();
+        return await ExecuteAsync(() => operations.SaveDraftAsync(ActorId, RoleCode, id, request, cancellationToken));
+    }
+
+    [HttpGet("appointments/{id:long}/medical-report/versions")]
+    public async Task<ActionResult<IReadOnlyList<ClinicalReportVersionResponse>>> ReportVersions(
+        ulong id, CancellationToken cancellationToken)
+    {
+        if (!await AdminAccessIsRecentAsync(cancellationToken)) return Forbid();
+        return await ExecuteAsync(() => operations.GetOphthalmologyVersionsAsync(ActorId, RoleCode, id, cancellationToken));
+    }
+
+    private Task<bool> AdminAccessIsRecentAsync(CancellationToken ct) =>
+        RoleCode == ViverAppRoles.Administrator ? recent.IsRecentAsync(User, ct) : Task.FromResult(true);
 
     [HttpPost("appointments/{id:long}/complete")]
     [Authorize(Policy = ViverAppPolicies.ClinicalProfessional)]

@@ -99,7 +99,7 @@ public sealed class DoctorExperienceController(DoctorExperienceService service, 
         return result.Response;
     }
     [HttpPut("appointments/{id:long}/report"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
-    public Task<ClinicalReportResponse> Draft(ulong id, MedicalReportWriteRequest request, CancellationToken ct) => clinical.SaveDraftAsync(Actor, id, request, ct);
+    public Task<ClinicalReportResponse> Draft(ulong id, MedicalReportWriteRequest request, CancellationToken ct) => clinical.SaveDraftAsync(Actor, Role, id, request, ct);
     [HttpPost("appointments/{id:long}/complete"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public Task<ClinicalAppointmentResponse> Complete(ulong id, CompleteAppointmentRequest request, CancellationToken ct) => clinical.CompleteAsync(Actor, id, request, ct);
     [HttpPost("appointments/{id:long}/start"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]

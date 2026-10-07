@@ -94,6 +94,7 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
         var service = CreateService(context, fixture.NowUtc);
         var draft = await service.SaveDraftAsync(
             fixture.DoctorId,
+            ViverAppRoles.Doctor,
             fixture.AppointmentId,
             new MedicalReportWriteRequest(0, "Paciente avaliado sem sinais de alarme no momento.", "Manter acompanhamento clínico."),
             CancellationToken.None);
@@ -127,6 +128,83 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
 
         Assert.Equal(1, await context.AppointmentStatusHistories.CountAsync(
             item => item.AppointmentId == fixture.AppointmentId && item.ToStatusCode == "completed"));
+    }
+
+    [Fact]
+    public async Task OphthalmologyReport_IsEditableByAssignedDoctorManagerAndAdministrator_WithRealEditorHistory()
+    {
+        await using var context = CreateContext(configuration);
+        var specialty = await context.Specialties.SingleAsync(x => x.NormalizedName == "OFTALMOLOGIA");
+        context.ProfessionalSpecialties.Add(new ProfessionalSpecialty
+        {
+            ProfessionalAccountId = fixture.DoctorId,
+            SpecialtyId = specialty.Id,
+            IsPrimary = true,
+        });
+        await context.SaveChangesAsync();
+        var service = CreateService(context, fixture.NowUtc);
+        var first = await service.SaveDraftAsync(
+            fixture.DoctorId, ViverAppRoles.Doctor, fixture.AppointmentId,
+            new MedicalReportWriteRequest(0, null, "Retorno em trinta dias.")
+            {
+                Ophthalmology = new OphthalmologyReportFields(
+                    "Queixa oftalmológica inicial", "OD 20/20", null, null, null, null),
+            }, CancellationToken.None);
+        Assert.Equal("OD 20/20", first.Ophthalmology?.VisualAcuity);
+
+        var unstructuredCompletion = await Assert.ThrowsAsync<ClinicalRuleException>(() => service.CompleteAsync(
+            fixture.DoctorId, fixture.AppointmentId,
+            new CompleteAppointmentRequest(1, first.RowVersion,
+                "Resumo antigo que substituiria os campos do laudo oftalmológico.", null),
+            CancellationToken.None));
+        Assert.Equal((int)HttpStatusCode.BadRequest, unstructuredCompletion.StatusCode);
+
+        var managerView = await service.GetAppointmentAsync(
+            fixture.ManagerId, ViverAppRoles.Manager, fixture.AppointmentId, CancellationToken.None);
+        Assert.True(managerView.IsOphthalmology);
+        Assert.True(managerView.MedicalReport?.ContentVisible);
+        Assert.Equal("Queixa oftalmológica inicial", managerView.MedicalReport?.Ophthalmology?.OphthalmicHistory);
+
+        var second = await service.SaveDraftAsync(
+            fixture.ManagerId, ViverAppRoles.Manager, fixture.AppointmentId,
+            new MedicalReportWriteRequest(first.RowVersion, null, "Acompanhar evolução.")
+            {
+                Ophthalmology = new OphthalmologyReportFields(
+                    "Queixa oftalmológica inicial", "OD 20/25", "Refração revisada", null, null, null),
+                ChangeReason = "Correção operacional da acuidade visual",
+            }, CancellationToken.None);
+        Assert.Equal("OD 20/25", second.Ophthalmology?.VisualAcuity);
+        var versions = await service.GetOphthalmologyVersionsAsync(
+            fixture.ManagerId, ViverAppRoles.Manager, fixture.AppointmentId, CancellationToken.None);
+        Assert.Equal(2, versions.Count);
+        Assert.Equal(fixture.ManagerId, await context.MedicalReportVersions
+            .Where(x => x.MedicalReport.AppointmentId == fixture.AppointmentId)
+            .OrderByDescending(x => x.VersionNumber).Select(x => x.EditorAccountId).FirstAsync());
+        Assert.Equal("OD 20/20", versions[1].Ophthalmology.VisualAcuity);
+
+        var administratorView = await service.GetAppointmentAsync(
+            fixture.AdministratorId, ViverAppRoles.Administrator, fixture.AppointmentId, CancellationToken.None);
+        Assert.True(administratorView.MedicalReport?.ContentVisible);
+        var third = await service.SaveDraftAsync(
+            fixture.AdministratorId, ViverAppRoles.Administrator, fixture.AppointmentId,
+            new MedicalReportWriteRequest(second.RowVersion, null, "Exame revisado.")
+            {
+                Ophthalmology = new OphthalmologyReportFields(
+                    "Queixa oftalmológica inicial", "OD 20/25", "Refração revisada",
+                    "Segmento anterior sem alterações", "15 mmHg", "Retina sem alterações"),
+            }, CancellationToken.None);
+        Assert.Equal("15 mmHg", third.Ophthalmology?.Tonometry);
+        Assert.Equal(fixture.AdministratorId, await context.MedicalReportVersions
+            .Where(x => x.MedicalReport.AppointmentId == fixture.AppointmentId)
+            .OrderByDescending(x => x.VersionNumber).Select(x => x.EditorAccountId).FirstAsync());
+
+        var outsider = await Assert.ThrowsAsync<ClinicalRuleException>(() => service.SaveDraftAsync(
+            fixture.OtherDoctorId, ViverAppRoles.Doctor, fixture.AppointmentId,
+            new MedicalReportWriteRequest(third.RowVersion, null, null)
+            {
+                Ophthalmology = new OphthalmologyReportFields("Acesso indevido", null, null, null, null, null),
+            }, CancellationToken.None));
+        Assert.Equal((int)HttpStatusCode.Forbidden, outsider.StatusCode);
     }
 
     [Fact]
@@ -354,9 +432,10 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
         var doctor = Account($"doctor-{marker}@phase8.example.test", ViverAppRoles.Doctor, "Dra. Fase Oito");
         var otherDoctor = Account($"other-{marker}@phase8.example.test", ViverAppRoles.Doctor, "Dr. Outro Médico");
         var manager = Account($"manager-{marker}@phase8.example.test", ViverAppRoles.Manager, "Gestora Fase Oito");
+        var administrator = Account($"administrator-{marker}@phase8.example.test", ViverAppRoles.Administrator, "Admin Fase Oito");
         var patient = Account($"patient-{marker}@phase8.example.test", ViverAppRoles.Patient, "Paciente João Vinculado");
         var otherPatient = Account($"patient2-{marker}@phase8.example.test", ViverAppRoles.Patient, "Segundo Paciente");
-        context.Accounts.AddRange(doctor, otherDoctor, manager, patient, otherPatient);
+        context.Accounts.AddRange(doctor, otherDoctor, manager, administrator, patient, otherPatient);
         await context.SaveChangesAsync();
         context.ProfessionalProfiles.AddRange(
             ProfessionalProfile(doctor.Id, "80001"),
@@ -385,7 +464,7 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
         context.Appointments.AddRange(appointment, otherAppointment);
         await context.SaveChangesAsync();
         return new ClinicalFixture(
-            doctor.Id, otherDoctor.Id, manager.Id, patient.Id, otherPatient.Id,
+            doctor.Id, otherDoctor.Id, manager.Id, administrator.Id, patient.Id, otherPatient.Id,
             appointment.Id, otherAppointment.Id, type.Id, now);
     }
 
@@ -509,6 +588,7 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
         ulong DoctorId,
         ulong OtherDoctorId,
         ulong ManagerId,
+        ulong AdministratorId,
         ulong PatientId,
         ulong OtherPatientId,
         ulong AppointmentId,
