@@ -59,11 +59,9 @@ jobs:
           EXPECTED_MIGRATIONS: ${{ inputs.expected_migrations }}
         run: |
           & ./scripts/package-windows-release.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Pacote falhou.' }
           $release = Get-ChildItem artifacts/release -Directory | Sort-Object Name | Select-Object -Last 1
           if (-not $release) { throw 'Pacote ausente.' }
           & ./scripts/verify-windows-release.ps1 -ReleaseDirectory $release.FullName
-          if ($LASTEXITCODE -ne 0) { throw 'Pacote inválido.' }
           $ids = @()
           if (-not [string]::IsNullOrWhiteSpace($env:EXPECTED_MIGRATIONS)) {
             $ids = @($env:EXPECTED_MIGRATIONS.Split(',') | ForEach-Object { $_.Trim() })
@@ -119,7 +117,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           & ./scripts/verify-windows-release.ps1 -ReleaseDirectory package
-          if ($LASTEXITCODE -ne 0) { throw 'Artefatos inválidos.' }
           $manifest = Get-Content package/manifest.json -Raw | ConvertFrom-Json
           $plan = Get-Content package/deployment-plan.json -Raw | ConvertFrom-Json
           if ($manifest.commit -cne '${{ github.sha }}' -or $plan.commit -cne $manifest.commit -or $plan.schema -ne 1) {

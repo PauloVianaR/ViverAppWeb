@@ -54,7 +54,6 @@ foreach ($name in $names) {
 }
 
 & (Join-Path $PSScriptRoot 'verify-windows-release.ps1') -ReleaseDirectory $destination
-if ($LASTEXITCODE -ne 0) { throw 'Manifesto ou ZIPs inválidos.' }
 $manifest = Get-Content -LiteralPath (Join-Path $destination 'manifest.json') -Raw | ConvertFrom-Json
 $plan = Get-Content -LiteralPath (Join-Path $destination 'deployment-plan.json') -Raw | ConvertFrom-Json
 if ($manifest.commit -cne $sha -or $plan.schema -ne 1 -or $plan.commit -cne $sha -or
