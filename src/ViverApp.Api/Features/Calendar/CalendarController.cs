@@ -10,7 +10,7 @@ namespace ViverApp.Api.Features.Calendar;
 [Route("api/v1/calendar")]
 [Authorize]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class CalendarController(CalendarService service) : ControllerBase
+public sealed class CalendarController(CalendarService service, CalendarDayPlanService dayPlan) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<CalendarResponse>> Get(
@@ -33,6 +33,14 @@ public sealed class CalendarController(CalendarService service) : ControllerBase
     [Authorize(Policy = ViverAppPolicies.Management)]
     public async Task<ActionResult<IReadOnlyList<CalendarProfessionalResponse>>> Professionals(CancellationToken cancellationToken) =>
         Ok(await service.ProfessionalsAsync(cancellationToken));
+
+    [HttpGet("day-plan")]
+    [Authorize(Roles = "doctor,psychologist,manager,administrator")]
+    public async Task<IActionResult> DayPlan([FromQuery] DateOnly anchor, [FromQuery] ulong? professionalAccountId, CancellationToken ct)
+    {
+        try { return Ok(await dayPlan.GetAsync(ActorId, RoleCode, anchor, professionalAccountId, ct)); }
+        catch (CalendarRuleException exception) { return Problem(statusCode: exception.StatusCode, title: exception.Message); }
+    }
 
     private ulong ActorId => ulong.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!, CultureInfo.InvariantCulture);
     private string RoleCode => User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;

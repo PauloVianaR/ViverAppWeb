@@ -78,6 +78,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<IdempotencyRecord> IdempotencyRecords { get; set; }
 
+    public virtual DbSet<ManagerNotification> ManagerNotifications { get; set; }
+
     public virtual DbSet<ManagerPreference> ManagerPreferences { get; set; }
 
     public virtual DbSet<MedicalRecordDocument> MedicalRecordDocuments { get; set; }
@@ -143,6 +145,8 @@ public partial class ViverAppDbContext : DbContext
     public virtual DbSet<ScheduledJob> ScheduledJobs { get; set; }
 
     public virtual DbSet<Specialty> Specialties { get; set; }
+
+    public virtual DbSet<StaffMessage> StaffMessages { get; set; }
 
     public virtual DbSet<TeleconsultationGuestLink> TeleconsultationGuestLinks { get; set; }
 
@@ -1623,6 +1627,38 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.ResponseStatusCode).HasColumnName("response_status_code");
         });
 
+        modelBuilder.Entity<ManagerNotification>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("manager_notifications");
+
+            entity.HasIndex(e => e.AppointmentId, "ix_manager_notifications_appointment");
+
+            entity.HasIndex(e => new { e.ManagerAccountId, e.ReadAtUtc, e.CreatedAtUtc }, "ix_manager_notifications_inbox");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.ManagerAccountId).HasColumnName("manager_account_id");
+            entity.Property(e => e.ReadAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("read_at_utc");
+            entity.Property(e => e.TypeCode)
+                .HasMaxLength(30)
+                .HasColumnName("type_code");
+
+            entity.HasOne(d => d.Appointment).WithMany(p => p.ManagerNotifications)
+                .HasForeignKey(d => d.AppointmentId)
+                .HasConstraintName("fk_manager_notifications_appointment");
+
+            entity.HasOne(d => d.ManagerAccount).WithMany(p => p.ManagerNotifications)
+                .HasForeignKey(d => d.ManagerAccountId)
+                .HasConstraintName("fk_manager_notifications_manager");
+        });
+
         modelBuilder.Entity<ManagerPreference>(entity =>
         {
             entity.HasKey(e => e.ManagerAccountId).HasName("PRIMARY");
@@ -2235,6 +2271,9 @@ public partial class ViverAppDbContext : DbContext
             entity.HasIndex(e => e.TaxId, "ux_patient_profiles_tax_id").IsUnique();
 
             entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.AdministrativeNotes)
+                .HasMaxLength(2000)
+                .HasColumnName("administrative_notes");
             entity.Property(e => e.BirthDate)
                 .HasColumnType("date")
                 .HasColumnName("birth_date");
@@ -3208,6 +3247,43 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.UpdatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");
+        });
+
+        modelBuilder.Entity<StaffMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("staff_messages");
+
+            entity.HasIndex(e => new { e.SenderAccountId, e.RecipientAccountId, e.CreatedAtUtc }, "ix_staff_messages_conversation");
+
+            entity.HasIndex(e => new { e.RecipientAccountId, e.ReadAtUtc, e.CreatedAtUtc }, "ix_staff_messages_inbox");
+
+            entity.HasIndex(e => new { e.SenderAccountId, e.ClientNonce }, "ux_staff_messages_nonce").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Body)
+                .HasMaxLength(2000)
+                .HasColumnName("body");
+            entity.Property(e => e.ClientNonce).HasColumnName("client_nonce");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.ReadAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("read_at_utc");
+            entity.Property(e => e.RecipientAccountId).HasColumnName("recipient_account_id");
+            entity.Property(e => e.SenderAccountId).HasColumnName("sender_account_id");
+
+            entity.HasOne(d => d.RecipientAccount).WithMany(p => p.StaffMessageRecipientAccounts)
+                .HasForeignKey(d => d.RecipientAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_staff_messages_recipient");
+
+            entity.HasOne(d => d.SenderAccount).WithMany(p => p.StaffMessageSenderAccounts)
+                .HasForeignKey(d => d.SenderAccountId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_staff_messages_sender");
         });
 
         modelBuilder.Entity<TeleconsultationGuestLink>(entity =>

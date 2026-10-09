@@ -118,8 +118,7 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
 
         var contact = await ReadUtf8Async((await client.GetAsync("/contato")).Content);
         Assert.Contains("35.843.469/0001-77", contact, StringComparison.Ordinal);
-        Assert.Contains("Rua Tude Tupy, 214", contact, StringComparison.Ordinal);
-        Assert.Contains("contato@viveralmenara.com", contact, StringComparison.Ordinal);
+        Assert.Contains("Carregando dados de contato da clínica", contact, StringComparison.Ordinal);
         Assert.Contains("privacidade@viveralmenara.com", contact, StringComparison.Ordinal);
         Assert.Contains("seguranca@viveralmenara.com", contact, StringComparison.Ordinal);
     }

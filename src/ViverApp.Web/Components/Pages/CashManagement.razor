@@ -57,7 +57,8 @@
                 <aside class="cash-print-grand-total">
                     <div><span>Entradas</span><strong>@Money(PrintData.Summary.ByMethod.Sum(item=>item.Entries))</strong></div>
                     <div><span>Saídas e estornos</span><strong>@Money(PrintData.Summary.ByMethod.Sum(item=>item.Outflows))</strong></div>
-                    <div class="cash-print-balance"><span>Saldo líquido</span><strong>@Money(PrintData.Summary.NetTotal)</strong></div>
+                    <div class="cash-print-balance"><span>Total líquido do dia</span><strong>@Money(PrintData.Summary.NetTotal)</strong></div>
+                    @if(PrintData.CumulativeSummary is not null){<div class="cash-print-balance"><span>Total líquido geral</span><strong>@Money(PrintData.CumulativeSummary.NetTotal)</strong></div>}
                 </aside>
             </div>
     </section>

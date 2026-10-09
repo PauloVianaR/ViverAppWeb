@@ -111,7 +111,7 @@
                         <div class="field"><label for="email">@(Backend.SmsEnabled ? "E-mail (opcional)" : "E-mail")</label><input id="email" type="email" autocomplete="email" maxlength="254" required="@(!Backend.SmsEnabled)" @bind="Email" /></div>
                     }
                     <div class="field"><label for="phone">Telefone com DDD</label><input id="phone" type="tel" autocomplete="tel-national" inputmode="numeric" placeholder="(11) 99999-9999" maxlength="15" value="@Phone" @oninput="e=>Phone=BrazilianPhoneInput.Mask(e.Value?.ToString())" /></div>
-                    <div class="field"><label for="tax-id">CPF</label><input id="tax-id" inputmode="numeric" autocomplete="off" maxlength="11" @bind="TaxId" /></div>
+                    <div class="field"><label for="tax-id">CPF</label><input id="tax-id" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00" value="@MaskedTaxId" @oninput="TaxIdInput" /></div>
                     <div class="field"><label for="birth-date">Data de nascimento</label><input id="birth-date" type="date" autocomplete="bday" value="@BirthDateText" @onchange="UpdateBirthDate" /></div>
                     @if (Mode == "register")
                     {
@@ -407,8 +407,8 @@
 
     private async Task HandleAuthenticationAsync(WebAuthenticationResult result)
     {
-        if (result.RequiresMfaEnrollment) { Mode = "mfa-setup"; return; }
-        if (result.RequiresMfa) { Mode = "mfa"; return; }
+        if (result.RequiresMfaEnrollment) { Code = string.Empty; Mode = "mfa-setup"; return; }
+        if (result.RequiresMfa) { Code = string.Empty; Mode = "mfa"; return; }
         await RedirectCurrentAccountAsync();
     }
 
@@ -450,6 +450,20 @@
         return UiErrorNotifier.Normalize(message);
     }
     private static string Digits(string value) => new(value.Where(char.IsAsciiDigit).ToArray());
+    private string MaskedTaxId => FormatCpf(Digits(TaxId));
+    private void TaxIdInput(ChangeEventArgs args)
+    {
+        var digits = Digits(args.Value?.ToString() ?? string.Empty);
+        TaxId = digits[..Math.Min(11, digits.Length)];
+    }
+    private static string FormatCpf(string value)
+    {
+        var digits = value[..Math.Min(11, value.Length)];
+        if (digits.Length <= 3) return digits;
+        if (digits.Length <= 6) return $"{digits[..3]}.{digits[3..]}";
+        if (digits.Length <= 9) return $"{digits[..3]}.{digits[3..6]}.{digits[6..]}";
+        return $"{digits[..3]}.{digits[3..6]}.{digits[6..9]}-{digits[9..]}";
+    }
     private static string FormatPostalCode(string digits) =>
         digits.Length <= 5 ? digits : $"{digits[..5]}-{digits[5..]}";
     private static bool IsPublicRegistrationRole(string? roleCode) =>

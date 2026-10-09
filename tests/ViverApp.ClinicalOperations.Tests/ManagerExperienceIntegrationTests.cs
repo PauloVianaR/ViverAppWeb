@@ -119,7 +119,8 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
                 null,
                 null,
                 new ManagerPatientAddressRequest("39900000", null, null, null, null, "Almenara", "MG"),
-                false),
+                false,
+                "Paciente prefere atendimento pela manhã."),
             CancellationToken.None);
 
         Assert.False(patient.PortalAccessEnabled);
@@ -131,9 +132,11 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         Assert.Null(patient.Address?.Street);
         Assert.Equal("Almenara", patient.Address?.City);
         Assert.Equal("MG", patient.Address?.StateCode);
+        Assert.Equal("Paciente prefere atendimento pela manhã.", patient.AdministrativeNotes);
         offlinePatientId = patient.AccountId;
         var persisted = await db.Accounts.SingleAsync(x => x.Id == patient.AccountId);
         Assert.False(persisted.PortalAccessEnabled);
+        Assert.Equal("Paciente prefere atendimento pela manhã.", (await db.PatientProfiles.SingleAsync(x => x.AccountId == patient.AccountId)).AdministrativeNotes);
     }
 
     [Fact]

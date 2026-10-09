@@ -27,6 +27,13 @@
 .metric-drilldown__list{display:grid;gap:.35rem;margin:0;padding-left:1.35rem;max-height:18rem;overflow:auto}
 .mobile-filter-panel__summary{display:none}
 .mobile-filter-panel__content{display:contents}
+.mobile-filter-panel--all{overflow:hidden;padding:0}
+.mobile-filter-panel--all .mobile-filter-panel__summary{align-items:center;background:transparent;border:0;color:inherit;cursor:pointer;display:flex;justify-content:space-between;gap:1rem;padding:1rem;text-align:left;width:100%}
+.mobile-filter-panel--all .mobile-filter-panel__summary>span{align-items:center;display:flex;gap:.65rem}
+.mobile-filter-panel--all .mobile-filter-panel__summary small{color:var(--color-text-muted)}
+.mobile-filter-panel--all .mobile-filter-panel__content{display:none;padding:0 1rem 1rem}
+.mobile-filter-panel--all.mobile-filter-panel--open .mobile-filter-panel__summary{border-bottom:1px solid var(--color-border)}
+.mobile-filter-panel--all.mobile-filter-panel--open .mobile-filter-panel__content{display:block}
 .mobile-metric-flow{display:contents}
 .patient-visit__top .badge { flex-shrink: 0; }
 .patient-visit__top p { margin-block: .4rem; }

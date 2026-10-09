@@ -479,6 +479,20 @@ public sealed class PatientSchedulingConcurrencyTests
                 calendar.GetAsync(fixture.DoctorId, ViverAppRoles.Psychologist, "day",
                     fixture.LocalDate, fixture.PatientId, CancellationToken.None));
             Assert.Equal(403, crossProfessional.StatusCode);
+            var dayPlan = new CalendarDayPlanService(database);
+            var plan = await dayPlan.GetAsync(fixture.DoctorId, ViverAppRoles.Psychologist,
+                fixture.LocalDate, null, CancellationToken.None);
+            Assert.InRange(plan.IntervalMinutes, 5, 120);
+            Assert.NotEmpty(plan.Windows);
+            Assert.DoesNotContain(fixture.LocalDate, plan.UnavailableDays);
+            var wrongProfessional = await Assert.ThrowsAsync<CalendarRuleException>(() =>
+                dayPlan.GetAsync(fixture.DoctorId, ViverAppRoles.Psychologist,
+                    fixture.LocalDate, fixture.PatientId, CancellationToken.None));
+            Assert.Equal(403, wrongProfessional.StatusCode);
+            var patientDenied = await Assert.ThrowsAsync<CalendarRuleException>(() =>
+                dayPlan.GetAsync(fixture.PatientId, ViverAppRoles.Patient,
+                    fixture.LocalDate, fixture.DoctorId, CancellationToken.None));
+            Assert.Equal(403, patientDenied.StatusCode);
         }
         finally
         {

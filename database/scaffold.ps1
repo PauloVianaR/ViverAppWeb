@@ -60,6 +60,8 @@ $tables = @(
     'arrival_queue_sequences',
     'appointment_status_history',
     'professional_notifications',
+    'manager_notifications',
+    'staff_messages',
     'medical_reports',
     'medical_report_versions',
     'electronic_health_records',

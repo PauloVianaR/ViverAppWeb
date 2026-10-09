@@ -48,7 +48,8 @@ public sealed record ManagerPatientResponse(ulong AccountId, string FullName, st
     string? Phone, bool EmailVerified, bool PhoneVerified, DateOnly? BirthDate, ManagerPatientAddressResponse? Address,
     string StatusCode, bool PortalAccessEnabled, bool IsPremium, string PremiumStatus, ulong? PremiumRequestId,
     ulong? PremiumMembershipId, ulong? PremiumMembershipRowVersion, Guid? PremiumProofDocumentId, string? PremiumProofName, decimal PremiumDiscountPercent,
-    int AppointmentCount, DateTime? LastAppointmentAtUtc, DateTime? NextAppointmentAtUtc, ulong RowVersion);
+    int AppointmentCount, DateTime? LastAppointmentAtUtc, DateTime? NextAppointmentAtUtc, ulong RowVersion,
+    string? AdministrativeNotes = null);
 public sealed record ManagerPatientCounters(int Total, int Premium, int Active, int Blocked, int PremiumPending);
 public sealed record ManagerPatientSources(IReadOnlyList<string> Total, IReadOnlyList<string> Premium,
     IReadOnlyList<string> Active, IReadOnlyList<string> Blocked, IReadOnlyList<string> PremiumPending);
@@ -77,7 +78,8 @@ public sealed record ManagerPatientCreateRequest(
     [param: EmailAddress, StringLength(254)] string? Email,
     [param: StringLength(20)] string? PhoneE164,
     ManagerPatientAddressRequest? Address,
-    bool SendOnboarding) : IValidatableObject
+    bool SendOnboarding,
+    [param: StringLength(2000)] string? AdministrativeNotes = null) : IValidatableObject
 {
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -97,7 +99,8 @@ public sealed record ManagerPatientUpdateRequest([param: Required, StringLength(
     [param: EmailAddress, StringLength(254)] string? Email,
     [param: StringLength(20)] string? PhoneE164,
     DateOnly? BirthDate, ManagerPatientAddressRequest? Address,
-    [param: Range(1, long.MaxValue)] ulong RowVersion);
+    [param: Range(1, long.MaxValue)] ulong RowVersion,
+    [param: StringLength(2000)] string? AdministrativeNotes = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ManagerPatientAddressRequest(

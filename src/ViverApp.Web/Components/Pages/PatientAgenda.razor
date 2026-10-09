@@ -5,7 +5,7 @@
 <header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Atendimentos</h1><p class="page-description">Consulte seus atendimentos e documentos do cuidado.</p></div><a class="button" href="/paciente/agendar">Novo agendamento</a></header>
 @if (Notice is not null) { <p class="notice notice--error" role="alert">@Notice</p> }
 <AppointmentStatusLegend />
-<MobileFilterPanel AriaLabel="Filtros da agenda">
+<MobileFilterPanel Class="mobile-filter-panel--all" AriaLabel="Filtros da agenda">
     <form @onsubmit="Apply" @onsubmit:preventDefault>
         <div class="patient-filter-grid">
             <div class="field"><label for="agenda-search">Serviço ou médico</label><input id="agenda-search" @bind="Search" maxlength="100" /></div>

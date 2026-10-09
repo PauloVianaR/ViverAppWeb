@@ -19,6 +19,7 @@ public sealed record CashDay(DateOnly OperationalDate, string TimezoneName, Cash
     WebPage<CashMovement> Page);
 public sealed record CashPrint(string ClinicName, DateOnly OperationalDate, string TimezoneName, string IssuedBy,
     DateTime IssuedAtUtc, string FilterDescription, CashClosure? Closure, bool IsClosed, CashSummary Summary,
+    CashSummary? CumulativeSummary,
     IReadOnlyList<CashMovement> Movements, bool TotalsOnly);
 public sealed record PaymentReversalResult(ulong ReversalId, ulong PaymentId, ulong AppointmentId, string StatusCode,
     string PaymentStatusCode, DateTime RequestedAtUtc, DateTime? CompletedAtUtc, bool CanCreateReplacementPayment,

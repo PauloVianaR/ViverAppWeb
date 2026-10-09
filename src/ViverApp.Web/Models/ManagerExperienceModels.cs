@@ -54,7 +54,8 @@ public sealed record ManagerPatient(ulong AccountId, string FullName, string? Pr
     string? Phone, bool EmailVerified, bool PhoneVerified, DateOnly? BirthDate, ManagerPatientAddress? Address,
     string StatusCode, bool PortalAccessEnabled, bool IsPremium, string PremiumStatus, ulong? PremiumRequestId,
     ulong? PremiumMembershipId, ulong? PremiumMembershipRowVersion, Guid? PremiumProofDocumentId, string? PremiumProofName, decimal PremiumDiscountPercent,
-    int AppointmentCount, DateTime? LastAppointmentAtUtc, DateTime? NextAppointmentAtUtc, ulong RowVersion);
+    int AppointmentCount, DateTime? LastAppointmentAtUtc, DateTime? NextAppointmentAtUtc, ulong RowVersion,
+    string? AdministrativeNotes = null);
 public sealed record ManagerPatientCounters(int Total, int Premium, int Active, int Blocked, int PremiumPending);
 public sealed record ManagerPatientSources(IReadOnlyList<string> Total, IReadOnlyList<string> Premium,
     IReadOnlyList<string> Active, IReadOnlyList<string> Blocked, IReadOnlyList<string> PremiumPending);

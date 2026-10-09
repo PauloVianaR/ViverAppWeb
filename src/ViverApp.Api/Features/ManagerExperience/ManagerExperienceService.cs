@@ -244,7 +244,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
             RowVersion = 1
         };
         database.Accounts.Add(account);
-        database.PatientProfiles.Add(new PatientProfile { Account = account, TaxId = taxId, BirthDate = account.BirthDate, PreferredName = Text(request.PreferredName), CreatedAtUtc = now, UpdatedAtUtc = now });
+        database.PatientProfiles.Add(new PatientProfile { Account = account, TaxId = taxId, BirthDate = account.BirthDate, PreferredName = Text(request.PreferredName), AdministrativeNotes = Text(request.AdministrativeNotes), CreatedAtUtc = now, UpdatedAtUtc = now });
         if (request.Address is not null)
             database.AccountAddresses.Add(new AccountAddress { Account = account, PostalCode = Text(request.Address.PostalCode), Street = Text(request.Address.Street), Number = Text(request.Address.Number), Complement = Text(request.Address.Complement), District = Text(request.Address.District), City = Text(request.Address.City), StateCode = Text(request.Address.StateCode)?.ToUpperInvariant(), UpdatedAtUtc = now });
         await database.SaveChangesAsync(ct);
@@ -290,7 +290,8 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         if (emailChanged || phoneChanged) account.SecurityStamp = RandomNumberGenerator.GetBytes(32);
         account.UpdatedAtUtc = now; account.RowVersion++;
         account.PatientProfile ??= new PatientProfile { AccountId = id, CreatedAtUtc = now };
-        account.PatientProfile.PreferredName = Text(request.PreferredName); account.PatientProfile.TaxId = taxId; account.PatientProfile.BirthDate = account.BirthDate; account.PatientProfile.UpdatedAtUtc = now;
+        if (account.PatientProfile.AdministrativeNotes != Text(request.AdministrativeNotes)) changed.Add("administrativeNotes");
+        account.PatientProfile.PreferredName = Text(request.PreferredName); account.PatientProfile.TaxId = taxId; account.PatientProfile.BirthDate = account.BirthDate; account.PatientProfile.AdministrativeNotes = Text(request.AdministrativeNotes); account.PatientProfile.UpdatedAtUtc = now;
         if (request.Address is null) { if (account.AccountAddress is not null) database.AccountAddresses.Remove(account.AccountAddress); }
         else if (account.AccountAddress is null) account.AccountAddress = new AccountAddress { AccountId = id, PostalCode = Text(request.Address.PostalCode), Street = Text(request.Address.Street), Number = Text(request.Address.Number), Complement = Text(request.Address.Complement), District = Text(request.Address.District), City = Text(request.Address.City), StateCode = Text(request.Address.StateCode)?.ToUpperInvariant(), UpdatedAtUtc = now };
         else { account.AccountAddress.PostalCode = Text(request.Address.PostalCode); account.AccountAddress.Street = Text(request.Address.Street); account.AccountAddress.Number = Text(request.Address.Number); account.AccountAddress.Complement = Text(request.Address.Complement); account.AccountAddress.District = Text(request.Address.District); account.AccountAddress.City = Text(request.Address.City); account.AccountAddress.StateCode = Text(request.Address.StateCode)?.ToUpperInvariant(); account.AccountAddress.UpdatedAtUtc = now; }
@@ -525,7 +526,8 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
             activeMembership?.Id, activeMembership?.RowVersion, activeMembership?.ProofDocumentId, activeMembership?.ProofDocument?.OriginalFileName,
             activeMembership?.PremiumPlan?.AppointmentDiscountPercent ?? 0, appointments.Length,
             appointments.Where(a => a.StartsAtUtc < now).Select(a => (DateTime?)a.StartsAtUtc).DefaultIfEmpty().Max(),
-            appointments.Where(a => a.StartsAtUtc >= now && a.StatusCode is "pending" or "confirmed" or "arrived" or "in_progress").Select(a => (DateTime?)a.StartsAtUtc).DefaultIfEmpty().Min(), x.RowVersion);
+            appointments.Where(a => a.StartsAtUtc >= now && a.StatusCode is "pending" or "confirmed" or "arrived" or "in_progress").Select(a => (DateTime?)a.StartsAtUtc).DefaultIfEmpty().Min(), x.RowVersion,
+            x.PatientProfile?.AdministrativeNotes);
     }
     private static ManagerPremiumRequestResponse MapPremium(PremiumMembership x) => new(x.Id, x.AccountId, x.Account.FullName, x.PremiumPlan.Name,
         x.PremiumPlan.AppointmentDiscountPercent, x.StatusCode, x.ProofDocumentId, x.ProofDocument?.OriginalFileName, x.ProofDocument?.SizeBytes,

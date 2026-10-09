@@ -107,6 +107,8 @@ public partial class Appointment
 
     public virtual Appointment? InverseRescheduledFromAppointment { get; set; }
 
+    public virtual ICollection<ManagerNotification> ManagerNotifications { get; set; } = new List<ManagerNotification>();
+
     public virtual ICollection<MedicalRecordDocument> MedicalRecordDocuments { get; set; } = new List<MedicalRecordDocument>();
 
     public virtual ICollection<MedicalRecordDraft> MedicalRecordDrafts { get; set; } = new List<MedicalRecordDraft>();

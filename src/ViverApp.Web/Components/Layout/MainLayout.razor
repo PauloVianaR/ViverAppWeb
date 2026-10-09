@@ -31,10 +31,11 @@
             @if (Account.Role is "doctor" or "psychologist")
             {
                 <details class="doctor-notification-center">
-                    <summary class="topbar-action" aria-label="@NotificationLabel"><AppIcon Name="sparkles" /><span>Alertas</span>@if(UnreadCount>0){<strong class="notification-dot">@UnreadCount</strong>}</summary>
+                    <summary class="topbar-action" aria-label="@NotificationLabel"><AppIcon Name="bell" />@if(UnreadCount+ChatUnreadCount>0){<span class="staff-unread-dot"></span>}</summary>
                     <div class="notification-panel">
                         <div class="section-heading"><h2>Chegadas</h2>@if(UnreadCount>0){<button class="button button--small button--secondary" @onclick="ReadAllAsync">Marcar todas como lidas</button>}</div>
                         <button class="button button--small button--secondary" @onclick="()=>SoundMuted=!SoundMuted">@(SoundMuted?"Ativar som nesta sessão":"Silenciar nesta sessão")</button>
+                        @if(ChatUnreadCount>0){<p>@ChatUnreadCount mensagem(ns) não lida(s). Abra o balão de conversa ao lado.</p>}
                         @if(Notifications.Count==0)
                         {
                             <p class="muted">Nenhuma chegada notificada.</p>
@@ -54,6 +55,11 @@
                         }
                     </div>
                 </details>
+            }
+            @if (Account.Role is "doctor" or "psychologist" or "manager" or "administrator"
+                && ulong.TryParse(Account.Id, out var staffAccountId))
+            {
+                <StaffChatWidget AccountId="staffAccountId" Role="@Account.Role" ChatUnreadChanged="count=>ChatUnreadCount=count" />
             }
             <button class="topbar-action topbar-action--logout" type="button" @onclick="LogoutAsync"><AppIcon Name="user" /><span>Sair</span></button>
             </div>
@@ -157,6 +163,7 @@
     private bool NotificationConnected, PopupEnabled, SoundEnabled, SoundMuted, MarkReadOnOpen = true;
     private int SoundVolume = 60;
     private int UnreadCount => Notifications.Count(x => !x.IsRead);
+    private int ChatUnreadCount;
     private string NotificationLabel => UnreadCount == 0 ? "Notificações de chegada" : $"Notificações de chegada: {UnreadCount} não lida(s)";
     private bool IdentityResolved;
     private bool DesktopSidebarEnabled = true;

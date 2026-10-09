@@ -1,0 +1,235 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JavaScript
+@inject WebBackendOptions Backend
+@inject UiErrorNotifier ErrorNotifier
+
+<div class="staff-comms">
+    @if (Role is "manager" or "administrator")
+    {
+        <details class="staff-alerts" @ref="AlertsMenu">
+            <summary class="topbar-action" aria-label="Alertas">
+                <AppIcon Name="bell" />
+                @if (ManagerUnread + ChatUnread > 0) { <span class="staff-unread-dot" aria-label="Notificações não lidas"></span> }
+            </summary>
+            <div class="staff-popover">
+                <h2>Alertas</h2>
+                @if (Role == "manager")
+                {
+                    @if (ManagerUnread > 0) { <button class="button button--small button--secondary" @onclick="ReadAlertsAsync">Marcar atendimentos como lidos</button> }
+                    @foreach (var alert in Alerts.Take(15))
+                    {
+                        <a class="staff-alert-row @(alert.IsRead ? "" : "staff-alert-row--unread")" href="/gestao/atendimentos/@alert.AppointmentId">
+                            Atendimento #@alert.AppointmentNumber @(alert.Type == "appointment_started" ? "iniciado" : "concluído")
+                            <small>@alert.CreatedAtUtc.ToLocalTime().ToString("dd/MM HH:mm")</small>
+                        </a>
+                    }
+                }
+                @if (ChatUnread > 0) { <p>@ChatUnread mensagem(ns) de chat não lida(s). Abra o balão ao lado.</p> }
+                @if (ManagerUnread + ChatUnread == 0) { <p class="muted">Nenhum alerta não lido.</p> }
+            </div>
+        </details>
+    }
+    <div class="staff-chat-anchor">
+        <button type="button" class="topbar-action" aria-label="Conversas da equipe" aria-expanded="@ContactsOpen" @onclick="ToggleContacts">
+            <AppIcon Name="chat" />
+            @if (ChatUnread > 0) { <span class="staff-unread-dot" aria-label="@($"{ChatUnread} mensagens não lidas")"></span> }
+        </button>
+        @if (ContactsOpen)
+        {
+            <section class="staff-popover staff-contact-panel" aria-label="Conversas da equipe">
+                <div class="staff-popover-head"><h2>Conversas</h2><button type="button" aria-label="Fechar" @onclick="ToggleContacts">×</button></div>
+                <label class="field"><span>Buscar pessoa</span><input type="search" @bind="Search" @bind:event="oninput" placeholder="Nome do gestor ou profissional" /></label>
+                @if (LoadError) { <p role="alert">Não foi possível carregar a equipe.</p><button type="button" class="button button--small" @onclick="RefreshAsync">Tentar novamente</button> }
+                <div class="staff-contacts">
+                    @foreach (var contact in FilteredContacts)
+                    {
+                        <button type="button" class="staff-contact" @onclick="() => OpenConversationAsync(contact)">
+                            <span class="staff-presence @(contact.Online ? "staff-presence--online" : "")"></span>
+                            <span><strong>@contact.FullName</strong><small>@RoleName(contact.Role) · @(contact.Online ? "Online" : "Offline")</small></span>
+                            @if (contact.Unread > 0) { <b class="staff-count">@contact.Unread</b> }
+                        </button>
+                    }
+                    @if (!FilteredContacts.Any()) { <p class="muted">Nenhuma pessoa encontrada.</p> }
+                </div>
+            </section>
+        }
+    </div>
+</div>
+@if (Selected is not null)
+{
+    <section class="staff-chat-window @(Minimized ? "staff-chat-window--minimized" : "")" aria-label="Conversa com @Selected.FullName">
+        <header>
+            <button type="button" class="staff-chat-title" @onclick="ToggleMinimized"><span class="staff-presence @(Selected.Online ? "staff-presence--online" : "")"></span>@Selected.FullName @if(Selected.Unread>0){<b class="staff-count">@Selected.Unread</b>}</button>
+            <button type="button" aria-label="@(Minimized ? "Expandir conversa" : "Minimizar conversa")" @onclick="ToggleMinimized">@(Minimized ? "▢" : "−")</button>
+            <button type="button" aria-label="Fechar conversa" @onclick="CloseConversation">×</button>
+        </header>
+        @if (!Minimized)
+        {
+            <div class="staff-chat-messages" role="log" aria-live="polite">
+                @foreach (var message in Messages)
+                {
+                    <div class="staff-chat-message @(message.SenderId == AccountId ? "staff-chat-message--own" : "")"><span>@message.Body</span><small>@message.CreatedAtUtc.ToLocalTime().ToString("dd/MM HH:mm")</small></div>
+                }
+            </div>
+            <form class="staff-chat-compose" @onsubmit="SendAsync" @onsubmit:preventDefault>
+                <input aria-label="Mensagem" maxlength="2000" @bind="Draft" @bind:event="oninput" placeholder="Escreva uma mensagem" />
+                <button type="submit" disabled="@Sending">Enviar</button>
+            </form>
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public ulong AccountId { get; set; }
+    [Parameter, EditorRequired] public string Role { get; set; } = "";
+    [Parameter] public EventCallback<int> ChatUnreadChanged { get; set; }
+    private IJSObjectReference? identity;
+    private IJSObjectReference? realtime;
+    private DotNetObjectReference<StaffChatWidget>? self;
+    private readonly List<StaffContact> Contacts = [];
+    private readonly List<StaffMessageView> Messages = [];
+    private readonly List<ManagerAlertView> Alerts = [];
+    private StaffContact? Selected;
+    private ElementReference AlertsMenu;
+    private bool ContactsOpen, Minimized, Sending, LoadError;
+    private string Search = "", Draft = "";
+    private int ChatUnread => Contacts.Sum(c => c.Unread);
+    private int ManagerUnread => Alerts.Count(a => !a.IsRead);
+    private IEnumerable<StaffContact> FilteredContacts => Contacts.Where(c => c.FullName.Contains(Search, StringComparison.CurrentCultureIgnoreCase))
+        .OrderByDescending(c => c.Online).ThenBy(c => c.FullName, StringComparer.Create(new System.Globalization.CultureInfo("pt-BR"), true));
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        identity = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/identity-access.js");
+        realtime = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/staff-chat.js");
+        self = DotNetObjectReference.Create(this);
+        await RefreshAsync();
+        try { await realtime.InvokeVoidAsync("connect", Backend.BaseUrl.ToString(), self); }
+        catch (JSException) { /* As mensagens persistidas continuam disponíveis. */ }
+    }
+    private async Task RefreshAsync()
+    {
+        if (identity is null) return;
+        try
+        {
+            var contacts = await identity.InvokeAsync<StaffContact[]>("get", Backend.BaseUrl.ToString(), "api/v1/staff/contacts");
+            Contacts.Clear(); Contacts.AddRange(contacts);
+            if (Role == "manager")
+            {
+                var alerts = await identity.InvokeAsync<ManagerAlertView[]>("get", Backend.BaseUrl.ToString(), "api/v1/staff/manager-alerts");
+                Alerts.Clear(); Alerts.AddRange(alerts);
+            }
+            await ChatUnreadChanged.InvokeAsync(ChatUnread);
+            LoadError = false;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (JSException) { LoadError = true; await InvokeAsync(StateHasChanged); }
+    }
+    private void ToggleContacts() => ContactsOpen = !ContactsOpen;
+    private void ToggleMinimized() => Minimized = !Minimized;
+    private void CloseConversation() { Selected = null; Messages.Clear(); }
+    private async Task OpenConversationAsync(StaffContact contact)
+    {
+        if (identity is null) return;
+        try
+        {
+            var history = await identity.InvokeAsync<StaffMessageView[]>("get", Backend.BaseUrl.ToString(), $"api/v1/staff/messages/{contact.Id}");
+            Messages.Clear(); Messages.AddRange(history);
+            Selected = contact; Minimized = false; ContactsOpen = false;
+            await MarkReadAsync(contact.Id);
+        }
+        catch (JSException) { ErrorNotifier.Show("Não foi possível abrir a conversa. Tente novamente."); }
+    }
+    private async Task MarkReadAsync(ulong contactId)
+    {
+        if (identity is null) return;
+        try
+        {
+            await identity.InvokeAsync<object?>("send", Backend.BaseUrl.ToString(), $"api/v1/staff/messages/{contactId}/read", new { });
+            var index = Contacts.FindIndex(c => c.Id == contactId);
+            if (index >= 0) Contacts[index] = Contacts[index] with { Unread = 0 };
+            Selected = Contacts.FirstOrDefault(c => c.Id == contactId);
+            await ChatUnreadChanged.InvokeAsync(ChatUnread);
+        }
+        catch (JSException) { ErrorNotifier.Show("Não foi possível confirmar a leitura. Tente novamente."); }
+    }
+    private async Task SendAsync()
+    {
+        if (identity is null || Selected is null || string.IsNullOrWhiteSpace(Draft) || Sending) return;
+        Sending = true;
+        try
+        {
+            var sent = await identity.InvokeAsync<StaffMessageView>("send", Backend.BaseUrl.ToString(), "api/v1/staff/messages",
+                new { recipientId = Selected.Id, clientNonce = Guid.NewGuid(), body = Draft.Trim() });
+            if (Messages.All(m => m.Id != sent.Id)) Messages.Add(sent);
+            Draft = "";
+        }
+        catch (JSException) { ErrorNotifier.Show("Não foi possível enviar a mensagem. Tente novamente."); }
+        finally { Sending = false; }
+    }
+    [JSInvokable]
+    public async Task OnStaffMessage(StaffMessageView message)
+    {
+        var other = message.SenderId == AccountId ? message.RecipientId : message.SenderId;
+        if (Selected?.Id == other && Messages.All(m => m.Id != message.Id))
+        {
+            Messages.Add(message);
+            if (!Minimized && message.SenderId != AccountId) await MarkReadAsync(other);
+            else if (Minimized && message.RecipientId == AccountId)
+            {
+                var index = Contacts.FindIndex(c => c.Id == other);
+                if (index >= 0) Contacts[index] = Contacts[index] with { Unread = Contacts[index].Unread + 1 };
+                Selected = Contacts.FirstOrDefault(c => c.Id == other);
+                await ChatUnreadChanged.InvokeAsync(ChatUnread);
+            }
+        }
+        else if (message.RecipientId == AccountId)
+        {
+            var index = Contacts.FindIndex(c => c.Id == other);
+            if (index >= 0) Contacts[index] = Contacts[index] with { Unread = Contacts[index].Unread + 1 };
+            await ChatUnreadChanged.InvokeAsync(ChatUnread);
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+    [JSInvokable]
+    public Task OnMessagesRead(ulong readerId) => InvokeAsync(() =>
+    {
+        if (Selected?.Id == readerId)
+            for (var i = 0; i < Messages.Count; i++)
+                if (Messages[i].SenderId == AccountId) Messages[i] = Messages[i] with { IsRead = true };
+        StateHasChanged();
+    });
+    [JSInvokable]
+    public Task OnPresenceChanged(ulong id, bool online) => InvokeAsync(() =>
+    {
+        var index = Contacts.FindIndex(c => c.Id == id);
+        if (index >= 0) Contacts[index] = Contacts[index] with { Online = online };
+        if (Selected?.Id == id) Selected = Contacts.FirstOrDefault(c => c.Id == id);
+        StateHasChanged();
+    });
+    [JSInvokable]
+    public Task OnManagerAlert(ManagerAlertView alert) => InvokeAsync(() =>
+    {
+        if (Alerts.All(a => a.Id != alert.Id)) Alerts.Insert(0, alert);
+        StateHasChanged();
+    });
+    [JSInvokable]
+    public Task RefreshStaffFeed() => InvokeAsync(RefreshAsync);
+    private async Task ReadAlertsAsync()
+    {
+        if (identity is null) return;
+        try
+        {
+            await identity.InvokeAsync<object?>("send", Backend.BaseUrl.ToString(), "api/v1/staff/manager-alerts/read-all", new { });
+            for (var i = 0; i < Alerts.Count; i++) Alerts[i] = Alerts[i] with { IsRead = true };
+        }
+        catch (JSException) { ErrorNotifier.Show("Não foi possível marcar os alertas como lidos. Tente novamente."); }
+    }
+    private static string RoleName(string role) => role switch { "administrator" => "Administrador", "manager" => "Gestor", "doctor" => "Médico", "psychologist" => "Psicólogo", _ => "Equipe" };
+    public async ValueTask DisposeAsync()
+    {
+        if (realtime is not null) { try { await realtime.InvokeVoidAsync("disconnect"); await realtime.DisposeAsync(); } catch (JSDisconnectedException) { } }
+        if (identity is not null) try { await identity.DisposeAsync(); } catch (JSDisconnectedException) { }
+        self?.Dispose();
+    }
+}

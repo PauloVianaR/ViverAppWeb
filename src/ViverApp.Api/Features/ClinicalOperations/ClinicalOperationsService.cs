@@ -2,6 +2,7 @@ using System.Data;
 using Microsoft.EntityFrameworkCore;
 using ViverApp.Api.Features.ClinicAdministration;
 using ViverApp.Api.Features.Identity;
+using ViverApp.Api.Features.StaffCommunication;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 
@@ -10,7 +11,8 @@ namespace ViverApp.Api.Features.ClinicalOperations;
 public sealed class ClinicalOperationsService(
     ViverAppDbContext database,
     IClinicalOperationsAuditWriter auditWriter,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    StaffCommunicationService? staff = null)
 {
     private static readonly string[] AllowedStatuses =
         ["pending", "confirmed", "completed", "canceled", "rescheduled", "no_show"];
@@ -422,6 +424,7 @@ public sealed class ClinicalOperationsService(
             OccurredAtUtc = now,
         });
         await SaveAsync(cancellationToken);
+        IReadOnlyList<ManagerAlertView> managerAlerts = staff is null ? [] : await staff.QueueManagerAlertsAsync(appointment, "appointment_completed", cancellationToken);
         var auditData = new Dictionary<string, string>
         {
             ["previousStatus"] = previousStatus,
@@ -437,6 +440,7 @@ public sealed class ClinicalOperationsService(
             auditData,
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        if (staff is not null) await staff.PublishManagerAlertsAsync(managerAlerts);
         return MapAppointment(appointment, actorId, ViverAppRoles.Doctor, includeReportContent: true);
     }
 

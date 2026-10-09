@@ -463,6 +463,10 @@ Cada fase deve:
 
 **Objetivo:** substituir o resumo único por campos oftalmológicos estruturados quando o profissional possuir Oftalmologia e consultar cada atendimento elegível diretamente no prontuário do paciente, com PDF individual.
 
+## Fase 31 — Operação, chat e agenda diária
+
+**Estado:** em implementação na branch `codex/fase-31-operacao-chat-agenda`, sob solicitação direta do proprietário. Escopo, migration, testes e limitação visual constam em [Fase 31 — Operação, chat e agenda diária](FASE-31-OPERACAO-CHAT-AGENDA.md). Não há merge ou publicação implícitos.
+
 ## Marcos sugeridos
 
 - **Marco A — Base confiável:** Fases 0 a 4.

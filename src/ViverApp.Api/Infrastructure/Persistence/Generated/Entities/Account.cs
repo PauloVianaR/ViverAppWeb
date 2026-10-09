@@ -109,6 +109,8 @@ public partial class Account
 
     public virtual ICollection<ExternalLogin> ExternalLogins { get; set; } = new List<ExternalLogin>();
 
+    public virtual ICollection<ManagerNotification> ManagerNotifications { get; set; } = new List<ManagerNotification>();
+
     public virtual ManagerPreference? ManagerPreference { get; set; }
 
     public virtual ICollection<MedicalRecordDocument> MedicalRecordDocumentDeletedByAccounts { get; set; } = new List<MedicalRecordDocument>();
@@ -154,6 +156,10 @@ public partial class Account
     public virtual ICollection<ProfessionalReview> ProfessionalReviewReviewerAccounts { get; set; } = new List<ProfessionalReview>();
 
     public virtual Role RoleCodeNavigation { get; set; } = null!;
+
+    public virtual ICollection<StaffMessage> StaffMessageRecipientAccounts { get; set; } = new List<StaffMessage>();
+
+    public virtual ICollection<StaffMessage> StaffMessageSenderAccounts { get; set; } = new List<StaffMessage>();
 
     public virtual ICollection<TeleconsultationGuestLink> TeleconsultationGuestLinks { get; set; } = new List<TeleconsultationGuestLink>();
 

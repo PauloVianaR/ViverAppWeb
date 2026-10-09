@@ -15,7 +15,7 @@
     <div class="calendar-toolbar__navigation"><button class="button button--secondary" @onclick="Previous" aria-label="Período anterior">‹</button><button class="button button--secondary" @onclick="Today">Hoje</button><button class="button button--secondary" @onclick="Next" aria-label="Próximo período">›</button><strong>@PeriodLabel</strong></div>
     <div class="calendar-view-switch" role="group" aria-label="Visualização">@foreach(var option in Views){<button class="button @(View==option.Code?null:"button--secondary")" aria-pressed="@(View==option.Code)" @onclick="()=>ChangeView(option.Code)">@option.Label</button>}</div>
     <div class="field"><label for="calendar-anchor">Data de referência</label><input id="calendar-anchor" type="date" value="@Anchor.ToString("yyyy-MM-dd")" @onchange="AnchorChanged" /></div>
-    @if(CanChooseProfessional){<div class="field"><label for="calendar-professional">Profissional</label><select id="calendar-professional" value="@ProfessionalId" @onchange="ProfessionalChanged"><option value="0">Todos</option>@foreach(var item in Professionals){<option value="@item.AccountId">@item.FullName · @item.LicenseLabel</option>}</select></div>}
+    @if(CanChooseProfessional && View!="day"){<div class="field"><label for="calendar-professional">Profissional</label><select id="calendar-professional" value="@ProfessionalId" @onchange="ProfessionalChanged"><option value="0">Todos</option>@foreach(var item in Professionals){<option value="@item.AccountId">@item.FullName · @item.LicenseLabel</option>}</select></div>}
 </section>
 
 @if(Loading){<LoadingSkeleton Lines="8"/>}
@@ -50,6 +50,63 @@ else if(View=="year")
 else if(View=="month")
 {
     <section class="surface calendar-month" aria-label="Agenda mensal"><div class="calendar-month-grid">@foreach(var label in WeekLabels){<strong class="calendar-week-label">@label</strong>}@foreach(var day in MonthCells(Anchor.Year,Anchor.Month)){if(day is null){<div class="calendar-month-day calendar-month-day--outside"></div>}else{<div class="calendar-month-day"><button class="calendar-day-number" @onclick="()=>OpenDay(day.Value)">@day.Value.Day</button>@foreach(var item in ItemsFor(day.Value)){<a class="calendar-event appointment-card--@PatientLabels.StatusCss(item.StatusCode)" href="@Details(item.Id)"><strong>#@item.AppointmentNumber @item.PatientName</strong><span>@Local(item.StartsAtUtc).ToString("HH:mm") · @Status(item.StatusCode)</span></a>}</div>}}</div></section>
+}
+else if(View=="day" && Role!="patient")
+{
+    <section class="calendar-day-workspace" aria-label="Agenda diária">
+        <aside class="surface calendar-day-sidebar">
+            <div class="field">
+                <label for="calendar-day-professional">Profissional</label>
+                @if(CanChooseProfessional)
+                {
+                    <select id="calendar-day-professional" value="@ProfessionalId" @onchange="ProfessionalChanged">
+                        @foreach(var item in Professionals){<option value="@item.AccountId">@item.FullName · @item.LicenseLabel</option>}
+                    </select>
+                }
+                else { <strong>@(CurrentAccount?.FullName ?? "Minha agenda")</strong> }
+            </div>
+            <div class="calendar-mini-month calendar-day-mini">
+                <h2>@Anchor.ToString("MMMM yyyy",CultureInfo.GetCultureInfo("pt-BR"))</h2>
+                <div class="calendar-mini-grid">
+                    @foreach(var label in WeekLabels){<span class="calendar-week-label">@label[..1]</span>}
+                    @foreach(var day in MonthCells(Anchor.Year,Anchor.Month))
+                    {
+                        if(day is null){<span></span>}
+                        else
+                        {
+                            var unavailable=DayPlan?.UnavailableDays.Contains(day.Value)??false;
+                            <button type="button" class="calendar-mini-day @(unavailable?"calendar-mini-day--unavailable":null) @(day==Anchor?"calendar-mini-day--selected":null)"
+                                    aria-label="@($"{day:dd/MM/yyyy}, {(unavailable?"profissional indisponível":"profissional disponível")}")"
+                                    @onclick="()=>OpenDay(day.Value)">@day.Value.Day</button>
+                        }
+                    }
+                </div>
+            </div>
+        </aside>
+        <div class="surface calendar-daily-list">
+            <h2>@Anchor.ToString("dddd, dd 'de' MMMM 'de' yyyy",CultureInfo.GetCultureInfo("pt-BR"))</h2>
+            @if(DayPlan is null){<p class="muted">A grade de horários não está disponível.</p>}
+            else if(DayRows.Count==0){<p class="muted">Profissional indisponível neste dia.</p>}
+            else
+            {
+                <div class="calendar-daily-rows">
+                    @foreach(var row in DayRows)
+                    {
+                        <div class="calendar-daily-row @(row.Item is null?"calendar-daily-row--free":"appointment-card--"+PatientLabels.StatusCss(row.Item.StatusCode))">
+                            <time>@row.Time.ToString(@"hh\:mm")</time>
+                            @if(row.Item is null){<span class="muted">Horário livre</span>}
+                            else
+                            {
+                                <span aria-hidden="true">@PatientLabels.StatusFace(row.Item.StatusCode)</span>
+                                <a href="@Details(row.Item.Id)"><strong>#@row.Item.AppointmentNumber @row.Item.PatientName</strong><small>@row.Item.AppointmentTypeName · @Status(row.Item.StatusCode)</small></a>
+                                <small>@Local(row.Item.StartsAtUtc).ToString("HH:mm")–@Local(row.Item.EndsAtUtc).ToString("HH:mm")</small>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </section>
 }
 else
 {
@@ -90,6 +147,10 @@ else
 
 @code {
     private WebCalendar? Data;
+    private WebCalendarDayPlan? DayPlan;
+    private WebCurrentAccount? CurrentAccount;
+    private sealed record DailyRow(TimeSpan Time, WebCalendarItem? Item);
+    private IReadOnlyList<DailyRow> DayRows=[];
     private IReadOnlyList<WebCalendarProfessional> Professionals=[];
     private string View="month";
     private DateOnly Anchor=DateOnly.FromDateTime(DateTime.Today);
@@ -99,7 +160,36 @@ else
     private string Role { get { var path=Navigation.ToBaseRelativePath(Navigation.Uri);return path.StartsWith("paciente",StringComparison.OrdinalIgnoreCase)?"patient":path.StartsWith("medico",StringComparison.OrdinalIgnoreCase)?"doctor":path.StartsWith("psicologo",StringComparison.OrdinalIgnoreCase)?"psychologist":path.StartsWith("gestao",StringComparison.OrdinalIgnoreCase)?"manager":"administrator"; } }
     private string AreaLabel=>Role switch{"patient"=>"Paciente","doctor"=>"Médico","psychologist"=>"Psicólogo","manager"=>"Gestor",_=>"Administrador"};
     private bool CanChooseProfessional=>Role is "manager" or "administrator";
-    protected override async Task Load(){if(!PreferenceLoaded){var preference=await Get<WebCalendarViewPreference>("api/v1/me/preferences/calendar-view");View=preference?.Mode??"month";PreferenceLoaded=true;}if(CanChooseProfessional&&Professionals.Count==0)Professionals=await Get<IReadOnlyList<WebCalendarProfessional>>("api/v1/calendar/professionals")??[];var selected=ProfessionalId==0?"":$"&professionalAccountId={ProfessionalId}";Data=await Get<WebCalendar>($"api/v1/calendar?view={View}&anchor={Anchor:yyyy-MM-dd}{selected}");}
+    protected override async Task Load(){if(!PreferenceLoaded){var preference=await Get<WebCalendarViewPreference>("api/v1/me/preferences/calendar-view");View=preference?.Mode??"month";PreferenceLoaded=true;}if(CanChooseProfessional&&Professionals.Count==0)Professionals=await Get<IReadOnlyList<WebCalendarProfessional>>("api/v1/calendar/professionals")??[];if(View=="day"&&CanChooseProfessional&&ProfessionalId==0)ProfessionalId=Professionals.FirstOrDefault()?.AccountId??0;var selected=ProfessionalId==0?"":$"&professionalAccountId={ProfessionalId}";Data=await Get<WebCalendar>($"api/v1/calendar?view={View}&anchor={Anchor:yyyy-MM-dd}{selected}");if(View=="day"&&Role!="patient"&&(!CanChooseProfessional||ProfessionalId!=0)){CurrentAccount??=await Get<WebCurrentAccount>("api/v1/auth/me");DayPlan=await Get<WebCalendarDayPlan>($"api/v1/calendar/day-plan?anchor={Anchor:yyyy-MM-dd}{selected}");DayRows=BuildDayRows();}else{DayPlan=null;DayRows=[];}}
+    private IReadOnlyList<DailyRow> BuildDayRows()
+    {
+        if (DayPlan is null || Data is null) return [];
+        var appointments=Data.Items.Where(item=>Local(item.StartsAtUtc).Date==Anchor.ToDateTime(TimeOnly.MinValue).Date)
+            .OrderBy(item=>Local(item.StartsAtUtc)).ThenBy(item=>item.AppointmentNumber).ToArray();
+        var rows=new List<DailyRow>();
+        var interval=TimeSpan.FromMinutes(DayPlan.IntervalMinutes);
+        foreach(var window in DayPlan.Windows)
+        {
+            var cursor=window.Start;
+            foreach(var item in appointments.Where(item=>Local(item.StartsAtUtc).TimeOfDay>=window.Start&&Local(item.StartsAtUtc).TimeOfDay<window.End))
+            {
+                var start=Local(item.StartsAtUtc).TimeOfDay;
+                while(cursor+interval<=start&&cursor<window.End){rows.Add(new(cursor,null));cursor+=interval;}
+                rows.Add(new(start,item));
+                var next=Local(item.EndsAtUtc).TimeOfDay+interval;
+                if(next>cursor)cursor=next;
+            }
+            while(cursor<window.End){rows.Add(new(cursor,null));cursor+=interval;}
+        }
+        foreach(var item in appointments.Where(item=>rows.All(row=>row.Item?.Id!=item.Id)))
+            rows.Add(new(Local(item.StartsAtUtc).TimeOfDay,item));
+        return rows.Where(row=>row.Item is not null || appointments.All(item=>
+        {
+            var start=Local(item.StartsAtUtc).TimeOfDay;
+            var end=Local(item.EndsAtUtc).TimeOfDay+interval;
+            return row.Time<start || row.Time>=end;
+        })).OrderBy(row=>row.Time).ThenBy(row=>row.Item is null?1:0).ToArray();
+    }
     private DateTime Local(DateTime value){try{return TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(value,DateTimeKind.Utc),TimeZoneInfo.FindSystemTimeZoneById(Data?.TimezoneName??"America/Sao_Paulo"));}catch{return value.ToLocalTime();}}
     private string PeriodLabel=>View switch{"day"=>Anchor.ToString("dd 'de' MMMM 'de' yyyy",CultureInfo.GetCultureInfo("pt-BR")),"week"=>$"{Data?.RangeStart:dd/MM}–{Data?.RangeEnd:dd/MM/yyyy}","month"=>Anchor.ToString("MMMM 'de' yyyy",CultureInfo.GetCultureInfo("pt-BR")),_=>Anchor.Year.ToString(CultureInfo.InvariantCulture)};
     private IEnumerable<DateOnly> VisibleDays(){var start=Data?.RangeStart??Anchor;var end=Data?.RangeEnd??Anchor;for(var day=start;day<=end;day=day.AddDays(1))yield return day;}
