@@ -1,4 +1,6 @@
 .staff-comms{display:flex;align-items:center;gap:.3rem}
+.staff-comms .topbar-action{display:inline-flex;align-items:center;justify-content:center;width:2.75rem;height:2.75rem;min-height:2.75rem;padding:0;border:0;border-radius:50%;background:var(--color-brand-strong);color:#fff;cursor:pointer}
+.staff-comms .topbar-action:hover{background:var(--color-brand)}
 .staff-alerts,.staff-chat-anchor{position:relative}
 .staff-alerts>summary{list-style:none;cursor:pointer;position:relative}
 .staff-alerts>summary::-webkit-details-marker{display:none}

@@ -61,7 +61,7 @@
             {
                 <StaffChatWidget AccountId="staffAccountId" Role="@Account.Role" ChatUnreadChanged="count=>ChatUnreadCount=count" />
             }
-            <button class="topbar-action topbar-action--logout" type="button" @onclick="LogoutAsync"><AppIcon Name="user" /><span>Sair</span></button>
+            <button class="topbar-action topbar-action--logout" type="button" aria-label="Sair da conta" title="Sair da conta" @onclick="LogoutAsync"><AppIcon Name="logout" /></button>
             </div>
         }
         else
