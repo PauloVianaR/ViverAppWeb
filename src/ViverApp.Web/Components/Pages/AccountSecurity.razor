@@ -8,7 +8,7 @@
 <PageTitle>Segurança da conta | ViverApp</PageTitle>
 
 <header class="workspace-heading"><div><p class="eyebrow">Conta</p><h1 class="page-title">Segurança e sessões</h1><p class="page-description">Revise onde sua conta está conectada e gerencie suas formas de acesso.</p></div><span class="badge badge--success">Sessão verificada</span></header>
-@if (!string.IsNullOrWhiteSpace(Notice)) { <div class="notice @(NoticeIsError ? "notice--error" : "notice--success")" role="@(NoticeIsError ? "alert" : "status")">@Notice</div> }
+@if (!string.IsNullOrWhiteSpace(Notice)) { <UiNotice Message="@Notice" IsError="NoticeIsError" /> }
 
 <div class="security-grid">
     <section class="surface security-panel" aria-labelledby="methods-title">

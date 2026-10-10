@@ -6,7 +6,7 @@
 @using static ViverApp.Web.DoctorLabels
 <PageTitle>Novo agendamento | ViverApp</PageTitle>
 <header class="workspace-heading"><div><p class="eyebrow">Agendamento pelo profissional</p><h1 class="page-title">Novo atendimento</h1><p class="page-description">Escolha um paciente vinculado; o profissional autenticado permanece fixo.</p></div><a class="button button--secondary" href="@ProfessionalRoot/agenda">Voltar à agenda</a></header>
-@if(Notice is not null){<p class="notice @(NoticeError?"notice--error":"notice--success")" role="alert">@Notice</p>}
+@if(Notice is not null){<UiNotice Message="@Notice" IsError="NoticeError" />}
 @if(Loading){<LoadingSkeleton Lines="7" />}else{
 <section class="surface patient-panel doctor-summary"><div class="field"><label for="doctor-booking-patient">Paciente</label><select id="doctor-booking-patient" value="@SelectedPatientId" @onchange="PatientChanged"><option value="0">Selecione</option>@foreach(var patient in Patients){<option value="@patient.AccountId">@patient.FullName@(patient.IsPremium?" · Premium":"")</option>}</select></div>@if(Patient is not null){<p>@(Patient.IsPremium?$"Paciente Premium — {Patient.PremiumDiscountPercent:0.##}% de desconto aplicado automaticamente.":"Paciente sem benefício Premium ativo.")</p>}</section>
 @if(Patient is not null){

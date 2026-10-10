@@ -3,7 +3,7 @@
 @using static ViverApp.Web.PatientLabels
 <PageTitle>Meu cuidado | ViverApp</PageTitle>
 <header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">@(Home is null ? "Seu cuidado começa aqui" : $"Olá, {Home.FullName}!")</h1><p class="page-description">Tudo para cuidar da sua saúde, em um só lugar.</p></div>@if (Home?.IsPremium == true) { <a class="badge badge--brand" href="/paciente/perfil#premium">Premium</a> }</header>
-@if (Notice is not null) { <p class="notice notice--error" role="alert">@Notice</p><button class="button" @onclick="() => Run(Load)">Tentar novamente</button> }
+@if (Notice is not null) { <UiNotice Message="@Notice" IsError="true" /><button class="button" @onclick="() => Run(Load)">Tentar novamente</button> }
 @if (Loading) { <LoadingSkeleton Lines="5" /> }
 else if (Home is not null)
 {

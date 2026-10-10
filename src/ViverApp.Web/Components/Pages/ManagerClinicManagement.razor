@@ -7,7 +7,7 @@
     <div><p class="eyebrow">Gestor</p><h1 class="page-title">Serviços e horários profissionais</h1><p class="page-description">Permissões temporárias controladas pelo Administrador para catálogo, preços e grade semanal.</p></div>
     <a class="button button--secondary" href="/gestao">Voltar ao início</a>
 </header>
-@if(Notice is not null){<p class="notice @(NoticeError?"notice--error":"notice--success")" role="alert">@Notice</p>}
+@if(Notice is not null){<UiNotice Message="@Notice" IsError="NoticeError" />}
 @if(Loading){<LoadingSkeleton Lines="8"/>}
 else if(Capabilities is null || !Capabilities.AppointmentTypesEnabled && !Capabilities.DoctorSchedulesEnabled && !Capabilities.ProfessionalServicesEnabled)
 {

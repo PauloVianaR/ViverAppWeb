@@ -29,9 +29,7 @@
     <div class="access-card surface">
         @if (!string.IsNullOrWhiteSpace(Notice))
         {
-            <div class="notice @(NoticeIsError ? "notice--error" : "notice--success")" role="@(NoticeIsError ? "alert" : "status")">
-                @Notice
-            </div>
+            <UiNotice Message="@Notice" IsError="NoticeIsError" />
         }
 
         @if (IsLoading)

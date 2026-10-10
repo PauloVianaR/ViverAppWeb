@@ -59,7 +59,10 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
         Assert.Contains("Criar conta com Google", html, StringComparison.Ordinal);
         Assert.Contains("Escolha seu perfil", html, StringComparison.Ordinal);
         Assert.Contains("Ocorreu um erro interno não classificado. Contate o administrador do sistema.", html, StringComparison.Ordinal);
-        Assert.Contains("role=\"alertdialog\"", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"ui-toast-host\"", html, StringComparison.Ordinal);
+        Assert.Contains("popover=\"manual\"", html, StringComparison.Ordinal);
+        Assert.Contains("role=\"alert\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("role=\"alertdialog\"", html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -368,6 +371,11 @@ public sealed class WebAccessibilityContractTests : IAsyncLifetime
     [InlineData("")]
     [InlineData("One or more validation errors occurred.")]
     [InlineData("Internal Server Error")]
+    [InlineData("Not Found")]
+    [InlineData("Bad Request")]
+    [InlineData("Forbidden")]
+    [InlineData("Unauthorized")]
+    [InlineData("Service Unavailable")]
     [InlineData("TypeError: Failed to fetch")]
     [InlineData("Failed to complete negotiation with the server")]
     [InlineData("There was an unhandled exception on the current circuit")]

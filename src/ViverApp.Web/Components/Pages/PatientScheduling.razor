@@ -4,7 +4,7 @@
 @using static ViverApp.Web.PatientLabels
 <PageTitle>Agendar | ViverApp</PageTitle>
 <header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">@(Original is null ? "Novo agendamento" : "Reagendar atendimento")</h1><p class="page-description">Escolha seu cuidado, profissional e horário. Horários no fuso da clínica.</p></div><a class="button button--secondary" href="/paciente/agenda">Minha agenda</a></header>
-@if (Notice is not null) { <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="alert">@Notice</p> }
+@if (Notice is not null) { <UiNotice Message="@Notice" IsError="NoticeError" /> }
 @if (Loading) { <LoadingSkeleton Lines="5" /> }
 <nav class="booking-steps" aria-label="Etapas do agendamento"><span class="booking-step booking-step--active"><b>1</b> Atendimento</span><span class="booking-step"><b>2</b> Profissional</span><span class="booking-step"><b>3</b> Horário</span><span class="booking-step"><b>4</b> Confirmar</span></nav>
 <div class="booking-layout">

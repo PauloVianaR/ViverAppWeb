@@ -3,7 +3,7 @@
 @inherits DoctorPageBase
 <PageTitle>Videoatendimento | ViverApp</PageTitle>
 <header class="workspace-heading"><div><p class="eyebrow">@ProfessionalLabel</p><h1 class="page-title">Videoatendimento</h1><p class="page-description">Sala privada para até quatro participantes, incluindo você.</p></div><a class="button button--secondary" href="@ProfessionalRoot/atendimentos/@Id">Voltar ao atendimento</a></header>
-@if (Notice is not null) { <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="alert">@Notice</p> }
+@if (Notice is not null) { <UiNotice Message="@Notice" IsError="NoticeError" /> }
 <section class="surface patient-panel">
     <p id="call-status" role="status" aria-live="polite">@StatusText</p><p id="call-quality">Qualidade: aguardando conexão.</p>
     <div class="patient-video-grid patient-video-grid--meeting"><figure><video id="local-video" autoplay playsinline muted aria-label="Seu vídeo"></video><figcaption>Você</figcaption></figure><div id="remote-videos" class="patient-video-grid patient-video-grid--remote" aria-label="Outros participantes"></div></div>

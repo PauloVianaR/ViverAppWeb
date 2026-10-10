@@ -354,3 +354,6 @@
     }
 }
 @media(max-width:390px){.calendar-day-sidebar{grid-template-columns:minmax(0,1fr)}}
+.calendar-daily-row--elapsed time,.calendar-time--elapsed{text-decoration:line-through;color:#768393}
+.calendar-daily-row--elapsed{opacity:.65}
+.calendar-mini-day:disabled{opacity:.4;cursor:not-allowed}

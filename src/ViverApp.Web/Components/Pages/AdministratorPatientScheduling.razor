@@ -6,7 +6,7 @@
 <header class="workspace-heading"><div><p class="eyebrow">Administrador</p><h1 class="page-title">Novo atendimento</h1>
 <p class="page-description">Combine serviços da mesma categoria, escolha o profissional e confira o valor final.</p></div>
 <a class="button button--secondary" href="/administracao/atendimentos">Voltar aos atendimentos</a></header>
-@if(Notice is not null){<p class="notice @(NoticeError?"notice--error":"notice--success")" role="alert">@Notice</p>}
+@if(Notice is not null){<UiNotice Message="@Notice" IsError="NoticeError" />}
 @if(Loading){<LoadingSkeleton Lines="7" />}else{
 <section class="surface patient-panel patient-section">
     <div class="field"><label for="admin-book-patient">Paciente</label><select id="admin-book-patient" @bind="PatientIdValue" @bind:after="PatientChanged">

@@ -19,7 +19,7 @@
     {
         @if (Notice is not null)
         {
-            <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="status">@Notice</p>
+            <UiNotice Message="@Notice" IsError="NoticeError" />
         }
         <p class="field-hint">Cada salvamento preserva uma versão anterior e identifica quem editou o laudo.</p>
         @if (Appointment.IsOphthalmology)

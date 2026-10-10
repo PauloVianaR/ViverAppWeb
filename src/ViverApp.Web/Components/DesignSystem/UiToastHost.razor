@@ -1,0 +1,52 @@
+@implements IAsyncDisposable
+@inject UiErrorNotifier Notifications
+@inject IJSRuntime JavaScript
+
+<div id="ui-toast-host" class="ui-toast-host" popover="manual" aria-label="Avisos da aplicação">
+    @foreach (var item in Items)
+    {
+        <aside @key="item.Id" class="ui-toast @(item.Notification.IsError ? "ui-toast--error" : "ui-toast--success")" role="@(item.Notification.IsError ? "alert" : "status")" aria-atomic="true">
+            <span class="ui-toast-icon" aria-hidden="true">@(item.Notification.IsError ? "!" : "✓")</span>
+            <div><strong>@(item.Notification.IsError ? "Não foi possível concluir" : "Aviso")</strong><p>@item.Notification.Message</p></div>
+            <button type="button" aria-label="Fechar aviso" @onclick="()=>Dismiss(item.Id)">×</button>
+        </aside>
+    }
+</div>
+
+@code {
+    private sealed record Toast(Guid Id, UiNotification Notification);
+    private readonly List<Toast> Items = [];
+    private readonly CancellationTokenSource lifetime = new();
+    private IJSObjectReference? module;
+    private bool disposed;
+    protected override void OnInitialized() => Notifications.NotificationRaised += Show;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/ui-toasts.js");
+        if (module is not null) await module.InvokeVoidAsync("sync", Items.Count > 0);
+    }
+    private void Show(UiNotification notification) => _ = InvokeAsync(() =>
+    {
+        if (disposed) return;
+        var toast = new Toast(Guid.NewGuid(), notification);
+        if (Items.Count >= 4) Items.RemoveAt(0);
+        Items.Add(toast); StateHasChanged();
+        _ = ExpireAsync(toast);
+    });
+    private async Task ExpireAsync(Toast toast)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(toast.Notification.IsError ? 10 : 7), lifetime.Token);
+            await InvokeAsync(() => Dismiss(toast.Id));
+        }
+        catch (OperationCanceledException) { }
+    }
+    private void Dismiss(Guid id) { Items.RemoveAll(item => item.Id == id); StateHasChanged(); }
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true; Notifications.NotificationRaised -= Show;
+        lifetime.Cancel(); lifetime.Dispose();
+        if (module is not null) try { await module.DisposeAsync(); } catch (JSDisconnectedException) { }
+    }
+}

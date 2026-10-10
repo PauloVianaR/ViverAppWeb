@@ -51,7 +51,7 @@
             </div>
         }
     }
-    @if (Notice is not null) { <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="status">@Notice</p> }
+    @if (Notice is not null) { <UiNotice Message="@Notice" IsError="NoticeError" /> }
 </details>
 
 @code {

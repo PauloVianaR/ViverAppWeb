@@ -86,6 +86,10 @@
     private IJSObjectReference? identity;
     private IJSObjectReference? realtime;
     private DotNetObjectReference<StaffChatWidget>? self;
+    private string? connectionId;
+    private int conversationRequest;
+    private bool disposed;
+    private readonly HashSet<ulong> ReceivedMessages = [];
     private readonly List<StaffContact> Contacts = [];
     private readonly List<StaffMessageView> Messages = [];
     private readonly List<ManagerAlertView> Alerts = [];
@@ -104,8 +108,8 @@
         realtime = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/staff-chat.js");
         self = DotNetObjectReference.Create(this);
         await RefreshAsync();
-        try { await realtime.InvokeVoidAsync("connect", Backend.BaseUrl.ToString(), self); }
-        catch (JSException) { /* As mensagens persistidas continuam disponíveis. */ }
+        try { connectionId = await realtime.InvokeAsync<string>("connect", Backend.BaseUrl.ToString(), self); }
+        catch (JSException) { ErrorNotifier.Show("O chat está temporariamente sem conexão em tempo real. Recarregue a página."); }
     }
     private async Task RefreshAsync()
     {
@@ -114,6 +118,7 @@
         {
             var contacts = await identity.InvokeAsync<StaffContact[]>("get", Backend.BaseUrl.ToString(), "api/v1/staff/contacts");
             Contacts.Clear(); Contacts.AddRange(contacts);
+            if (Selected is not null) Selected = Contacts.FirstOrDefault(c => c.Id == Selected.Id);
             if (Role == "manager")
             {
                 var alerts = await identity.InvokeAsync<ManagerAlertView[]>("get", Backend.BaseUrl.ToString(), "api/v1/staff/manager-alerts");
@@ -125,17 +130,19 @@
         }
         catch (JSException) { LoadError = true; await InvokeAsync(StateHasChanged); }
     }
-    private void ToggleContacts() => ContactsOpen = !ContactsOpen;
-    private void ToggleMinimized() => Minimized = !Minimized;
-    private void CloseConversation() { Selected = null; Messages.Clear(); }
+    private async Task ToggleContacts() { ContactsOpen = !ContactsOpen; if (ContactsOpen) await RefreshAsync(); }
+    private async Task ToggleMinimized() { Minimized = !Minimized; if (!Minimized && Selected is not null) await MarkReadAsync(Selected.Id); }
+    private void CloseConversation() { conversationRequest++; Selected = null; Messages.Clear(); Draft = ""; }
     private async Task OpenConversationAsync(StaffContact contact)
     {
         if (identity is null) return;
+        var request = ++conversationRequest;
         try
         {
             var history = await identity.InvokeAsync<StaffMessageView[]>("get", Backend.BaseUrl.ToString(), $"api/v1/staff/messages/{contact.Id}");
+            if (disposed || request != conversationRequest) return;
             Messages.Clear(); Messages.AddRange(history);
-            Selected = contact; Minimized = false; ContactsOpen = false;
+            Selected = contact; Draft = ""; Minimized = false; ContactsOpen = false;
             await MarkReadAsync(contact.Id);
         }
         catch (JSException) { ErrorNotifier.Show("Não foi possível abrir a conversa. Tente novamente."); }
@@ -148,7 +155,7 @@
             await identity.InvokeAsync<object?>("send", Backend.BaseUrl.ToString(), $"api/v1/staff/messages/{contactId}/read", new { });
             var index = Contacts.FindIndex(c => c.Id == contactId);
             if (index >= 0) Contacts[index] = Contacts[index] with { Unread = 0 };
-            Selected = Contacts.FirstOrDefault(c => c.Id == contactId);
+            if (Selected?.Id == contactId) Selected = Contacts.FirstOrDefault(c => c.Id == contactId);
             await ChatUnreadChanged.InvokeAsync(ChatUnread);
         }
         catch (JSException) { ErrorNotifier.Show("Não foi possível confirmar a leitura. Tente novamente."); }
@@ -157,20 +164,33 @@
     {
         if (identity is null || Selected is null || string.IsNullOrWhiteSpace(Draft) || Sending) return;
         Sending = true;
+        var recipient = Selected.Id;
+        var body = Draft.Trim();
         try
         {
             var sent = await identity.InvokeAsync<StaffMessageView>("send", Backend.BaseUrl.ToString(), "api/v1/staff/messages",
-                new { recipientId = Selected.Id, clientNonce = Guid.NewGuid(), body = Draft.Trim() });
-            if (Messages.All(m => m.Id != sent.Id)) Messages.Add(sent);
-            Draft = "";
+                new { recipientId = recipient, clientNonce = Guid.NewGuid(), body });
+            if (Selected?.Id == recipient)
+            {
+                if (Messages.All(m => m.Id != sent.Id)) Messages.Add(sent);
+                Draft = "";
+            }
         }
         catch (JSException) { ErrorNotifier.Show("Não foi possível enviar a mensagem. Tente novamente."); }
         finally { Sending = false; }
     }
     [JSInvokable]
-    public async Task OnStaffMessage(StaffMessageView message)
+    public Task OnStaffMessage(StaffMessageView message) => InvokeAsync(async () =>
     {
+        if (disposed || message.SenderId != AccountId && message.RecipientId != AccountId
+            || !ReceivedMessages.Add(message.Id)) return;
+        if (ReceivedMessages.Count > 500) ReceivedMessages.Remove(ReceivedMessages.Min());
         var other = message.SenderId == AccountId ? message.RecipientId : message.SenderId;
+        if (message.RecipientId == AccountId)
+        {
+            var sender = Contacts.FirstOrDefault(c => c.Id == other)?.FullName ?? "Equipe";
+            ErrorNotifier.Notify($"Nova mensagem de {sender}. Abra o chat para ler.");
+        }
         if (Selected?.Id == other && Messages.All(m => m.Id != message.Id))
         {
             Messages.Add(message);
@@ -190,7 +210,7 @@
             await ChatUnreadChanged.InvokeAsync(ChatUnread);
         }
         await InvokeAsync(StateHasChanged);
-    }
+    });
     [JSInvokable]
     public Task OnMessagesRead(ulong readerId) => InvokeAsync(() =>
     {
@@ -211,10 +231,25 @@
     public Task OnManagerAlert(ManagerAlertView alert) => InvokeAsync(() =>
     {
         if (Alerts.All(a => a.Id != alert.Id)) Alerts.Insert(0, alert);
+        ErrorNotifier.Notify($"Atendimento #{alert.AppointmentNumber} {(alert.Type == "appointment_started" ? "iniciado" : "concluído")}.");
         StateHasChanged();
     });
     [JSInvokable]
-    public Task RefreshStaffFeed() => InvokeAsync(RefreshAsync);
+    public Task RefreshStaffFeed() => InvokeAsync(async () =>
+    {
+        await RefreshAsync();
+        if (Selected is not null && identity is not null)
+        {
+            var contact = Selected;
+            var request = conversationRequest;
+            var history = await identity.InvokeAsync<StaffMessageView[]>("get", Backend.BaseUrl.ToString(), $"api/v1/staff/messages/{contact.Id}");
+            if (Selected?.Id != contact.Id || request != conversationRequest) return;
+            foreach (var message in history.Where(m => Messages.All(existing => existing.Id != m.Id))) Messages.Add(message);
+            Messages.Sort((a, b) => a.Id.CompareTo(b.Id));
+            if (!Minimized) await MarkReadAsync(contact.Id);
+            StateHasChanged();
+        }
+    });
     private async Task ReadAlertsAsync()
     {
         if (identity is null) return;
@@ -228,7 +263,8 @@
     private static string RoleName(string role) => role switch { "administrator" => "Administrador", "manager" => "Gestor", "doctor" => "Médico", "psychologist" => "Psicólogo", _ => "Equipe" };
     public async ValueTask DisposeAsync()
     {
-        if (realtime is not null) { try { await realtime.InvokeVoidAsync("disconnect"); await realtime.DisposeAsync(); } catch (JSDisconnectedException) { } }
+        disposed = true; conversationRequest++;
+        if (realtime is not null) { try { await realtime.InvokeVoidAsync("disconnect", connectionId); await realtime.DisposeAsync(); } catch (JSDisconnectedException) { } }
         if (identity is not null) try { await identity.DisposeAsync(); } catch (JSDisconnectedException) { }
         self?.Dispose();
     }

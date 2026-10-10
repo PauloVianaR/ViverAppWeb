@@ -9,7 +9,7 @@
 
 <PageTitle>Agenda | ViverApp</PageTitle>
 <header class="workspace-heading"><div><p class="eyebrow">@AreaLabel</p><h1 class="page-title">Agenda</h1><p class="page-description">Visualize os atendimentos por dia, semana, mês ou ano.</p></div>@if(Role=="patient"){<a class="button" href="/paciente/agendar">Novo agendamento</a>}</header>
-@if(Notice is not null){<p class="notice notice--error" role="alert">@Notice</p>}
+@if(Notice is not null){<UiNotice Message="@Notice" IsError="true" />}
 
 <section class="surface calendar-toolbar" aria-label="Controles da agenda">
     <div class="calendar-toolbar__navigation"><button class="button button--secondary" @onclick="Previous" aria-label="Período anterior">‹</button><button class="button button--secondary" @onclick="Today">Hoje</button><button class="button button--secondary" @onclick="Next" aria-label="Próximo período">›</button><strong>@PeriodLabel</strong></div>
@@ -76,6 +76,7 @@ else if(View=="day" && Role!="patient")
                         {
                             var unavailable=MiniMonthPlan?.UnavailableDays.Contains(day.Value)??false;
                             <button type="button" class="calendar-mini-day @(unavailable?"calendar-mini-day--unavailable":null) @(day==Anchor?"calendar-mini-day--selected":null)"
+                                    disabled="@(day.Value < ClinicToday)"
                                     aria-label="@($"{day:dd/MM/yyyy}, {(unavailable?"profissional indisponível":"profissional disponível")}")"
                                     @onclick="()=>OpenDay(day.Value)">@day.Value.Day</button>
                         }
@@ -94,12 +95,19 @@ else if(View=="day" && Role!="patient")
                     {
                         @if(row.Item is null)
                         {
-                            <a class="calendar-daily-row calendar-daily-row--free" href="@BookingPath" aria-label="@BookingLabel(row.Time)"><time>@row.Time.ToString(@"hh\:mm")</time><span class="muted">Horário livre · agendar</span></a>
+                            @if (IsElapsed(row.Time))
+                            {
+                                <div class="calendar-daily-row calendar-daily-row--free calendar-daily-row--elapsed"><time>@row.Time.ToString(@"hh\:mm")</time><span class="muted">Horário encerrado</span></div>
+                            }
+                            else
+                            {
+                                <a class="calendar-daily-row calendar-daily-row--free" href="@BookingPath" aria-label="@BookingLabel(row.Time)"><time>@row.Time.ToString(@"hh\:mm")</time><span class="muted">Horário livre · agendar</span></a>
+                            }
                         }
                         else
                         {
                             <div class="calendar-daily-row appointment-card--@PatientLabels.StatusCss(row.Item.StatusCode)">
-                                <time>@row.Time.ToString(@"hh\:mm")</time>
+                                <time class="@(IsElapsed(row.Time)?"calendar-time--elapsed":null)">@row.Time.ToString(@"hh\:mm")</time>
                                 <span aria-hidden="true">@PatientLabels.StatusFace(row.Item.StatusCode)</span>
                                 <a href="@Details(row.Item.Id)"><strong>#@row.Item.AppointmentNumber @row.Item.PatientName</strong><small>@row.Item.AppointmentTypeName · @Status(row.Item.StatusCode)</small></a>
                                 <small>@Local(row.Item.StartsAtUtc).ToString("HH:mm")–@Local(row.Item.EndsAtUtc).ToString("HH:mm")</small>
@@ -134,7 +142,7 @@ else
                             @foreach(var item in items)
                             {
                                 <a class="calendar-event appointment-card--@PatientLabels.StatusCss(item.StatusCode)" href="@Details(item.Id)" title="@($"#{item.AppointmentNumber} {item.PatientName} · {Local(item.StartsAtUtc):HH:mm}–{Local(item.EndsAtUtc):HH:mm} · {Status(item.StatusCode)}")">
-                                    <time>@Local(item.StartsAtUtc).ToString("HH:mm")–@Local(item.EndsAtUtc).ToString("HH:mm")</time>
+                                    <time class="@(View=="day"&&IsElapsed(Local(item.StartsAtUtc).TimeOfDay)?"calendar-time--elapsed":null)">@Local(item.StartsAtUtc).ToString("HH:mm")–@Local(item.EndsAtUtc).ToString("HH:mm")</time>
                                     <strong>#@item.AppointmentNumber @item.PatientName</strong>
                                     <span>@item.AppointmentTypeName · @Status(item.StatusCode)</span>
                                     @if(CanChooseProfessional){<small>@item.ProfessionalName</small>}
@@ -167,6 +175,9 @@ else
     private bool CanChooseProfessional=>Role is "manager" or "administrator";
     private string BookingPath=>Role switch{"doctor"=>"/medico/agendar","psychologist"=>"/psicologo/agendar","manager"=>"/gestao/agendar",_=>"/administracao/agendar"};
     private string BookingLabel(TimeSpan time)=>$"Agendar atendimento para {Anchor:dd/MM/yyyy} às {TimeOnly.FromTimeSpan(time):HH:mm}";
+    private DateTime ClinicNow => Local(DateTime.UtcNow);
+    private DateOnly ClinicToday => DateOnly.FromDateTime(ClinicNow);
+    private bool IsElapsed(TimeSpan time) => Anchor == ClinicToday && time < ClinicNow.TimeOfDay;
     protected override async Task Load()
     {
         if(!PreferenceLoaded){var preference=await Get<WebCalendarViewPreference>("api/v1/me/preferences/calendar-view");View=preference?.Mode??"month";PreferenceLoaded=true;}

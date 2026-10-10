@@ -34,7 +34,7 @@ else
 
     @if (Notice is not null)
     {
-        <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="status">@Notice</p>
+        <UiNotice Message="@Notice" IsError="NoticeError" />
     }
 
     <section class="medical-record-shell">

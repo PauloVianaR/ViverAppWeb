@@ -6,8 +6,24 @@ public sealed class UiErrorNotifier
         "Ocorreu um erro interno não classificado. Contate o administrador do sistema.";
 
     public event Action<string>? ErrorRaised;
+    public event Action<UiNotification>? NotificationRaised;
+    private string? lastMessage;
+    private bool lastError;
+    private DateTime lastRaised;
 
-    public void Show(string? message) => ErrorRaised?.Invoke(Normalize(message));
+    public void Show(string? message) => Notify(Normalize(message), true);
+
+    public void Notify(string? message, bool isError = false)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+        var text = Normalize(message);
+        var now = DateTime.UtcNow;
+        // A mesma falha pode vir do tratamento da operação e do aviso da página.
+        if (text == lastMessage && isError == lastError && now - lastRaised < TimeSpan.FromSeconds(1)) return;
+        lastMessage = text; lastError = isError; lastRaised = now;
+        if (isError) ErrorRaised?.Invoke(text);
+        NotificationRaised?.Invoke(new(text, isError));
+    }
 
     public static string Normalize(string? message)
     {
@@ -19,6 +35,11 @@ public sealed class UiErrorNotifier
             || value.Contains("TypeError", StringComparison.OrdinalIgnoreCase)
             || value.Contains("Failed to fetch", StringComparison.OrdinalIgnoreCase)
             || value.Contains("Failed to complete negotiation", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("Not Found", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("Bad Request", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("Forbidden", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("Unauthorized", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("Service Unavailable", StringComparison.OrdinalIgnoreCase)
             || value.Contains("Unhandled exception", StringComparison.OrdinalIgnoreCase))
             return UnexpectedMessage;
         return value;
@@ -39,3 +60,5 @@ public sealed class UiErrorNotifier
         return firstSuffix > 0 ? value[..firstSuffix].Trim() : value;
     }
 }
+
+public sealed record UiNotification(string Message, bool IsError);

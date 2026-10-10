@@ -32,7 +32,7 @@
     @if (Loading) { <p class="field-hint" role="status">Consultando dias disponíveis…</p> }
     @if (LoadingDay) { <p class="field-hint" role="status">Consultando horários do dia selecionado…</p> }
     else if (AvailableDates.Count == 0 && Error is null) { <p class="field-hint" role="status">Nenhum dia com horário disponível neste mês. Avance ou altere o serviço/profissional.</p> }
-    @if (Error is not null) { <p class="notice notice--error" role="alert">@Error</p> }
+    @if (Error is not null) { <UiNotice Message="@Error" IsError="true" /> }
 </div>
 
 @code {

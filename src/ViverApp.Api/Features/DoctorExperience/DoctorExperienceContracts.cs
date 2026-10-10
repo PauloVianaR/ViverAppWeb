@@ -40,7 +40,7 @@ public sealed record DoctorAgendaSources(IReadOnlyList<ulong> Total, IReadOnlyLi
     IReadOnlyList<ulong> InPerson, IReadOnlyList<ulong> Rescheduled);
 public sealed record DoctorPatientResponse(ulong AccountId, string FullName, string? PreferredName, string? Email,
     string? Phone, DateOnly? BirthDate, string StatusCode, bool IsPremium, decimal PremiumDiscountPercent, int AppointmentCount,
-    DateTime? LastAppointmentAtUtc, DateTime? NextAppointmentAtUtc, ulong RowVersion);
+    DateTime? LastAppointmentAtUtc, DateTime? NextAppointmentAtUtc, ulong RowVersion, bool PortalAccessEnabled = false);
 public sealed record DoctorPatientCounters(int Total, int Premium, int Active, int Blocked);
 public sealed record DoctorPatientSources(IReadOnlyList<string> Total, IReadOnlyList<string> Premium,
     IReadOnlyList<string> Active, IReadOnlyList<string> Blocked);

@@ -68,6 +68,8 @@ public static class SecurityServiceCollectionExtensions
                         "Idempotency-Key",
                         "X-Clinical-Purpose",
                         "X-CSRF-TOKEN",
+                        "X-SignalR-User-Agent",
+                        "X-Requested-With",
                         CorrelationIdMiddleware.HeaderName,
                         "traceparent",
                         "tracestate",

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.RegularExpressions;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
@@ -18,6 +19,34 @@ namespace ViverApp.Security.Tests;
 
 public sealed class SecurityBaselineTests
 {
+    [Fact]
+    public void SignalRPreflight_AllowsRequiredHeadersOnlyForConfiguredWebOrigin()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Security:AllowedCorsOrigins:0"] = "https://web.example.test"
+        }).Build();
+        services.AddViverAppSecurityBaseline(configuration, CreateEnvironment(Environments.Development), SecuritySurface.Api);
+        using var provider = services.BuildServiceProvider();
+        var policy = provider.GetRequiredService<IOptions<CorsOptions>>().Value.GetPolicy(SecurityPolicyNames.WebClientCors)!;
+        var context = new DefaultHttpContext();
+        context.Request.Method = "OPTIONS";
+        context.Request.Headers.Origin = "https://web.example.test";
+        context.Request.Headers["Access-Control-Request-Method"] = "POST";
+        context.Request.Headers["Access-Control-Request-Headers"] = "x-signalr-user-agent,x-requested-with";
+        var cors = provider.GetRequiredService<ICorsService>();
+        var allowed = cors.EvaluatePolicy(context, policy);
+        Assert.True(allowed.IsOriginAllowed);
+        Assert.True(allowed.SupportsCredentials);
+        Assert.Contains(allowed.AllowedHeaders, h => h.Equals("x-signalr-user-agent", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(allowed.AllowedHeaders, h => h.Equals("x-requested-with", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(allowed.AllowedHeaders, h => h.Equals("x-unapproved-header", StringComparison.OrdinalIgnoreCase));
+        context.Request.Headers.Origin = "https://untrusted.example.test";
+        Assert.False(cors.EvaluatePolicy(context, policy).IsOriginAllowed);
+    }
+
     [Fact]
     public async Task CorrelationIdMiddleware_PreservesOnlyValidClientIdentifiers()
     {

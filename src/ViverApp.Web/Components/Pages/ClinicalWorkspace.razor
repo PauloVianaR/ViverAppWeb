@@ -21,13 +21,8 @@
 
 @if (!string.IsNullOrWhiteSpace(Notice))
 {
-    <div class="notice @(NoticeIsError ? "notice--error" : "notice--success")" role="@(NoticeIsError ? "alert" : "status")">
-        <span>@Notice</span>
-        @if (NoticeIsUnauthorized)
-        {
-            <a class="button button--small" href="/acesso">Entrar novamente</a>
-        }
-    </div>
+    <UiNotice Message="@Notice" IsError="NoticeIsError" />
+    @if (NoticeIsUnauthorized) { <a class="button button--small" href="/acesso">Entrar novamente</a> }
 }
 
 <nav class="clinical-tabs" aria-label="Operação clínica">

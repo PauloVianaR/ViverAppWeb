@@ -242,6 +242,7 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         await app.StartAsync();
         var server = app.GetTestServer();
         using var doctorSocket = await ConnectHubAsync(server, "/hubs/doctor-notifications", doctorId, ViverAppRoles.Doctor);
+        using var doctorChatSocket = await ConnectHubAsync(server, "/hubs/staff-chat", doctorId, ViverAppRoles.Doctor);
         using var managerSocket = await ConnectHubAsync(server, "/hubs/staff-chat", managerId, ViverAppRoles.Manager);
         using var otherManagerSocket = await ConnectHubAsync(server, "/hubs/staff-chat", extraManagerId, ViverAppRoles.Manager);
         for (var attempt = 0; attempt < 50 && (!presence.Online(managerId) || !presence.Online(extraManagerId)); attempt++)
@@ -252,6 +253,17 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
 
         var staff = new StaffCommunicationService(db, presence, new FixedClock(now),
             app.Services.GetRequiredService<IHubContext<StaffChatHub>>(), NullLogger<StaffCommunicationService>.Instance);
+        Assert.Contains(await staff.ContactsAsync(managerId, CancellationToken.None), c => c.Id == doctorId && c.Online);
+        Assert.Contains(await staff.ContactsAsync(doctorId, CancellationToken.None), c => c.Id == managerId && c.Online);
+        var privateMessage = await staff.SendAsync(managerId,
+            new SendStaffMessageRequest(extraManagerId, Guid.NewGuid(), "Mensagem privada ao segundo gestor"), CancellationToken.None);
+        using var extraDelivery = await ReadInvocationAsync(otherManagerSocket, "StaffMessage");
+        Assert.Equal(privateMessage.Id, extraDelivery.RootElement.GetProperty("arguments")[0].GetProperty("id").GetUInt64());
+        var intendedMessage = await staff.SendAsync(managerId,
+            new SendStaffMessageRequest(doctorId, Guid.NewGuid(), "Mensagem privada ao médico"), CancellationToken.None);
+        using var doctorDelivery = await ReadInvocationAsync(doctorChatSocket, "StaffMessage");
+        // Se a mensagem do outro destinatário vazasse para o médico, seria a primeira recebida.
+        Assert.Equal(intendedMessage.Id, doctorDelivery.RootElement.GetProperty("arguments")[0].GetProperty("id").GetUInt64());
         var service = new ArrivalExperienceService(db, new FixedClock(now), new NoOpAuditWriter(),
             app.Services.GetRequiredService<IHubContext<ProfessionalNotificationsHub>>(),
             NullLogger<ArrivalExperienceService>.Instance, staff);
@@ -267,6 +279,7 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         using var otherStartMessage = await ReadInvocationAsync(otherManagerSocket, "ManagerAlert");
         Assert.Equal("appointment_started", otherStartMessage.RootElement.GetProperty("arguments")[0].GetProperty("type").GetString());
         await doctorSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Teste concluído", CancellationToken.None);
+        await doctorChatSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Teste concluído", CancellationToken.None);
         await managerSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Teste concluído", CancellationToken.None);
         await otherManagerSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Teste concluído", CancellationToken.None);
         for (var attempt = 0; attempt < 50 && (presence.Online(managerId) || presence.Online(extraManagerId)); attempt++)
@@ -389,6 +402,7 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
             .ExecuteUpdateAsync(update => update.SetProperty(x => x.RescheduledFromAppointmentId, (ulong?)null));
         await db.Appointments.Where(x => appointmentIds.Contains(x.Id)).ExecuteDeleteAsync();
         await db.ManagerPreferences.Where(x => deletableAccountIds.Contains(x.ManagerAccountId)).ExecuteDeleteAsync();
+        await db.StaffMessages.Where(x => deletableAccountIds.Contains(x.SenderAccountId) || deletableAccountIds.Contains(x.RecipientAccountId)).ExecuteDeleteAsync();
         await db.ProfessionalProfiles.Where(x => deletableAccountIds.Contains(x.AccountId)).ExecuteDeleteAsync();
         await db.PatientProfiles.Where(x => deletableAccountIds.Contains(x.AccountId)).ExecuteDeleteAsync();
         await db.Accounts.Where(x => deletableAccountIds.Contains(x.Id)).ExecuteDeleteAsync();
