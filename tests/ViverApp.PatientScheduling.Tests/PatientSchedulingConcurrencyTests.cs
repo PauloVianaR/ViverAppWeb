@@ -21,6 +21,45 @@ namespace ViverApp.PatientScheduling.Tests;
 public sealed class PatientSchedulingConcurrencyTests
 {
     [Fact]
+    public async Task SameDayBooking_ListsSevenFortyAtSevenThirtyInClinicTimezone()
+    {
+        var configuration = LoadConfiguration();
+        var fixture = await CreateFixtureAsync(configuration);
+        try
+        {
+            await using var database = CreateContext(configuration);
+            await using var transaction = await database.Database.BeginTransactionAsync();
+            var date = new DateOnly(2026, 10, 11);
+            var timezone = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
+            var localNow = DateTime.SpecifyKind(date.ToDateTime(new TimeOnly(7, 30)), DateTimeKind.Unspecified);
+            var clock = new FixedTimeProvider(new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localNow, timezone)));
+            foreach (var setting in await database.ApplicationSettings.Where(s =>
+                s.SettingKey == "appointments.minimum_lead_minutes" || s.SettingKey == "appointments.slot_interval_minutes").ToArrayAsync())
+                setting.ValueJson = "10";
+            var hours = await database.ProfessionalWeeklyHours.SingleAsync(h => h.ProfessionalAccountId == fixture.DoctorId);
+            hours.DayOfWeek = (byte)date.DayOfWeek;
+            hours.StartTime = TimeSpan.FromHours(7);
+            hours.EndTime = TimeSpan.FromHours(12);
+            hours.ValidFrom = hours.ValidUntil = date.ToDateTime(TimeOnly.MinValue);
+            var type = await database.AppointmentTypes.SingleAsync(t => t.Id == fixture.AppointmentTypeId);
+            type.ModalityCode = "both";
+            database.ClinicWeeklyHours.Add(new ClinicWeeklyHour
+            {
+                DayOfWeek = (byte)date.DayOfWeek, StartTime = TimeSpan.FromHours(7), EndTime = TimeSpan.FromHours(12),
+                IsActive = true, CreatedAtUtc = fixture.UtcNow.UtcDateTime, UpdatedAtUtc = fixture.UtcNow.UtcDateTime, RowVersion = 1
+            });
+            await database.SaveChangesAsync();
+            var service = new PatientSchedulingService(database, new NullAuditWriter(), clock);
+            var slots = await service.GetAvailableSlotsAsync(fixture.PatientId, fixture.DoctorId,
+                fixture.AppointmentTypeId, "in_person", date, 1, CancellationToken.None);
+            Assert.Equal(new TimeOnly(7, 40), slots[0].StartsAt);
+            Assert.All(slots, slot => Assert.True(slot.StartsAtUtc >= clock.GetUtcNow().UtcDateTime.AddMinutes(10)));
+            await transaction.RollbackAsync();
+        }
+        finally { await DeleteFixtureAsync(configuration, fixture); }
+    }
+
+    [Fact]
     public async Task PointDiscount_AppliesAfterPremium_AndRespectsConfiguredMaximum()
     {
         var configuration = LoadConfiguration();

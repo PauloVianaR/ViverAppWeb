@@ -50,6 +50,35 @@ public sealed class PatientSchedulingPolicyTests
     }
 
     [Fact]
+    public void Slots_SundayAtSevenThirty_OfferSevenFortyWithTenMinuteLead()
+    {
+        var date = new DateOnly(2026, 10, 11);
+        var now = TimeZoneInfo.ConvertTimeToUtc(
+            DateTime.SpecifyKind(date.ToDateTime(new TimeOnly(7, 30)), DateTimeKind.Unspecified), Timezone);
+        var slots = PatientSchedulingPolicy.BuildDaySlots(date, 10, 10, "America/Sao_Paulo", Timezone,
+            [new(TimeSpan.FromHours(7), TimeSpan.FromHours(12))],
+            [new(TimeSpan.FromHours(7), TimeSpan.FromHours(12))], [], [],
+            now.AddMinutes(10), requiresClinic: true);
+
+        Assert.Equal(new TimeOnly(7, 40), slots[0].StartsAt);
+        Assert.All(slots, slot => Assert.True(slot.StartsAtUtc >= now.AddMinutes(10)));
+    }
+
+    [Fact]
+    public void Slots_LeadStillRespectsConflictsAndClinicOpening()
+    {
+        var date = new DateOnly(2026, 10, 11);
+        var now = TimeZoneInfo.ConvertTimeToUtc(
+            DateTime.SpecifyKind(date.ToDateTime(new TimeOnly(7, 30)), DateTimeKind.Unspecified), Timezone);
+        var slots = PatientSchedulingPolicy.BuildDaySlots(date, 10, 10, "America/Sao_Paulo", Timezone,
+            [new(TimeSpan.FromHours(7), TimeSpan.FromHours(12))],
+            [new(TimeSpan.FromHours(8), TimeSpan.FromHours(12))], [],
+            [new(now.AddMinutes(30), now.AddMinutes(50))], now.AddMinutes(10), requiresClinic: true);
+
+        Assert.Equal(new TimeOnly(8, 20), slots[0].StartsAt);
+    }
+
+    [Fact]
     public void Slots_RejectNonexistentDaylightSavingLocalTime()
     {
         var timezone = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");

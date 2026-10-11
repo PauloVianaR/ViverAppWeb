@@ -35,4 +35,4 @@
 .staff-chat-compose{display:flex;gap:.4rem;padding:.6rem;background:#fff}
 .staff-chat-compose input{flex:1;min-width:0;padding:.55rem;border:1px solid #bbc8d2;border-radius:.5rem}
 .staff-chat-compose button{border:0;border-radius:.5rem;background:#126d65;color:#fff;padding:.5rem .7rem;cursor:pointer}
-@media(max-width:720px){.staff-chat-window{bottom:5.5rem;height:min(65dvh,480px)}.staff-popover{position:fixed;top:4.3rem;left:.75rem;right:.75rem;width:auto;max-height:70dvh}}
+@media(max-width:720px){.staff-chat-window{bottom:5.5rem;height:min(65dvh,480px)}.staff-chat-window--minimized{height:auto}.staff-popover{position:fixed;top:4.3rem;left:.75rem;right:.75rem;width:auto;max-height:70dvh}}

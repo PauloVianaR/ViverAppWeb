@@ -8,3 +8,7 @@ export function connect(baseUrl, dotnet) {
 }
 
 export function disconnect(id) { return closeRealtime(id); }
+
+export function scrollToLatest(panel) {
+    if (panel) panel.scrollTop = panel.scrollHeight;
+}

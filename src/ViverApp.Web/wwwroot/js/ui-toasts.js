@@ -1,7 +1,8 @@
 let observingFatal = false;
 let fatalTimer;
+let lastToastId;
 
-export function sync(visible) {
+export function sync(visible, newestToastId) {
     if (!observingFatal) {
         const fatal = document.getElementById("blazor-error-ui");
         if (fatal) {
@@ -17,7 +18,8 @@ export function sync(visible) {
     if (!host) return;
     if (visible) {
         // A camada superior mantém o aviso visível inclusive sobre formulários dialog.
-        if (host.matches(":popover-open")) host.hidePopover();
-        host.showPopover();
+        if (newestToastId !== lastToastId && host.matches(":popover-open")) host.hidePopover();
+        if (!host.matches(":popover-open")) host.showPopover();
     } else if (host.matches(":popover-open")) host.hidePopover();
+    lastToastId = newestToastId;
 }

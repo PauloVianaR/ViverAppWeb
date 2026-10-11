@@ -919,7 +919,8 @@ public sealed class PatientSchedulingService(
 
         return (new SchedulingPolicy(
             ReadInt(values, "appointments.booking_horizon_days", 365, 1, 730),
-            ReadInt(values, "appointments.minimum_lead_minutes", 120, 0, 10080),
+            ReadInt(values, "appointments.minimum_lead_minutes",
+                ReadInt(values, "appointments.slot_interval_minutes", 10, 5, 120), 0, 10080),
             ReadInt(values, "appointments.cancellation_cutoff_hours", 24, 0, 720),
             ReadInt(values, "appointments.reschedule_cutoff_hours", 24, 0, 720),
             ReadInt(values, "appointments.slot_interval_minutes", 10, 5, 120)), timezoneName, timezone);

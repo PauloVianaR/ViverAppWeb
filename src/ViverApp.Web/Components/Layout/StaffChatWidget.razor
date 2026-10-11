@@ -65,7 +65,7 @@
         </header>
         @if (!Minimized)
         {
-            <div class="staff-chat-messages" role="log" aria-live="polite">
+            <div class="staff-chat-messages" @ref="MessagesPanel" role="log" aria-live="polite">
                 @foreach (var message in Messages)
                 {
                     <div class="staff-chat-message @(message.SenderId == AccountId ? "staff-chat-message--own" : "")"><span>@message.Body</span><small>@message.CreatedAtUtc.ToLocalTime().ToString("dd/MM HH:mm")</small></div>
@@ -95,6 +95,8 @@
     private readonly List<ManagerAlertView> Alerts = [];
     private StaffContact? Selected;
     private ElementReference AlertsMenu;
+    private ElementReference MessagesPanel;
+    private bool scrollPending;
     private bool ContactsOpen, Minimized, Sending, LoadError;
     private string Search = "", Draft = "";
     private int ChatUnread => Contacts.Sum(c => c.Unread);
@@ -103,7 +105,15 @@
         .OrderByDescending(c => c.Online).ThenBy(c => c.FullName, StringComparer.Create(new System.Globalization.CultureInfo("pt-BR"), true));
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
+        if (!firstRender)
+        {
+            if (scrollPending && !Minimized && Selected is not null && realtime is not null)
+            {
+                scrollPending = false;
+                await realtime.InvokeVoidAsync("scrollToLatest", MessagesPanel);
+            }
+            return;
+        }
         identity = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/identity-access.js");
         realtime = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/staff-chat.js");
         self = DotNetObjectReference.Create(this);
@@ -131,7 +141,7 @@
         catch (JSException) { LoadError = true; await InvokeAsync(StateHasChanged); }
     }
     private async Task ToggleContacts() { ContactsOpen = !ContactsOpen; if (ContactsOpen) await RefreshAsync(); }
-    private async Task ToggleMinimized() { Minimized = !Minimized; if (!Minimized && Selected is not null) await MarkReadAsync(Selected.Id); }
+    private async Task ToggleMinimized() { Minimized = !Minimized; if (!Minimized && Selected is not null) { scrollPending = true; await MarkReadAsync(Selected.Id); } }
     private void CloseConversation() { conversationRequest++; Selected = null; Messages.Clear(); Draft = ""; }
     private async Task OpenConversationAsync(StaffContact contact)
     {
@@ -143,6 +153,7 @@
             if (disposed || request != conversationRequest) return;
             Messages.Clear(); Messages.AddRange(history);
             Selected = contact; Draft = ""; Minimized = false; ContactsOpen = false;
+            scrollPending = true;
             await MarkReadAsync(contact.Id);
         }
         catch (JSException) { ErrorNotifier.Show("Não foi possível abrir a conversa. Tente novamente."); }
@@ -173,6 +184,7 @@
             if (Selected?.Id == recipient)
             {
                 if (Messages.All(m => m.Id != sent.Id)) Messages.Add(sent);
+                scrollPending = true;
                 Draft = "";
             }
         }
@@ -186,14 +198,15 @@
             || !ReceivedMessages.Add(message.Id)) return;
         if (ReceivedMessages.Count > 500) ReceivedMessages.Remove(ReceivedMessages.Min());
         var other = message.SenderId == AccountId ? message.RecipientId : message.SenderId;
-        if (message.RecipientId == AccountId)
+        if (message.RecipientId == AccountId && Selected?.Id != other)
         {
             var sender = Contacts.FirstOrDefault(c => c.Id == other)?.FullName ?? "Equipe";
             ErrorNotifier.Notify($"Nova mensagem de {sender}. Abra o chat para ler.");
         }
-        if (Selected?.Id == other && Messages.All(m => m.Id != message.Id))
+        if (Selected?.Id == other)
         {
-            Messages.Add(message);
+            if (Messages.All(m => m.Id != message.Id)) Messages.Add(message);
+            scrollPending = true;
             if (!Minimized && message.SenderId != AccountId) await MarkReadAsync(other);
             else if (Minimized && message.RecipientId == AccountId)
             {
@@ -246,6 +259,7 @@
             if (Selected?.Id != contact.Id || request != conversationRequest) return;
             foreach (var message in history.Where(m => Messages.All(existing => existing.Id != m.Id))) Messages.Add(message);
             Messages.Sort((a, b) => a.Id.CompareTo(b.Id));
+            scrollPending = true;
             if (!Minimized) await MarkReadAsync(contact.Id);
             StateHasChanged();
         }
