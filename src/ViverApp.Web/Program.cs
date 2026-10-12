@@ -42,6 +42,7 @@ builder.Services.AddViverAppObservability(
 builder.Services.AddSingleton(WebBackendOptions.Load(builder.Configuration, builder.Environment));
 builder.Services.AddSingleton<PublicSitePolicy>();
 builder.Services.AddScoped<UiErrorNotifier>();
+builder.Services.AddScoped<AppointmentNavigationStore>();
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), ["live", "ready"]);
 builder.Services.AddRazorComponents()

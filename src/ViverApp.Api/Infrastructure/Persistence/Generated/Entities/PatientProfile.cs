@@ -13,6 +13,8 @@ public partial class PatientProfile
 
     public string? PreferredName { get; set; }
 
+    public string? AdministrativeNotes { get; set; }
+
     public DateTime CreatedAtUtc { get; set; }
 
     public DateTime UpdatedAtUtc { get; set; }

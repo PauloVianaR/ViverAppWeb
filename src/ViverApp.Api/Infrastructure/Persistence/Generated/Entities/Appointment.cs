@@ -81,7 +81,15 @@ public partial class Appointment
 
     public DateTime? PointDiscountAtUtc { get; set; }
 
+    public string BillingFormCode { get; set; } = null!;
+
+    public uint? SpecialtyId { get; set; }
+
     public virtual ICollection<AppointmentDocument> AppointmentDocuments { get; set; } = new List<AppointmentDocument>();
+
+    public virtual AppointmentOperationalReview? AppointmentOperationalReview { get; set; }
+
+    public virtual ICollection<AppointmentOperationalReviewVersion> AppointmentOperationalReviewVersions { get; set; } = new List<AppointmentOperationalReviewVersion>();
 
     public virtual ICollection<AppointmentRescheduleHistory> AppointmentRescheduleHistories { get; set; } = new List<AppointmentRescheduleHistory>();
 
@@ -106,6 +114,8 @@ public partial class Appointment
     public virtual Payment? CurrentPayment { get; set; }
 
     public virtual Appointment? InverseRescheduledFromAppointment { get; set; }
+
+    public virtual ICollection<ManagerNotification> ManagerNotifications { get; set; } = new List<ManagerNotification>();
 
     public virtual ICollection<MedicalRecordDocument> MedicalRecordDocuments { get; set; } = new List<MedicalRecordDocument>();
 
@@ -134,6 +144,8 @@ public partial class Appointment
     public virtual Appointment? RescheduledFromAppointment { get; set; }
 
     public virtual ICollection<ScheduledJob> ScheduledJobs { get; set; } = new List<ScheduledJob>();
+
+    public virtual Specialty? Specialty { get; set; }
 
     public virtual TeleconsultationGuestLink? TeleconsultationGuestLink { get; set; }
 

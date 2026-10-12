@@ -2,6 +2,7 @@ using System.Data;
 using Microsoft.EntityFrameworkCore;
 using ViverApp.Api.Features.ClinicAdministration;
 using ViverApp.Api.Features.Identity;
+using ViverApp.Api.Features.StaffCommunication;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 
@@ -10,7 +11,8 @@ namespace ViverApp.Api.Features.ClinicalOperations;
 public sealed class ClinicalOperationsService(
     ViverAppDbContext database,
     IClinicalOperationsAuditWriter auditWriter,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    StaffCommunicationService? staff = null)
 {
     private static readonly string[] AllowedStatuses =
         ["pending", "confirmed", "completed", "canceled", "rescheduled", "no_show"];
@@ -132,7 +134,7 @@ public sealed class ClinicalOperationsService(
             .SingleOrDefaultAsync(item => item.Id == appointmentId, cancellationToken)
             ?? throw NotFound("Consulta não encontrada.");
         var isOphthalmology = await OphthalmologyReportMapping.IsOphthalmologyAsync(
-            database, appointment.ProfessionalAccountId, cancellationToken);
+            database, appointment.ProfessionalAccountId, cancellationToken, appointment.SpecialtyId);
         var includeReportContent = IsClinicalProfessional(roleCode) && appointment.ProfessionalAccountId == actorId
             || roleCode is ViverAppRoles.Manager or ViverAppRoles.Administrator;
         if (includeReportContent && appointment.MedicalReport is not null)
@@ -224,7 +226,7 @@ public sealed class ClinicalOperationsService(
         if (IsClinicalProfessional(roleCode) && appointment.ProfessionalAccountId != actorId)
             throw Forbidden();
         var isOphthalmology = await OphthalmologyReportMapping.IsOphthalmologyAsync(
-            database, appointment.ProfessionalAccountId, cancellationToken);
+            database, appointment.ProfessionalAccountId, cancellationToken, appointment.SpecialtyId);
         if (!isOphthalmology && request.Ophthalmology is not null)
             throw BadRequest("Campos oftalmológicos não pertencem à especialidade deste atendimento.");
         var ophthalmology = isOphthalmology
@@ -313,10 +315,10 @@ public sealed class ClinicalOperationsService(
         EnsureClinicalRole(roleCode);
         var appointment = await VisibleAppointments(actorId, roleCode).AsNoTracking()
             .Where(item => item.Id == appointmentId)
-            .Select(item => new { item.ProfessionalAccountId })
+            .Select(item => new { item.ProfessionalAccountId, item.SpecialtyId })
             .SingleOrDefaultAsync(ct) ?? throw NotFound("Consulta não encontrada.");
         var isOphthalmology = await OphthalmologyReportMapping.IsOphthalmologyAsync(
-            database, appointment.ProfessionalAccountId, ct);
+            database, appointment.ProfessionalAccountId, ct, appointment.SpecialtyId);
         var versions = await database.MedicalReportVersions.AsNoTracking()
             .Include(version => version.EditorAccount)
             .Where(version => version.MedicalReport.AppointmentId == appointmentId)
@@ -355,7 +357,7 @@ public sealed class ClinicalOperationsService(
         }
 
         if (hasReport && await OphthalmologyReportMapping.IsOphthalmologyAsync(
-                database, appointment.ProfessionalAccountId, cancellationToken))
+                database, appointment.ProfessionalAccountId, cancellationToken, appointment.SpecialtyId))
             throw BadRequest("Salve os campos do laudo oftalmológico antes de finalizar o atendimento.");
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
@@ -422,6 +424,7 @@ public sealed class ClinicalOperationsService(
             OccurredAtUtc = now,
         });
         await SaveAsync(cancellationToken);
+        IReadOnlyList<ManagerAlertView> managerAlerts = staff is null ? [] : await staff.QueueManagerAlertsAsync(appointment, "appointment_completed", cancellationToken);
         var auditData = new Dictionary<string, string>
         {
             ["previousStatus"] = previousStatus,
@@ -437,6 +440,7 @@ public sealed class ClinicalOperationsService(
             auditData,
             cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        if (staff is not null) await staff.PublishManagerAlertsAsync(managerAlerts);
         return MapAppointment(appointment, actorId, ViverAppRoles.Doctor, includeReportContent: true);
     }
 

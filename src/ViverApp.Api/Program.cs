@@ -11,6 +11,7 @@ using ViverApp.Api.Features.PatientScheduling;
 using ViverApp.Api.Features.Payments;
 using ViverApp.Api.Features.PatientExperience;
 using ViverApp.Api.Features.Calendar;
+using ViverApp.Api.Features.StaffCommunication;
 using ViverApp.Api.Features.Notifications;
 using ViverApp.Api.Infrastructure.Persistence;
 using ViverApp.Security;
@@ -86,6 +87,9 @@ builder.Services.AddHttpClient("PostalCodeLookup", client =>
 builder.Services.AddScoped<IPatientSchedulingAuditWriter, PatientSchedulingAuditWriter>();
 builder.Services.AddScoped<PatientSchedulingService>();
 builder.Services.AddScoped<CalendarService>();
+builder.Services.AddScoped<CalendarDayPlanService>();
+builder.Services.AddSingleton<StaffPresence>();
+builder.Services.AddScoped<StaffCommunicationService>();
 builder.Services.AddScoped<IClinicalOperationsAuditWriter, ClinicalOperationsAuditWriter>();
 builder.Services.AddScoped<ClinicalOperationsService>();
 builder.Services.AddScoped<MedicalRecordService>();
@@ -166,6 +170,7 @@ app.MapHealthChecks(
 app.MapControllers().RequireCors(SecurityPolicyNames.WebClientCors);
 app.MapHub<TeleconsultationHub>("/hubs/teleconsultation").RequireCors(SecurityPolicyNames.WebClientCors).RequireRateLimiting(SecurityPolicyNames.VideoRateLimit).DisableRequestTimeout();
 app.MapHub<ViverApp.Api.Features.ArrivalExperience.ProfessionalNotificationsHub>("/hubs/doctor-notifications").RequireCors(SecurityPolicyNames.WebClientCors).RequireRateLimiting(SecurityPolicyNames.VideoRateLimit).DisableRequestTimeout();
+app.MapHub<StaffChatHub>("/hubs/staff-chat").RequireCors(SecurityPolicyNames.WebClientCors).RequireRateLimiting(SecurityPolicyNames.VideoRateLimit).DisableRequestTimeout();
 
 app.Run();
 

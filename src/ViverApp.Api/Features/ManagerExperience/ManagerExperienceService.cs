@@ -98,11 +98,11 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
 
     public async Task<IReadOnlyList<ManagerServiceOption>> ServicesAsync(CancellationToken ct) =>
         await database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).ThenBy(x => x.Id)
-            .Select(x => new ManagerServiceOption(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode, x.DurationMinutes, x.PriceAmount, x.RequiresPayment)).ToArrayAsync(ct);
+            .Select(x => new ManagerServiceOption(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode, x.DurationMinutes, x.PriceAmount, x.RequiresPayment, x.SpecialtyId)).ToArrayAsync(ct);
 
     public async Task<ManagerAgendaResponse> AgendaAsync(DateOnly from, DateOnly to, string? status, string? modality,
         string? category, ulong? doctor, ulong? appointmentNumber, string? payment, TimeOnly? startTime, TimeOnly? endTime, string? search,
-        string sort, int page, int pageSize, CancellationToken ct)
+        string sort, int page, int pageSize, CancellationToken ct, uint? specialtyId = null)
     {
         Page(page, pageSize); if (to < from || to.DayNumber - from.DayNumber > 366) throw Invalid("O período deve ter no máximo 367 dias.");
         if (status is not null && !AppointmentStatuses.Contains(status, StringComparer.Ordinal)) throw Invalid("Estado inválido.");
@@ -117,6 +117,8 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         if (modality is not null) query = query.Where(x => x.ModalityCode == modality);
         if (category is not null) query = query.Where(x => x.AppointmentType.CategoryCode == category);
         if (doctor.HasValue) query = query.Where(x => x.ProfessionalAccountId == doctor);
+        if (specialtyId == 0) throw Invalid("Selecione uma especialidade válida.");
+        if (specialtyId.HasValue) query = query.Where(x => x.SpecialtyId == specialtyId);
         if (appointmentNumber.HasValue) query = query.Where(x => x.AppointmentNumber == appointmentNumber);
         if (payment == "paid") query = query.Where(x => x.CurrentPayment != null && x.CurrentPayment.StatusCode == "paid");
         if (payment == "pending") query = query.Where(x => x.RequiresPayment && (x.CurrentPayment == null || x.CurrentPayment.StatusCode != "paid"));
@@ -244,7 +246,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
             RowVersion = 1
         };
         database.Accounts.Add(account);
-        database.PatientProfiles.Add(new PatientProfile { Account = account, TaxId = taxId, BirthDate = account.BirthDate, PreferredName = Text(request.PreferredName), CreatedAtUtc = now, UpdatedAtUtc = now });
+        database.PatientProfiles.Add(new PatientProfile { Account = account, TaxId = taxId, BirthDate = account.BirthDate, PreferredName = Text(request.PreferredName), AdministrativeNotes = Text(request.AdministrativeNotes), CreatedAtUtc = now, UpdatedAtUtc = now });
         if (request.Address is not null)
             database.AccountAddresses.Add(new AccountAddress { Account = account, PostalCode = Text(request.Address.PostalCode), Street = Text(request.Address.Street), Number = Text(request.Address.Number), Complement = Text(request.Address.Complement), District = Text(request.Address.District), City = Text(request.Address.City), StateCode = Text(request.Address.StateCode)?.ToUpperInvariant(), UpdatedAtUtc = now });
         await database.SaveChangesAsync(ct);
@@ -290,7 +292,8 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         if (emailChanged || phoneChanged) account.SecurityStamp = RandomNumberGenerator.GetBytes(32);
         account.UpdatedAtUtc = now; account.RowVersion++;
         account.PatientProfile ??= new PatientProfile { AccountId = id, CreatedAtUtc = now };
-        account.PatientProfile.PreferredName = Text(request.PreferredName); account.PatientProfile.TaxId = taxId; account.PatientProfile.BirthDate = account.BirthDate; account.PatientProfile.UpdatedAtUtc = now;
+        if (account.PatientProfile.AdministrativeNotes != Text(request.AdministrativeNotes)) changed.Add("administrativeNotes");
+        account.PatientProfile.PreferredName = Text(request.PreferredName); account.PatientProfile.TaxId = taxId; account.PatientProfile.BirthDate = account.BirthDate; account.PatientProfile.AdministrativeNotes = Text(request.AdministrativeNotes); account.PatientProfile.UpdatedAtUtc = now;
         if (request.Address is null) { if (account.AccountAddress is not null) database.AccountAddresses.Remove(account.AccountAddress); }
         else if (account.AccountAddress is null) account.AccountAddress = new AccountAddress { AccountId = id, PostalCode = Text(request.Address.PostalCode), Street = Text(request.Address.Street), Number = Text(request.Address.Number), Complement = Text(request.Address.Complement), District = Text(request.Address.District), City = Text(request.Address.City), StateCode = Text(request.Address.StateCode)?.ToUpperInvariant(), UpdatedAtUtc = now };
         else { account.AccountAddress.PostalCode = Text(request.Address.PostalCode); account.AccountAddress.Street = Text(request.Address.Street); account.AccountAddress.Number = Text(request.Address.Number); account.AccountAddress.Complement = Text(request.Address.Complement); account.AccountAddress.District = Text(request.Address.District); account.AccountAddress.City = Text(request.Address.City); account.AccountAddress.StateCode = Text(request.Address.StateCode)?.ToUpperInvariant(); account.AccountAddress.UpdatedAtUtc = now; }
@@ -299,7 +302,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         if (account.PortalAccessEnabled && user is not null && emailChanged && normalizedEmail is not null) await challenges.CreateAsync(user, "contact_verification", "email", normalizedEmail, ct);
         if (account.PortalAccessEnabled && user is not null && phoneChanged && normalizedPhone is not null) await challenges.CreateAsync(user, "contact_verification", "sms", normalizedPhone, ct);
         var actorRole = await database.Accounts.AsNoTracking().Where(x => x.Id == actor).Select(x => x.RoleCode).SingleAsync(ct);
-        await audit.WriteAsync(actorRole == ViverAppRoles.Administrator ? "administrator.patient.operational_data.updated" : "manager.patient.operational_data.updated", actor, "account", id.ToString(CultureInfo.InvariantCulture), new Dictionary<string, string> { ["changedFields"] = string.Join(',', changed) }, ct);
+        await audit.WriteAsync($"{actorRole}.patient.operational_data.updated", actor, "account", id.ToString(CultureInfo.InvariantCulture), new Dictionary<string, string> { ["changedFields"] = string.Join(',', changed) }, ct);
         await transaction.CommitAsync(ct);
         return await PatientAsync(id, ct);
     }
@@ -525,7 +528,8 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
             activeMembership?.Id, activeMembership?.RowVersion, activeMembership?.ProofDocumentId, activeMembership?.ProofDocument?.OriginalFileName,
             activeMembership?.PremiumPlan?.AppointmentDiscountPercent ?? 0, appointments.Length,
             appointments.Where(a => a.StartsAtUtc < now).Select(a => (DateTime?)a.StartsAtUtc).DefaultIfEmpty().Max(),
-            appointments.Where(a => a.StartsAtUtc >= now && a.StatusCode is "pending" or "confirmed" or "arrived" or "in_progress").Select(a => (DateTime?)a.StartsAtUtc).DefaultIfEmpty().Min(), x.RowVersion);
+            appointments.Where(a => a.StartsAtUtc >= now && a.StatusCode is "pending" or "confirmed" or "arrived" or "in_progress").Select(a => (DateTime?)a.StartsAtUtc).DefaultIfEmpty().Min(), x.RowVersion,
+            x.PatientProfile?.AdministrativeNotes);
     }
     private static ManagerPremiumRequestResponse MapPremium(PremiumMembership x) => new(x.Id, x.AccountId, x.Account.FullName, x.PremiumPlan.Name,
         x.PremiumPlan.AppointmentDiscountPercent, x.StatusCode, x.ProofDocumentId, x.ProofDocument?.OriginalFileName, x.ProofDocument?.SizeBytes,

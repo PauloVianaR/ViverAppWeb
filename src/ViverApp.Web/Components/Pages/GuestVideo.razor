@@ -4,7 +4,7 @@
 @inject WebBackendOptions Backend
 <PageTitle>Convite de videochamada | ViverApp</PageTitle>
 <header class="workspace-heading"><div><p class="eyebrow">Convidado</p><h1 class="page-title">Videochamada</h1><p class="page-description">Entre pelo convite recebido, sem criar uma conta.</p></div></header>
-@if (Notice is not null) { <p class="notice notice--error" role="alert">@Notice</p> }
+@if (Notice is not null) { <UiNotice Message="@Notice" IsError="true" /> }
 <section class="surface patient-panel">
     <p id="call-status" role="status" aria-live="polite">@StatusText</p>
     @if (AppointmentId.HasValue)

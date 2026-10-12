@@ -1,0 +1,20 @@
+@inherits ViverApp.Web.Components.Pages.ManagerPageBase
+@if(Notice is not null){<UiNotice Message="@Notice" IsError="NoticeError" />}
+<section class="patient-section">
+    <h3>Anexos</h3><p class="field-hint">Documentos privados: PDF, PNG ou JPEG de até 10 MB, verificados antes de disponibilizar.</p>
+    @if(CanUpload){<div class="field"><label for="@InputId">Novo anexo</label><input id="@InputId" type="file" accept=".pdf,.png,.jpg,.jpeg" /></div><button type="button" class="button" disabled="@Busy" @onclick="Upload">Enviar anexo</button>}
+    @foreach(var document in Documents){<div class="patient-document"><strong>@document.Name</strong><div class="patient-actions"><button type="button" class="button button--secondary" @onclick="()=>Download(document)">Baixar</button>@if(document.CanDelete){<button type="button" class="button button--danger" @onclick="()=>Delete(document)">Excluir</button>}</div></div>}
+</section>
+@code{
+    [Parameter]public long AppointmentId{get;set;}
+    [Parameter]public bool CanUpload{get;set;}
+    private string InputId=>$"appointment-document-{AppointmentId}";
+    private string Api=>$"api/v1/booking-workspace/appointments/{AppointmentId}/documents";
+    private IReadOnlyList<Attachment> Documents=[];
+    private sealed record Attachment(ulong Id,string Name,ulong SizeBytes,ulong RowVersion,bool CanDelete);
+    protected override async Task Load()=>Documents=await Get<IReadOnlyList<Attachment>>(Api)??[];
+    private Task Upload()=>Run(async()=>{await ClinicalFileAction("upload",Api,InputId);await Load();Notice="Anexo verificado e disponibilizado.";});
+    private Task Download(Attachment document)=>Run(()=>ClinicalFileAction("download",$"{Api}/{document.Id}",null));
+    private Task Delete(Attachment document)=>Run(async()=>{await Request<object>($"{Api}/{document.Id}?rowVersion={document.RowVersion}","DELETE",null);await Load();Notice="Anexo removido.";});
+    private async Task ClinicalFileAction(string operation,string path,string? input){await using var files=await JavaScript.InvokeAsync<IJSObjectReference>("import","/js/medical-records.js");try{if(operation=="upload")await files.InvokeVoidAsync(operation,Backend.BaseUrl.ToString(),path,input);else await files.InvokeVoidAsync(operation,Backend.BaseUrl.ToString(),path,null,"anexo");}catch(JSException e){throw new ManagerUiException(UiErrorNotifier.Normalize(e.Message));}}
+}

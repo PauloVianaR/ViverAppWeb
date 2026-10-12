@@ -8,3 +8,6 @@ public sealed record WebCalendarDay(DateOnly Date, int Count, IReadOnlyList<stri
 public sealed record WebCalendar(string View, DateOnly Anchor, DateOnly RangeStart, DateOnly RangeEnd,
     string TimezoneName, IReadOnlyList<WebCalendarItem> Items, IReadOnlyList<WebCalendarDay> Days);
 public sealed record WebCalendarViewPreference(string Mode, ulong RowVersion);
+public sealed record WebCalendarWindow(TimeSpan Start, TimeSpan End);
+public sealed record WebCalendarDayPlan(int IntervalMinutes, IReadOnlyList<WebCalendarWindow> Windows,
+    IReadOnlyList<DateOnly> UnavailableDays);

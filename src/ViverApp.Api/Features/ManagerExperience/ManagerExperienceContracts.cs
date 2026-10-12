@@ -17,7 +17,7 @@ public sealed record ManagerCapabilitiesResponse(bool AppointmentTypesEnabled, b
     bool PremiumManagementEnabled, bool MedicalRecordWriteEnabled, bool CashReopeningEnabled,
     bool CashCumulativeTotalsEnabled, bool PointDiscountsEnabled, decimal PointDiscountMaxPercent);
 public sealed record ManagerServiceOption(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode,
-    ushort DurationMinutes, decimal BasePrice, bool RequiresPayment);
+    ushort DurationMinutes, decimal BasePrice, bool RequiresPayment, uint SpecialtyId = 0);
 public sealed record ManagerReportMetadata(bool Exists, string? StatusCode, uint VersionCount, DateTime? PublishedAtUtc);
 public sealed record ManagerPaymentMetadata(ulong? Id, string StatusCode, string? MethodCode, DateTime? PaidAtUtc,
     string? CardLastFour, string? AuthorizationReference, ulong RowVersion);
@@ -48,7 +48,8 @@ public sealed record ManagerPatientResponse(ulong AccountId, string FullName, st
     string? Phone, bool EmailVerified, bool PhoneVerified, DateOnly? BirthDate, ManagerPatientAddressResponse? Address,
     string StatusCode, bool PortalAccessEnabled, bool IsPremium, string PremiumStatus, ulong? PremiumRequestId,
     ulong? PremiumMembershipId, ulong? PremiumMembershipRowVersion, Guid? PremiumProofDocumentId, string? PremiumProofName, decimal PremiumDiscountPercent,
-    int AppointmentCount, DateTime? LastAppointmentAtUtc, DateTime? NextAppointmentAtUtc, ulong RowVersion);
+    int AppointmentCount, DateTime? LastAppointmentAtUtc, DateTime? NextAppointmentAtUtc, ulong RowVersion,
+    string? AdministrativeNotes = null);
 public sealed record ManagerPatientCounters(int Total, int Premium, int Active, int Blocked, int PremiumPending);
 public sealed record ManagerPatientSources(IReadOnlyList<string> Total, IReadOnlyList<string> Premium,
     IReadOnlyList<string> Active, IReadOnlyList<string> Blocked, IReadOnlyList<string> PremiumPending);
@@ -77,7 +78,8 @@ public sealed record ManagerPatientCreateRequest(
     [param: EmailAddress, StringLength(254)] string? Email,
     [param: StringLength(20)] string? PhoneE164,
     ManagerPatientAddressRequest? Address,
-    bool SendOnboarding) : IValidatableObject
+    bool SendOnboarding,
+    [param: StringLength(2000)] string? AdministrativeNotes = null) : IValidatableObject
 {
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -97,7 +99,8 @@ public sealed record ManagerPatientUpdateRequest([param: Required, StringLength(
     [param: EmailAddress, StringLength(254)] string? Email,
     [param: StringLength(20)] string? PhoneE164,
     DateOnly? BirthDate, ManagerPatientAddressRequest? Address,
-    [param: Range(1, long.MaxValue)] ulong RowVersion);
+    [param: Range(1, long.MaxValue)] ulong RowVersion,
+    [param: StringLength(2000)] string? AdministrativeNotes = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ManagerPatientAddressRequest(
@@ -116,7 +119,9 @@ public sealed record ManagerAppointmentCreateRequest([param: Range(1, long.MaxVa
     TimeOnly LocalStartsAt, [param: StringLength(1000)] string? PatientNotes,
     IReadOnlyList<uint>? AdditionalAppointmentTypeIds = null,
     string? PointDiscountKindCode = null, decimal? PointDiscountValue = null,
-    [param: Range(5, 720)] int? DurationMinutes = null);
+    [param: Range(5, 720)] int? DurationMinutes = null,
+    [param: RegularExpression("^(private|insurance)$")] string BillingFormCode = "private",
+    [param: Range(1, int.MaxValue)] uint? SpecialtyId = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ManagerPremiumDecisionRequest(bool Approve, [param: StringLength(1000)] string? Notes,

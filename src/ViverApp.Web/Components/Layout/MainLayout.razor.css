@@ -30,7 +30,7 @@
 
 .topbar {
     align-items: center;
-    background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+    background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
     display: grid;
     gap: var(--space-5);
@@ -40,10 +40,6 @@
     position: sticky;
     top: 0;
     z-index: 30;
-}
-
-@supports (backdrop-filter: blur(12px)) {
-    .topbar { backdrop-filter: blur(12px); }
 }
 
 .brand {
@@ -113,8 +109,19 @@
 
 .topbar-action:hover { background: var(--color-brand); }
 .topbar-actions { align-items: center; display: flex; gap: .5rem; justify-self: end; }
+.topbar-actions > .topbar-action,
+.doctor-notification-center > summary {
+    width: 2.75rem;
+    height: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0;
+    border-radius: 50%;
+    justify-content: center;
+}
 .topbar-action--logout { background: #344054; border: 1px solid #344054; cursor: pointer; }
 .topbar-action--logout:hover { background: #182230; }
+.doctor-notification-center > summary { position:relative; }
+.staff-unread-dot { position:absolute;right:.15rem;top:.15rem;width:.7rem;height:.7rem;border:2px solid #fff;border-radius:50%;background:#d62d37; }
 
 .workspace-context { display: grid; justify-self: start; }
 .workspace-context span { color: var(--color-text-muted); font-size: var(--text-xs); }
@@ -195,6 +202,7 @@
 @media (min-width: 46.001rem) {
     .app-shell--desktop-new .shell-body {
         grid-template-columns: 16.5rem minmax(0, 1fr);
+        transition: grid-template-columns 240ms ease;
         max-width: 120rem;
         width: 100%;
     }
@@ -213,6 +221,8 @@
 
     ::deep .desktop-sidebar {
         align-self: start;
+        min-width: 0;
+        overflow: hidden;
         border-right: 1px solid var(--color-border);
         min-height: calc(100dvh - 5rem);
         padding: var(--space-5) var(--space-3);
@@ -263,6 +273,7 @@
         padding: .75rem var(--space-3);
         text-decoration: none;
         white-space: nowrap;
+        transition: padding 240ms ease, gap 240ms ease;
     }
 
     ::deep .desktop-sidebar nav a:hover, ::deep .desktop-sidebar nav a.active,
@@ -275,11 +286,32 @@
     ::deep .desktop-sidebar__security { border-top: 1px solid var(--color-border); margin-top: var(--space-5); }
 
     .app-shell--sidebar-collapsed ::deep .desktop-sidebar nav a,
-    .app-shell--sidebar-collapsed ::deep .desktop-sidebar__security { justify-content: center; padding-inline: 0; }
+    .app-shell--sidebar-collapsed ::deep .desktop-sidebar__security { gap: 0; }
+    ::deep .desktop-sidebar nav a > span,
+    ::deep .desktop-sidebar__security > span,
+    ::deep .desktop-sidebar__heading > span {
+        max-width: 13rem;
+        opacity: 1;
+        overflow: hidden;
+        white-space: nowrap;
+        transition: max-width 240ms ease, opacity 180ms ease;
+    }
+    ::deep .desktop-sidebar .app-icon { flex-shrink: 0; }
+    ::deep .desktop-sidebar__heading { transition: padding 240ms ease, gap 240ms ease; }
     .app-shell--sidebar-collapsed ::deep .desktop-sidebar nav a span,
     .app-shell--sidebar-collapsed ::deep .desktop-sidebar__security span,
-    .app-shell--sidebar-collapsed ::deep .desktop-sidebar__heading > span { display: none; }
-    .app-shell--sidebar-collapsed ::deep .desktop-sidebar__heading { justify-content: center; padding-left: 0; }
+    .app-shell--sidebar-collapsed ::deep .desktop-sidebar__heading > span { max-width: 0; opacity: 0; }
+    .app-shell--sidebar-collapsed ::deep .desktop-sidebar__heading { gap: 0; padding-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-shell--desktop-new .shell-body,
+    ::deep .desktop-sidebar nav a,
+    ::deep .desktop-sidebar__security,
+    ::deep .desktop-sidebar nav a > span,
+    ::deep .desktop-sidebar__security > span,
+    ::deep .desktop-sidebar__heading,
+    ::deep .desktop-sidebar__heading > span { transition: none; }
 }
 
 @media (max-width: 64rem) {
@@ -383,18 +415,17 @@
 }
 
 #blazor-error-ui {
-    align-items: center;
-    background: rgba(20, 30, 45, .58);
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
+    align-items: flex-end;
     box-sizing: border-box;
     display: none;
-    inset: 0;
-    justify-content: center;
+    right: 0;
+    bottom: 0;
+    justify-content: flex-end;
     padding: 1rem;
     position: fixed;
     z-index: 2000;
 }
+@media(max-width:720px){#blazor-error-ui{left:0;bottom:5rem}}
 
 .site-footer{display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:.7rem 1.5rem;padding:1.2rem clamp(1rem,3vw,2rem);background:#0b2340;color:#fff;font-size:.88rem}
 .site-footer nav{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem 1rem}.site-footer a{color:inherit;text-decoration:underline}.site-footer a:focus-visible{outline:3px solid #fff;outline-offset:3px}

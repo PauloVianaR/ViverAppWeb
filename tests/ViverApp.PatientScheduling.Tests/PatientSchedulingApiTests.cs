@@ -40,6 +40,9 @@ public sealed class PatientSchedulingApiTests : IAsyncLifetime
     [Theory]
     [InlineData("/api/v1/patient/booking/professionals")]
     [InlineData("/api/v1/patient/appointments")]
+    [InlineData("/api/v1/booking-workspace/options")]
+    [InlineData("/api/v1/booking-workspace/patients")]
+    [InlineData("/api/v1/booking-workspace/appointments/1")]
     public async Task PatientSchedulingEndpoints_RequireAuthentication(string path)
     {
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions

@@ -1,0 +1,57 @@
+@using ViverApp.Web.Components.Pages
+
+<section class="surface appointment-workspace">
+    <nav class="appointment-workspace-tabs" aria-label="Seções do atendimento">
+        @foreach (var tab in Tabs)
+        {
+            <button type="button" class="@(Active == tab ? "active" : null)" aria-current="@(Active == tab ? "page" : null)"
+                disabled="@(tab != "Agendamento" && PatientId == 0)" @onclick="() => Select(tab)">@tab</button>
+        }
+    </nav>
+    <div hidden="@(Active != "Agendamento")" class="appointment-workspace-scheduling">
+        @ChildContent
+    </div>
+    @if (PatientId > 0)
+    {
+        @if (Visited.Contains("Ficha"))
+        {
+            <div hidden='@(Active != "Ficha")' class="appointment-workspace-record">
+                <div class="appointment-ficha-grid"><MedicalRecordWorkspace @key='@($"{PatientId}-summary-{PatientRevision}")' PatientId="PatientId" EmbeddedSection="summary" /><PatientRegistrationEditor @key="PatientId" PatientId="PatientId" Saved="RefreshPatient" /></div>
+                <MedicalRecordWorkspace @key='@($"{PatientId}-documents-{PatientRevision}")' PatientId="PatientId" EmbeddedSection="documents" />
+            </div>
+        }
+        @if (Visited.Contains("Histórico"))
+        {
+            <div hidden='@(Active != "Histórico")' class="appointment-workspace-record">
+                <MedicalRecordWorkspace @key='@($"{PatientId}-appointments")' PatientId="PatientId" EmbeddedSection="appointments" />
+            </div>
+        }
+        @if (Visited.Contains("Financeiro"))
+        {
+            <div hidden='@(Active != "Financeiro")' class="appointment-workspace-record">
+                <MedicalRecordWorkspace @key='@($"{PatientId}-financial")' PatientId="PatientId" EmbeddedSection="financial" />
+            </div>
+        }
+    }
+</section>
+
+@code {
+    [Parameter] public long PatientId { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback PatientSaved { get; set; }
+    private int PatientRevision;
+    private static readonly string[] Tabs = ["Agendamento", "Ficha", "Histórico", "Financeiro"];
+    private readonly HashSet<string> Visited = ["Agendamento"];
+    private string Active = "Agendamento";
+    private long previousPatient;
+    protected override void OnParametersSet()
+    {
+        if (PatientId == previousPatient) return;
+        previousPatient = PatientId;
+        Active = "Agendamento";
+        Visited.Clear();
+        Visited.Add(Active);
+    }
+    private void Select(string tab) { Active = tab; Visited.Add(tab); }
+    private async Task RefreshPatient() { PatientRevision++; await PatientSaved.InvokeAsync(); }
+}

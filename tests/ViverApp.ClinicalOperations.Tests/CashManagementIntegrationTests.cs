@@ -299,6 +299,8 @@ public sealed class CashManagementIntegrationTests
         Assert.Equal(5, fullPrint.Movements.Count);
         Assert.Empty(totalsPrint.Movements);
         Assert.Equal(fullPrint.Summary.NetTotal, totalsPrint.Summary.NetTotal);
+        Assert.NotNull(fullPrint.CumulativeSummary);
+        Assert.Equal(fullPrint.CumulativeSummary!.NetTotal, totalsPrint.CumulativeSummary?.NetTotal);
         var professionalPrint = await cash.PrintAsync(manager.Id, date, null, null, null, null, null, null, null,
             false, CancellationToken.None, professionalAccountId: doctor.Id);
         Assert.Equal(5, professionalPrint.Movements.Count);

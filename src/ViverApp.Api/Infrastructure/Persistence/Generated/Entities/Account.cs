@@ -81,6 +81,10 @@ public partial class Account
 
     public virtual ICollection<Appointment> AppointmentNoShowRecordedByAccounts { get; set; } = new List<Appointment>();
 
+    public virtual ICollection<AppointmentOperationalReviewVersion> AppointmentOperationalReviewVersions { get; set; } = new List<AppointmentOperationalReviewVersion>();
+
+    public virtual ICollection<AppointmentOperationalReview> AppointmentOperationalReviews { get; set; } = new List<AppointmentOperationalReview>();
+
     public virtual ICollection<Appointment> AppointmentPatientAccounts { get; set; } = new List<Appointment>();
 
     public virtual ICollection<Appointment> AppointmentPointDiscountByAccounts { get; set; } = new List<Appointment>();
@@ -108,6 +112,8 @@ public partial class Account
     public virtual ElectronicHealthRecord? ElectronicHealthRecord { get; set; }
 
     public virtual ICollection<ExternalLogin> ExternalLogins { get; set; } = new List<ExternalLogin>();
+
+    public virtual ICollection<ManagerNotification> ManagerNotifications { get; set; } = new List<ManagerNotification>();
 
     public virtual ManagerPreference? ManagerPreference { get; set; }
 
@@ -154,6 +160,10 @@ public partial class Account
     public virtual ICollection<ProfessionalReview> ProfessionalReviewReviewerAccounts { get; set; } = new List<ProfessionalReview>();
 
     public virtual Role RoleCodeNavigation { get; set; } = null!;
+
+    public virtual ICollection<StaffMessage> StaffMessageRecipientAccounts { get; set; } = new List<StaffMessage>();
+
+    public virtual ICollection<StaffMessage> StaffMessageSenderAccounts { get; set; } = new List<StaffMessage>();
 
     public virtual ICollection<TeleconsultationGuestLink> TeleconsultationGuestLinks { get; set; } = new List<TeleconsultationGuestLink>();
 

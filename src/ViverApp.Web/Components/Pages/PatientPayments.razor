@@ -5,7 +5,7 @@
 @using static ViverApp.Web.PatientLabels
 <PageTitle>Pagamentos | ViverApp</PageTitle>
 <header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Meus pagamentos</h1><p class="page-description">Confira valores, escolha como pagar e acompanhe a confirmação.</p></div><a class="button button--secondary" href="/paciente/agenda">Minha agenda</a></header>
-@if(Notice is not null){<p class="notice @(NoticeError?"notice--error":"notice--success")" role="alert">@Notice</p>}
+@if(Notice is not null){<UiNotice Message="@Notice" IsError="NoticeError" />}
 <div class="patient-tabs" aria-label="Visualização de pagamentos"><button class="button @(View=="pending"?null:"button--secondary")" aria-pressed="@(View=="pending")" disabled="@Busy" @onclick='()=>ChangeView("pending")'>Pagar</button><button class="button @(View=="history"?null:"button--secondary")" aria-pressed="@(View=="history")" disabled="@Busy" @onclick='()=>ChangeView("history")'>Histórico</button></div>
 <MobileFilterPanel AriaLabel="Filtros de pagamentos"><form @onsubmit="Apply" @onsubmit:preventDefault><div class="patient-filter-grid">
     <div class="field"><label for="payments-from">De</label><input id="payments-from" type="date" @bind="From" /></div><div class="field"><label for="payments-until">Até</label><input id="payments-until" type="date" @bind="Until" /></div>

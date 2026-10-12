@@ -3,7 +3,7 @@
 @using static ViverApp.Web.PatientLabels
 <PageTitle>Meu perfil e Premium | ViverApp</PageTitle>
 <header class="workspace-heading"><div><p class="eyebrow">Paciente</p><h1 class="page-title">Meu perfil</h1><p class="page-description">Seus dados, suas preferências e os benefícios do seu cuidado.</p></div><a class="button button--secondary" href="/seguranca">Segurança e sessões</a></header>
-@if (Notice is not null) { <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="alert">@Notice</p> }
+@if (Notice is not null) { <UiNotice Message="@Notice" IsError="NoticeError" /> }
 <nav class="patient-tabs" aria-label="Seções do perfil"><a class="button button--secondary" href="#dados">Dados pessoais</a><a class="button button--secondary" href="#contatos">Contatos e segurança</a><a class="button button--secondary" href="#premium">Premium</a></nav>
 @if (Loading) { <LoadingSkeleton Lines="5" /> }
 else if (Profile is not null)

@@ -76,7 +76,8 @@ public sealed record AppointmentTypeWriteRequest(
     [param: Range(0, long.MaxValue)] ulong RowVersion = 0,
     [param: Required, RegularExpression("^(consultation|examination|surgery|procedure)$")] string CategoryCode = "consultation",
     bool RequiresPayment = true,
-    [param: MaxLength(500)] IReadOnlyList<ulong>? ProfessionalAccountIds = null);
+    [param: MaxLength(500)] IReadOnlyList<ulong>? ProfessionalAccountIds = null,
+    [param: Range(1, int.MaxValue)] uint? SpecialtyId = null);
 
 public sealed record AppointmentTypeResponse(
     uint Id,
@@ -90,7 +91,7 @@ public sealed record AppointmentTypeResponse(
     bool IsActive,
     ushort DisplayOrder,
     ulong RowVersion,
-    bool CanDelete = false);
+    bool CanDelete = false, uint SpecialtyId = 0, string SpecialtyName = "");
 
 public sealed record AppointmentTypeProfessionalResponse(
     ulong ProfessionalAccountId,

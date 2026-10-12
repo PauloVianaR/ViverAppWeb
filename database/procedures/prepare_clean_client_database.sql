@@ -57,7 +57,9 @@ BEGIN
         OR (SELECT COUNT(*) FROM viverappweb.audit_events) <> 0
         OR (SELECT COUNT(*) FROM viverappweb.medical_record_versions) <> 0
         OR (SELECT COUNT(*) FROM viverappweb.teleconsultation_peers) <> 0
-        OR (SELECT COUNT(*) FROM viverappweb.teleconsultation_guest_links) <> 0 THEN
+        OR (SELECT COUNT(*) FROM viverappweb.teleconsultation_guest_links) <> 0
+        OR (SELECT COUNT(*) FROM viverappweb.staff_messages) <> 0
+        OR (SELECT COUNT(*) FROM viverappweb.manager_notifications) <> 0 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Destino nao esta vazio; nao usar sobre dados existentes.';
     END IF;
     IF (SELECT next_value FROM viverappweb.appointment_number_sequence WHERE sequence_key = 1) <> 100 THEN

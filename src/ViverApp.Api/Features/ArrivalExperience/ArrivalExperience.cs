@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using ViverApp.Api.Features.ClinicalOperations;
 using ViverApp.Api.Features.Identity;
+using ViverApp.Api.Features.StaffCommunication;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 using ViverApp.Security;
@@ -53,7 +54,7 @@ public sealed class ProfessionalNotificationsHub : Hub
 
 public sealed class ArrivalExperienceService(ViverAppDbContext database, TimeProvider clock,
     IClinicalOperationsAuditWriter audit, IHubContext<ProfessionalNotificationsHub> hub,
-    ILogger<ArrivalExperienceService> logger)
+    ILogger<ArrivalExperienceService> logger, StaffCommunicationService? staff = null)
 {
     public async Task<ArrivalResponse> RegisterAsync(ulong actor, ulong appointmentId, ArrivalRequest request, CancellationToken ct)
     {
@@ -226,8 +227,10 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
         await database.ProfessionalNotifications.Where(x => x.ProfessionalAccountId == doctor && x.AppointmentId == appointmentId && x.ReadAtUtc == null)
             .ExecuteUpdateAsync(x => x.SetProperty(n => n.ReadAtUtc, now).SetProperty(n => n.RowVersion, n => n.RowVersion + 1), ct);
         await database.SaveChangesAsync(ct);
+        IReadOnlyList<ManagerAlertView> managerAlerts = staff is null ? [] : await staff.QueueManagerAlertsAsync(appointment, "appointment_started", ct);
         await audit.WriteAsync("appointment.started", doctor, "appointment", appointment.Id.ToString(CultureInfo.InvariantCulture), null, ct);
         await transaction.CommitAsync(ct);
+        if (staff is not null) await staff.PublishManagerAlertsAsync(managerAlerts);
         return MapArrival(appointment);
     }
 
@@ -311,10 +314,12 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
             OccurredAtUtc = now,
         });
         await database.SaveChangesAsync(ct);
+        IReadOnlyList<ManagerAlertView> managerAlerts = staff is null ? [] : await staff.QueueManagerAlertsAsync(appointment, "appointment_completed", ct);
         await audit.WriteAsync("appointment.completed", actor, "appointment",
             appointment.Id.ToString(CultureInfo.InvariantCulture),
             new Dictionary<string, string> { ["previousStatus"] = previous }, ct);
         await transaction.CommitAsync(ct);
+        if (staff is not null) await staff.PublishManagerAlertsAsync(managerAlerts);
         return MapArrival(appointment);
     }
 

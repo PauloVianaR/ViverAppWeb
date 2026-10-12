@@ -21,13 +21,8 @@
 
 @if (!string.IsNullOrWhiteSpace(Notice))
 {
-    <div class="notice @(NoticeIsError ? "notice--error" : "notice--success")" role="@(NoticeIsError ? "alert" : "status")">
-        <span>@Notice</span>
-        @if (NoticeIsUnauthorized)
-        {
-            <a class="button button--small" href="/acesso">Entrar novamente</a>
-        }
-    </div>
+    <UiNotice Message="@Notice" IsError="NoticeIsError" />
+    @if (NoticeIsUnauthorized) { <a class="button button--small" href="/acesso">Entrar novamente</a> }
 }
 
 <nav class="clinical-tabs" aria-label="Operação clínica">
@@ -59,7 +54,7 @@ else if (View is ClinicalView.Agenda or ClinicalView.History)
             <div class="field">
                 <label for="clinical-status">Status</label>
                 <select id="clinical-status" @bind="StatusFilter">
-                    <option value="">Todos</option><option value="pending">Pendente</option><option value="confirmed">Confirmada</option>
+                    <option value="">Todos</option><option value="pending">Aguardando Pagamento</option><option value="confirmed">Confirmada</option>
                     <option value="completed">Concluída</option><option value="no_show">Falta</option><option value="canceled">Cancelada</option>
                     <option value="rescheduled">Remarcada</option>
                 </select>
@@ -364,7 +359,7 @@ else
     private static string Initials(string name) => string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(item => char.ToUpperInvariant(item[0])));
     private static string ContactLabel(WebClinicalAppointment appointment) => string.Join(" · ", new[] { appointment.PatientEmail, appointment.PatientPhone }.Where(item => !string.IsNullOrWhiteSpace(item)));
     private static string ModalityLabel(string value) => value == "online" ? "Online" : "Presencial";
-    private static string StatusLabel(string value) => value switch { "pending" => "Pendente", "confirmed" => "Confirmada", "completed" => "Concluída", "canceled" => "Cancelada", "rescheduled" => "Remarcada", "no_show" => "Falta", _ => value };
+    private static string StatusLabel(string value) => value switch { "pending" => "Aguardando Pagamento", "confirmed" => "Confirmada", "completed" => "Concluída", "canceled" => "Cancelada", "rescheduled" => "Remarcada", "no_show" => "Falta", _ => value };
     private static string StatusClass(string value) => value switch { "confirmed" or "completed" => "badge--success", "pending" => "badge--warning", "canceled" or "no_show" => "badge--danger", _ => string.Empty };
     private static string DayLabel(byte day) => day switch { 0 => "Domingo", 1 => "Segunda-feira", 2 => "Terça-feira", 3 => "Quarta-feira", 4 => "Quinta-feira", 5 => "Sexta-feira", 6 => "Sábado", _ => "Dia inválido" };
     private static string ValidityLabel(WebProfessionalWeeklyHour hour) => hour.ValidFrom is null && hour.ValidUntil is null ? "Sem período de validade" : $"{hour.ValidFrom?.ToString("dd/MM/yyyy") ?? "início"} a {hour.ValidUntil?.ToString("dd/MM/yyyy") ?? "sem fim"}";

@@ -60,8 +60,8 @@ public sealed class AdministratorExperienceController(AdministratorExperienceSer
     [HttpGet("doctor-access")] public Task<IReadOnlyList<AdministratorDoctorAccessResponse>> DoctorAccess(CancellationToken ct) => service.DoctorAccessAsync(ct);
     [HttpGet("agenda")]
     public Task<ManagerAgendaResponse> Agenda(DateOnly from, DateOnly to, string? status = null, string? modality = null, string? category = null,
-        ulong? doctorAccountId = null, ulong? appointmentNumber = null, string? payment = null, string? search = null, string sort = "date_asc", int page = 1, int pageSize = 20, CancellationToken ct = default) =>
-        service.AgendaAsync(from, to, status, modality, category, doctorAccountId, appointmentNumber, payment, search, sort, page, pageSize, ct);
+        ulong? doctorAccountId = null, ulong? appointmentNumber = null, string? payment = null, string? search = null, string sort = "date_asc", int page = 1, int pageSize = 20, CancellationToken ct = default, uint? specialtyId = null) =>
+        service.AgendaAsync(from, to, status, modality, category, doctorAccountId, appointmentNumber, payment, search, sort, page, pageSize, ct, specialtyId);
     [HttpGet("appointments/{id:long}")] public Task<ManagerAppointmentResponse> Appointment(ulong id, CancellationToken ct) => service.AppointmentAsync(id, ct);
     [HttpPost("appointments"), EnableRateLimiting(SecurityPolicyNames.WriteRateLimit)]
     public async Task<ActionResult<AppointmentResponse>> Create([FromHeader(Name = "Idempotency-Key")] string key,

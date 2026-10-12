@@ -105,7 +105,7 @@
         }
         }
     }
-    @if (!string.IsNullOrWhiteSpace(Notice)) { <p class="notice @(NoticeError ? "notice--error" : "notice--success")" role="alert">@Notice</p> }
+    @if (!string.IsNullOrWhiteSpace(Notice)) { <UiNotice Message="@Notice" IsError="NoticeError" /> }
 </section>
 
 @code {

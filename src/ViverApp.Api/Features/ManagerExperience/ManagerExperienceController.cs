@@ -56,8 +56,8 @@ public sealed class ManagerExperienceController(ManagerExperienceService service
     public Task<ManagerAgendaResponse> Agenda(DateOnly from, DateOnly to, string? status = null, string? modality = null,
         string? category = null, ulong? doctorAccountId = null, ulong? appointmentNumber = null, string? payment = null, TimeOnly? startTime = null,
         TimeOnly? endTime = null, string? search = null, string sort = "date_asc", int page = 1, int pageSize = 20,
-        CancellationToken ct = default) => service.AgendaAsync(from, to, status, modality, category, doctorAccountId, appointmentNumber,
-            payment, startTime, endTime, search, sort, page, pageSize, ct);
+        CancellationToken ct = default, uint? specialtyId = null) => service.AgendaAsync(from, to, status, modality, category, doctorAccountId, appointmentNumber,
+            payment, startTime, endTime, search, sort, page, pageSize, ct, specialtyId);
     [HttpGet("appointments/{id:long}")] public Task<ManagerAppointmentResponse> Appointment(ulong id, CancellationToken ct) => service.AppointmentAsync(id, ct);
     [HttpGet("booking/slots"), EnableRateLimiting(SecurityPolicyNames.SlotRateLimit)]
     public Task<IReadOnlyList<AvailableSlotResponse>> Slots(ulong patientAccountId, ulong doctorAccountId, uint appointmentTypeId,

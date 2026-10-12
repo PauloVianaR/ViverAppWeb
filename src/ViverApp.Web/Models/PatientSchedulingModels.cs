@@ -119,3 +119,4 @@ public sealed record WebPayment(
     DateTime? PaidAtUtc,
     DateTime? RefundedAtUtc,
     ulong RowVersion);
+public sealed record WebBookingProfessionalSpecialties(uint? PrimarySpecialtyId);

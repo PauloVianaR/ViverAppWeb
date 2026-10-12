@@ -51,7 +51,7 @@
             }
         }
     }
-    @if (!string.IsNullOrWhiteSpace(Error)) { <p class="notice notice--error" role="alert">@Error</p> }
+    @if (!string.IsNullOrWhiteSpace(Error)) { <UiNotice Message="@Error" IsError="true" /> }
 </section>
 
 @code {

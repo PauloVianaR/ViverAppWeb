@@ -83,6 +83,7 @@ public sealed record CashPrintResponse(
     CashClosureResponse? Closure,
     bool IsClosed,
     CashSummaryResponse Summary,
+    CashSummaryResponse? CumulativeSummary,
     IReadOnlyList<CashMovementResponse> Movements,
     bool TotalsOnly);
 

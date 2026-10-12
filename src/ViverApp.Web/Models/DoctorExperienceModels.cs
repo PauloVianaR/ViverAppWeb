@@ -11,7 +11,7 @@ public sealed record ProfessionalProfileData(ulong AccountId, string FullName, s
     bool OnlineEnabled, ushort MaxOnlineDaily, ushort MaxInPersonDaily, double? AverageRating, int ReviewCount,
     ulong AccountRowVersion, ulong ProfileRowVersion, ulong PreferenceRowVersion, string LicenseTypeCode = "CRM");
 public sealed record ProfessionalService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode,
-    ushort DurationMinutes, decimal PriceAmount, bool RequiresPayment, bool IsActive, bool Offered, ulong RowVersion);
+    ushort DurationMinutes, decimal PriceAmount, bool RequiresPayment, bool IsActive, bool Offered, ulong RowVersion, uint SpecialtyId = 0);
 public sealed record DoctorAppointment(ulong Id, ulong AppointmentNumber, ulong PatientAccountId, string PatientName, int? PatientAge, uint AppointmentTypeId, string Service,
     string CategoryCode, string StatusCode, string ModalityCode, DateTime StartsAtUtc, DateTime EndsAtUtc, decimal PriceAmount, decimal BasePriceAmount,
     decimal DiscountPercent, bool RequiresPayment, string PaymentStatus, string PaymentLocation, string? PatientNotes, string? CancellationReason,
@@ -38,7 +38,7 @@ public sealed record DoctorAgendaData(DoctorAgendaCounters Counters, DoctorAgend
 public sealed record DoctorAgendaCounters(int Total, int Online, int InPerson, int Rescheduled);
 public sealed record DoctorPatient(ulong AccountId, string FullName, string? PreferredName, string? Email, string? Phone,
     DateOnly? BirthDate, string StatusCode, bool IsPremium, decimal PremiumDiscountPercent, int AppointmentCount, DateTime? LastAppointmentAtUtc,
-    DateTime? NextAppointmentAtUtc, ulong RowVersion);
+    DateTime? NextAppointmentAtUtc, ulong RowVersion, bool PortalAccessEnabled = false);
 public sealed record DoctorPatientCounters(int Total, int Premium, int Active, int Blocked);
 public sealed record DoctorPatientSources(IReadOnlyList<string> Total, IReadOnlyList<string> Premium,
     IReadOnlyList<string> Active, IReadOnlyList<string> Blocked);

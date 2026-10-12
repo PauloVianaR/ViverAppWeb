@@ -1091,16 +1091,7 @@ public sealed class AuthController(
                 UpdatedAtUtc = now,
                 RowVersion = 1,
             });
-            var activeServices = await database.AppointmentTypes.AsNoTracking().Where(item => item.IsActive).Select(item => item.Id).ToArrayAsync(cancellationToken);
-            database.ProfessionalServices.AddRange(activeServices.Select(id => new ProfessionalService
-            {
-                ProfessionalAccountId = accountId,
-                AppointmentTypeId = id,
-                IsActive = true,
-                CreatedAtUtc = now,
-                UpdatedAtUtc = now,
-                RowVersion = 1,
-            }));
+            // Os serviços são oferecidos automaticamente pelas especialidades; sem vínculos individuais.
         }
 
         await database.SaveChangesAsync(cancellationToken);

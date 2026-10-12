@@ -173,6 +173,7 @@ public sealed class MedicalRecordService(
         var appointments = await query
             .Include(x => x.ProfessionalAccount).ThenInclude(x => x.Account)
             .Include(x => x.AppointmentType)
+            .Include(x => x.Specialty)
             .Include(x => x.MedicalReport)
             .OrderByDescending(x => x.StartsAtUtc).ThenByDescending(x => x.Id)
             .Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(ct);
@@ -182,7 +183,7 @@ public sealed class MedicalRecordService(
                 && x.Specialty.NormalizedName == "OFTALMOLOGIA")
             .Select(x => x.ProfessionalAccountId).Distinct().ToArrayAsync(ct)).ToHashSet();
         return new(appointments.Select(x => MapAppointmentReport(x,
-            ophthalmologists.Contains(x.ProfessionalAccountId))).ToArray(), page, pageSize, total);
+            (x.SpecialtyId.HasValue ? x.Specialty?.NormalizedName == "OFTALMOLOGIA" : ophthalmologists.Contains(x.ProfessionalAccountId)))).ToArray(), page, pageSize, total);
     }
 
     public async Task<MedicalRecordAppointmentPdfSnapshot> AppointmentReportPdfAsync(
@@ -200,7 +201,7 @@ public sealed class MedicalRecordService(
         var appointment = await query.SingleOrDefaultAsync(ct)
             ?? throw Missing("Atendimento não encontrado neste prontuário.");
         var ophthalmology = await OphthalmologyReportMapping.IsOphthalmologyAsync(
-            database, appointment.ProfessionalAccountId, ct);
+            database, appointment.ProfessionalAccountId, ct, appointment.SpecialtyId);
         var patient = await SummaryWithoutAuditAsync(patientId, roleCode, ct);
         await audit.WriteAsync("medical_record.appointment_pdf_generated", actorId,
             "appointment", appointmentId.ToString(CultureInfo.InvariantCulture), null, ct);

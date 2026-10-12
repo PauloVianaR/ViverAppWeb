@@ -3,7 +3,7 @@
 @inherits DoctorPageBase
 <PageTitle>Rotina profissional | ViverApp</PageTitle>
 <header class="workspace-heading"><div><p class="eyebrow">Área profissional</p><h1 class="page-title">@(Home is null?"Sua rotina clínica":$"Olá, {DisplayName(Home.Profile)}")</h1><p class="page-description">Agenda do dia, indicadores e atalhos para conduzir seus atendimentos.</p></div><a class="button button--secondary" href="@ProfessionalRoot/perfil">Meu perfil</a></header>
-@if(Notice is not null){<p class="notice notice--error" role="alert">@Notice</p>}
+@if(Notice is not null){<UiNotice Message="@Notice" IsError="true" />}
 @if(Loading){<LoadingSkeleton Lines="6" />}
 else if(Home is not null){
 <section class="surface patient-panel doctor-summary"><p class="eyebrow">Perfil profissional</p><h2>@DisplayName(Home.Profile)</h2><p>@Home.Profile.LicenseTypeCode @Home.Profile.LicenseStateCode @Home.Profile.LicenseNumber · @(Home.Profile.Specialties.FirstOrDefault(x=>x.IsPrimary)?.Name??"Especialidade não definida") · @Home.Profile.YearsExperience anos de experiência</p><p>@(Home.Profile.AverageRating.HasValue?$"★ {Home.Profile.AverageRating:0.0} em {Home.Profile.ReviewCount} avaliações":"Ainda sem avaliações")</p></section>

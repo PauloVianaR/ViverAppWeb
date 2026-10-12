@@ -1,0 +1,18 @@
+@inject UiErrorNotifier Notifications
+
+@code {
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public bool IsError { get; set; }
+    private string? previous;
+    private bool previousError;
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Message != previous || IsError != previousError)
+        {
+            previous = Message; previousError = IsError;
+            Notifications.Notify(Message, IsError);
+        }
+        return Task.CompletedTask;
+    }
+}

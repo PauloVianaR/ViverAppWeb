@@ -1,13 +1,26 @@
 using System.Security.Cryptography;
+using System.Security.Claims;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.SignalR;
 using MySql.Data.MySqlClient;
 using ViverApp.Api.Features.ClinicalOperations;
 using ViverApp.Api.Features.ArrivalExperience;
 using ViverApp.Api.Features.Identity;
 using ViverApp.Api.Features.ManagerExperience;
+using ViverApp.Api.Features.StaffCommunication;
 using ViverApp.Api.Infrastructure.Persistence.Generated;
 using ViverApp.Api.Infrastructure.Persistence.Generated.Entities;
 using Xunit;
@@ -18,7 +31,7 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
 {
     private const string Marker = "__phase13_test__";
     private IConfiguration configuration = null!;
-    private ulong managerId, doctorId, patientId, appointmentId, offlinePatientId;
+    private ulong managerId, doctorId, patientId, appointmentId, offlinePatientId, extraManagerId;
     private string offlinePatientTaxId = null!;
     private DateTime now;
     private DateOnly appointmentLocalDate;
@@ -119,7 +132,8 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
                 null,
                 null,
                 new ManagerPatientAddressRequest("39900000", null, null, null, null, "Almenara", "MG"),
-                false),
+                false,
+                "Paciente prefere atendimento pela manhã."),
             CancellationToken.None);
 
         Assert.False(patient.PortalAccessEnabled);
@@ -131,9 +145,11 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         Assert.Null(patient.Address?.Street);
         Assert.Equal("Almenara", patient.Address?.City);
         Assert.Equal("MG", patient.Address?.StateCode);
+        Assert.Equal("Paciente prefere atendimento pela manhã.", patient.AdministrativeNotes);
         offlinePatientId = patient.AccountId;
         var persisted = await db.Accounts.SingleAsync(x => x.Id == patient.AccountId);
         Assert.False(persisted.PortalAccessEnabled);
+        Assert.Equal("Paciente prefere atendimento pela manhã.", (await db.PatientProfiles.SingleAsync(x => x.AccountId == patient.AccountId)).AdministrativeNotes);
     }
 
     [Fact]
@@ -191,6 +207,134 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task WebSocketsDeliverArrivalToAssignedProfessionalAndStartToEveryManager()
+    {
+        await using var db = CreateContext();
+        var otherManager = Account($"manager-{Guid.NewGuid():N}@phase31.example.test", ViverAppRoles.Manager, "Gestora WebSocket Dois");
+        db.Accounts.Add(otherManager);
+        await db.SaveChangesAsync();
+        extraManagerId = otherManager.Id;
+        var timezone = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
+        var localDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(now, timezone));
+        var start = TimeZoneInfo.ConvertTimeToUtc(
+            DateTime.SpecifyKind(localDate.ToDateTime(new TimeOnly(12, 0)), DateTimeKind.Unspecified), timezone);
+        await db.Appointments.Where(x => x.Id == appointmentId).ExecuteUpdateAsync(x => x
+            .SetProperty(a => a.StatusCode, "confirmed").SetProperty(a => a.StartsAtUtc, start)
+            .SetProperty(a => a.EndsAtUtc, start.AddMinutes(30)));
+
+        var presence = new StaffPresence();
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Logging.ClearProviders();
+        builder.Services.AddDbContext<ViverAppDbContext>(options =>
+            options.UseMySQL(configuration.GetConnectionString("LocalConnection")!));
+        builder.Services.AddSingleton(presence);
+        builder.Services.AddSignalR();
+        builder.Services.AddAuthentication("Test").AddScheme<AuthenticationSchemeOptions, WebSocketTestAuthHandler>("Test", _ => { });
+        builder.Services.AddAuthorization(options => options.AddPolicy(ViverAppPolicies.ClinicalProfessional,
+            policy => policy.RequireRole(ViverAppRoles.Doctor, ViverAppRoles.Psychologist)));
+        await using var app = builder.Build();
+        app.UseWebSockets();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.MapHub<ProfessionalNotificationsHub>("/hubs/doctor-notifications");
+        app.MapHub<StaffChatHub>("/hubs/staff-chat");
+        await app.StartAsync();
+        var server = app.GetTestServer();
+        using var doctorSocket = await ConnectHubAsync(server, "/hubs/doctor-notifications", doctorId, ViverAppRoles.Doctor);
+        using var doctorChatSocket = await ConnectHubAsync(server, "/hubs/staff-chat", doctorId, ViverAppRoles.Doctor);
+        using var managerSocket = await ConnectHubAsync(server, "/hubs/staff-chat", managerId, ViverAppRoles.Manager);
+        using var otherManagerSocket = await ConnectHubAsync(server, "/hubs/staff-chat", extraManagerId, ViverAppRoles.Manager);
+        for (var attempt = 0; attempt < 50 && (!presence.Online(managerId) || !presence.Online(extraManagerId)); attempt++)
+            await Task.Delay(20);
+        Assert.True(presence.Online(managerId));
+        Assert.True(presence.Online(extraManagerId));
+        await Task.Delay(50);
+
+        var staff = new StaffCommunicationService(db, presence, new FixedClock(now),
+            app.Services.GetRequiredService<IHubContext<StaffChatHub>>(), NullLogger<StaffCommunicationService>.Instance);
+        Assert.Contains(await staff.ContactsAsync(managerId, CancellationToken.None), c => c.Id == doctorId && c.Online);
+        Assert.Contains(await staff.ContactsAsync(doctorId, CancellationToken.None), c => c.Id == managerId && c.Online);
+        var privateMessage = await staff.SendAsync(managerId,
+            new SendStaffMessageRequest(extraManagerId, Guid.NewGuid(), "Mensagem privada ao segundo gestor"), CancellationToken.None);
+        using var extraDelivery = await ReadInvocationAsync(otherManagerSocket, "StaffMessage");
+        Assert.Equal(privateMessage.Id, extraDelivery.RootElement.GetProperty("arguments")[0].GetProperty("id").GetUInt64());
+        var intendedMessage = await staff.SendAsync(managerId,
+            new SendStaffMessageRequest(doctorId, Guid.NewGuid(), "Mensagem privada ao médico"), CancellationToken.None);
+        using var doctorDelivery = await ReadInvocationAsync(doctorChatSocket, "StaffMessage");
+        // Se a mensagem do outro destinatário vazasse para o médico, seria a primeira recebida.
+        Assert.Equal(intendedMessage.Id, doctorDelivery.RootElement.GetProperty("arguments")[0].GetProperty("id").GetUInt64());
+        var service = new ArrivalExperienceService(db, new FixedClock(now), new NoOpAuditWriter(),
+            app.Services.GetRequiredService<IHubContext<ProfessionalNotificationsHub>>(),
+            NullLogger<ArrivalExperienceService>.Instance, staff);
+        var arrived = await service.RegisterAsync(managerId, appointmentId, new ArrivalRequest(1), CancellationToken.None);
+        using var arrivalMessage = await ReadInvocationAsync(doctorSocket, "PatientArrived");
+        Assert.Equal(appointmentId, arrivalMessage.RootElement.GetProperty("arguments")[0].GetProperty("appointmentId").GetUInt64());
+
+        await service.StartAsync(doctorId, appointmentId, new StartAppointmentRequest(arrived.RowVersion), CancellationToken.None);
+        using var startMessage = await ReadInvocationAsync(managerSocket, "ManagerAlert");
+        var alert = startMessage.RootElement.GetProperty("arguments")[0];
+        Assert.Equal("appointment_started", alert.GetProperty("type").GetString());
+        Assert.Equal(appointmentId, alert.GetProperty("appointmentId").GetUInt64());
+        using var otherStartMessage = await ReadInvocationAsync(otherManagerSocket, "ManagerAlert");
+        Assert.Equal("appointment_started", otherStartMessage.RootElement.GetProperty("arguments")[0].GetProperty("type").GetString());
+        await doctorSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Teste concluído", CancellationToken.None);
+        await doctorChatSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Teste concluído", CancellationToken.None);
+        await managerSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Teste concluído", CancellationToken.None);
+        await otherManagerSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Teste concluído", CancellationToken.None);
+        for (var attempt = 0; attempt < 50 && (presence.Online(managerId) || presence.Online(extraManagerId)); attempt++)
+            await Task.Delay(20);
+        Assert.False(presence.Online(managerId));
+        Assert.False(presence.Online(extraManagerId));
+    }
+
+    private static async Task<WebSocket> ConnectHubAsync(TestServer server, string path, ulong accountId, string role)
+    {
+        var socket = await server.CreateWebSocketClient().ConnectAsync(
+            new Uri($"ws://localhost{path}?account={accountId}&role={role}"), CancellationToken.None);
+        var handshake = Encoding.UTF8.GetBytes("{\"protocol\":\"json\",\"version\":1}\u001e");
+        await socket.SendAsync(handshake, WebSocketMessageType.Text, true, CancellationToken.None);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var buffer = new byte[4096];
+        var received = await socket.ReceiveAsync(buffer, timeout.Token);
+        Assert.Contains("{}", Encoding.UTF8.GetString(buffer, 0, received.Count));
+        return socket;
+    }
+
+    private static async Task<JsonDocument> ReadInvocationAsync(WebSocket socket, string target)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var buffer = new byte[16384];
+        while (true)
+        {
+            var received = await socket.ReceiveAsync(buffer, timeout.Token);
+            Assert.NotEqual(WebSocketMessageType.Close, received.MessageType);
+            foreach (var frame in Encoding.UTF8.GetString(buffer, 0, received.Count).Split('\u001e', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var document = JsonDocument.Parse(frame);
+                if (document.RootElement.TryGetProperty("target", out var name) && name.GetString() == target)
+                    return document;
+                document.Dispose();
+            }
+        }
+    }
+
+    private sealed class WebSocketTestAuthHandler(
+        IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
+        : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+    {
+        protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+        {
+            var account = Request.Query["account"].ToString();
+            var role = Request.Query["role"].ToString();
+            if (!ulong.TryParse(account, out _) || role is not (ViverAppRoles.Doctor or ViverAppRoles.Manager))
+                return Task.FromResult(AuthenticateResult.Fail("Identidade de teste inválida."));
+            var identity = new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, account), new Claim(ClaimTypes.Role, role)], Scheme.Name);
+            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name)));
+        }
+    }
+
+    [Fact]
     public async Task ArrivalRejectsOnlyAnotherClinicDay()
     {
         await using var setup = CreateContext();
@@ -237,7 +381,7 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
     private async Task CleanupAsync()
     {
         if (configuration is null) return; await using var db = CreateContext();
-        var accountIds = new[] { managerId, doctorId, patientId, offlinePatientId }.Where(x => x != 0).Distinct().ToArray();
+        var accountIds = new[] { managerId, doctorId, patientId, offlinePatientId, extraManagerId }.Where(x => x != 0).Distinct().ToArray();
         if (accountIds.Length == 0) return;
         var allAppointmentIds = await db.Appointments.Where(x => accountIds.Contains(x.PatientAccountId) || accountIds.Contains(x.ProfessionalAccountId) || accountIds.Contains(x.CreatedByAccountId)).Select(x => x.Id).ToArrayAsync();
         var retainedAppointmentIds = await db.CashMovements.Where(x => x.AppointmentId.HasValue && allAppointmentIds.Contains(x.AppointmentId.Value)).Select(x => x.AppointmentId!.Value).Distinct().ToArrayAsync();
@@ -252,11 +396,13 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         await db.Appointments.Where(x => appointmentIds.Contains(x.Id)).ExecuteUpdateAsync(update => update.SetProperty(x => x.CurrentPaymentId, (ulong?)null));
         await db.Payments.Where(x => paymentIds.Contains(x.Id)).ExecuteDeleteAsync();
         await db.ProfessionalNotifications.Where(x => appointmentIds.Contains(x.AppointmentId)).ExecuteDeleteAsync();
+        await db.ManagerNotifications.Where(x => appointmentIds.Contains(x.AppointmentId)).ExecuteDeleteAsync();
         await db.AppointmentStatusHistories.Where(x => appointmentIds.Contains(x.AppointmentId)).ExecuteDeleteAsync();
         await db.Appointments.Where(x => appointmentIds.Contains(x.Id) && x.RescheduledFromAppointmentId != null)
             .ExecuteUpdateAsync(update => update.SetProperty(x => x.RescheduledFromAppointmentId, (ulong?)null));
         await db.Appointments.Where(x => appointmentIds.Contains(x.Id)).ExecuteDeleteAsync();
         await db.ManagerPreferences.Where(x => deletableAccountIds.Contains(x.ManagerAccountId)).ExecuteDeleteAsync();
+        await db.StaffMessages.Where(x => deletableAccountIds.Contains(x.SenderAccountId) || deletableAccountIds.Contains(x.RecipientAccountId)).ExecuteDeleteAsync();
         await db.ProfessionalProfiles.Where(x => deletableAccountIds.Contains(x.AccountId)).ExecuteDeleteAsync();
         await db.PatientProfiles.Where(x => deletableAccountIds.Contains(x.AccountId)).ExecuteDeleteAsync();
         await db.Accounts.Where(x => deletableAccountIds.Contains(x.Id)).ExecuteDeleteAsync();

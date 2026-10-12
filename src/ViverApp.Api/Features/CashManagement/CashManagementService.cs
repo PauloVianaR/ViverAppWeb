@@ -102,8 +102,8 @@ public sealed class CashManagementService(
         var query = Filtered(date, method, type, appointmentNumber, patient, responsible,
             normalizedCardLastFour, normalizedAuthorization, professionalAccountId, responsibleAccountId);
         var clinic = await ClinicAsync(cancellationToken);
-        var actorName = await database.Accounts.AsNoTracking().Where(item => item.Id == actor)
-            .Select(item => item.FullName).SingleAsync(cancellationToken);
+        var actorAccount = await database.Accounts.AsNoTracking().Where(item => item.Id == actor)
+            .Select(item => new { item.FullName, item.RoleCode }).SingleAsync(cancellationToken);
         var movements = totalsOnly
             ? []
             : (await query.OrderBy(item => item.OccurredAtUtc).ThenBy(item => item.Id).ToArrayAsync(cancellationToken)).Select(Map).ToArray();
@@ -130,10 +130,17 @@ public sealed class CashManagementService(
         await audit.WriteAsync(totalsOnly ? "cash.totals_printed" : "cash.movements_printed", actor, "cash_day",
             date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), null, cancellationToken);
         var closure = await ClosureAsync(date, cancellationToken);
-        return new(clinic.LegalName, date, clinic.TimezoneName, actorName, clock.GetUtcNow().UtcDateTime,
+        var canViewCumulative = actorAccount.RoleCode == ViverAppRoles.Administrator
+            || actorAccount.RoleCode == ViverAppRoles.Manager
+                && await SettingAsync("cash.manager_can_view_cumulative_totals", true, cancellationToken);
+        var cumulative = canViewCumulative
+            ? await SummaryAsync(database.CashMovements.AsNoTracking()
+                .Where(item => item.OperationalDate <= today.ToDateTime(TimeOnly.MinValue)), cancellationToken)
+            : null;
+        return new(clinic.LegalName, date, clinic.TimezoneName, actorAccount.FullName, clock.GetUtcNow().UtcDateTime,
             string.IsNullOrWhiteSpace(filters) ? "Sem filtros adicionais" : filters,
             closure, date < today || closure is not null,
-            await SummaryAsync(query, cancellationToken), movements, totalsOnly);
+            await SummaryAsync(query, cancellationToken), cumulative, movements, totalsOnly);
     }
 
     public async Task<CashMovementResponse> AddManualAsync(

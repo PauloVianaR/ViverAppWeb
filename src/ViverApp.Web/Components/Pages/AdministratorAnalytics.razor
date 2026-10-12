@@ -14,7 +14,7 @@
 
 @if (Notice is not null)
 {
-    <p class="notice notice--error">@Notice</p>
+    <UiNotice Message="@Notice" IsError="true" />
 }
 
 <MobileFilterPanel AriaLabel="Filtros do período analítico">

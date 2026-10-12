@@ -103,32 +103,19 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
     public async Task<IReadOnlyList<ProfessionalServiceResponse>> ServicesAsync(ulong doctor, CancellationToken ct)
     {
         await RequireDoctorAsync(doctor, ct);
-        var offered = await database.ProfessionalServices.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor)
-            .ToDictionaryAsync(x => x.AppointmentTypeId, ct);
-        var types = await database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive)
-            .OrderBy(x => x.Name).ThenBy(x => x.Id).ToArrayAsync(ct);
+        var specialties = await database.ProfessionalSpecialties.AsNoTracking()
+            .Where(x => x.ProfessionalAccountId == doctor && x.Specialty.IsActive).Select(x => x.SpecialtyId).ToArrayAsync(ct);
+        var types = await database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive && specialties.Contains(x.SpecialtyId))
+            .OrderBy(x => x.Name).ToArrayAsync(ct);
         return types.Select(x => new ProfessionalServiceResponse(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode,
-            x.DurationMinutes, x.PriceAmount, x.RequiresPayment, x.IsActive, offered.TryGetValue(x.Id, out var link) && link.IsActive,
-            offered.TryGetValue(x.Id, out link) ? link.RowVersion : 0)).ToArray();
+            x.DurationMinutes, x.PriceAmount, x.RequiresPayment, true, true, x.RowVersion, x.SpecialtyId)).ToArray();
     }
 
-    public async Task<IReadOnlyList<ProfessionalServiceResponse>> UpdateServicesAsync(ulong doctor, ProfessionalServicesUpdateRequest request, CancellationToken ct)
-    {
-        var ids = request.AppointmentTypeIds.Distinct().ToArray();
-        if (await database.AppointmentTypes.CountAsync(x => ids.Contains(x.Id) && x.IsActive, ct) != ids.Length)
-            throw Invalid("Um ou mais serviços estão inativos ou não existem.");
-        var existing = await database.ProfessionalServices.Where(x => x.ProfessionalAccountId == doctor).ToArrayAsync(ct);
-        var now = clock.GetUtcNow().UtcDateTime;
-        foreach (var row in existing) { row.IsActive = ids.Contains(row.AppointmentTypeId); row.UpdatedAtUtc = now; row.RowVersion++; }
-        foreach (var id in ids.Except(existing.Select(x => x.AppointmentTypeId))) database.ProfessionalServices.Add(new()
-        { ProfessionalAccountId = doctor, AppointmentTypeId = id, IsActive = true, CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 });
-        await SaveAsync(ct); await audit.WriteAsync("professional.services.updated", doctor, "professional_profile", doctor.ToString(),
-            new Dictionary<string, string> { ["activeCount"] = ids.Length.ToString() }, ct);
-        return await ServicesAsync(doctor, ct);
-    }
+    public Task<IReadOnlyList<ProfessionalServiceResponse>> UpdateServicesAsync(ulong doctor, ProfessionalServicesUpdateRequest request, CancellationToken ct)
+        => throw Conflict("Os serviços são definidos automaticamente pelas especialidades. Altere a especialidade do catálogo, não o profissional.");
 
     public async Task<DoctorAgendaResponse> AgendaAsync(ulong doctor, DateOnly from, DateOnly to, string? status,
-        string? modality, string? category, ulong? appointmentNumber, string? search, int page, int pageSize, CancellationToken ct)
+        string? modality, string? category, ulong? appointmentNumber, string? search, int page, int pageSize, CancellationToken ct, uint? specialtyId = null)
     {
         Page(page, pageSize); if (to < from || to.DayNumber - from.DayNumber > 366) throw Invalid("Período inválido.");
         if (status is not null && !AppointmentStatuses.Contains(status)) throw Invalid("Estado inválido.");
@@ -140,11 +127,13 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         else if (status is not null) query = query.Where(x => x.StatusCode == status);
         if (modality is not null) query = query.Where(x => x.ModalityCode == modality);
         if (category is not null) query = query.Where(x => x.AppointmentType.CategoryCode == category);
+        if (specialtyId == 0) throw Invalid("Selecione uma especialidade válida.");
+        if (specialtyId.HasValue) query = query.Where(x => x.SpecialtyId == specialtyId);
         if (appointmentNumber.HasValue) query = query.Where(x => x.AppointmentNumber == appointmentNumber);
         var term = Text(search); if (term is { Length: > 120 }) throw Invalid("A busca deve ter no máximo 120 caracteres.");
         if (term is not null) { var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.PatientAccount.FullName.Contains(term) || x.AppointmentType.Name.Contains(term) || isNumber && x.AppointmentNumber == number); }
         var totalNumbers = await query.Select(x => x.AppointmentNumber).ToArrayAsync(ct);
-        var countersSource = database.Appointments.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor && x.StartsAtUtc >= start && x.StartsAtUtc < end && x.InverseRescheduledFromAppointment == null);
+        var countersSource = query;
         var sourceRows = await countersSource.Select(x => new { x.AppointmentNumber, x.ModalityCode, Rescheduled = x.AppointmentRescheduleHistories.Any() || x.RescheduledFromAppointmentId != null }).ToArrayAsync(ct);
         var sources = new DoctorAgendaSources(totalNumbers,
             sourceRows.Where(x => x.ModalityCode == "online").Select(x => x.AppointmentNumber).ToArray(),
@@ -194,7 +183,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
             x.StatusCode, x.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)),
             x.PremiumMembershipAccounts.Where(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)).Select(m => m.PremiumPlan.AppointmentDiscountPercent).FirstOrDefault(),
             history.Length, history.Where(a => a.StartsAtUtc < now).Select(a => (DateTime?)a.StartsAtUtc).Max(),
-            history.Where(a => a.StartsAtUtc >= now && a.StatusCode is "pending" or "confirmed").Select(a => (DateTime?)a.StartsAtUtc).Min(), x.RowVersion);
+            history.Where(a => a.StartsAtUtc >= now && a.StatusCode is "pending" or "confirmed").Select(a => (DateTime?)a.StartsAtUtc).Min(), x.RowVersion, x.PortalAccessEnabled);
         }).ToArray();
         var sources = new DoctorPatientSources(await all.OrderBy(x => x.FullName).Select(x => x.FullName).ToArrayAsync(ct),
             await all.Where(x => x.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now))).OrderBy(x => x.FullName).Select(x => x.FullName).ToArrayAsync(ct),
@@ -225,7 +214,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
             patient.PremiumMembershipAccounts.Any(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)),
             patient.PremiumMembershipAccounts.Where(m => m.StatusCode == "active" && m.StartsAtUtc <= now && (m.EndsAtUtc == null || m.EndsAtUtc > now)).Select(m => m.PremiumPlan.AppointmentDiscountPercent).FirstOrDefault(),
             history.Length, history.Where(x => x.StartsAtUtc < now).Select(x => (DateTime?)x.StartsAtUtc).Max(),
-            history.Where(x => x.StartsAtUtc >= now && x.StatusCode is "pending" or "confirmed").Select(x => (DateTime?)x.StartsAtUtc).Min(), patient.RowVersion);
+            history.Where(x => x.StartsAtUtc >= now && x.StatusCode is "pending" or "confirmed").Select(x => (DateTime?)x.StartsAtUtc).Min(), patient.RowVersion, patient.PortalAccessEnabled);
     }
 
     public async Task<DoctorPatientResponse> InvitePatientAsync(ulong doctor, DoctorPatientInviteRequest request, CancellationToken ct)
@@ -343,7 +332,8 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var report = await database.MedicalReports.FromSqlInterpolated($"SELECT mr.* FROM medical_reports mr JOIN appointments a ON a.id=mr.appointment_id WHERE mr.appointment_id={appointment} AND a.professional_account_id={doctor} FOR UPDATE")
             .SingleOrDefaultAsync(ct) ?? throw Missing();
-        if (await OphthalmologyReportMapping.IsOphthalmologyAsync(database, doctor, ct))
+        var specialtyId = await database.Appointments.Where(x => x.Id == appointment).Select(x => x.SpecialtyId).SingleAsync(ct);
+        if (await OphthalmologyReportMapping.IsOphthalmologyAsync(database, doctor, ct, specialtyId))
             throw Conflict("Use o laudo oftalmológico estruturado para retificar este atendimento.");
         if (report.StatusCode != "published") throw Conflict("Somente um laudo publicado pode ser retificado.");
         RequireVersion(report.RowVersion, request.ReportRowVersion);

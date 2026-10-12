@@ -56,6 +56,18 @@ public sealed class IdentityApiSecurityTests : IAsyncLifetime
         await factory.DisposeAsync();
     }
 
+    [Theory]
+    [InlineData("/api/v1/staff/contacts")]
+    [InlineData("/api/v1/staff/messages/1")]
+    [InlineData("/api/v1/staff/manager-alerts")]
+    [InlineData("/api/v1/calendar/day-plan?anchor=2026-10-09&professionalAccountId=1")]
+    public async Task StaffAndDailyScheduleEndpoints_RejectAnonymousAccess(string path)
+    {
+        using var client = CreateClient();
+        using var response = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     [Fact]
     public async Task AnonymousMutationWithoutAntiforgeryToken_IsRejected()
     {

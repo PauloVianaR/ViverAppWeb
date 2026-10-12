@@ -49,6 +49,7 @@ internal static partial class Program
                 "inspect-homolog" when homologation => await InspectHomologationAsync(connectionSource, cancellationSource.Token),
                 "seed-homolog" when homologation => await SeedHomologationAsync(connectionSource, cancellationSource.Token),
                 "analyze-hot-paths" => await AnalyzeHotPathsAsync(connectionSource, cancellationSource.Token),
+                "inspect-encoding" => await InspectEncodingAsync(connectionSource, cancellationSource.Token),
                 "apply" => await ApplyAsync(connectionSource, selectedDatabase, cancellationSource.Token),
                 "verify" => await VerifyAsync(connectionSource, selectedDatabase, cancellationSource.Token),
                 _ => UnknownCommand(args[0]),
@@ -401,7 +402,10 @@ internal static partial class Program
         string database,
         CancellationToken cancellationToken)
     {
-        await using var connection = CreateConnection(source, database);
+        // Migrations versionadas podem usar variáveis SQL de sessão (SET/PREPARE).
+        // A opção é local ao executor de migrations, nunca às consultas da API.
+        var migrationSource = new MySqlConnectionStringBuilder(source.ConnectionString) { AllowUserVariables = true };
+        await using var connection = CreateConnection(migrationSource, database);
         await connection.OpenAsync(cancellationToken);
         await AssertServerAsync(connection, cancellationToken);
         await AssertDatabaseAsync(connection, database, cancellationToken);
@@ -980,7 +984,7 @@ internal static partial class Program
 
     private static void PrintUsage()
     {
-        Console.WriteLine("Uso: dotnet run --project tools/ViverApp.Database -- <diagnose-configuration|inspect-legacy|snapshot-legacy-schema|bootstrap|configure-target|status|analyze-hot-paths|apply|verify> [--homolog apenas para bootstrap/status/apply/verify/inspect-homolog/seed-homolog]");
+        Console.WriteLine("Uso: dotnet run --project tools/ViverApp.Database -- <diagnose-configuration|inspect-legacy|snapshot-legacy-schema|bootstrap|configure-target|status|analyze-hot-paths|inspect-encoding|apply|verify> [--homolog apenas para bootstrap/status/apply/verify/inspect-homolog/seed-homolog]");
     }
 
     [GeneratedRegex("^(?<id>[0-9]{4})__(?<description>[a-z0-9_]+)\\.sql$", RegexOptions.CultureInvariant)]

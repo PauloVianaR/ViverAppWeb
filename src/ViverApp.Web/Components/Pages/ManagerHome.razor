@@ -2,7 +2,7 @@
 @inherits ManagerPageBase
 <PageTitle>Gestão clínica | ViverApp</PageTitle>
 <header class="workspace-heading"><div><p class="eyebrow">Gestor</p><h1 class="page-title">@(Home is null?"Operação da clínica":$"Olá, {Home.Profile.FullName}")</h1><p class="page-description">Acompanhe o dia, pagamentos e a agenda da clínica em um só lugar.</p></div><a class="button button--secondary" href="/gestao/perfil">Meu perfil</a></header>
-@if(Notice is not null){<p class="notice notice--error" role="alert">@Notice</p>}
+@if(Notice is not null){<UiNotice Message="@Notice" IsError="true" />}
 @if(Loading){<LoadingSkeleton Lines="6" />}
 else if(Home is not null){
 <section class="surface patient-panel manager-welcome"><p class="eyebrow">Hoje</p><h2>Visão operacional</h2><p>Os indicadores são calculados no servidor e refletem toda a clínica.</p></section>

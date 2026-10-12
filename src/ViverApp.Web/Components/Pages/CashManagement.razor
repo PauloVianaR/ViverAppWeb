@@ -4,8 +4,8 @@
 @using static ViverApp.Web.ManagerLabels
 <PageTitle>Caixa | ViverApp</PageTitle>
 <header class="workspace-heading cash-no-print"><div><p class="eyebrow">@(IsAdministrator?"Administrador":"Gestor")</p><h1 class="page-title">Caixa da clínica</h1><p class="page-description">Movimentações diárias, totais por forma de pagamento e fechamento auditável.</p></div>@if(Data?.IsClosed==true){<span class="badge">@(Data.Closure is null?"Caixa fechado":$"Fechado por {Data.Closure.ResponsibleName}")</span>}</header>
-@if(Notice is not null){<p class="notice @(NoticeError?"notice--error":"notice--success") cash-no-print" role="alert">@Notice</p>}
-<MobileFilterPanel AriaLabel="Filtros do caixa" Class="cash-no-print"><form @onsubmit="Apply" @onsubmit:preventDefault><div class="manager-filter-grid">
+@if(Notice is not null){<UiNotice Message="@Notice" IsError="NoticeError" />}
+<MobileFilterPanel AriaLabel="Filtros do caixa" Class="cash-no-print mobile-filter-panel--all"><form @onsubmit="Apply" @onsubmit:preventDefault><div class="manager-filter-grid">
 <div class="field"><label for="cash-date">Data do caixa</label><input id="cash-date" type="date" max="@TodayIso" @bind="Date" /></div>
 <div class="field"><label for="cash-method">Forma</label><select id="cash-method" @bind="MethodFilter"><option value="">Todas</option>@foreach(var value in Methods){<option value="@value">@CashMethod(value)</option>}</select></div>
 <div class="field"><label for="cash-type">Movimento</label><select id="cash-type" @bind="TypeFilter"><option value="">Todos</option>@foreach(var value in Types){<option value="@value">@CashType(value)</option>}</select></div>
@@ -57,7 +57,8 @@
                 <aside class="cash-print-grand-total">
                     <div><span>Entradas</span><strong>@Money(PrintData.Summary.ByMethod.Sum(item=>item.Entries))</strong></div>
                     <div><span>Saídas e estornos</span><strong>@Money(PrintData.Summary.ByMethod.Sum(item=>item.Outflows))</strong></div>
-                    <div class="cash-print-balance"><span>Saldo líquido</span><strong>@Money(PrintData.Summary.NetTotal)</strong></div>
+                    <div class="cash-print-balance"><span>Total líquido do dia</span><strong>@Money(PrintData.Summary.NetTotal)</strong></div>
+                    @if(PrintData.CumulativeSummary is not null){<div class="cash-print-balance"><span>Total líquido geral</span><strong>@Money(PrintData.CumulativeSummary.NetTotal)</strong></div>}
                 </aside>
             </div>
     </section>

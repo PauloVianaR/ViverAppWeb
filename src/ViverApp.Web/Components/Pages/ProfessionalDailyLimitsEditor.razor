@@ -18,7 +18,7 @@
                 <button class="button" disabled="@Saving">Salvar limites</button>
             </form>
         }
-        @if (!string.IsNullOrWhiteSpace(Notice)) { <p class="notice @(IsError ? "notice--error" : "notice--success")" role="@(IsError ? "alert" : "status")">@Notice</p> }
+        @if (!string.IsNullOrWhiteSpace(Notice)) { <UiNotice Message="@Notice" IsError="IsError" /> }
     </section>
 }
 

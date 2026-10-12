@@ -23,7 +23,7 @@ public static class PatientLabels
 {
     public static string Status(string code) => code switch
     {
-        "pending" => "Pendente",
+        "pending" => "Aguardando Pagamento",
         "confirmed" => "Confirmado",
         "arrived" => "Paciente chegou",
         "in_progress" => "Em atendimento",

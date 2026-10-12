@@ -5,8 +5,10 @@
 @page "/privacidade"
 @page "/cookies"
 @page "/acessibilidade"
-@implements IDisposable
+@implements IAsyncDisposable
 @inject NavigationManager Navigation
+@inject IJSRuntime JavaScript
+@inject WebBackendOptions Backend
 
 <PublicSeo Title="@Title" Description="@Description" Path="@Path" />
 
@@ -27,7 +29,7 @@
             <p class="muted">Situação cadastral consultada no comprovante de inscrição: ativa desde 23/12/2019. “Centro Médico Viver” é a marca de apresentação do portal; o nome fantasia aparece oculto no comprovante fornecido.</p>
             break;
         case "/contato":
-            <section><h2>Atendimento geral</h2><address><strong>@ClinicPublicIdentity.LegalName</strong><br />@ClinicPublicIdentity.StreetAddress<br />@ClinicPublicIdentity.CityAddress</address><p><a href="tel:@ClinicPublicIdentity.PhoneUri">@ClinicPublicIdentity.PhoneDisplay</a><br /><a href="mailto:@ClinicPublicIdentity.PublicEmail">@ClinicPublicIdentity.PublicEmail</a></p></section>
+            <section><h2>Atendimento geral</h2>@if(ClinicContact is null){<p>@(ContactLoadFailed ? "Dados de contato indisponíveis no momento. Tente novamente mais tarde." : "Carregando dados de contato da clínica…")</p>}else{<address><strong>@ClinicContact.DisplayName</strong><br />@ClinicContact.LegalName<br />@ClinicContact.Address</address><p>@if(!string.IsNullOrWhiteSpace(ClinicContact.PhoneE164)){<a href="tel:@ClinicContact.PhoneE164">@FormatClinicPhone(ClinicContact.PhoneE164)</a><br />}@if(!string.IsNullOrWhiteSpace(ClinicContact.Email)){<a href="mailto:@ClinicContact.Email">@ClinicContact.Email</a>}</p>}</section>
             <section><h2>Privacidade e proteção de dados</h2><p>Para exercer direitos relacionados a dados pessoais ou esclarecer como eles são tratados, escreva para <a href="mailto:@ClinicPublicIdentity.PrivacyEmail">@ClinicPublicIdentity.PrivacyEmail</a>. A identidade do solicitante poderá ser confirmada de forma proporcional ao risco antes da entrega ou alteração de informações.</p></section>
             <section id="seguranca"><h2>Segurança</h2><p>Para comunicar uma possível vulnerabilidade, sem incluir dados de pacientes ou explorar sistemas, utilize <a href="mailto:@ClinicPublicIdentity.SecurityEmail">@ClinicPublicIdentity.SecurityEmail</a>. Este canal não representa programa de recompensa nem autorização para testes invasivos.</p></section>
             <p class="public-document__notice"><strong>Importante:</strong> estes canais não substituem serviços de urgência ou emergência. Não envie prontuário, exames, credenciais ou outros dados sensíveis por e-mail comum; quando necessário, a clínica indicará um meio autenticado.</p>
@@ -80,6 +82,31 @@
 </article>
 
 @code {
+    private IJSObjectReference? ContactModule;
+    private PublicClinicContact? ClinicContact;
+    private bool ContactLoadFailed;
+    private static string FormatClinicPhone(string phone)
+    {
+        var digits = new string(phone.Where(char.IsDigit).ToArray());
+        if (digits.StartsWith("55", StringComparison.Ordinal) && digits.Length is 12 or 13) digits = digits[2..];
+        return digits.Length switch
+        {
+            11 => $"({digits[..2]}) {digits.Substring(2, 5)}-{digits[7..]}",
+            10 => $"({digits[..2]}) {digits.Substring(2, 4)}-{digits[6..]}",
+            _ => phone
+        };
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            ContactModule = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/identity-access.js");
+            ClinicContact = await ContactModule.InvokeAsync<PublicClinicContact>("get", Backend.BaseUrl.ToString(), "api/v1/public/clinic");
+        }
+        catch (JSException) { ContactLoadFailed = true; }
+        StateHasChanged();
+    }
     private string Path => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant();
     private string Title => Path switch
     {
@@ -95,5 +122,9 @@
     private void HandleLocationChanged(object? sender, LocationChangedEventArgs args) =>
         _ = InvokeAsync(StateHasChanged);
 
-    public void Dispose() => Navigation.LocationChanged -= HandleLocationChanged;
+    public async ValueTask DisposeAsync()
+    {
+        Navigation.LocationChanged -= HandleLocationChanged;
+        if (ContactModule is not null) try { await ContactModule.DisposeAsync(); } catch (JSDisconnectedException) { }
+    }
 }

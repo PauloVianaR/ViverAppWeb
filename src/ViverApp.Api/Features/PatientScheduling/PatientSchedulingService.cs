@@ -32,6 +32,7 @@ public sealed class PatientSchedulingService(
         ValidatePagination(page, pageSize);
         ValidateModality(modality, allowNull: true);
 
+        uint[] requiredSpecialties = [];
         if (appointmentTypeId.HasValue)
         {
             var ids = new[] { appointmentTypeId.Value }.Concat(additionalAppointmentTypeIds ?? []).ToArray();
@@ -39,6 +40,7 @@ public sealed class PatientSchedulingService(
                 throw BadRequest("A seleção de serviços é inválida.");
             var types = await database.AppointmentTypes.AsNoTracking()
                 .Where(item => ids.Contains(item.Id) && item.IsActive).ToArrayAsync(cancellationToken);
+            requiredSpecialties = types.Select(x => x.SpecialtyId).Distinct().ToArray();
             if (types.Length != ids.Length || types.Any(type => type.CategoryCode != types[0].CategoryCode
                 || modality is not null && !SupportsModality(type.ModalityCode, modality)))
                 throw Conflict("Os serviços devem ter o mesmo tipo base e oferecer a modalidade selecionada.");
@@ -63,9 +65,8 @@ public sealed class PatientSchedulingService(
 
         if (appointmentTypeId.HasValue)
         {
-            var serviceIds = new[] { appointmentTypeId.Value }.Concat(additionalAppointmentTypeIds ?? []).ToArray();
-            query = query.Where(account => account.ProfessionalProfile!.ProfessionalServices
-                .Count(link => serviceIds.Contains(link.AppointmentTypeId) && link.IsActive && link.AppointmentType.IsActive) == serviceIds.Length);
+            query = query.Where(account => account.ProfessionalProfile!.ProfessionalSpecialties
+                .Count(link => requiredSpecialties.Contains(link.SpecialtyId) && link.Specialty.IsActive) == requiredSpecialties.Length);
         }
 
         var total = await query.CountAsync(cancellationToken);
@@ -260,6 +261,7 @@ public sealed class PatientSchedulingService(
             ProfessionalAccountId = request.ProfessionalAccountId,
             AppointmentTypeId = request.AppointmentTypeId,
             CreatedByAccountId = patientId,
+            SpecialtyId = type.SpecialtyId,
             StatusCode = requiresPayment ? "pending" : "confirmed",
             ModalityCode = request.ModalityCode,
             StartsAtUtc = slot.StartsAtUtc,
@@ -307,10 +309,8 @@ public sealed class PatientSchedulingService(
         ValidateIdempotencyKey(idempotencyKey);
         await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         await LockPatientAsync(request.PatientAccountId, cancellationToken);
-        var isLinked = await database.ProfessionalPatientLinks.AnyAsync(x => x.ProfessionalAccountId == doctorId
-            && x.PatientAccountId == request.PatientAccountId && x.StatusCode == "active", cancellationToken)
-            || await database.Appointments.AnyAsync(x => x.ProfessionalAccountId == doctorId && x.PatientAccountId == request.PatientAccountId, cancellationToken);
-        if (!isLinked) throw NotFound("Paciente não encontrado.");
+        // A seleção inclui todos os pacientes da clínica; o profissional do novo
+        // atendimento continua sendo exclusivamente o titular da sessão.
         var requestHash = HashRequest(doctorId, $"doctor-create:{request.PatientAccountId}", request);
         var scope = $"appointment.doctor-create:{doctorId}";
         var replay = await TryReplayAsync(scope, idempotencyKey, requestHash, cancellationToken);
@@ -324,10 +324,12 @@ public sealed class PatientSchedulingService(
         var (type, serviceItems, basePrice, requiresPayment) = await ResolveServicesAsync(
             request.AppointmentTypeId, request.AdditionalAppointmentTypeIds, request.ModalityCode,
             doctorId, cancellationToken, request.DurationMinutes);
+        var specialtyId = type.SpecialtyId;
+        if (request.SpecialtyId.HasValue && request.SpecialtyId != specialtyId)
+            throw Conflict("Os serviços escolhidos devem pertencer à especialidade selecionada.");
+        requiresPayment = ApplyBillingForm(request.BillingFormCode, requiresPayment);
         var doctor = await RequireActiveDoctorAsync(doctorId, cancellationToken);
-        if (!await database.ProfessionalServices.AnyAsync(x => x.ProfessionalAccountId == doctorId
-            && x.AppointmentTypeId == type.Id && x.IsActive && x.AppointmentType.IsActive, cancellationToken))
-            throw Conflict("Este serviço não está ativo no seu perfil.");
+
         var (policy, timezoneName, timezone) = await LoadConfigurationAsync(cancellationToken);
         var slot = await RequireSlotAsync(request.PatientAccountId, doctorId, type, request.ModalityCode,
             request.LocalDate, request.LocalStartsAt, timezoneName, timezone, policy, null, cancellationToken);
@@ -343,11 +345,13 @@ public sealed class PatientSchedulingService(
             ProfessionalAccountId = doctorId,
             AppointmentTypeId = type.Id,
             CreatedByAccountId = doctorId,
+            BillingFormCode = request.BillingFormCode,
+            SpecialtyId = specialtyId,
             StatusCode = requiresPayment ? "pending" : "confirmed",
             ModalityCode = request.ModalityCode,
             StartsAtUtc = slot.StartsAtUtc,
             EndsAtUtc = slot.EndsAtUtc,
-            PriceAmount = PatientExperience.PatientExperienceService.DiscountedPrice(basePrice, discount),
+            PriceAmount = requiresPayment ? PatientExperience.PatientExperienceService.DiscountedPrice(basePrice, discount) : 0,
             BasePriceAmount = basePrice,
             DiscountPercent = requiresPayment ? discount : 0,
             RequiresPayment = requiresPayment,
@@ -388,10 +392,12 @@ public sealed class PatientSchedulingService(
         var (type, serviceItems, basePrice, requiresPayment) = await ResolveServicesAsync(
             request.AppointmentTypeId, request.AdditionalAppointmentTypeIds, request.ModalityCode,
             request.ProfessionalAccountId, cancellationToken, request.DurationMinutes);
+        var specialtyId = type.SpecialtyId;
+        if (request.SpecialtyId.HasValue && request.SpecialtyId != specialtyId)
+            throw BadRequest("A especialidade selecionada não corresponde ao serviço.");
+        requiresPayment = ApplyBillingForm(request.BillingFormCode, requiresPayment);
         var doctor = await RequireActiveDoctorAsync(request.ProfessionalAccountId, cancellationToken);
-        if (!await database.ProfessionalServices.AnyAsync(x => x.ProfessionalAccountId == request.ProfessionalAccountId
-            && x.AppointmentTypeId == type.Id && x.IsActive && x.AppointmentType.IsActive, cancellationToken))
-            throw Conflict("Este serviço não é oferecido pelo profissional selecionado.");
+
         var (policy, timezoneName, timezone) = await LoadConfigurationAsync(cancellationToken);
         var slot = await RequireSlotAsync(request.PatientAccountId, request.ProfessionalAccountId, type, request.ModalityCode,
             request.LocalDate, request.LocalStartsAt, timezoneName, timezone, policy, null, cancellationToken);
@@ -407,11 +413,13 @@ public sealed class PatientSchedulingService(
             ProfessionalAccountId = request.ProfessionalAccountId,
             AppointmentTypeId = type.Id,
             CreatedByAccountId = managerId,
+            BillingFormCode = request.BillingFormCode,
+            SpecialtyId = specialtyId,
             StatusCode = requiresPayment ? "pending" : "confirmed",
             ModalityCode = request.ModalityCode,
             StartsAtUtc = slot.StartsAtUtc,
             EndsAtUtc = slot.EndsAtUtc,
-            PriceAmount = PatientExperience.PatientExperienceService.DiscountedPrice(basePrice, discount),
+            PriceAmount = requiresPayment ? PatientExperience.PatientExperienceService.DiscountedPrice(basePrice, discount) : 0,
             BasePriceAmount = basePrice,
             DiscountPercent = requiresPayment ? discount : 0,
             RequiresPayment = requiresPayment,
@@ -435,6 +443,13 @@ public sealed class PatientSchedulingService(
         await transaction.CommitAsync(cancellationToken); return (response, false);
     }
 
+    internal static bool ApplyBillingForm(string form, bool catalogRequiresPayment) => form switch
+    {
+        "private" => catalogRequiresPayment,
+        "insurance" => false,
+        _ => throw Conflict("Selecione Particular ou Convênio."),
+    };
+
     public async Task<AppointmentResponse> ApplyPointDiscountForManagerAsync(ulong actorId, ulong appointmentId,
         AppointmentPointDiscountRequest request, CancellationToken cancellationToken)
     {
@@ -446,17 +461,18 @@ public sealed class PatientSchedulingService(
             .SingleOrDefaultAsync(cancellationToken) ?? throw NotFound("Atendimento não encontrado.");
         if (appointment.RowVersion != request.RowVersion)
             throw Conflict("O atendimento foi alterado por outra sessão.");
-        if (appointment.StatusCode is not ("pending" or "confirmed") || appointment.PointDiscountKindCode is not null)
-            throw Conflict("O desconto pontual só pode ser aplicado uma vez, antes do início do atendimento.");
+        if (appointment.StatusCode is not ("pending" or "confirmed"))
+            throw Conflict("O desconto pontual só pode ser alterado antes da chegada e do início do atendimento.");
         if (await database.Payments.AnyAsync(payment => payment.AppointmentId == appointmentId
                 && (payment.StatusCode == "pending" || payment.StatusCode == "authorized"
                     || payment.StatusCode == "paid"), cancellationToken))
             throw Conflict("Este atendimento já possui uma cobrança. Cancele-a antes de conceder desconto.");
+        appointment.PriceAmount += appointment.PointDiscountAmount;
         await ApplyPointDiscountAsync(appointment, actorId, request.KindCode, request.Value, cancellationToken);
         appointment.UpdatedAtUtc = timeProvider.GetUtcNow().UtcDateTime;
         appointment.RowVersion++;
         await database.SaveChangesAsync(cancellationToken);
-        await auditWriter.WriteAsync("appointment.point_discount_applied", actorId, appointment.Id,
+        await auditWriter.WriteAsync(request.KindCode == "none" ? "appointment.point_discount_removed" : "appointment.point_discount_updated", actorId, appointment.Id,
             new Dictionary<string, string>
             {
                 ["kind"] = request.KindCode,
@@ -790,8 +806,8 @@ public sealed class PatientSchedulingService(
         ulong? excludedAppointmentId,
         CancellationToken cancellationToken)
     {
-        if (!await database.ProfessionalServices.AsNoTracking().AnyAsync(x => x.ProfessionalAccountId == doctorId
-            && x.AppointmentTypeId == type.Id && x.IsActive && x.AppointmentType.IsActive, cancellationToken))
+        if (!await database.ProfessionalSpecialties.AsNoTracking().AnyAsync(x => x.ProfessionalAccountId == doctorId
+            && x.SpecialtyId == type.SpecialtyId && x.Specialty.IsActive, cancellationToken))
             return [];
         var preferences = await database.ProfessionalPreferences.AsNoTracking()
             .SingleOrDefaultAsync(x => x.ProfessionalAccountId == doctorId, cancellationToken);
@@ -919,7 +935,8 @@ public sealed class PatientSchedulingService(
 
         return (new SchedulingPolicy(
             ReadInt(values, "appointments.booking_horizon_days", 365, 1, 730),
-            ReadInt(values, "appointments.minimum_lead_minutes", 120, 0, 10080),
+            ReadInt(values, "appointments.minimum_lead_minutes",
+                ReadInt(values, "appointments.slot_interval_minutes", 10, 5, 120), 0, 10080),
             ReadInt(values, "appointments.cancellation_cutoff_hours", 24, 0, 720),
             ReadInt(values, "appointments.reschedule_cutoff_hours", 24, 0, 720),
             ReadInt(values, "appointments.slot_interval_minutes", 10, 5, 120)), timezoneName, timezone);
@@ -952,12 +969,13 @@ public sealed class PatientSchedulingService(
             types.Add(await RequireAppointmentTypeAsync(id, modality, cancellationToken));
         if (types.Any(type => type.CategoryCode != types[0].CategoryCode))
             throw BadRequest("Todos os serviços do atendimento devem ser do mesmo tipo base.");
-        var linkedIds = await database.ProfessionalServices.AsNoTracking()
-            .Where(link => link.ProfessionalAccountId == professionalId && link.IsActive
-                && ids.Contains(link.AppointmentTypeId) && link.AppointmentType.IsActive)
-            .Select(link => link.AppointmentTypeId).ToArrayAsync(cancellationToken);
-        if (linkedIds.Distinct().Count() != ids.Length)
-            throw Conflict("O profissional selecionado não oferece todos os serviços escolhidos.");
+        var specialties = await database.ProfessionalSpecialties.AsNoTracking()
+            .Where(link => link.ProfessionalAccountId == professionalId && link.Specialty.IsActive)
+            .Select(link => link.SpecialtyId).ToArrayAsync(cancellationToken);
+        if (types.Any(type => !specialties.Contains(type.SpecialtyId)))
+            throw Conflict("O profissional selecionado não atende a especialidade dos serviços escolhidos.");
+        if (types.Any(type => type.SpecialtyId != types[0].SpecialtyId))
+            throw BadRequest("Selecione serviços da mesma especialidade.");
         if (durationMinutes.HasValue && ids.Length == 1)
             throw BadRequest("A duração de um único serviço é definida pelo catálogo e não pode ser alterada no agendamento.");
         if (durationMinutes is < 5 or > 720)
@@ -985,7 +1003,7 @@ public sealed class PatientSchedulingService(
         string? kind, decimal? value, CancellationToken cancellationToken)
     {
         if (kind is null && value is null) return;
-        if (kind is not ("percent" or "amount") || value is null || value <= 0)
+        if ((kind == "none" && value != 0) || (kind != "none" && (kind is not ("percent" or "amount") || value is null || value <= 0)))
             throw BadRequest("Informe um desconto pontual válido em porcentagem ou reais.");
         if (!appointment.RequiresPayment || appointment.PriceAmount <= 0)
             throw BadRequest("O desconto pontual exige um atendimento com cobrança.");
@@ -1001,19 +1019,29 @@ public sealed class PatientSchedulingService(
             if (enabled == "false")
                 throw new SchedulingRuleException(StatusCodes.Status403Forbidden, "Descontos pelo gestor estão desabilitados.");
         }
+        if (kind == "none")
+        {
+            appointment.PointDiscountKindCode = null;
+            appointment.PointDiscountValue = 0;
+            appointment.PointDiscountAmount = 0;
+            appointment.PointDiscountByAccountId = null;
+            appointment.PointDiscountAtUtc = null;
+            return;
+        }
         var maxText = await database.ApplicationSettings.AsNoTracking()
             .Where(setting => setting.SettingKey == "appointments.point_discount_max_percent")
             .Select(setting => setting.ValueJson).SingleOrDefaultAsync(cancellationToken);
         var maxPercent = decimal.TryParse(maxText, NumberStyles.Number, CultureInfo.InvariantCulture,
             out var configured) && configured is >= 0 and <= 100 ? configured : 30m;
+        var discountValue = value ?? throw BadRequest("Informe o valor do desconto.");
         var amount = kind == "percent"
-            ? decimal.Round(appointment.PriceAmount * value.Value / 100m, 2, MidpointRounding.AwayFromZero)
-            : value.Value;
+            ? decimal.Round(appointment.PriceAmount * discountValue / 100m, 2, MidpointRounding.AwayFromZero)
+            : discountValue;
         if (amount <= 0 || amount >= appointment.PriceAmount
             || amount > decimal.Round(appointment.PriceAmount * maxPercent / 100m, 2, MidpointRounding.AwayFromZero))
             throw BadRequest($"O desconto deve ser menor que o valor a pagar e respeitar o limite de {maxPercent:N0}% após o Premium.");
         appointment.PointDiscountKindCode = kind;
-        appointment.PointDiscountValue = value.Value;
+        appointment.PointDiscountValue = discountValue;
         appointment.PointDiscountAmount = amount;
         appointment.PointDiscountByAccountId = actorId;
         appointment.PointDiscountAtUtc = timeProvider.GetUtcNow().UtcDateTime;

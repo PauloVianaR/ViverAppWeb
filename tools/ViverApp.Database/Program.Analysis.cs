@@ -4,6 +4,25 @@ namespace ViverApp.Database;
 
 internal static partial class Program
 {
+    private static async Task<int> InspectEncodingAsync(MySqlConnectionStringBuilder source, CancellationToken ct)
+    {
+        await using var connection = CreateConnection(source, TargetDatabase);
+        await connection.OpenAsync(ct);
+        await AssertServerAsync(connection, ct);
+        await AssertDatabaseAsync(connection, TargetDatabase, ct);
+        foreach (var sql in new[] {
+            "SELECT name, normalized_name FROM specialties ORDER BY id",
+            "SELECT setting_key, description FROM application_settings ORDER BY setting_key" })
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                Console.WriteLine($"{reader.GetString(0)} | {(reader.IsDBNull(1) ? "" : reader.GetString(1))}");
+        }
+        return 0;
+    }
+
     private static async Task<int> AnalyzeHotPathsAsync(MySqlConnectionStringBuilder source, CancellationToken ct)
     {
         await using var connection = CreateConnection(source, TargetDatabase);

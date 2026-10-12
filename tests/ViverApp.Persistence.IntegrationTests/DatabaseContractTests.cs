@@ -32,7 +32,13 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(68, applicationEntities.Length);
+        Assert.Equal(72, applicationEntities.Length);
+        Assert.NotNull(context.Model.FindEntityType(typeof(AppointmentOperationalReview)));
+        Assert.NotNull(context.Model.FindEntityType(typeof(AppointmentOperationalReviewVersion)));
+        Assert.False(context.Model.FindEntityType(typeof(AppointmentType))!.FindProperty(nameof(AppointmentType.SpecialtyId))!.IsNullable);
+        Assert.NotNull(context.Model.FindEntityType(typeof(StaffMessage)));
+        Assert.NotNull(context.Model.FindEntityType(typeof(ManagerNotification)));
+        Assert.NotNull(context.Model.FindEntityType(typeof(PatientProfile))!.FindProperty(nameof(PatientProfile.AdministrativeNotes)));
         Assert.NotNull(context.Model.FindEntityType(typeof(AppointmentServiceItem)));
         Assert.DoesNotContain(
             applicationEntities,
@@ -109,7 +115,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052", migrations);
+        Assert.Equal("0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022,0023,0024,0025,0026,0027,0028,0029,0030,0031,0032,0033,0034,0035,0036,0037,0038,0039,0040,0041,0042,0043,0044,0045,0046,0047,0048,0049,0050,0051,0052,0053,0054,0055,0056,0057", migrations);
 
         var calendarIndex = await ExecuteScalarAsync(connection,
             "SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ',') FROM information_schema.statistics WHERE table_schema='viverappweb' AND table_name='appointments' AND index_name='ix_appointments_start_id'");
@@ -321,7 +327,7 @@ public sealed class DatabaseContractTests
             FROM application_settings
             WHERE setting_key LIKE 'appointments.%'
             """);
-        Assert.Equal("23", schedulingSettings);
+        Assert.Equal("24", schedulingSettings);
 
         var administratorSchema = await ExecuteScalarAsync(
             connection,

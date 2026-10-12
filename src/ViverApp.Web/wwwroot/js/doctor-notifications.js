@@ -1,4 +1,5 @@
-let connection;
+import { openRealtime, closeRealtime } from "./realtime-connection.js";
+let connectionId;
 let audioContext;
 
 function endpoint(baseUrl, path) {
@@ -6,20 +7,14 @@ function endpoint(baseUrl, path) {
 }
 
 export async function connect(baseUrl, role, dotnet) {
-    await import("/vendor/signalr/signalr.min.js");
     const area = role === "psychologist" ? "psychologist" : "doctor";
     const response = await fetch(endpoint(baseUrl, `api/v1/${area}/notifications?page=1&pageSize=20`), {
         credentials: "include", headers: { "Accept": "application/json" }, cache: "no-store"
     });
     if (!response.ok) throw new Error("Não foi possível carregar as notificações.");
     const initial = await response.json();
-    connection = new globalThis.signalR.HubConnectionBuilder()
-        .withUrl(endpoint(baseUrl, "hubs/doctor-notifications"), { withCredentials: true })
-        .withAutomaticReconnect([0, 2000, 5000, 15000])
-        .configureLogging(globalThis.signalR.LogLevel.Warning)
-        .build();
-    connection.on("PatientArrived", message => dotnet.invokeMethodAsync("ReceiveArrival", message));
-    try { await connection.start(); } catch { /* O feed durável continua disponível por HTTP. */ }
+    connectionId = await openRealtime(baseUrl, "hubs/doctor-notifications", dotnet,
+        { PatientArrived: "ReceiveArrival" }, "RefreshArrivalFeed");
     const unlock = () => {
         audioContext ??= new (window.AudioContext || window.webkitAudioContext)();
         if (audioContext.state === "suspended") audioContext.resume();
@@ -45,6 +40,6 @@ export async function play(volume) {
 }
 
 export async function disconnect() {
-    if (connection) { try { await connection.stop(); } catch { } connection = null; }
+    await closeRealtime(connectionId); connectionId = null;
     if (audioContext) { try { await audioContext.close(); } catch { } audioContext = null; }
 }

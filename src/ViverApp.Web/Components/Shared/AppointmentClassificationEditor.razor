@@ -1,0 +1,42 @@
+@inherits ViverApp.Web.Components.Pages.ManagerPageBase
+@if (Notice is not null) { <UiNotice Message="@Notice" IsError="NoticeError" /> }
+@if (!Loading && Metadata is not null)
+{
+    <section class="appointment-classification">
+        <div class="field"><label for="appointment-billing-form">Forma</label><select id="appointment-billing-form" @bind="BillingForm"><option value="private">Particular</option><option value="insurance">Convênio</option></select></div>
+        <div class="field"><span>Especialidade</span><strong id="appointment-specialty">@SpecialtyLabel</strong></div>
+        <button type="button" class="button button--secondary button--small" @onclick="Save" disabled="@(Busy || !Changed)">Salvar forma</button>
+    </section>
+}
+@code {
+    [Parameter] public long AppointmentId { get; set; }
+    [Parameter] public EventCallback Saved { get; set; }
+    private WebBookingWorkspaceMetadata? Metadata;
+    private IReadOnlyList<WebSpecialty>? Specialties;
+    private string SpecialtyLabel => BookingWorkspaceLabels.Specialty(Metadata, Specialties);
+    private string BillingForm = "private";
+    private uint SpecialtyId;
+    private bool Changed => Metadata is not null && Metadata.BillingFormCode != BillingForm;
+    protected override async Task Load()
+    {
+        Metadata = await Get<WebBookingWorkspaceMetadata>($"api/v1/booking-workspace/appointments/{AppointmentId}");
+        await LoadSpecialtyLabel();
+        BillingForm = Metadata?.BillingFormCode ?? "private";
+        SpecialtyId = Metadata?.SpecialtyId ?? 0;
+    }
+    private async Task LoadSpecialtyLabel()
+    {
+        // Older API responses contain the specialty ID, but not its display name.
+        // Resolve that exact ID; never guess from the professional or hardcode Ophthalmology.
+        if (Metadata?.SpecialtyId is > 0 && string.IsNullOrWhiteSpace(Metadata.SpecialtyName))
+            Specialties ??= await AppointmentFilterOptions.SpecialtiesAsync(path => Get<WebPage<WebSpecialty>>(path));
+    }
+    private Task Save() => Run(async () =>
+    {
+        Metadata = await Request<WebBookingWorkspaceMetadata>($"api/v1/booking-workspace/appointments/{AppointmentId}", "PUT",
+            new { billingFormCode = BillingForm, specialtyId = SpecialtyId == 0 ? (uint?)null : SpecialtyId, rowVersion = Metadata!.RowVersion });
+        await LoadSpecialtyLabel();
+        await Saved.InvokeAsync();
+        Notice = "Forma do atendimento salva.";
+    });
+}

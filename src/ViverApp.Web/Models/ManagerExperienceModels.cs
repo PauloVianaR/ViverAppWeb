@@ -14,7 +14,7 @@ public sealed record ManagerProfessionalWeeklyHour(ulong Id, byte DayOfWeek, Tim
 public sealed record ManagerCapabilities(bool AppointmentTypesEnabled, bool DoctorSchedulesEnabled, bool ProfessionalServicesEnabled,
     bool PremiumManagementEnabled, bool MedicalRecordWriteEnabled, bool CashReopeningEnabled,
     bool CashCumulativeTotalsEnabled, bool PointDiscountsEnabled = true, decimal PointDiscountMaxPercent = 30);
-public sealed record ManagerService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal BasePrice, bool RequiresPayment);
+public sealed record ManagerService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal BasePrice, bool RequiresPayment, uint SpecialtyId = 0);
 public sealed record ManagerAppointmentCreate(
     [property: JsonPropertyName("patientAccountId")] ulong PatientAccountId,
     [property: JsonPropertyName("professionalAccountId")] ulong ProfessionalAccountId,
@@ -25,7 +25,7 @@ public sealed record ManagerAppointmentCreate(
     [property: JsonPropertyName("patientNotes")] string? PatientNotes,
     IReadOnlyList<uint>? AdditionalAppointmentTypeIds = null,
     string? PointDiscountKindCode = null, decimal? PointDiscountValue = null,
-    int? DurationMinutes = null);
+    int? DurationMinutes = null, string BillingFormCode = "private", uint? SpecialtyId = null);
 public sealed record ManagerReportMetadata(bool Exists, string? StatusCode, uint VersionCount, DateTime? PublishedAtUtc);
 public sealed record ManagerPaymentMetadata(ulong? Id, string StatusCode, string? MethodCode, DateTime? PaidAtUtc,
     string? CardLastFour, string? AuthorizationReference, ulong RowVersion);
@@ -54,7 +54,8 @@ public sealed record ManagerPatient(ulong AccountId, string FullName, string? Pr
     string? Phone, bool EmailVerified, bool PhoneVerified, DateOnly? BirthDate, ManagerPatientAddress? Address,
     string StatusCode, bool PortalAccessEnabled, bool IsPremium, string PremiumStatus, ulong? PremiumRequestId,
     ulong? PremiumMembershipId, ulong? PremiumMembershipRowVersion, Guid? PremiumProofDocumentId, string? PremiumProofName, decimal PremiumDiscountPercent,
-    int AppointmentCount, DateTime? LastAppointmentAtUtc, DateTime? NextAppointmentAtUtc, ulong RowVersion);
+    int AppointmentCount, DateTime? LastAppointmentAtUtc, DateTime? NextAppointmentAtUtc, ulong RowVersion,
+    string? AdministrativeNotes = null);
 public sealed record ManagerPatientCounters(int Total, int Premium, int Active, int Blocked, int PremiumPending);
 public sealed record ManagerPatientSources(IReadOnlyList<string> Total, IReadOnlyList<string> Premium,
     IReadOnlyList<string> Active, IReadOnlyList<string> Blocked, IReadOnlyList<string> PremiumPending);
