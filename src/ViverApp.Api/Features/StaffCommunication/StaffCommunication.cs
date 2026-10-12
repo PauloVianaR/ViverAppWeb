@@ -99,8 +99,14 @@ public sealed class StaffCommunicationService(
                 throw new StaffRuleException(409, "Esta mensagem já foi enviada com outro conteúdo.");
             return Map(existing);
         }
-        var message = new StaffMessage { SenderAccountId = actor, RecipientAccountId = request.RecipientId,
-            ClientNonce = request.ClientNonce, Body = body, CreatedAtUtc = clock.GetUtcNow().UtcDateTime };
+        var message = new StaffMessage
+        {
+            SenderAccountId = actor,
+            RecipientAccountId = request.RecipientId,
+            ClientNonce = request.ClientNonce,
+            Body = body,
+            CreatedAtUtc = clock.GetUtcNow().UtcDateTime
+        };
         database.StaffMessages.Add(message);
         try { await database.SaveChangesAsync(ct); }
         catch (DbUpdateException ex) when (ex.InnerException is MySql.Data.MySqlClient.MySqlException { Number: 1062 })
@@ -145,8 +151,13 @@ public sealed class StaffCommunicationService(
         var ids = await database.Accounts.AsNoTracking().Where(a => a.RoleCode == "manager" && a.StatusCode == "active")
             .Select(a => a.Id).ToArrayAsync(ct);
         var now = clock.GetUtcNow().UtcDateTime;
-        var entries = ids.Select(id => new ManagerNotification { ManagerAccountId = id,
-            AppointmentId = appointment.Id, TypeCode = type, CreatedAtUtc = now }).ToArray();
+        var entries = ids.Select(id => new ManagerNotification
+        {
+            ManagerAccountId = id,
+            AppointmentId = appointment.Id,
+            TypeCode = type,
+            CreatedAtUtc = now
+        }).ToArray();
         database.ManagerNotifications.AddRange(entries);
         await database.SaveChangesAsync(ct);
         return entries.Select(n => new ManagerAlertView(n.Id, n.AppointmentId, appointment.AppointmentNumber, n.TypeCode, now, false)).ToArray();

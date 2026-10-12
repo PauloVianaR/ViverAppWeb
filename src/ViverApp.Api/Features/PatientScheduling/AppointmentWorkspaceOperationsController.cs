@@ -79,8 +79,13 @@ public sealed class AppointmentWorkspaceOperationsController(ViverAppDbContext d
         review.RowVersion++;
         database.AppointmentOperationalReviewVersions.Add(new AppointmentOperationalReviewVersion
         {
-            AppointmentId = id, VersionNumber = review.RowVersion, Rating = review.Rating, Feedback = review.Feedback,
-            EditorAccountId = Actor, EditorRoleCode = User.FindFirstValue(ClaimTypes.Role)!, CreatedAtUtc = now,
+            AppointmentId = id,
+            VersionNumber = review.RowVersion,
+            Rating = review.Rating,
+            Feedback = review.Feedback,
+            EditorAccountId = Actor,
+            EditorRoleCode = User.FindFirstValue(ClaimTypes.Role)!,
+            CreatedAtUtc = now,
         });
         await database.SaveChangesAsync(ct);
         await audit.WriteAsync("appointment.operational_review.saved", Actor, "appointment", id.ToString(), null, ct);
@@ -108,14 +113,22 @@ public sealed class AppointmentWorkspaceOperationsController(ViverAppDbContext d
         await using var transaction = await database.Database.BeginTransactionAsync(ct);
         var locked = await database.Appointments.FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {id} FOR UPDATE").AsNoTracking().SingleAsync(ct);
         if ((Professional && locked.ProfessionalAccountId != Actor) || locked.StatusCode is not ("confirmed" or "arrived" or "in_progress" or "completed"))
-            throw new AdministratorRuleException(409,"O atendimento foi alterado durante o envio. Atualize antes de anexar.");
+            throw new AdministratorRuleException(409, "O atendimento foi alterado durante o envio. Atualize antes de anexar.");
         database.PrivateDocuments.Add(document);
         var link = new AppointmentDocument
         {
-            AppointmentId = id, UploadedByAccountId = Actor, CategoryCode = "attachment", ObjectKey = document.Id.ToString("D"),
-            OriginalFileName = document.OriginalFileName, ContentType = document.ContentType, SizeBytes = document.SizeBytes,
-            Sha256 = document.Sha256, StatusCode = "available", CreatedAtUtc = clock.GetUtcNow().UtcDateTime,
-            AvailableAtUtc = clock.GetUtcNow().UtcDateTime, RowVersion = 1,
+            AppointmentId = id,
+            UploadedByAccountId = Actor,
+            CategoryCode = "attachment",
+            ObjectKey = document.Id.ToString("D"),
+            OriginalFileName = document.OriginalFileName,
+            ContentType = document.ContentType,
+            SizeBytes = document.SizeBytes,
+            Sha256 = document.Sha256,
+            StatusCode = "available",
+            CreatedAtUtc = clock.GetUtcNow().UtcDateTime,
+            AvailableAtUtc = clock.GetUtcNow().UtcDateTime,
+            RowVersion = 1,
         };
         database.AppointmentDocuments.Add(link);
         await database.SaveChangesAsync(ct);

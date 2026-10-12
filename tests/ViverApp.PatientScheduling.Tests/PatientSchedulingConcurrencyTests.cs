@@ -92,12 +92,15 @@ public sealed class PatientSchedulingConcurrencyTests
                 new DoctorAppointmentCreateRequest(fixture.PatientId, fixture.AppointmentTypeId, "online",
                     fixture.LocalDate, new TimeOnly(10, 0), null), default);
             database.ChangeTracker.Clear();
-            var http = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity([
+            var http = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity([
                 new Claim(ClaimTypes.NameIdentifier, fixture.DoctorId.ToString()),
-                new Claim(ClaimTypes.Role, ViverAppRoles.Doctor)], "test")) };
+                new Claim(ClaimTypes.Role, ViverAppRoles.Doctor)], "test"))
+            };
             var audit = new IdentityAuditWriter(database, new HttpContextAccessor { HttpContext = http }, IdentitySecurityOptions.Load(configuration));
             var controller = new BookingWorkspaceController(database, null!, audit, new FixedTimeProvider(fixture.UtcNow), service)
-                { ControllerContext = new ControllerContext { HttpContext = http } };
+            { ControllerContext = new ControllerContext { HttpContext = http } };
             var initial = await controller.Metadata(created.Response.Id, default);
             Assert.NotNull(initial.SpecialtyId);
             Assert.Equal(await database.Specialties.Where(x => x.Id == initial.SpecialtyId)
@@ -198,8 +201,13 @@ public sealed class PatientSchedulingConcurrencyTests
             type.ModalityCode = "both";
             database.ClinicWeeklyHours.Add(new ClinicWeeklyHour
             {
-                DayOfWeek = (byte)date.DayOfWeek, StartTime = TimeSpan.FromHours(7), EndTime = TimeSpan.FromHours(12),
-                IsActive = true, CreatedAtUtc = fixture.UtcNow.UtcDateTime, UpdatedAtUtc = fixture.UtcNow.UtcDateTime, RowVersion = 1
+                DayOfWeek = (byte)date.DayOfWeek,
+                StartTime = TimeSpan.FromHours(7),
+                EndTime = TimeSpan.FromHours(12),
+                IsActive = true,
+                CreatedAtUtc = fixture.UtcNow.UtcDateTime,
+                UpdatedAtUtc = fixture.UtcNow.UtcDateTime,
+                RowVersion = 1
             });
             await database.SaveChangesAsync();
             var service = new PatientSchedulingService(database, new NullAuditWriter(), clock);
@@ -940,52 +948,55 @@ public sealed class PatientSchedulingConcurrencyTests
     [InlineData("administrator")]
     public async Task OperationalReview_VersionsAreSeparateFromPatientReviewAndOwned(string role)
     {
-        var configuration=LoadConfiguration();
-        var fixture=await CreateFixtureAsync(configuration,true,role=="psychologist" ? role : ViverAppRoles.Doctor);
-        ulong extraActor=0;
+        var configuration = LoadConfiguration();
+        var fixture = await CreateFixtureAsync(configuration, true, role == "psychologist" ? role : ViverAppRoles.Doctor);
+        ulong extraActor = 0;
         try
         {
-            await using var database=CreateContext(configuration);
-            var clock=new FixedTimeProvider(fixture.UtcNow);
-            var scheduling=new PatientSchedulingService(database,new NullAuditWriter(),clock);
-            var created=await scheduling.CreateForDoctorAsync(fixture.DoctorId,Guid.NewGuid().ToString("N"),
-                new DoctorAppointmentCreateRequest(fixture.PatientId,fixture.AppointmentTypeId,"online",fixture.LocalDate,new(10,0),null),default);
-            var actor=fixture.DoctorId;
-            if(role is "manager" or "administrator")
+            await using var database = CreateContext(configuration);
+            var clock = new FixedTimeProvider(fixture.UtcNow);
+            var scheduling = new PatientSchedulingService(database, new NullAuditWriter(), clock);
+            var created = await scheduling.CreateForDoctorAsync(fixture.DoctorId, Guid.NewGuid().ToString("N"),
+                new DoctorAppointmentCreateRequest(fixture.PatientId, fixture.AppointmentTypeId, "online", fixture.LocalDate, new(10, 0), null), default);
+            var actor = fixture.DoctorId;
+            if (role is "manager" or "administrator")
             {
-                var account=NewAccount(role,"QA avaliação operacional",Guid.NewGuid().ToString("N")+"@review.example.test",fixture.UtcNow.UtcDateTime);
-                database.Accounts.Add(account);await database.SaveChangesAsync();actor=extraActor=account.Id;
+                var account = NewAccount(role, "QA avaliação operacional", Guid.NewGuid().ToString("N") + "@review.example.test", fixture.UtcNow.UtcDateTime);
+                database.Accounts.Add(account); await database.SaveChangesAsync(); actor = extraActor = account.Id;
             }
-            var http=new DefaultHttpContext {User=new ClaimsPrincipal(new ClaimsIdentity([
-                new Claim(ClaimTypes.NameIdentifier,actor.ToString()),new Claim(ClaimTypes.Role,role)],"test"))};
-            var audit=new IdentityAuditWriter(database,new HttpContextAccessor{HttpContext=http},IdentitySecurityOptions.Load(configuration));
-            var controller=new AppointmentWorkspaceOperationsController(database,null!,audit,clock)
-                {ControllerContext=new ControllerContext{HttpContext=http}};
-            var blocked=await Assert.ThrowsAsync<ViverApp.Api.Features.AdministratorExperience.AdministratorRuleException>(
-                ()=>controller.SaveReview(created.Response.Id,new(5,"Antes da conclusão",0),default));
-            Assert.Equal(409,blocked.StatusCode);
-            await database.Appointments.Where(x=>x.Id==created.Response.Id).ExecuteUpdateAsync(update=>update.SetProperty(x=>x.StatusCode,"completed").SetProperty(x=>x.CompletedByAccountId,(ulong?)actor).SetProperty(x=>x.CompletedAtUtc,(DateTime?)fixture.UtcNow.UtcDateTime));
+            var http = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity([
+                new Claim(ClaimTypes.NameIdentifier,actor.ToString()),new Claim(ClaimTypes.Role,role)], "test"))
+            };
+            var audit = new IdentityAuditWriter(database, new HttpContextAccessor { HttpContext = http }, IdentitySecurityOptions.Load(configuration));
+            var controller = new AppointmentWorkspaceOperationsController(database, null!, audit, clock)
+            { ControllerContext = new ControllerContext { HttpContext = http } };
+            var blocked = await Assert.ThrowsAsync<ViverApp.Api.Features.AdministratorExperience.AdministratorRuleException>(
+                () => controller.SaveReview(created.Response.Id, new(5, "Antes da conclusão", 0), default));
+            Assert.Equal(409, blocked.StatusCode);
+            await database.Appointments.Where(x => x.Id == created.Response.Id).ExecuteUpdateAsync(update => update.SetProperty(x => x.StatusCode, "completed").SetProperty(x => x.CompletedByAccountId, (ulong?)actor).SetProperty(x => x.CompletedAtUtc, (DateTime?)fixture.UtcNow.UtcDateTime));
             database.ChangeTracker.Clear();
-            var first=await controller.SaveReview(created.Response.Id,new(3,"Primeiro feedback",0),default);
-            var second=await controller.SaveReview(created.Response.Id,new(5,"Segundo feedback",first.RowVersion),default);
-            Assert.Equal(2,second.Versions.Count);
-            Assert.Equal("Segundo feedback",second.Feedback);
-            Assert.Equal("Primeiro feedback",second.Versions[1].Feedback);
-            Assert.Equal(role,second.Versions[0].EditorRole);
-            var stale=await Assert.ThrowsAsync<ViverApp.Api.Features.AdministratorExperience.AdministratorRuleException>(
-                ()=>controller.SaveReview(created.Response.Id,new(4,"Versão desatualizada",first.RowVersion),default));
-            Assert.Equal(409,stale.StatusCode);
-            Assert.False(await database.AppointmentReviews.AnyAsync(x=>x.AppointmentId==created.Response.Id));
-            http.User=new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier,fixture.PatientId.ToString()),
-                new Claim(ClaimTypes.Role,"doctor")],"test"));
-            var denied=await Assert.ThrowsAsync<ViverApp.Api.Features.AdministratorExperience.AdministratorRuleException>(
-                ()=>controller.Review(created.Response.Id,default));
-            Assert.Equal(404,denied.StatusCode);
+            var first = await controller.SaveReview(created.Response.Id, new(3, "Primeiro feedback", 0), default);
+            var second = await controller.SaveReview(created.Response.Id, new(5, "Segundo feedback", first.RowVersion), default);
+            Assert.Equal(2, second.Versions.Count);
+            Assert.Equal("Segundo feedback", second.Feedback);
+            Assert.Equal("Primeiro feedback", second.Versions[1].Feedback);
+            Assert.Equal(role, second.Versions[0].EditorRole);
+            var stale = await Assert.ThrowsAsync<ViverApp.Api.Features.AdministratorExperience.AdministratorRuleException>(
+                () => controller.SaveReview(created.Response.Id, new(4, "Versão desatualizada", first.RowVersion), default));
+            Assert.Equal(409, stale.StatusCode);
+            Assert.False(await database.AppointmentReviews.AnyAsync(x => x.AppointmentId == created.Response.Id));
+            http.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier,fixture.PatientId.ToString()),
+                new Claim(ClaimTypes.Role,"doctor")], "test"));
+            var denied = await Assert.ThrowsAsync<ViverApp.Api.Features.AdministratorExperience.AdministratorRuleException>(
+                () => controller.Review(created.Response.Id, default));
+            Assert.Equal(404, denied.StatusCode);
         }
         finally
         {
-            await DeleteFixtureAsync(configuration,fixture);
-            if(extraActor!=0){await using var database=CreateContext(configuration);await database.Accounts.Where(x=>x.Id==extraActor).ExecuteDeleteAsync();}
+            await DeleteFixtureAsync(configuration, fixture);
+            if (extraActor != 0) { await using var database = CreateContext(configuration); await database.Accounts.Where(x => x.Id == extraActor).ExecuteDeleteAsync(); }
         }
     }
 
@@ -1103,7 +1114,7 @@ public sealed class PatientSchedulingConcurrencyTests
             RowVersion = 1,
         });
         await database.SaveChangesAsync();
-        database.ProfessionalSpecialties.Add(new ProfessionalSpecialty { ProfessionalAccountId=doctor.Id,SpecialtyId=appointmentType.SpecialtyId,IsPrimary=true });
+        database.ProfessionalSpecialties.Add(new ProfessionalSpecialty { ProfessionalAccountId = doctor.Id, SpecialtyId = appointmentType.SpecialtyId, IsPrimary = true });
         await database.SaveChangesAsync();
         return new Fixture(patient.Id, doctor.Id, appointmentType.Id, localDate, utcNow);
     }

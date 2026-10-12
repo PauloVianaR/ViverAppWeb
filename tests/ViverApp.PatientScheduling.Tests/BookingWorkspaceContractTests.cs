@@ -11,15 +11,15 @@ public sealed class BookingWorkspaceContractTests
     [Fact]
     public void OperationalReviewAndAttachments_RequireProtectedStaffWrites()
     {
-        var type=typeof(AppointmentWorkspaceOperationsController);
-        var roles=Assert.Single(type.GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AuthorizeAttribute),false)
+        var type = typeof(AppointmentWorkspaceOperationsController);
+        var roles = Assert.Single(type.GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AuthorizeAttribute), false)
             .Cast<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>());
-        Assert.Equal(["administrator","manager","doctor","psychologist"],roles.Roles!.Split(','));
-        Assert.Contains(type.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.ServiceFilterAttribute),false)
-            .Cast<Microsoft.AspNetCore.Mvc.ServiceFilterAttribute>(),x=>x.ServiceType==typeof(ViverApp.Api.Features.AdministratorExperience.AdministratorStepUpFilter));
-        foreach(var method in new[]{nameof(AppointmentWorkspaceOperationsController.SaveReview),nameof(AppointmentWorkspaceOperationsController.Upload),nameof(AppointmentWorkspaceOperationsController.Delete)})
-            Assert.Single(type.GetMethod(method)!.GetCustomAttributes(typeof(Microsoft.AspNetCore.RateLimiting.EnableRateLimitingAttribute),false));
-        Assert.Throws<JsonException>(()=>JsonSerializer.Deserialize<OperationalReviewWrite>(
+        Assert.Equal(["administrator", "manager", "doctor", "psychologist"], roles.Roles!.Split(','));
+        Assert.Contains(type.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.ServiceFilterAttribute), false)
+            .Cast<Microsoft.AspNetCore.Mvc.ServiceFilterAttribute>(), x => x.ServiceType == typeof(ViverApp.Api.Features.AdministratorExperience.AdministratorStepUpFilter));
+        foreach (var method in new[] { nameof(AppointmentWorkspaceOperationsController.SaveReview), nameof(AppointmentWorkspaceOperationsController.Upload), nameof(AppointmentWorkspaceOperationsController.Delete) })
+            Assert.Single(type.GetMethod(method)!.GetCustomAttributes(typeof(Microsoft.AspNetCore.RateLimiting.EnableRateLimitingAttribute), false));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<OperationalReviewWrite>(
             """{"rating":5,"feedback":"teste","rowVersion":0,"updatedByAccountId":1}""",
             new JsonSerializerOptions(JsonSerializerDefaults.Web)));
     }

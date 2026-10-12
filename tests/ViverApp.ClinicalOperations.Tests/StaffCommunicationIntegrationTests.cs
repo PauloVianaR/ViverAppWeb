@@ -58,21 +58,56 @@ public sealed class StaffCommunicationIntegrationTests
         db.Accounts.AddRange(managerOne, managerTwo, doctor, patient);
         await db.SaveChangesAsync();
         var now = DateTime.UtcNow;
-        db.ProfessionalProfiles.Add(new ProfessionalProfile { AccountId = doctor.Id, ProfessionalTitle = "Dr.",
-            LicenseTypeCode = "CRM", LicenseStateCode = "MG", LicenseNumber = "TESTE-CHAT",
-            DefaultAppointmentDurationMinutes = 10, CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 });
-        var type = new AppointmentType { Name = "__staff_chat_test__" + Guid.NewGuid().ToString("N"),
-            CategoryCode = "consultation", Description = "Teste sintético", ModalityCode = "in_person",
-            DurationMinutes = 10, PriceAmount = 0, RequiresPayment = false, IsActive = true,
-            DisplayOrder = 999, CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 };
+        db.ProfessionalProfiles.Add(new ProfessionalProfile
+        {
+            AccountId = doctor.Id,
+            ProfessionalTitle = "Dr.",
+            LicenseTypeCode = "CRM",
+            LicenseStateCode = "MG",
+            LicenseNumber = "TESTE-CHAT",
+            DefaultAppointmentDurationMinutes = 10,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1
+        });
+        var type = new AppointmentType
+        {
+            Name = "__staff_chat_test__" + Guid.NewGuid().ToString("N"),
+            CategoryCode = "consultation",
+            Description = "Teste sintético",
+            ModalityCode = "in_person",
+            DurationMinutes = 10,
+            PriceAmount = 0,
+            RequiresPayment = false,
+            IsActive = true,
+            DisplayOrder = 999,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1
+        };
         db.AppointmentTypes.Add(type);
         await db.SaveChangesAsync();
-        var appointment = new Appointment { AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
-            PatientAccountId = patient.Id, ProfessionalAccountId = doctor.Id, AppointmentTypeId = type.Id,
-            CreatedByAccountId = managerOne.Id, StatusCode = "confirmed", ModalityCode = "in_person",
-            StartsAtUtc = now.AddDays(1), EndsAtUtc = now.AddDays(1).AddMinutes(10),
-            PriceAmount = 0, BasePriceAmount = 0, RequiresPayment = false, DiscountPercent = 0,
-            PaymentLocationCode = "clinic", CurrencyCode = "BRL", CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 };
+        var appointment = new Appointment
+        {
+            AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
+            PatientAccountId = patient.Id,
+            ProfessionalAccountId = doctor.Id,
+            AppointmentTypeId = type.Id,
+            CreatedByAccountId = managerOne.Id,
+            StatusCode = "confirmed",
+            ModalityCode = "in_person",
+            StartsAtUtc = now.AddDays(1),
+            EndsAtUtc = now.AddDays(1).AddMinutes(10),
+            PriceAmount = 0,
+            BasePriceAmount = 0,
+            RequiresPayment = false,
+            DiscountPercent = 0,
+            PaymentLocationCode = "clinic",
+            CurrencyCode = "BRL",
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1
+        };
         db.Appointments.Add(appointment);
         await db.SaveChangesAsync();
         var service = NewService(db, new StaffPresence());
@@ -101,9 +136,19 @@ public sealed class StaffCommunicationIntegrationTests
     private static Account NewAccount(string role, string name)
     {
         var email = $"staff-{Guid.NewGuid():N}@phase31.example.test";
-        return new Account { RoleCode = role, StatusCode = "active", FullName = name, Email = email,
-            NormalizedEmail = email.ToUpperInvariant(), EmailVerified = true, SecurityStamp = RandomNumberGenerator.GetBytes(32),
-            CreatedAtUtc = DateTime.UtcNow, UpdatedAtUtc = DateTime.UtcNow, RowVersion = 1 };
+        return new Account
+        {
+            RoleCode = role,
+            StatusCode = "active",
+            FullName = name,
+            Email = email,
+            NormalizedEmail = email.ToUpperInvariant(),
+            EmailVerified = true,
+            SecurityStamp = RandomNumberGenerator.GetBytes(32),
+            CreatedAtUtc = DateTime.UtcNow,
+            UpdatedAtUtc = DateTime.UtcNow,
+            RowVersion = 1
+        };
     }
     private sealed class NullHubContext : IHubContext<StaffChatHub>
     {

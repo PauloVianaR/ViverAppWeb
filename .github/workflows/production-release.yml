@@ -31,6 +31,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      - name: Verify pinned SDK
+        shell: pwsh
+        run: ./scripts/assert-dotnet-sdk.ps1
+      - name: Scheduling navigation JavaScript tests
+        run: node --test tests/ViverApp.Web.Tests/appointment-navigation.test.mjs
       - name: Restore, build, format and portable tests
         shell: pwsh
         run: |

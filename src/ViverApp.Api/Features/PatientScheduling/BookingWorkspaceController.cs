@@ -120,9 +120,14 @@ public sealed class BookingWorkspaceController(ViverAppDbContext database, Manag
             item.StatusCode = item.RequiresPayment ? "pending" : "confirmed";
             if (previous != item.StatusCode) database.AppointmentStatusHistories.Add(new AppointmentStatusHistory
             {
-                AppointmentId = id, ActorAccountId = Actor, FromStatusCode = previous, ToStatusCode = item.StatusCode,
-                Reason = "Alteração da forma de atendimento", OccurredAtUtc = now,
-                StartsAtUtc = item.StartsAtUtc, EndsAtUtc = item.EndsAtUtc,
+                AppointmentId = id,
+                ActorAccountId = Actor,
+                FromStatusCode = previous,
+                ToStatusCode = item.StatusCode,
+                Reason = "Alteração da forma de atendimento",
+                OccurredAtUtc = now,
+                StartsAtUtc = item.StartsAtUtc,
+                EndsAtUtc = item.EndsAtUtc,
             });
         }
         item.BillingFormCode = request.BillingFormCode;

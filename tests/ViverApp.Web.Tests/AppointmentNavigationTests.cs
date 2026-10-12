@@ -1,16 +1,17 @@
 using Xunit;
 namespace ViverApp.Web.Tests;
+
 public sealed class AppointmentNavigationTests
 {
     [Theory]
-    [InlineData(2026,10,11,2026,10,11,2026,10,18)]
-    [InlineData(2026,10,17,2026,10,11,2026,10,18)]
-    [InlineData(2026,12,31,2026,12,27,2027,1,3)]
-    public void WeekIncludesSundayThroughNextSunday(int y,int m,int d,int sy,int sm,int sd,int ey,int em,int ed)
+    [InlineData(2026, 10, 11, 2026, 10, 11, 2026, 10, 18)]
+    [InlineData(2026, 10, 17, 2026, 10, 11, 2026, 10, 18)]
+    [InlineData(2026, 12, 31, 2026, 12, 27, 2027, 1, 3)]
+    public void WeekIncludesSundayThroughNextSunday(int y, int m, int d, int sy, int sm, int sd, int ey, int em, int ed)
     {
-        var day=new DateTime(y,m,d);
-        Assert.Equal(new DateTime(sy,sm,sd),AppointmentNavigation.WeekStart(day));
-        Assert.Equal(new DateTime(ey,em,ed),AppointmentNavigation.WeekEnd(day));
+        var day = new DateTime(y, m, d);
+        Assert.Equal(new DateTime(sy, sm, sd), AppointmentNavigation.WeekStart(day));
+        Assert.Equal(new DateTime(ey, em, ed), AppointmentNavigation.WeekEnd(day));
     }
     [Theory]
     [InlineData("https://example.com")]
@@ -18,16 +19,16 @@ public sealed class AppointmentNavigationTests
     [InlineData("/administracao/agenda?view=day")]
     [InlineData("/gestao/agenda?view=day\nheader")]
     public void ReturnCannotEscapeCurrentArea(string destination)
-        =>Assert.Equal("/gestao/agenda",AppointmentNavigation.AgendaReturn("/gestao",destination));
+        => Assert.Equal("/gestao/agenda", AppointmentNavigation.AgendaReturn("/gestao", destination));
     [Fact]
     public void HistoryStateKeepsContextWithoutAddingQueryParameters()
     {
         var context = new AppointmentNavigationContext("/gestao", "day", new(2026, 10, 19), 42, "09:10");
         var state = AppointmentNavigation.State(context);
         Assert.Equal(context, AppointmentNavigation.Restore("/gestao", state));
-        var fallback=AppointmentNavigation.QueryFallback("/gestao/agenda",context);
-        Assert.Equal(context with {Time=null},AppointmentNavigation.LegacyContext("/gestao",fallback));
-        Assert.Contains("time=09:10",AppointmentNavigation.QueryFallback("/gestao/agendar",context));
+        var fallback = AppointmentNavigation.QueryFallback("/gestao/agenda", context);
+        Assert.Equal(context with { Time = null }, AppointmentNavigation.LegacyContext("/gestao", fallback));
+        Assert.Contains("time=09:10", AppointmentNavigation.QueryFallback("/gestao/agendar", context));
         Assert.Null(AppointmentNavigation.Restore("/medico", state));
         Assert.Null(AppointmentNavigation.Restore("/gestao", "not json"));
         Assert.Null(AppointmentNavigation.Restore("/gestao", AppointmentNavigation.State(context with { Time = "wrong" })));
@@ -59,7 +60,7 @@ public sealed class AppointmentNavigationTests
     [Fact]
     public void ReturnPreservesDateProfessionalAndView()
     {
-        const string path="/gestao/agenda?view=day&date=2026-10-19&professional=42";
-        Assert.Equal(path,AppointmentNavigation.AgendaReturn("/gestao",path));
+        const string path = "/gestao/agenda?view=day&date=2026-10-19&professional=42";
+        Assert.Equal(path, AppointmentNavigation.AgendaReturn("/gestao", path));
     }
 }

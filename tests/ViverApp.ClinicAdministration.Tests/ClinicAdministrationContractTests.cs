@@ -503,26 +503,26 @@ public sealed class ClinicAdministrationContractTests : IAsyncLifetime
         });
         await database.SaveChangesAsync();
 
-        var psychologyId=await database.Specialties.Where(x=>x.NormalizedName=="PSICOLOGIA").Select(x=>x.Id).SingleAsync();
-        database.ProfessionalSpecialties.Add(new ProfessionalSpecialty{ProfessionalAccountId=clinician.Id,SpecialtyId=psychologyId,IsPrimary=true});
+        var psychologyId = await database.Specialties.Where(x => x.NormalizedName == "PSICOLOGIA").Select(x => x.Id).SingleAsync();
+        database.ProfessionalSpecialties.Add(new ProfessionalSpecialty { ProfessionalAccountId = clinician.Id, SpecialtyId = psychologyId, IsPrimary = true });
         await database.SaveChangesAsync();
         var serviceCreated = await controller.CreateAppointmentType(
             new AppointmentTypeWriteRequest($"Serviço {Guid.NewGuid():N}", null, "in_person", 30,
-                120m, true, 0, 0, "consultation", true, null,psychologyId), CancellationToken.None);
+                120m, true, 0, 0, "consultation", true, null, psychologyId), CancellationToken.None);
         var service = Assert.IsType<AppointmentTypeResponse>(Assert.IsType<CreatedAtActionResult>(serviceCreated.Result).Value);
-        Assert.Equal(psychologyId,service.SpecialtyId);
+        Assert.Equal(psychologyId, service.SpecialtyId);
         Assert.False(await database.ProfessionalServices.AsNoTracking().AnyAsync(link =>
             link.AppointmentTypeId == service.Id && link.ProfessionalAccountId == clinician.Id));
         var linked = await controller.GetAppointmentTypeProfessionals(service.Id, CancellationToken.None);
         Assert.Contains(Assert.IsType<OkObjectResult>(linked.Result).Value as IReadOnlyList<AppointmentTypeProfessionalResponse> ?? [],
             item => item.ProfessionalAccountId == clinician.Id && item.Linked);
-        var retiredWrite=controller.UpdateAppointmentTypeProfessionals(service.Id,new([clinician.Id]));
-        Assert.Equal(409,Assert.IsType<ObjectResult>(retiredWrite).StatusCode);
+        var retiredWrite = controller.UpdateAppointmentTypeProfessionals(service.Id, new([clinician.Id]));
+        Assert.Equal(409, Assert.IsType<ObjectResult>(retiredWrite).StatusCode);
         var invalidName = $"Serviço inválido {Guid.NewGuid():N}";
         var invalid = await controller.CreateAppointmentType(
             new AppointmentTypeWriteRequest(invalidName, null, "in_person", 30,
                 120m, true, 0, 0, "consultation", true, [ulong.MaxValue]), CancellationToken.None);
-        Assert.Equal(409,Assert.IsType<ObjectResult>(invalid.Result).StatusCode);
+        Assert.Equal(409, Assert.IsType<ObjectResult>(invalid.Result).StatusCode);
         Assert.False(await database.AppointmentTypes.AsNoTracking().AnyAsync(item => item.Name == invalidName));
 
         await transaction.RollbackAsync();

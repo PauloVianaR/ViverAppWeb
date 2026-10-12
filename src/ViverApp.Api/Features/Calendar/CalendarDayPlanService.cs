@@ -70,11 +70,12 @@ public sealed class CalendarDayPlanService(ViverAppDbContext database)
                             .Select(h => new CalendarWindowResponse(h.StartTime, h.EndTime)).ToArray();
                 professionalWindows.AddRange(current);
             }
-            var windows = (from c in clinicWindows from p in professionalWindows
-                let start = c.Start > p.Start ? c.Start : p.Start
-                let end = c.End < p.End ? c.End : p.End
-                where end > start
-                select new CalendarWindowResponse(start, end)).ToList();
+            var windows = (from c in clinicWindows
+                           from p in professionalWindows
+                           let start = c.Start > p.Start ? c.Start : p.Start
+                           let end = c.End < p.End ? c.End : p.End
+                           where end > start
+                           select new CalendarWindowResponse(start, end)).ToList();
             foreach (var holiday in holidays.Where(h => h.HolidayDate.Date == day.ToDateTime(TimeOnly.MinValue).Date
                 || h.IsAnnual && h.HolidayDate.Month == day.Month && h.HolidayDate.Day == day.Day))
             {
