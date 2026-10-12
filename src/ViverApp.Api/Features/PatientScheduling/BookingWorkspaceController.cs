@@ -18,7 +18,7 @@ namespace ViverApp.Api.Features.PatientScheduling;
 
 public sealed record BookingWorkspaceSpecialty(uint Id, string Name);
 public sealed record BookingWorkspaceOptions(uint? DefaultSpecialtyId, IReadOnlyList<BookingWorkspaceSpecialty> Specialties);
-public sealed record BookingWorkspaceMetadata(string BillingFormCode, uint? SpecialtyId, ulong RowVersion);
+public sealed record BookingWorkspaceMetadata(string BillingFormCode, uint? SpecialtyId, ulong RowVersion, string? SpecialtyName = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record BookingWorkspaceUpdate(
     [param: Required, RegularExpression("^(private|insurance)$")] string BillingFormCode,
@@ -73,10 +73,10 @@ public sealed class BookingWorkspaceController(ViverAppDbContext database, Manag
     [HttpGet("appointments/{id:long}")]
     public async Task<BookingWorkspaceMetadata> Metadata(ulong id, CancellationToken ct)
     {
-        var item = await database.Appointments.AsNoTracking()
+        var item = await database.Appointments.AsNoTracking().Include(x => x.Specialty)
             .SingleOrDefaultAsync(x => x.Id == id && (!Professional || x.ProfessionalAccountId == Actor), ct)
             ?? throw new AdministratorRuleException(404, "Atendimento não encontrado.");
-        return new(item.BillingFormCode, item.SpecialtyId, item.RowVersion);
+        return new(item.BillingFormCode, item.SpecialtyId, item.RowVersion, item.Specialty?.Name);
     }
 
     [HttpPut("appointments/{id:long}"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
@@ -88,14 +88,12 @@ public sealed class BookingWorkspaceController(ViverAppDbContext database, Manag
         if (item is null || (Professional && item.ProfessionalAccountId != Actor))
             throw new AdministratorRuleException(404, "Atendimento não encontrado.");
         if (item.RowVersion != request.RowVersion) throw new AdministratorRuleException(409, "O atendimento foi alterado. Atualize antes de salvar.");
-        if (request.SpecialtyId.HasValue && !await database.Specialties.AnyAsync(x => x.Id == request.SpecialtyId && x.IsActive, ct))
-            throw new AdministratorRuleException(400, "Selecione uma especialidade ativa.");
+        if (item.SpecialtyId != request.SpecialtyId)
+            throw new AdministratorRuleException(409, "A especialidade deste atendimento é fixa. Se estiver incorreta, cancele o atendimento e registre outro.");
         if (request.BillingFormCode is not ("private" or "insurance"))
             throw new AdministratorRuleException(400, "Selecione Particular ou Convênio.");
         if (item.StatusCode is "canceled" or "no_show")
-            throw new AdministratorRuleException(409, "A forma e a especialidade não podem ser alteradas neste estado.");
-        if (item.SpecialtyId != request.SpecialtyId && await database.MedicalReports.AnyAsync(x => x.AppointmentId == id, ct))
-            throw new AdministratorRuleException(409, "A especialidade não pode ser trocada após registrar um laudo; os dados clínicos devem ser preservados.");
+            throw new AdministratorRuleException(409, "A forma não pode ser alterada neste estado.");
         var now = clock.GetUtcNow().UtcDateTime;
         if (item.BillingFormCode != request.BillingFormCode)
         {
@@ -126,7 +124,6 @@ public sealed class BookingWorkspaceController(ViverAppDbContext database, Manag
             });
         }
         item.BillingFormCode = request.BillingFormCode;
-        item.SpecialtyId = request.SpecialtyId;
         item.UpdatedAtUtc = now;
         item.RowVersion++;
         // RequiresPayment integra a chave alternativa usada pelos pagamentos.
@@ -143,6 +140,7 @@ public sealed class BookingWorkspaceController(ViverAppDbContext database, Manag
         await audit.WriteAsync("appointment.workspace.updated", Actor, "appointment", id.ToString(CultureInfo.InvariantCulture),
             new Dictionary<string, string> { ["billingForm"] = item.BillingFormCode }, ct);
         await transaction.CommitAsync(ct);
-        return new(item.BillingFormCode, item.SpecialtyId, item.RowVersion);
+        return new(item.BillingFormCode, item.SpecialtyId, item.RowVersion,
+            await database.Specialties.Where(x => x.Id == item.SpecialtyId).Select(x => x.Name).SingleOrDefaultAsync(ct));
     }
 }

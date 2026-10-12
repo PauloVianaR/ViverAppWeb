@@ -76,12 +76,14 @@ else
                     @if (PointKind != "") { <div class="field"><label for="booking-discount-value">Valor</label><input id="booking-discount-value" type="number" min="0.01" step="0.01" @bind="PointValue" /></div> }
                 }
                 <button type="button" class="button" disabled="@(Busy || PatientIdValue == 0 || PrimaryId == 0 || (!IsProfessional && ProfessionalId == 0) || !Slots.Any(x=>x.StartsAt.ToString("HH:mm")==SelectedTime) || !DurationValid || SpecialtyId == 0)" @onclick="Confirm">Salvar agendamento</button>
-                <a class="button button--secondary" href="@ReturnTo">Voltar à agenda</a>
-                <p class="field-hint">Convênio não gera cobrança ao paciente. Particular respeita “Cobrar?” do catálogo. Valores e disponibilidade são validados no servidor.</p>
+                <a class="button button--secondary" href="@ReturnTo" @onclick="BackToAgenda" @onclick:preventDefault>Voltar à agenda</a>
+                <p class="field-hint">Convênio não gera cobrança ao paciente. Particular respeita “Cobrar?” do catálogo.</p>
             </aside>
         </div>
     </AppointmentWorkspace>
 }
+
+@inject AppointmentNavigationStore AgendaContext
 
 @code {
     [Parameter] public long PatientId { get; set; }
@@ -89,7 +91,10 @@ else
     [Parameter] public string? DateQuery { get; set; }
     [Parameter] public string? TimeQuery { get; set; }
     [Parameter] public string? ReturnQuery { get; set; }
-    private string ReturnTo => AppointmentNavigation.AgendaReturn(Root,ReturnQuery);
+    private AppointmentNavigationContext? NavigationContext;
+    private string ReturnTo => Root + "/agenda";
+    private string? InitialTime => TimeQuery ?? NavigationContext?.Time;
+    private async Task BackToAgenda() {var context=NavigationContext is null?null:NavigationContext with{Time=null};await AgendaContext.NavigateAsync(ReturnTo,context);}
     [Parameter] public ulong? ProfessionalQuery { get; set; }
     private bool IsProfessional => Root is "/medico" or "/psicologo";
     private string Api => IsProfessional ? "api/v1/doctor" : Root == "/administracao" ? "api/v1/administrator" : "api/v1/manager";
@@ -129,6 +134,7 @@ else
     private string CalendarKey => $"{PatientIdValue}-{ProfessionalId}-{PrimaryId}-{Extras}-{ModalityCode}";
     protected override async Task Load()
     {
+        NavigationContext = await AgendaContext.RestoreAsync(Root, ReturnQuery);
         Options = await Get<WebBookingWorkspaceOptions>("api/v1/booking-workspace/options");
         SpecialtyId = Options?.DefaultSpecialtyId ?? 0;
         var people = new List<ManagerPatient>();
@@ -157,13 +163,13 @@ else
             if (Root == "/gestao") { var cap = await Get<ManagerCapabilities>("api/v1/manager/capabilities"); DiscountAllowed = cap?.PointDiscountsEnabled == true; MaxDiscount = cap?.PointDiscountMaxPercent ?? 30; }
             else { var settings = await Get<IReadOnlyList<AdministratorSetting>>($"{Api}/settings") ?? []; if (decimal.TryParse(settings.FirstOrDefault(x => x.Key == "appointments.point_discount_max_percent")?.ValueJson, CultureInfo.InvariantCulture, out var limit)) MaxDiscount = limit; }
         }
-        if (DateOnly.TryParseExact(DateQuery, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var initial) && initial >= Date) InitialDate = initial;
-        ProfessionalId = ProfessionalQuery ?? 0;
+        if (DateOnly.TryParseExact(DateQuery ?? NavigationContext?.Date.ToString("yyyy-MM-dd"), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var initial) && initial >= Date) InitialDate = initial;
+        ProfessionalId = ProfessionalQuery ?? NavigationContext?.ProfessionalId ?? 0;
         if(IsProfessional){var me=await Get<WebCurrentAccount>("api/v1/auth/me");ProfessionalId=ulong.TryParse(me?.Id,out var ownId)?ownId:0;var selfProfile=await Get<ProfessionalProfileData>("api/v1/doctor/profile");Professionals=[new WebBookingProfessional(ProfessionalId,selfProfile?.FullName??"Você",null,"","",10,[])];}
         if(ProfessionalId!=0){var selected=await Get<WebBookingProfessionalSpecialties>($"api/v1/booking-workspace/professionals/{ProfessionalId}/specialties");SpecialtyId=selected?.PrimarySpecialtyId??SpecialtyId;}
         await LoadProfessionals();
         if (InitialDate.HasValue) Date = InitialDate.Value;
-        if (TimeOnly.TryParse(TimeQuery, CultureInfo.InvariantCulture, out var initialTime)) SelectedTime = initialTime.ToString("HH:mm");
+        if (TimeOnly.TryParse(InitialTime, CultureInfo.InvariantCulture, out var initialTime)) SelectedTime = initialTime.ToString("HH:mm");
     }
     private async Task ReloadSelectedPatient()
     {
@@ -208,13 +214,13 @@ else
         if (selection.Date == default) return;
         if(Date!=selection.Date)SelectedTime=null;
         Date = selection.Date;
-        if (Date == InitialDate && TimeOnly.TryParse(TimeQuery, out var wanted) && Slots.Any(x => x.StartsAt == wanted)) SelectedTime = wanted.ToString("HH:mm");
+        if (Date == InitialDate && TimeOnly.TryParse(InitialTime, out var wanted) && Slots.Any(x => x.StartsAt == wanted)) SelectedTime = wanted.ToString("HH:mm");
     }
     private Task Confirm() => Run(async () =>
     {
         var common = new { patientAccountId = PatientIdValue, appointmentTypeId = PrimaryId, additionalAppointmentTypeIds = SelectedIds.Skip(1).ToArray(), modalityCode = ModalityCode, localDate = Date, localStartsAt = TimeOnly.Parse(SelectedTime!, CultureInfo.InvariantCulture), patientNotes = Notes, durationMinutes = SelectedIds.Count > 1 ? (int?)Duration : null, billingFormCode = BillingForm, specialtyId = SpecialtyId };
         var body = IsProfessional ? (object)common : new ManagerAppointmentCreate(PatientIdValue, ProfessionalId, PrimaryId, ModalityCode, Date, common.localStartsAt, Notes, common.additionalAppointmentTypeIds, ChargeRequired && PointKind != "" ? PointKind : null, ChargeRequired && PointKind != "" ? PointValue : null, common.durationMinutes, BillingForm, SpecialtyId);
         var result = await Request<WebAppointment>($"{Api}/appointments", "POST", body, Guid.NewGuid().ToString("N"));
-        Navigation.NavigateTo($"{Root}/atendimentos/{result!.Id}?returnTo={Uri.EscapeDataString(ReturnTo)}");
+        await AgendaContext.NavigateAsync($"{Root}/atendimentos/{result!.Id}",NavigationContext is null?null:NavigationContext with{Time=null});
     });
 }

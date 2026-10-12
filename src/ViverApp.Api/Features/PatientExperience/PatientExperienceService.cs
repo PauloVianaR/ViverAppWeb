@@ -100,7 +100,7 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
     }
 
     public async Task<SchedulingPage<PatientAppointmentResponse>> AgendaAsync(ulong actor, int page, int pageSize,
-        string view, string? search, ulong? appointmentNumber, DateTime? from, DateTime? until, string? status, string? category, string? modality, CancellationToken ct)
+        string view, string? search, ulong? appointmentNumber, DateTime? from, DateTime? until, string? status, string? category, string? modality, CancellationToken ct, uint? specialtyId = null)
     {
         ValidatePage(page, pageSize);
         if (view is not ("future" or "history" or "all")) throw Invalid("Visualização inválida.");
@@ -115,6 +115,8 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
         else if (!string.IsNullOrEmpty(status)) query = query.Where(x => x.StatusCode == status);
         if (!string.IsNullOrEmpty(category)) query = query.Where(x => x.AppointmentType.CategoryCode == category);
         if (!string.IsNullOrEmpty(modality)) query = query.Where(x => x.ModalityCode == modality);
+        if (specialtyId == 0) throw Invalid("Selecione uma especialidade válida.");
+        if (specialtyId.HasValue) query = query.Where(x => x.SpecialtyId == specialtyId);
         if (appointmentNumber.HasValue) query = query.Where(x => x.AppointmentNumber == appointmentNumber);
         if (!string.IsNullOrWhiteSpace(search)) { var term = search.Trim(); var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.ProfessionalAccount.Account.FullName.Contains(term) || x.AppointmentType.Name.Contains(term) || isNumber && x.AppointmentNumber == number); }
         var total = await query.CountAsync(ct);

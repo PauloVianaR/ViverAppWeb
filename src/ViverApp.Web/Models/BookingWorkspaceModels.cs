@@ -5,7 +5,7 @@ namespace ViverApp.Web;
 
 public sealed record WebBookingWorkspaceSpecialty(uint Id, string Name);
 public sealed record WebBookingWorkspaceOptions(uint? DefaultSpecialtyId, IReadOnlyList<WebBookingWorkspaceSpecialty> Specialties);
-public sealed record WebBookingWorkspaceMetadata(string BillingFormCode, uint? SpecialtyId, ulong RowVersion);
+public sealed record WebBookingWorkspaceMetadata(string BillingFormCode, uint? SpecialtyId, ulong RowVersion, string? SpecialtyName = null);
 
 public static class PatientSearchKey
 {

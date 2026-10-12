@@ -1,3 +1,5 @@
+import { clear as clearAgendaContext, bindOwner as bindAgendaOwner } from "./appointment-navigation.js";
+
 function endpoint(baseUrl, path) {
     return new URL(path.replace(/^\//, ""), baseUrl).toString();
 }
@@ -44,9 +46,12 @@ export async function tryGetCurrent(baseUrl) {
         cache: "no-store"
     });
     if (response.status === 401 || response.status === 403) {
+        clearAgendaContext();
         return null;
     }
-    return await readResponse(response);
+    const account = await readResponse(response);
+    bindAgendaOwner(account?.id);
+    return account;
 }
 
 export async function send(baseUrl, path, body) {
@@ -71,5 +76,7 @@ export async function sendMethod(baseUrl, path, method, body) {
         body: body === null ? null : JSON.stringify(body),
         cache: "no-store"
     });
-    return await readResponse(response);
+    const result = await readResponse(response);
+    if (path === "api/v1/auth/logout") clearAgendaContext();
+    return result;
 }

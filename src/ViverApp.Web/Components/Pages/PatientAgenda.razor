@@ -13,7 +13,7 @@
             <div class="field"><label for="agenda-from">De</label><input id="agenda-from" type="date" @bind="From" /></div>
             <div class="field"><label for="agenda-until">Até</label><input id="agenda-until" type="date" @bind="Until" /></div>
             <div class="field"><label for="agenda-status">Estado</label><select id="agenda-status" @bind="StatusFilter"><option value="">Todos</option>@foreach(var code in new[]{"pending","confirmed","completed","canceled","rescheduled","no_show"}){<option value="@(code)">@Status(code)</option>}</select></div>
-            <div class="field"><label for="agenda-category">Tipo</label><select id="agenda-category" @bind="CategoryFilter"><option value="">Todos</option><option value="consultation">Consulta</option><option value="examination">Exame</option><option value="surgery">Cirurgia</option><option value="procedure">Procedimento</option></select></div>
+            <div class="field"><label for="agenda-specialty">Especialidade</label><select id="agenda-specialty" @bind="SpecialtyFilter"><option value="">Todos</option>@foreach (var specialty in Specialties ?? []) { <option value="@specialty.Id">@specialty.Name</option> }</select></div><div class="field"><label for="agenda-category">Tipo</label><select id="agenda-category" @bind="CategoryFilter"><option value="">Todos</option><option value="consultation">Consulta</option><option value="examination">Exame</option><option value="surgery">Cirurgia</option><option value="procedure">Procedimento</option></select></div>
             <div class="field"><label for="agenda-modality">Modalidade</label><select id="agenda-modality" @bind="Modality"><option value="">Todas</option><option value="in_person">Presencial</option><option value="online">Online</option></select></div>
         </div><div class="patient-actions"><button class="button" disabled="@Busy">Aplicar filtros</button><button type="button" class="button button--secondary" @onclick="Clear" disabled="@Busy">Limpar filtros</button></div>
     </form>
@@ -25,13 +25,15 @@ else { <InterfaceState Title="Nenhum atendimento encontrado" Description="Altere
 @code {
     private WebPage<PatientAppointment>? PageData;
     private PatientClinic? Clinic;
+    private uint? SpecialtyFilter;
+    private IReadOnlyList<WebSpecialty>? Specialties;
     private string View = "all", Search = "", StatusFilter = "", CategoryFilter = "", Modality = "";
     private DateTime? From=AppointmentNavigation.WeekStart(DateTime.Today), Until=AppointmentNavigation.WeekEnd(DateTime.Today);
     private ulong? AppointmentNumber;
     private int Page = 1;
-    protected override async Task Load() { await LoadAppointmentViewAsync(); Clinic ??= await Get<PatientClinic>("api/v1/patient/experience/clinic"); PageData = await Get<WebPage<PatientAppointment>>($"api/v1/patient/experience/agenda?page={Page}&view={View}&search={Escape(Search)}&appointmentNumber={AppointmentNumber}&status={StatusFilter}&category={CategoryFilter}&modality={Modality}&from={From:yyyy-MM-dd}&until={Until:yyyy-MM-dd}"); }
+    protected override async Task Load() { await LoadAppointmentViewAsync(); Specialties ??= await AppointmentFilterOptions.SpecialtiesAsync(path => Get<WebPage<WebSpecialty>>(path)); Clinic ??= await Get<PatientClinic>("api/v1/patient/experience/clinic"); PageData = await Get<WebPage<PatientAppointment>>($"api/v1/patient/experience/agenda?page={Page}&view={View}&search={Escape(Search)}&appointmentNumber={AppointmentNumber}&status={StatusFilter}&specialtyId={SpecialtyFilter}&category={CategoryFilter}&modality={Modality}&from={From:yyyy-MM-dd}&until={Until:yyyy-MM-dd}"); }
     private Task Apply() => Run(async () => { Page = 1; await Load(); });
-    private Task Clear() => Run(async () => { Search = StatusFilter = CategoryFilter = Modality = ""; AppointmentNumber = null; From = AppointmentNavigation.WeekStart(DateTime.Today); Until = AppointmentNavigation.WeekEnd(DateTime.Today); Page = 1; await Load(); });
+    private Task Clear() => Run(async () => { Search = StatusFilter = CategoryFilter = Modality = ""; AppointmentNumber = null; SpecialtyFilter = null; From = AppointmentNavigation.WeekStart(DateTime.Today); Until = AppointmentNavigation.WeekEnd(DateTime.Today); Page = 1; await Load(); });
     private Task Previous() => Run(async () => { Page--; await Load(); });
     private Task Next() => Run(async () => { Page++; await Load(); });
 }

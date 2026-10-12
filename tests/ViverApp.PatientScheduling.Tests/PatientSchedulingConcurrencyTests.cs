@@ -20,6 +20,63 @@ namespace ViverApp.PatientScheduling.Tests;
 
 public sealed class PatientSchedulingConcurrencyTests
 {
+    [Fact]
+    public async Task SpecialtyFilter_UsesSnapshotAndFiltersPagesCountersAndOwnership()
+    {
+        var configuration = LoadConfiguration();
+        var fixture = await CreateFixtureAsync(configuration, true);
+        try
+        {
+            await using var database = CreateContext(configuration);
+            var clock = new FixedTimeProvider(fixture.UtcNow);
+            var scheduling = new PatientSchedulingService(database, new NullAuditWriter(), clock);
+            var created = await scheduling.CreateForDoctorAsync(fixture.DoctorId, Guid.NewGuid().ToString("N"),
+                new DoctorAppointmentCreateRequest(fixture.PatientId, fixture.AppointmentTypeId, "online",
+                    fixture.LocalDate, new TimeOnly(10, 0), null), default);
+            var alternate = await database.Specialties.Select(x => x.Id).Where(id =>
+                id != database.AppointmentTypes.Where(t => t.Id == fixture.AppointmentTypeId).Select(t => t.SpecialtyId).First()).FirstAsync();
+            await database.Appointments.Where(x => x.Id == created.Response.Id)
+                .ExecuteUpdateAsync(set => set.SetProperty(x => x.SpecialtyId, (uint?)alternate));
+            var manager = new ManagerExperienceService(database, null!, null!, null!, clock);
+            var included = await manager.AgendaAsync(fixture.LocalDate, fixture.LocalDate,
+                null, null, null, fixture.DoctorId, null, null, null, null, null, "date_asc", 1, 20, default, alternate);
+            Assert.Single(included.Page.Items);
+            Assert.Equal(created.Response.Id, included.Page.Items[0].Id);
+            Assert.Single(included.Sources.Total);
+            Assert.Equal(1, included.Counters.Total);
+            var excluded = await manager.AgendaAsync(fixture.LocalDate, fixture.LocalDate,
+                null, null, null, fixture.DoctorId, null, null, null, null, null, "date_asc", 1, 20, default, uint.MaxValue);
+            Assert.Empty(excluded.Page.Items);
+            Assert.Empty(excluded.Sources.Total);
+            Assert.Equal(0, excluded.Counters.Total);
+            var doctor = new ViverApp.Api.Features.DoctorExperience.DoctorExperienceService(database, null!, null!, null!, clock);
+            var own = await doctor.AgendaAsync(fixture.DoctorId, fixture.LocalDate, fixture.LocalDate,
+                null, null, null, null, null, 1, 20, default, alternate);
+            Assert.Single(own.Page.Items);
+            Assert.Single(own.Sources.Online);
+            var none = await doctor.AgendaAsync(fixture.DoctorId, fixture.LocalDate, fixture.LocalDate,
+                null, null, null, null, null, 1, 20, default, uint.MaxValue);
+            Assert.Empty(none.Sources.Total);
+            Assert.Empty(none.Sources.Online);
+            Assert.Empty(none.Sources.InPerson);
+            var patient = new ViverApp.Api.Features.PatientExperience.PatientExperienceService(database, scheduling, null!, clock, configuration);
+            var patientPage = await patient.AgendaAsync(fixture.PatientId, 1, 20, "all", null, null,
+                fixture.LocalDate.ToDateTime(TimeOnly.MinValue), fixture.LocalDate.ToDateTime(TimeOnly.MinValue),
+                null, null, null, default, alternate);
+            Assert.Single(patientPage.Items);
+            Assert.Equal(created.Response.Id, patientPage.Items[0].Appointment.Id);
+            var patientEmpty = await patient.AgendaAsync(fixture.PatientId, 1, 20, "all", null, null,
+                null, null, null, null, null, default, uint.MaxValue);
+            Assert.Empty(patientEmpty.Items);
+        }
+        finally
+        {
+            await using var database = CreateContext(configuration);
+            await database.IdempotencyRecords.Where(x => x.ScopeCode == $"appointment.doctor-create:{fixture.DoctorId}").ExecuteDeleteAsync();
+            await DeleteFixtureAsync(configuration, fixture);
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -42,6 +99,12 @@ public sealed class PatientSchedulingConcurrencyTests
             var controller = new BookingWorkspaceController(database, null!, audit, new FixedTimeProvider(fixture.UtcNow), service)
                 { ControllerContext = new ControllerContext { HttpContext = http } };
             var initial = await controller.Metadata(created.Response.Id, default);
+            var deniedSpecialty = await Assert.ThrowsAsync<ViverApp.Api.Features.AdministratorExperience.AdministratorRuleException>(
+                () => controller.Update(created.Response.Id, new("insurance", initial.SpecialtyId + 1, initial.RowVersion), default));
+            Assert.Equal(409, deniedSpecialty.StatusCode);
+            Assert.Contains("especialidade", deniedSpecialty.Message);
+            var unchanged = await controller.Metadata(created.Response.Id, default);
+            Assert.Equal(initial, unchanged);
             var insurance = await controller.Update(created.Response.Id, new("insurance", initial.SpecialtyId, initial.RowVersion), default);
             var item = await database.Appointments.AsNoTracking().SingleAsync(x => x.Id == created.Response.Id);
             Assert.False(item.RequiresPayment);

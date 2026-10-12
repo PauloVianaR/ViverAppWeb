@@ -2,7 +2,7 @@
 @inherits AdministratorPageBase
 @using static ViverApp.Web.ManagerLabels
 <PageTitle>Atendimento administrativo | ViverApp</PageTitle>
-<header class="workspace-heading appointment-compact-heading"><div><p class="eyebrow">Administrador</p><h1 class="page-title">@(Item?.PatientName??"Detalhes do atendimento")</h1><p class="page-description">Ações operacionais e financeiras elevadas, sem abrir conteúdo clínico.</p></div><a class="button button--secondary" href="@AgendaReturn">Voltar à agenda</a></header>
+<header class="workspace-heading appointment-compact-heading"><div><p class="eyebrow">Administrador</p><h1 class="page-title">@(Item?.PatientName??"Detalhes do atendimento")</h1><p class="page-description">Ações operacionais e financeiras elevadas, sem abrir conteúdo clínico.</p></div><a class="button button--secondary" href="@AgendaReturn" @onclick="BackToAgenda" @onclick:preventDefault>Voltar à agenda</a></header>
 <p class="administrator-elevated">Cancelar, reagendar e confirmar pagamento exigem login recente com MFA.</p>
 @if(Notice is not null){<UiNotice Message="@Notice" IsError="NoticeError" />}
 @if(Loading){<LoadingSkeleton Lines="8"/>}else if(Item is not null){<AppointmentWorkspace PatientId="@((long)Item.PatientAccountId)" PatientSaved="Load"><div class="appointment-detail-grid"><AppointmentClassificationEditor @key="Item.RowVersion" AppointmentId="Id" Saved="Load" /><ManagerVisitCard Model="Item" BasePath="/administracao/atendimentos" ShowDetailsLink="false" ShowPhoneAction="false"/>
@@ -20,8 +20,11 @@
 <dialog id="admin-complete"><h2>Finalizar atendimento?</h2><p>Confirme a conclusão. O Administrador poderá reabrir posteriormente, com motivo auditado.</p><div class="administrator-actions"><button class="button" @onclick="Complete">Confirmar finalização</button><button class="button button--secondary" @onclick='()=>Close("admin-complete")'>Voltar</button></div></dialog>
 <dialog id="admin-reopen"><h2>Reabrir atendimento</h2><p>O atendimento voltará ao estado anterior à finalização.</p><div class="field"><label for="admin-reopen-reason">Motivo</label><textarea id="admin-reopen-reason" minlength="5" maxlength="500" @bind="ReopenReason"></textarea></div><div class="administrator-actions"><button class="button" @onclick="Reopen">Confirmar reabertura</button><button class="button button--secondary" @onclick='()=>Close("admin-reopen")'>Voltar</button></div></dialog>
 <dialog id="admin-reversal"><h2>@(Item.StatusCode=="no_show"?"Estornar valor ao paciente":"Cancelar pagamento")</h2><p>A entrada original permanecerá no caixa; a saída vinculada será lançada somente no caixa do dia do estorno. @(Item.StatusCode=="no_show"?"O atendimento permanecerá como não compareceu.":"O atendimento voltará para Aguardando Pagamento.") A sessão administrativa exige MFA.</p><div class="field"><label for="admin-reversal-reason">Motivo</label><textarea id="admin-reversal-reason" minlength="5" maxlength="500" @bind="ReversalReason"></textarea></div><div class="administrator-actions"><button class="button button--danger" @onclick="ReversePayment">@(Item.StatusCode=="no_show"?"Confirmar estorno":"Confirmar cancelamento do pagamento")</button><button class="button button--secondary" @onclick='()=>Close("admin-reversal")'>Voltar</button></div></dialog>}
+@inject AppointmentNavigationStore AgendaContext
+
 @code { [SupplyParameterFromQuery(Name="returnTo")]public string? ReturnQuery{get;set;}
-private string AgendaReturn=>AppointmentNavigation.AgendaReturn("/administracao",ReturnQuery);
+private string AgendaReturn=>"/administracao" + "/agenda";
+private async Task BackToAgenda() { var context=await AgendaContext.RestoreAsync("/administracao",ReturnQuery);if(context is not null)context=context with{Time=null};await AgendaContext.NavigateAsync(AgendaReturn,context); }
 
     private string ReopenReason = "";
     private Task Complete() => Run(async () => { await Request<object>($"api/v1/administrator/appointments/{Id}/complete", "POST", new { rowVersion = Item!.RowVersion }); await Close("admin-complete"); await Load(); Notice = "Atendimento finalizado."; });

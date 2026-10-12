@@ -102,7 +102,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
 
     public async Task<ManagerAgendaResponse> AgendaAsync(DateOnly from, DateOnly to, string? status, string? modality,
         string? category, ulong? doctor, ulong? appointmentNumber, string? payment, TimeOnly? startTime, TimeOnly? endTime, string? search,
-        string sort, int page, int pageSize, CancellationToken ct)
+        string sort, int page, int pageSize, CancellationToken ct, uint? specialtyId = null)
     {
         Page(page, pageSize); if (to < from || to.DayNumber - from.DayNumber > 366) throw Invalid("O período deve ter no máximo 367 dias.");
         if (status is not null && !AppointmentStatuses.Contains(status, StringComparer.Ordinal)) throw Invalid("Estado inválido.");
@@ -117,6 +117,8 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         if (modality is not null) query = query.Where(x => x.ModalityCode == modality);
         if (category is not null) query = query.Where(x => x.AppointmentType.CategoryCode == category);
         if (doctor.HasValue) query = query.Where(x => x.ProfessionalAccountId == doctor);
+        if (specialtyId == 0) throw Invalid("Selecione uma especialidade válida.");
+        if (specialtyId.HasValue) query = query.Where(x => x.SpecialtyId == specialtyId);
         if (appointmentNumber.HasValue) query = query.Where(x => x.AppointmentNumber == appointmentNumber);
         if (payment == "paid") query = query.Where(x => x.CurrentPayment != null && x.CurrentPayment.StatusCode == "paid");
         if (payment == "pending") query = query.Where(x => x.RequiresPayment && (x.CurrentPayment == null || x.CurrentPayment.StatusCode != "paid"));

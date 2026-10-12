@@ -115,7 +115,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         => throw Conflict("Os serviços são definidos automaticamente pelas especialidades. Altere a especialidade do catálogo, não o profissional.");
 
     public async Task<DoctorAgendaResponse> AgendaAsync(ulong doctor, DateOnly from, DateOnly to, string? status,
-        string? modality, string? category, ulong? appointmentNumber, string? search, int page, int pageSize, CancellationToken ct)
+        string? modality, string? category, ulong? appointmentNumber, string? search, int page, int pageSize, CancellationToken ct, uint? specialtyId = null)
     {
         Page(page, pageSize); if (to < from || to.DayNumber - from.DayNumber > 366) throw Invalid("Período inválido.");
         if (status is not null && !AppointmentStatuses.Contains(status)) throw Invalid("Estado inválido.");
@@ -127,11 +127,13 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         else if (status is not null) query = query.Where(x => x.StatusCode == status);
         if (modality is not null) query = query.Where(x => x.ModalityCode == modality);
         if (category is not null) query = query.Where(x => x.AppointmentType.CategoryCode == category);
+        if (specialtyId == 0) throw Invalid("Selecione uma especialidade válida.");
+        if (specialtyId.HasValue) query = query.Where(x => x.SpecialtyId == specialtyId);
         if (appointmentNumber.HasValue) query = query.Where(x => x.AppointmentNumber == appointmentNumber);
         var term = Text(search); if (term is { Length: > 120 }) throw Invalid("A busca deve ter no máximo 120 caracteres.");
         if (term is not null) { var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.PatientAccount.FullName.Contains(term) || x.AppointmentType.Name.Contains(term) || isNumber && x.AppointmentNumber == number); }
         var totalNumbers = await query.Select(x => x.AppointmentNumber).ToArrayAsync(ct);
-        var countersSource = database.Appointments.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor && x.StartsAtUtc >= start && x.StartsAtUtc < end && x.InverseRescheduledFromAppointment == null);
+        var countersSource = query;
         var sourceRows = await countersSource.Select(x => new { x.AppointmentNumber, x.ModalityCode, Rescheduled = x.AppointmentRescheduleHistories.Any() || x.RescheduledFromAppointmentId != null }).ToArrayAsync(ct);
         var sources = new DoctorAgendaSources(totalNumbers,
             sourceRows.Where(x => x.ModalityCode == "online").Select(x => x.AppointmentNumber).ToArray(),

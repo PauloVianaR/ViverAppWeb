@@ -67,8 +67,8 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
     }
 
     public Task<ManagerAgendaResponse> AgendaAsync(DateOnly from, DateOnly to, string? status, string? modality, string? category,
-        ulong? doctor, ulong? appointmentNumber, string? payment, string? search, string sort, int page, int size, CancellationToken ct) =>
-        manager.AgendaAsync(from, to, status, modality, category, doctor, appointmentNumber, payment, null, null, search, sort, page, size, ct);
+        ulong? doctor, ulong? appointmentNumber, string? payment, string? search, string sort, int page, int size, CancellationToken ct, uint? specialtyId = null) =>
+        manager.AgendaAsync(from, to, status, modality, category, doctor, appointmentNumber, payment, null, null, search, sort, page, size, ct, specialtyId);
     public Task<ManagerAppointmentResponse> AppointmentAsync(ulong id, CancellationToken ct) => manager.AppointmentAsync(id, ct);
     public Task<ManagerPatientsResponse> PatientsAsync(string? search, string? status, bool? premium, int page, int size, CancellationToken ct) => manager.PatientsAsync(search, status, premium, page, size, ct);
     public Task<ManagerPatientResponse> PatientAsync(ulong id, CancellationToken ct) => manager.PatientAsync(id, ct);
