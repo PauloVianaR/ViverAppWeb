@@ -13,3 +13,4 @@
     .booking-calendar__day { min-height: 3.7rem; }
     .booking-calendar__days { gap: .65rem; }
 }
+.booking-calendar.booking-calendar--compact{margin-block:.35rem;padding:0;max-width:none}.booking-calendar--compact .booking-calendar__day{min-height:1.8rem;height:1.8rem;font-size:.85rem}.booking-calendar--compact .booking-calendar__days{gap:.2rem}.booking-calendar--compact .booking-calendar__heading{margin-bottom:.3rem}.booking-calendar--compact .booking-calendar__heading .button{padding:.2rem .5rem;min-height:1.8rem}.booking-calendar--compact .field-hint{font-size:.7rem;margin:.25rem 0}

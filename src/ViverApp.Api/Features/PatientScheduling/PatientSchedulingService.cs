@@ -307,10 +307,8 @@ public sealed class PatientSchedulingService(
         ValidateIdempotencyKey(idempotencyKey);
         await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         await LockPatientAsync(request.PatientAccountId, cancellationToken);
-        var isLinked = await database.ProfessionalPatientLinks.AnyAsync(x => x.ProfessionalAccountId == doctorId
-            && x.PatientAccountId == request.PatientAccountId && x.StatusCode == "active", cancellationToken)
-            || await database.Appointments.AnyAsync(x => x.ProfessionalAccountId == doctorId && x.PatientAccountId == request.PatientAccountId, cancellationToken);
-        if (!isLinked) throw NotFound("Paciente não encontrado.");
+        // A seleção inclui todos os pacientes da clínica; o profissional do novo
+        // atendimento continua sendo exclusivamente o titular da sessão.
         var requestHash = HashRequest(doctorId, $"doctor-create:{request.PatientAccountId}", request);
         var scope = $"appointment.doctor-create:{doctorId}";
         var replay = await TryReplayAsync(scope, idempotencyKey, requestHash, cancellationToken);
@@ -324,6 +322,8 @@ public sealed class PatientSchedulingService(
         var (type, serviceItems, basePrice, requiresPayment) = await ResolveServicesAsync(
             request.AppointmentTypeId, request.AdditionalAppointmentTypeIds, request.ModalityCode,
             doctorId, cancellationToken, request.DurationMinutes);
+        var specialtyId = await ResolveSpecialtyAsync(request.SpecialtyId, cancellationToken);
+        requiresPayment = ApplyBillingForm(request.BillingFormCode, requiresPayment);
         var doctor = await RequireActiveDoctorAsync(doctorId, cancellationToken);
         if (!await database.ProfessionalServices.AnyAsync(x => x.ProfessionalAccountId == doctorId
             && x.AppointmentTypeId == type.Id && x.IsActive && x.AppointmentType.IsActive, cancellationToken))
@@ -343,11 +343,13 @@ public sealed class PatientSchedulingService(
             ProfessionalAccountId = doctorId,
             AppointmentTypeId = type.Id,
             CreatedByAccountId = doctorId,
+            BillingFormCode = request.BillingFormCode,
+            SpecialtyId = specialtyId,
             StatusCode = requiresPayment ? "pending" : "confirmed",
             ModalityCode = request.ModalityCode,
             StartsAtUtc = slot.StartsAtUtc,
             EndsAtUtc = slot.EndsAtUtc,
-            PriceAmount = PatientExperience.PatientExperienceService.DiscountedPrice(basePrice, discount),
+            PriceAmount = requiresPayment ? PatientExperience.PatientExperienceService.DiscountedPrice(basePrice, discount) : 0,
             BasePriceAmount = basePrice,
             DiscountPercent = requiresPayment ? discount : 0,
             RequiresPayment = requiresPayment,
@@ -388,6 +390,8 @@ public sealed class PatientSchedulingService(
         var (type, serviceItems, basePrice, requiresPayment) = await ResolveServicesAsync(
             request.AppointmentTypeId, request.AdditionalAppointmentTypeIds, request.ModalityCode,
             request.ProfessionalAccountId, cancellationToken, request.DurationMinutes);
+        var specialtyId = await ResolveSpecialtyAsync(request.SpecialtyId, cancellationToken);
+        requiresPayment = ApplyBillingForm(request.BillingFormCode, requiresPayment);
         var doctor = await RequireActiveDoctorAsync(request.ProfessionalAccountId, cancellationToken);
         if (!await database.ProfessionalServices.AnyAsync(x => x.ProfessionalAccountId == request.ProfessionalAccountId
             && x.AppointmentTypeId == type.Id && x.IsActive && x.AppointmentType.IsActive, cancellationToken))
@@ -407,11 +411,13 @@ public sealed class PatientSchedulingService(
             ProfessionalAccountId = request.ProfessionalAccountId,
             AppointmentTypeId = type.Id,
             CreatedByAccountId = managerId,
+            BillingFormCode = request.BillingFormCode,
+            SpecialtyId = specialtyId,
             StatusCode = requiresPayment ? "pending" : "confirmed",
             ModalityCode = request.ModalityCode,
             StartsAtUtc = slot.StartsAtUtc,
             EndsAtUtc = slot.EndsAtUtc,
-            PriceAmount = PatientExperience.PatientExperienceService.DiscountedPrice(basePrice, discount),
+            PriceAmount = requiresPayment ? PatientExperience.PatientExperienceService.DiscountedPrice(basePrice, discount) : 0,
             BasePriceAmount = basePrice,
             DiscountPercent = requiresPayment ? discount : 0,
             RequiresPayment = requiresPayment,
@@ -433,6 +439,27 @@ public sealed class PatientSchedulingService(
         await auditWriter.WriteAsync("appointment.created_by_manager", managerId, entity.Id,
             new Dictionary<string, string> { ["doctorAccountId"] = request.ProfessionalAccountId.ToString(CultureInfo.InvariantCulture), ["modality"] = request.ModalityCode }, cancellationToken);
         await transaction.CommitAsync(cancellationToken); return (response, false);
+    }
+
+    internal static bool ApplyBillingForm(string form, bool catalogRequiresPayment) => form switch
+    {
+        "private" => catalogRequiresPayment,
+        "insurance" => false,
+        _ => throw Conflict("Selecione Particular ou Convênio."),
+    };
+
+    private async Task<uint?> ResolveSpecialtyAsync(uint? specialtyId, CancellationToken ct)
+    {
+        if (!specialtyId.HasValue)
+        {
+            var configured = await database.ApplicationSettings.AsNoTracking()
+                .Where(x => x.SettingKey == "appointments.default_specialty_id" && !x.IsSecret)
+                .Select(x => x.ValueJson).SingleOrDefaultAsync(ct);
+            if (uint.TryParse(configured, out var value)) specialtyId = value;
+        }
+        if (specialtyId.HasValue && !await database.Specialties.AnyAsync(x => x.Id == specialtyId && x.IsActive, ct))
+            throw Conflict("A especialidade selecionada não está ativa.");
+        return specialtyId;
     }
 
     public async Task<AppointmentResponse> ApplyPointDiscountForManagerAsync(ulong actorId, ulong appointmentId,

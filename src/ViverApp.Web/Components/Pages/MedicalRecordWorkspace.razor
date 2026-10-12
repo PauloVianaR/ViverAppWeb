@@ -20,6 +20,8 @@ else if (Summary is null)
 }
 else
 {
+    @if (EmbeddedSection is null)
+    {
     <header class="workspace-heading medical-record-heading">
         <div>
             <p class="eyebrow">@AreaLabel · prontuário eletrônico</p>
@@ -31,13 +33,16 @@ else
             <button type="button" class="button" @onclick="DownloadPdfAsync" disabled="@Busy">Gerar PDF</button>
         </div>
     </header>
+    }
 
     @if (Notice is not null)
     {
         <UiNotice Message="@Notice" IsError="NoticeError" />
     }
 
-    <section class="medical-record-shell">
+    <section class="medical-record-shell @(EmbeddedSection is not null ? "medical-record-shell--embedded" : null)">
+        @if (EmbeddedSection is null or "documents")
+        {
         <aside class="surface patient-record-summary">
             <details open>
                 <summary><strong>Resumo do paciente</strong><span>mostrar/ocultar</span></summary>
@@ -67,14 +72,18 @@ else
                 </div>
             </details>
         </aside>
+        }
 
         <div class="medical-record-main">
+            @if (EmbeddedSection is null)
+            {
             <nav class="medical-record-tabs" aria-label="Seções do prontuário">
                 @foreach (var tab in Tabs)
                 {
                     <button type="button" class="@(ActiveTab == tab.Value ? "active" : null)" aria-current="@(ActiveTab == tab.Value ? "page" : null)" @onclick="() => ActivateAsync(tab.Value)">@tab.Label</button>
                 }
             </nav>
+            }
 
             @if (ActiveTab == RecordTab.Timeline)
             {
@@ -239,6 +248,7 @@ else
 
 @code {
     [Parameter] public long PatientId { get; set; }
+    [Parameter] public string? EmbeddedSection { get; set; }
     private enum RecordTab { Timeline, Appointments, Clinical, Financial, Documents, Access }
     private sealed record TabOption(RecordTab Value, string Label);
     private IJSObjectReference? Module;
@@ -278,7 +288,7 @@ else
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if(!firstRender)return;
-        try { Module=await JavaScript.InvokeAsync<IJSObjectReference>("import","/js/medical-records.js"); CanWriteClinical=Role is "doctor" or "psychologist"||(Role=="manager"&&(await Get<ManagerCapabilities>("api/v1/manager/capabilities"))?.MedicalRecordWriteEnabled==true); Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary"); Appointments.AddRange(await Get<IReadOnlyList<WebMedicalRecordAppointmentOption>>($"api/v1/medical-records/patients/{PatientId}/appointments")??[]); await LoadTimelineCoreAsync(); }
+        try { Module=await JavaScript.InvokeAsync<IJSObjectReference>("import","/js/medical-records.js"); CanWriteClinical=Role is "doctor" or "psychologist"||(Role=="manager"&&(await Get<ManagerCapabilities>("api/v1/manager/capabilities"))?.MedicalRecordWriteEnabled==true); Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary"); Appointments.AddRange(await Get<IReadOnlyList<WebMedicalRecordAppointmentOption>>($"api/v1/medical-records/patients/{PatientId}/appointments")??[]); if (EmbeddedSection is null) await LoadTimelineCoreAsync(); else { ActiveTab = EmbeddedSection switch { "appointments" => RecordTab.Appointments, "financial" => RecordTab.Financial, _ => RecordTab.Documents }; switch (ActiveTab) { case RecordTab.Appointments: await LoadAppointmentReportsAsync(); break; case RecordTab.Financial: await LoadFinancialAsync(); break; default: await LoadDocumentsAsync(); break; } } }
         catch(Exception e){ShowError(e);}
         finally{Loading=false;StateHasChanged();}
     }
@@ -369,7 +379,7 @@ else
     private static string Local(DateTime utc)=>DateTime.SpecifyKind(utc,DateTimeKind.Utc).ToLocalTime().ToString("dd/MM/yyyy HH:mm");
     private static string DateLabel(DateTime? utc)=>utc.HasValue?Local(utc.Value):"Não informado";
     private static string Money(decimal value)=>value.ToString("C",System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
-    private static string StatusLabel(string x)=>x switch{"pending"=>"Pendente","confirmed"=>"Confirmado","arrived"=>"Paciente chegou","in_progress"=>"Em atendimento","completed"=>"Concluído","canceled"=>"Cancelado","no_show"=>"Falta",_=>x};
+    private static string StatusLabel(string x)=>x switch{"pending"=>"Aguardando Pagamento","confirmed"=>"Confirmado","arrived"=>"Paciente chegou","in_progress"=>"Em atendimento","completed"=>"Concluído","canceled"=>"Cancelado","no_show"=>"Falta",_=>x};
     private static string PaymentStatus(string x)=>x switch{"paid"=>"Pago","reversed" or "refunded"=>"Cancelado","reversal_pending"=>"Cancelamento pendente","pending"=>"Pendente","failed"=>"Falhou",_=>x};
     private static string DocumentCategoryLabel(string x)=>x switch{"exam"=>"Exame","report"=>"Laudo","administrative"=>"Administrativo",_=>"Anexo"};
     private static string FileSize(ulong bytes)=>bytes>=1048576?$"{bytes/1048576d:0.0} MB":$"{bytes/1024d:0} KB";

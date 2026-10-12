@@ -1,0 +1,62 @@
+@inherits ViverApp.Web.Components.Pages.ManagerPageBase
+
+@if (Notice is not null) { <UiNotice Message="@Notice" IsError="NoticeError" /> }
+@if (Loading) { <LoadingSkeleton Lines="4" /> }
+else if (Patient is not null)
+{
+    <details class="surface appointment-patient-registration" open>
+        <summary><strong>Cadastro do paciente</strong></summary>
+        <form @onsubmit="Save" @onsubmit:preventDefault>
+            <div class="appointment-form-grid">
+                <div class="field"><label for="ficha-name">Nome</label><input id="ficha-name" @bind="Name" @bind:event="oninput" required minlength="3" maxlength="200" /></div>
+                <div class="field"><label for="ficha-preferred">Nome preferido</label><input id="ficha-preferred" @bind="Preferred" @bind:event="oninput" maxlength="120" /></div>
+                <div class="field"><label for="ficha-cpf">CPF</label><input id="ficha-cpf" @bind="TaxId" @bind:event="oninput" maxlength="14" /></div>
+                <div class="field"><label for="ficha-birth">Nascimento</label><input id="ficha-birth" type="date" @bind="Birth" /></div>
+                <div class="field"><label for="ficha-email">E-mail</label><input id="ficha-email" type="email" @bind="Email" @bind:event="oninput" maxlength="254" /></div>
+                <div class="field"><label for="ficha-phone">Telefone</label><input id="ficha-phone" type="tel" value="@Phone" @oninput="PhoneChanged" maxlength="15" /></div>
+                <div class="field"><label for="ficha-postal">CEP</label><input id="ficha-postal" @bind="Postal" @bind:event="oninput" maxlength="9" /></div>
+                <div class="field"><label for="ficha-street">Logradouro</label><input id="ficha-street" @bind="Street" @bind:event="oninput" maxlength="200" /></div>
+                <div class="field"><label for="ficha-number">Número</label><input id="ficha-number" @bind="Number" @bind:event="oninput" maxlength="20" /></div>
+                <div class="field"><label for="ficha-complement">Complemento</label><input id="ficha-complement" @bind="Complement" @bind:event="oninput" maxlength="100" /></div>
+                <div class="field"><label for="ficha-district">Bairro</label><input id="ficha-district" @bind="District" @bind:event="oninput" maxlength="100" /></div>
+                <div class="field"><label for="ficha-city">Cidade</label><input id="ficha-city" @bind="City" @bind:event="oninput" maxlength="100" /></div>
+                <div class="field"><label for="ficha-state">UF</label><input id="ficha-state" @bind="State" @bind:event="oninput" maxlength="2" /></div>
+                <div class="field"><label for="ficha-notes">Observação</label><textarea id="ficha-notes" @bind="Notes" @bind:event="oninput" maxlength="2000" rows="2"></textarea></div>
+            </div>
+            <button class="button" disabled="@Busy">Salvar cadastro</button>
+            <p class="field-hint">Alterar contatos de uma conta com acesso ao portal exige a verificação do novo contato; não altera credenciais nem permissões.</p>
+        </form>
+    </details>
+}
+@code {
+    [Parameter] public long PatientId { get; set; }
+    [Parameter] public EventCallback Saved { get; set; }
+    private ManagerPatient? Patient;
+    private string Name = "", Preferred = "", TaxId = "", Email = "", Phone = "", Postal = "", Street = "", Number = "", Complement = "", District = "", City = "", State = "", Notes = "";
+    private DateTime? Birth;
+    protected override async Task Load()
+    {
+        Patient = await Get<ManagerPatient>($"api/v1/booking-workspace/patients/{PatientId}");
+        if (Patient is null) return;
+        Name = Patient.FullName; Preferred = Patient.PreferredName ?? ""; TaxId = Patient.TaxId ?? "";
+        Email = Patient.Email ?? ""; Phone = BrazilianPhoneInput.Mask(Patient.Phone ?? ""); Birth = Patient.BirthDate?.ToDateTime(TimeOnly.MinValue);
+        Postal = Patient.Address?.PostalCode ?? ""; Street = Patient.Address?.Street ?? ""; Number = Patient.Address?.Number ?? "";
+        Complement = Patient.Address?.Complement ?? ""; District = Patient.Address?.District ?? ""; City = Patient.Address?.City ?? ""; State = Patient.Address?.StateCode ?? "";
+        Notes = Patient.AdministrativeNotes ?? "";
+    }
+    private void PhoneChanged(ChangeEventArgs e) => Phone = BrazilianPhoneInput.Mask(e.Value?.ToString() ?? "");
+    private static string? Empty(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private Task Save() => Run(async () =>
+    {
+        var hasAddress = new[] { Postal, Street, Number, Complement, District, City, State }.Any(x => !string.IsNullOrWhiteSpace(x));
+        Patient = await Request<ManagerPatient>($"api/v1/booking-workspace/patients/{PatientId}", "PUT", new
+        {
+            fullName = Name.Trim(), preferredName = Empty(Preferred), taxId = Empty(new string(TaxId.Where(char.IsAsciiDigit).ToArray())),
+            email = Empty(Email), phoneE164 = Empty(Phone), birthDate = Birth.HasValue ? DateOnly.FromDateTime(Birth.Value) : (DateOnly?)null,
+            address = hasAddress ? new { postalCode = Empty(new string(Postal.Where(char.IsAsciiDigit).ToArray())), street = Empty(Street), number = Empty(Number), complement = Empty(Complement), district = Empty(District), city = Empty(City), stateCode = Empty(State)?.ToUpperInvariant() } : null,
+            rowVersion = Patient!.RowVersion, administrativeNotes = Empty(Notes),
+        });
+        Notice = "Cadastro do paciente atualizado.";
+        await Saved.InvokeAsync();
+    });
+}

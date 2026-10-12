@@ -614,6 +614,8 @@ public partial class ViverAppDbContext : DbContext
 
             entity.HasIndex(e => e.NoShowRecordedByAccountId, "fk_appointments_no_show_actor");
 
+            entity.HasIndex(e => e.SpecialtyId, "fk_appointments_specialty");
+
             entity.HasIndex(e => e.AppointmentTypeId, "fk_appointments_type");
 
             entity.HasIndex(e => e.ArrivalRecordedByAccountId, "ix_appointments_arrival_actor");
@@ -662,6 +664,10 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.BasePriceAmount)
                 .HasPrecision(13)
                 .HasColumnName("base_price_amount");
+            entity.Property(e => e.BillingFormCode)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'private'")
+                .HasColumnName("billing_form_code");
             entity.Property(e => e.CanceledAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("canceled_at_utc");
@@ -726,6 +732,7 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.RowVersion)
                 .HasDefaultValueSql("'1'")
                 .HasColumnName("row_version");
+            entity.Property(e => e.SpecialtyId).HasColumnName("specialty_id");
             entity.Property(e => e.StartsAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("starts_at_utc");
@@ -791,6 +798,10 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey<Appointment>(d => d.RescheduledFromAppointmentId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_appointments_rescheduled_from");
+
+            entity.HasOne(d => d.Specialty).WithMany(p => p.Appointments)
+                .HasForeignKey(d => d.SpecialtyId)
+                .HasConstraintName("fk_appointments_specialty");
         });
 
         modelBuilder.Entity<AppointmentDocument>(entity =>

@@ -5,7 +5,7 @@
 @inject WebBackendOptions Backend
 @inject UiErrorNotifier Errors
 
-<div class="booking-calendar" aria-label="Datas disponíveis para agendamento">
+<div class="booking-calendar @(Compact ? "booking-calendar--compact" : null)" aria-label="Datas disponíveis para agendamento">
     <div class="booking-calendar__heading">
         <strong>@Month.ToString("MMMM yyyy", CultureInfo.GetCultureInfo("pt-BR"))</strong>
         <div class="patient-actions">
@@ -31,13 +31,15 @@
     </div>
     @if (Loading) { <p class="field-hint" role="status">Consultando dias disponíveis…</p> }
     @if (LoadingDay) { <p class="field-hint" role="status">Consultando horários do dia selecionado…</p> }
-    else if (AvailableDates.Count == 0 && Error is null) { <p class="field-hint" role="status">Nenhum dia com horário disponível neste mês. Avance ou altere o serviço/profissional.</p> }
+    else if (!Loading && AvailableDates.Count == 0 && Error is null) { <p class="field-hint" role="status">Nenhum dia com horário disponível neste mês. Avance ou altere o serviço/profissional.</p> }
     @if (Error is not null) { <UiNotice Message="@Error" IsError="true" /> }
 </div>
 
 @code {
     [Parameter, EditorRequired] public string SlotsApiPrefix { get; set; } = "";
     [Parameter] public EventCallback<BookingDaySelection> DateSelected { get; set; }
+    [Parameter] public DateOnly? InitialDate { get; set; }
+    [Parameter] public bool Compact { get; set; }
     private IJSObjectReference? Module;
     private DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
     private DateOnly CurrentMonth => new(Today.Year, Today.Month, 1);
@@ -45,7 +47,7 @@
     private DateOnly? SelectedDate;
     private HashSet<DateOnly> AvailableDates = [];
     private readonly Dictionary<DateOnly, IReadOnlyList<WebAvailableSlot>> SlotsByDate = [];
-    private bool Loading;
+    private bool Loading = true;
     private bool LoadingDay;
     private string? Error;
     private static readonly string[] Weekdays = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -61,7 +63,9 @@
     {
         if (!firstRender) return;
         Module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/identity-access.js");
+        if (InitialDate is { } initial && initial >= Today) Month = new(initial.Year, initial.Month, 1);
         await LoadMonth();
+        if (InitialDate is { } selected && AvailableDates.Contains(selected)) await SelectDate(selected);
     }
     private async Task MoveMonth(int amount)
     {

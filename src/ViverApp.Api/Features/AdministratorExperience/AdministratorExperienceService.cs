@@ -20,7 +20,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         "appointments.booking_horizon_days", "appointments.minimum_lead_minutes", "appointments.cancellation_cutoff_hours",
         "appointments.reschedule_cutoff_hours", "appointments.slot_interval_minutes", "appointments.patient_daily_limit",
         "appointments.default_consultation_minutes", "appointments.default_examination_minutes", "appointments.default_surgery_minutes",
-        "appointments.default_procedure_minutes", "manager.appointment_types_enabled", "manager.professional_schedules_enabled",
+        "appointments.default_procedure_minutes", "appointments.default_specialty_id", "manager.appointment_types_enabled", "manager.professional_schedules_enabled",
         "manager.professional_services_enabled", "manager.point_discounts_enabled", "appointments.point_discount_max_percent",
         "professional.patient_scheduling_enabled", "premium.manager_can_manage", "manager.medical_records_write_enabled",
         "cash.manager_can_reopen", "cash.manager_can_view_cumulative_totals",
@@ -208,6 +208,9 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         if (setting.RowVersion != request.RowVersion) throw new AdministratorRuleException(409, "A configuração foi alterada por outra sessão.");
         try { using var json = JsonDocument.Parse(request.ValueJson); ValidateSetting(key, json.RootElement); }
         catch (JsonException) { throw new AdministratorRuleException(400, "Informe um valor JSON válido e tipado."); }
+        if (key == "appointments.default_specialty_id" && !await database.Specialties.AnyAsync(s =>
+            s.Id == JsonSerializer.Deserialize<uint>(request.ValueJson) && s.IsActive, ct))
+            throw new AdministratorRuleException(400, "Selecione uma especialidade ativa do catálogo.");
         if (key == "web.maintenance_mode" &&
             JsonSerializer.Deserialize<bool>(request.ValueJson) != JsonSerializer.Deserialize<bool>(setting.ValueJson))
         {
@@ -366,6 +369,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         var valid = key switch
         {
             "appointments.booking_horizon_days" => number is >= 1 and <= 730,
+            "appointments.default_specialty_id" => number >= 1,
             "appointments.minimum_lead_minutes" => number is >= 0 and <= 10080,
             "appointments.cancellation_cutoff_hours" or "appointments.reschedule_cutoff_hours" => number is >= 0 and <= 720,
             "appointments.slot_interval_minutes" or "appointments.interval_minutes" => number is >= 0 and <= 240,

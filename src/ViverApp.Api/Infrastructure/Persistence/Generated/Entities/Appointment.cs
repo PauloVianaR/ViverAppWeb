@@ -81,6 +81,10 @@ public partial class Appointment
 
     public DateTime? PointDiscountAtUtc { get; set; }
 
+    public string BillingFormCode { get; set; } = null!;
+
+    public uint? SpecialtyId { get; set; }
+
     public virtual ICollection<AppointmentDocument> AppointmentDocuments { get; set; } = new List<AppointmentDocument>();
 
     public virtual ICollection<AppointmentRescheduleHistory> AppointmentRescheduleHistories { get; set; } = new List<AppointmentRescheduleHistory>();
@@ -136,6 +140,8 @@ public partial class Appointment
     public virtual Appointment? RescheduledFromAppointment { get; set; }
 
     public virtual ICollection<ScheduledJob> ScheduledJobs { get; set; } = new List<ScheduledJob>();
+
+    public virtual Specialty? Specialty { get; set; }
 
     public virtual TeleconsultationGuestLink? TeleconsultationGuestLink { get; set; }
 

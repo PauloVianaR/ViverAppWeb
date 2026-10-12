@@ -1,0 +1,33 @@
+@inherits ViverApp.Web.Components.Pages.ManagerPageBase
+@if (Notice is not null) { <UiNotice Message="@Notice" IsError="NoticeError" /> }
+@if (!Loading && Metadata is not null)
+{
+    <section class="appointment-classification">
+        <div class="field"><label for="appointment-billing-form">Forma</label><select id="appointment-billing-form" @bind="BillingForm"><option value="private">Particular</option><option value="insurance">Convênio</option></select></div>
+        <div class="field"><label for="appointment-specialty">Especialidade</label><select id="appointment-specialty" @bind="SpecialtyId"><option value="0">Selecione</option>@foreach (var option in Options?.Specialties ?? []) { <option value="@option.Id">@option.Name</option> }</select></div>
+        <button type="button" class="button button--secondary button--small" @onclick="Save" disabled="@(Busy || !Changed)">Salvar forma e especialidade</button>
+    </section>
+}
+@code {
+    [Parameter] public long AppointmentId { get; set; }
+    [Parameter] public EventCallback Saved { get; set; }
+    private WebBookingWorkspaceOptions? Options;
+    private WebBookingWorkspaceMetadata? Metadata;
+    private string BillingForm = "private";
+    private uint SpecialtyId;
+    private bool Changed => Metadata is not null && (Metadata.BillingFormCode != BillingForm || Metadata.SpecialtyId != (SpecialtyId == 0 ? null : SpecialtyId));
+    protected override async Task Load()
+    {
+        Options = await Get<WebBookingWorkspaceOptions>("api/v1/booking-workspace/options");
+        Metadata = await Get<WebBookingWorkspaceMetadata>($"api/v1/booking-workspace/appointments/{AppointmentId}");
+        BillingForm = Metadata?.BillingFormCode ?? "private";
+        SpecialtyId = Metadata?.SpecialtyId ?? 0;
+    }
+    private Task Save() => Run(async () =>
+    {
+        Metadata = await Request<WebBookingWorkspaceMetadata>($"api/v1/booking-workspace/appointments/{AppointmentId}", "PUT",
+            new { billingFormCode = BillingForm, specialtyId = SpecialtyId == 0 ? (uint?)null : SpecialtyId, rowVersion = Metadata!.RowVersion });
+        await Saved.InvokeAsync();
+        Notice = "Forma e especialidade do atendimento salvas.";
+    });
+}

@@ -7,8 +7,10 @@ namespace ViverApp.Api.Features.ClinicalOperations;
 internal static class OphthalmologyReportMapping
 {
     public static Task<bool> IsOphthalmologyAsync(
-        ViverAppDbContext database, ulong professionalAccountId, CancellationToken ct) =>
-        database.ProfessionalSpecialties.AsNoTracking().AnyAsync(link =>
+        ViverAppDbContext database, ulong professionalAccountId, CancellationToken ct, uint? specialtyId = null) =>
+        specialtyId.HasValue
+        ? database.Specialties.AsNoTracking().AnyAsync(s => s.Id == specialtyId && s.NormalizedName == "OFTALMOLOGIA", ct)
+        : database.ProfessionalSpecialties.AsNoTracking().AnyAsync(link =>
             link.ProfessionalAccountId == professionalAccountId
             && link.Specialty.NormalizedName == "OFTALMOLOGIA", ct);
 

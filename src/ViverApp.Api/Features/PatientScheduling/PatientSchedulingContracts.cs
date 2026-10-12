@@ -100,7 +100,9 @@ public sealed record DoctorAppointmentCreateRequest(
     TimeOnly LocalStartsAt,
     [param: StringLength(1000)] string? PatientNotes,
     IReadOnlyList<uint>? AdditionalAppointmentTypeIds = null,
-    [param: Range(5, 720)] int? DurationMinutes = null);
+    [param: Range(5, 720)] int? DurationMinutes = null,
+    [param: RegularExpression("^(private|insurance)$")] string BillingFormCode = "private",
+    [param: Range(1, int.MaxValue)] uint? SpecialtyId = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AppointmentPointDiscountRequest(

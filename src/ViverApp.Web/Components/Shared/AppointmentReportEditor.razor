@@ -51,7 +51,7 @@
         }
         else
         {
-            <p class="field-hint">Laudos não podem ser alterados em atendimentos pendentes ou cancelados.</p>
+            <p class="field-hint">Laudos não podem ser alterados em atendimentos aguardando pagamento ou cancelados.</p>
         }
         @foreach (var version in Versions)
         {
@@ -83,6 +83,10 @@
     [Parameter] public long AppointmentId { get; set; }
     [Parameter] public ulong ExpectedPatientId { get; set; }
     [Parameter] public bool Embedded { get; set; }
+    [Parameter] public ulong RefreshVersion { get; set; }
+    [Parameter] public EventCallback Saved { get; set; }
+    private ulong loadedRefreshVersion;
+    private readonly string EditorId = "report-" + Guid.NewGuid().ToString("N");
     private IJSObjectReference? Module;
     private WebClinicalAppointment? Appointment;
     private readonly List<WebClinicalReportVersion> Versions = [];
@@ -90,6 +94,23 @@
     private string Summary = "", Recommendations = "", ChangeReason = "";
     private string? Notice;
     private bool Loading = true, Busy, NoticeError;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Module is null || Appointment is null || Busy || RefreshVersion == loadedRefreshVersion) return;
+        loadedRefreshVersion = RefreshVersion;
+        try
+        {
+            var current = await Module.InvokeAsync<WebClinicalAppointment>("get", Backend.BaseUrl.ToString(),
+                $"api/v1/clinical/appointments/{AppointmentId}", (string?)null);
+            if (ExpectedPatientId != 0 && current.PatientAccountId != ExpectedPatientId) throw new InvalidOperationException();
+            if (current.IsOphthalmology != Appointment.IsOphthalmology) await LoadAsync();
+            else Appointment = Appointment with { StatusCode = current.StatusCode };
+            // Atualizações operacionais não apagam o texto em edição nem trocam
+            // a versão clínica esperada, preservando a proteção de concorrência.
+        }
+        catch (Exception error) { ShowError(error); }
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -120,6 +141,7 @@
             (string?)null);
         Versions.Clear();
         Versions.AddRange(versions ?? []);
+        loadedRefreshVersion = RefreshVersion;
     }
 
     private async Task SaveAsync()
@@ -141,6 +163,7 @@
             ChangeReason = "";
             Notice = "Laudo salvo em uma nova versão auditada.";
             NoticeError = false;
+            await Saved.InvokeAsync();
         }
         catch (Exception error) { ShowError(error); }
         finally { Busy = false; StateHasChanged(); }
@@ -153,7 +176,7 @@
         Errors.Show(Notice);
     }
 
-    private string FieldId(string name) => $"appointment-report-{AppointmentId}-{name}";
+    private string FieldId(string name) => $"{EditorId}-{AppointmentId}-{name}";
     private static string RoleLabel(string code) => code switch
     {
         "doctor" => "Médico", "psychologist" => "Psicólogo",

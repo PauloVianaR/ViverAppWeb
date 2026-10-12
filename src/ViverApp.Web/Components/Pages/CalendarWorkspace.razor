@@ -101,7 +101,7 @@ else if(View=="day" && Role!="patient")
                             }
                             else
                             {
-                                <a class="calendar-daily-row calendar-daily-row--free" href="@BookingPath" aria-label="@BookingLabel(row.Time)"><time>@row.Time.ToString(@"hh\:mm")</time><span class="muted">Horário livre · agendar</span></a>
+                                <a class="calendar-daily-row calendar-daily-row--free" href="@BookingLink(row.Time)" aria-label="@BookingLabel(row.Time)"><time>@row.Time.ToString(@"hh\:mm")</time><span class="muted">Horário livre · agendar</span></a>
                             }
                         }
                         else
@@ -175,6 +175,7 @@ else
     private bool CanChooseProfessional=>Role is "manager" or "administrator";
     private string BookingPath=>Role switch{"doctor"=>"/medico/agendar","psychologist"=>"/psicologo/agendar","manager"=>"/gestao/agendar",_=>"/administracao/agendar"};
     private string BookingLabel(TimeSpan time)=>$"Agendar atendimento para {Anchor:dd/MM/yyyy} às {TimeOnly.FromTimeSpan(time):HH:mm}";
+    private string BookingLink(TimeSpan time)=>$"{BookingPath}?date={Anchor:yyyy-MM-dd}&time={TimeOnly.FromTimeSpan(time):HH:mm}&professional={ProfessionalId}";
     private DateTime ClinicNow => Local(DateTime.UtcNow);
     private DateOnly ClinicToday => DateOnly.FromDateTime(ClinicNow);
     private bool IsElapsed(TimeSpan time) => Anchor == ClinicToday && time < ClinicNow.TimeOfDay;

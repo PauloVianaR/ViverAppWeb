@@ -13,3 +13,5 @@
 .record-appointment-body{margin-top:1rem;padding-top:.75rem;border-top:1px solid var(--color-border)}
 .record-appointment .clinical-content{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin:1rem 0}
 @media(max-width:700px){.record-appointment-toggle{grid-template-columns:auto minmax(0,1fr)}.record-appointment-toggle>span:last-child{grid-column:2}.record-appointment .clinical-content{grid-template-columns:1fr}}
+.medical-record-shell--embedded{grid-template-columns:1fr}.medical-record-shell--embedded:has(.patient-record-summary){grid-template-columns:minmax(15rem,22rem) minmax(0,1fr)}.medical-record-shell--embedded .patient-record-summary{position:static}.medical-record-shell--embedded .medical-record-main{min-width:0}
+@media(max-width:760px){.medical-record-shell--embedded:has(.patient-record-summary){grid-template-columns:1fr}}
