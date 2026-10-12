@@ -330,3 +330,21 @@ input:disabled, select:disabled, textarea:disabled { background: var(--color-sur
 .appointment-service-option>span{min-width:0;overflow-wrap:anywhere}
 @media(max-width:1100px){.appointment-booking-grid,.appointment-detail-grid{grid-template-columns:minmax(0,1fr)}.appointment-detail-grid>.appointment-operation-panel{grid-column:1;grid-row:auto;position:static;order:10}}
 @media screen and (min-width:1100px) and (max-height:800px){.appointment-workspace-scheduling{padding:.75rem}.appointment-workspace .appointment-service-options{max-height:4.4rem}.appointment-workspace .appointment-date-panel .booking-calendar__day{height:1.55rem;min-height:1.55rem}.appointment-workspace .field{margin-bottom:.35rem}.appointment-compact-heading{margin-bottom:.55rem}}
+/* Specialty service selector and patient file in the appointment workspace. */
+.appointment-service-trigger{display:flex;justify-content:space-between;text-align:left;width:100%;padding:.7rem .8rem;border:1px solid #c9d3df;border-radius:.6rem;background:#fff;color:inherit;font:inherit}
+.appointment-service-dropdown{position:fixed;inset:auto;margin:0;padding:.8rem;border:1px solid #c9d3df;border-radius:.8rem;max-height:min(26rem,75dvh);box-shadow:0 12px 40px #0003;background:#fff;color:#172b43;overflow:auto;z-index:1200}
+.appointment-service-picker-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;gap:1rem}
+.appointment-service-picker-heading button{border:0;border-radius:50%;width:2rem;height:2rem;font-size:1.4rem;background:#eef3f8}
+.appointment-service-dropdown>input{width:100%;box-sizing:border-box;padding:.6rem;border:1px solid #c9d3df;border-radius:.5rem}
+.appointment-service-matches{display:grid;gap:.4rem;margin-top:.7rem}
+.appointment-service-option--selected{background:#e6f6ec!important;border-color:#218357!important}
+.appointment-selected-services{margin:.5rem 0;padding-left:1.4rem}
+.appointment-ficha-grid{display:grid;grid-template-columns:minmax(230px,.85fr) minmax(0,2fr);align-items:start;gap:1rem}
+.appointment-ficha-grid .medical-record-shell{display:block}
+.appointment-ficha-grid .patient-record-summary{position:static}
+.appointment-ficha-grid .medical-record-main[hidden]{display:none}
+.appointment-workspace-record>.medical-record-shell--embedded{display:block}
+.operational-rating-stars{display:flex;gap:.3rem}
+.operational-rating-stars button{font-size:1.65rem;background:none;border:0;color:#7a8798;cursor:pointer;padding:.2rem}
+.operational-rating-stars button.selected{color:#b47800}
+@media(max-width:1100px){.appointment-ficha-grid{grid-template-columns:minmax(0,1fr)}}

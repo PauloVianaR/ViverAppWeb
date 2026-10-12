@@ -3,8 +3,8 @@
 @inject NavigationManager Navigation
 <PageTitle>Novo atendimento | ViverApp</PageTitle>
 <header class="workspace-heading appointment-compact-heading"><div><p class="eyebrow">Agendamento pela clínica</p><h1 class="page-title">Novo atendimento</h1></div></header>
-<StaffAppointmentBooking @key="Navigation.Uri" PatientId="@Math.Max(PatientId, PatientQuery ?? 0)" Root="/administracao" DateQuery="@DateQuery" TimeQuery="@TimeQuery" ProfessionalQuery="ProfessionalQuery" />
-@code {
+<StaffAppointmentBooking @key="Navigation.Uri" PatientId="@Math.Max(PatientId, PatientQuery ?? 0)" Root="/administracao" DateQuery="@DateQuery" TimeQuery="@TimeQuery" ProfessionalQuery="ProfessionalQuery" ReturnQuery="@ReturnQuery" />
+@code { [SupplyParameterFromQuery(Name="returnTo")] public string? ReturnQuery{get;set;}
     [Parameter] public long PatientId { get; set; }
     [SupplyParameterFromQuery(Name="patient")] public long? PatientQuery { get; set; }
     [SupplyParameterFromQuery(Name="date")] public string? DateQuery { get; set; }

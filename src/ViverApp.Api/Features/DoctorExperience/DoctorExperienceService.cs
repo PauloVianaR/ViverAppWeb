@@ -103,29 +103,16 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
     public async Task<IReadOnlyList<ProfessionalServiceResponse>> ServicesAsync(ulong doctor, CancellationToken ct)
     {
         await RequireDoctorAsync(doctor, ct);
-        var offered = await database.ProfessionalServices.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor)
-            .ToDictionaryAsync(x => x.AppointmentTypeId, ct);
-        var types = await database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive)
-            .OrderBy(x => x.Name).ThenBy(x => x.Id).ToArrayAsync(ct);
+        var specialties = await database.ProfessionalSpecialties.AsNoTracking()
+            .Where(x => x.ProfessionalAccountId == doctor && x.Specialty.IsActive).Select(x => x.SpecialtyId).ToArrayAsync(ct);
+        var types = await database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive && specialties.Contains(x.SpecialtyId))
+            .OrderBy(x => x.Name).ToArrayAsync(ct);
         return types.Select(x => new ProfessionalServiceResponse(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode,
-            x.DurationMinutes, x.PriceAmount, x.RequiresPayment, x.IsActive, offered.TryGetValue(x.Id, out var link) && link.IsActive,
-            offered.TryGetValue(x.Id, out link) ? link.RowVersion : 0)).ToArray();
+            x.DurationMinutes, x.PriceAmount, x.RequiresPayment, true, true, x.RowVersion, x.SpecialtyId)).ToArray();
     }
 
-    public async Task<IReadOnlyList<ProfessionalServiceResponse>> UpdateServicesAsync(ulong doctor, ProfessionalServicesUpdateRequest request, CancellationToken ct)
-    {
-        var ids = request.AppointmentTypeIds.Distinct().ToArray();
-        if (await database.AppointmentTypes.CountAsync(x => ids.Contains(x.Id) && x.IsActive, ct) != ids.Length)
-            throw Invalid("Um ou mais serviços estão inativos ou não existem.");
-        var existing = await database.ProfessionalServices.Where(x => x.ProfessionalAccountId == doctor).ToArrayAsync(ct);
-        var now = clock.GetUtcNow().UtcDateTime;
-        foreach (var row in existing) { row.IsActive = ids.Contains(row.AppointmentTypeId); row.UpdatedAtUtc = now; row.RowVersion++; }
-        foreach (var id in ids.Except(existing.Select(x => x.AppointmentTypeId))) database.ProfessionalServices.Add(new()
-        { ProfessionalAccountId = doctor, AppointmentTypeId = id, IsActive = true, CreatedAtUtc = now, UpdatedAtUtc = now, RowVersion = 1 });
-        await SaveAsync(ct); await audit.WriteAsync("professional.services.updated", doctor, "professional_profile", doctor.ToString(),
-            new Dictionary<string, string> { ["activeCount"] = ids.Length.ToString() }, ct);
-        return await ServicesAsync(doctor, ct);
-    }
+    public Task<IReadOnlyList<ProfessionalServiceResponse>> UpdateServicesAsync(ulong doctor, ProfessionalServicesUpdateRequest request, CancellationToken ct)
+        => throw Conflict("Os serviços são definidos automaticamente pelas especialidades. Altere a especialidade do catálogo, não o profissional.");
 
     public async Task<DoctorAgendaResponse> AgendaAsync(ulong doctor, DateOnly from, DateOnly to, string? status,
         string? modality, string? category, ulong? appointmentNumber, string? search, int page, int pageSize, CancellationToken ct)

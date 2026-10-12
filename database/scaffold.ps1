@@ -90,6 +90,8 @@ $tables = @(
     'idempotency_records'
     'patient_preferences'
     'appointment_reviews'
+    'appointment_operational_reviews'
+    'appointment_operational_review_versions'
     'private_documents'
     'contact_change_requests'
     'teleconsultation_peers'

@@ -40,8 +40,8 @@ else
         <UiNotice Message="@Notice" IsError="NoticeError" />
     }
 
-    <section class="medical-record-shell @(EmbeddedSection is not null ? "medical-record-shell--embedded" : null)">
-        @if (EmbeddedSection is null or "documents")
+    <section class="medical-record-shell @(EmbeddedSection == "summary" ? "medical-record-shell--summary" : null) @(EmbeddedSection is not null ? "medical-record-shell--embedded" : null)">
+        @if (EmbeddedSection is null or "summary")
         {
         <aside class="surface patient-record-summary">
             <details open>
@@ -74,7 +74,7 @@ else
         </aside>
         }
 
-        <div class="medical-record-main">
+        <div class="medical-record-main" hidden='@(EmbeddedSection == "summary")'>
             @if (EmbeddedSection is null)
             {
             <nav class="medical-record-tabs" aria-label="Seções do prontuário">
@@ -288,7 +288,7 @@ else
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if(!firstRender)return;
-        try { Module=await JavaScript.InvokeAsync<IJSObjectReference>("import","/js/medical-records.js"); CanWriteClinical=Role is "doctor" or "psychologist"||(Role=="manager"&&(await Get<ManagerCapabilities>("api/v1/manager/capabilities"))?.MedicalRecordWriteEnabled==true); Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary"); Appointments.AddRange(await Get<IReadOnlyList<WebMedicalRecordAppointmentOption>>($"api/v1/medical-records/patients/{PatientId}/appointments")??[]); if (EmbeddedSection is null) await LoadTimelineCoreAsync(); else { ActiveTab = EmbeddedSection switch { "appointments" => RecordTab.Appointments, "financial" => RecordTab.Financial, _ => RecordTab.Documents }; switch (ActiveTab) { case RecordTab.Appointments: await LoadAppointmentReportsAsync(); break; case RecordTab.Financial: await LoadFinancialAsync(); break; default: await LoadDocumentsAsync(); break; } } }
+        try { Module=await JavaScript.InvokeAsync<IJSObjectReference>("import","/js/medical-records.js"); CanWriteClinical=Role is "doctor" or "psychologist"||(Role=="manager"&&(await Get<ManagerCapabilities>("api/v1/manager/capabilities"))?.MedicalRecordWriteEnabled==true); Summary=await Get<WebMedicalRecordPatientSummary>($"api/v1/medical-records/patients/{PatientId}/summary"); Appointments.AddRange(await Get<IReadOnlyList<WebMedicalRecordAppointmentOption>>($"api/v1/medical-records/patients/{PatientId}/appointments")??[]); if (EmbeddedSection is null) await LoadTimelineCoreAsync(); else if (EmbeddedSection != "summary") { ActiveTab = EmbeddedSection switch { "appointments" => RecordTab.Appointments, "financial" => RecordTab.Financial, _ => RecordTab.Documents }; switch (ActiveTab) { case RecordTab.Appointments: await LoadAppointmentReportsAsync(); break; case RecordTab.Financial: await LoadFinancialAsync(); break; default: await LoadDocumentsAsync(); break; } } }
         catch(Exception e){ShowError(e);}
         finally{Loading=false;StateHasChanged();}
     }

@@ -26,12 +26,12 @@ else { <InterfaceState Title="Nenhum atendimento encontrado" Description="Altere
     private WebPage<PatientAppointment>? PageData;
     private PatientClinic? Clinic;
     private string View = "all", Search = "", StatusFilter = "", CategoryFilter = "", Modality = "";
-    private DateTime? From=DateTime.Today, Until=DateTime.Today;
+    private DateTime? From=AppointmentNavigation.WeekStart(DateTime.Today), Until=AppointmentNavigation.WeekEnd(DateTime.Today);
     private ulong? AppointmentNumber;
     private int Page = 1;
     protected override async Task Load() { await LoadAppointmentViewAsync(); Clinic ??= await Get<PatientClinic>("api/v1/patient/experience/clinic"); PageData = await Get<WebPage<PatientAppointment>>($"api/v1/patient/experience/agenda?page={Page}&view={View}&search={Escape(Search)}&appointmentNumber={AppointmentNumber}&status={StatusFilter}&category={CategoryFilter}&modality={Modality}&from={From:yyyy-MM-dd}&until={Until:yyyy-MM-dd}"); }
     private Task Apply() => Run(async () => { Page = 1; await Load(); });
-    private Task Clear() => Run(async () => { Search = StatusFilter = CategoryFilter = Modality = ""; AppointmentNumber = null; From = Until = DateTime.Today; Page = 1; await Load(); });
+    private Task Clear() => Run(async () => { Search = StatusFilter = CategoryFilter = Modality = ""; AppointmentNumber = null; From = AppointmentNavigation.WeekStart(DateTime.Today); Until = AppointmentNavigation.WeekEnd(DateTime.Today); Page = 1; await Load(); });
     private Task Previous() => Run(async () => { Page--; await Load(); });
     private Task Next() => Run(async () => { Page++; await Load(); });
 }

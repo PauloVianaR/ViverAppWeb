@@ -1,0 +1,25 @@
+@inherits ViverApp.Web.Components.Pages.ManagerPageBase
+@if(Notice is not null){<UiNotice Message="@Notice" IsError="NoticeError" />}
+@if(Loading){<LoadingSkeleton Lines="3" />}
+else
+{
+    <details class="appointment-detail-extra"><summary>Avaliação operacional</summary>
+        <p class="field-hint">Avaliação da equipe da clínica. As alterações preservam as versões anteriores e não alteram a avaliação do paciente.</p>
+        <div class="operational-rating-stars" role="group" aria-label="Nota da avaliação operacional">
+            @for(byte i=1;i<=5;i++){var star=i;<button type="button" class="@(Rating>=star?"selected":null)" aria-label="@($"{star} estrela(s)")" aria-pressed="@(Rating==star)" @onclick="()=>Rating=star">★</button>}
+        </div>
+        <div class="field"><label for="operational-feedback">Feedback</label><textarea id="operational-feedback" rows="3" maxlength="2000" @bind="Feedback"></textarea></div>
+        <button type="button" class="button" disabled="@(Busy||Rating==0)" @onclick="Save">Salvar avaliação</button>
+        @foreach(var version in Data?.Versions??[]){<details><summary>Versão @version.Version · @Role(version.EditorRole): @version.EditorName · @version.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</summary><p>@version.Rating de 5 estrelas</p><p>@version.Feedback</p></details>}
+    </details>
+}
+@code{
+    [Parameter]public long AppointmentId{get;set;}
+    private ReviewData? Data;private byte Rating;private string Feedback="";
+    private string Api=>$"api/v1/booking-workspace/appointments/{AppointmentId}/operational-review";
+    protected override async Task Load(){Data=await Get<ReviewData>(Api);Rating=Data?.Rating??0;Feedback=Data?.Feedback??"";}
+    private Task Save()=>Run(async()=>{Data=await Request<ReviewData>(Api,"PUT",new{rating=Rating,feedback=Feedback,rowVersion=Data?.RowVersion??0});Notice="Avaliação operacional salva em uma nova versão.";});
+    private static string Role(string role)=>role switch{"manager"=>"Gestor","administrator"=>"Admin","psychologist"=>"Psicólogo",_=>"Médico"};
+    private sealed record ReviewVersion(ulong Version,byte Rating,string? Feedback,string EditorName,string EditorRole,DateTime CreatedAtUtc);
+    private sealed record ReviewData(byte? Rating,string? Feedback,ulong RowVersion,IReadOnlyList<ReviewVersion> Versions);
+}

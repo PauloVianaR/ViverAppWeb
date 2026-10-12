@@ -30,7 +30,7 @@ public sealed record BookingWorkspaceUpdate(
 [ServiceFilter(typeof(AdministratorExceptionFilter)), ServiceFilter(typeof(AdministratorStepUpFilter))]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class BookingWorkspaceController(ViverAppDbContext database, ManagerExperienceService patients,
-    IdentityAuditWriter audit, TimeProvider clock) : ControllerBase
+    IdentityAuditWriter audit, TimeProvider clock, PatientSchedulingService scheduling) : ControllerBase
 {
     private ulong Actor => ulong.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!, CultureInfo.InvariantCulture);
     private bool Professional => User.IsInRole("doctor") || User.IsInRole("psychologist");
@@ -44,6 +44,19 @@ public sealed class BookingWorkspaceController(ViverAppDbContext database, Manag
             .Where(x => x.SettingKey == "appointments.default_specialty_id" && !x.IsSecret)
             .Select(x => x.ValueJson).SingleOrDefaultAsync(ct);
         return new(uint.TryParse(value, out var id) && specialties.Any(x => x.Id == id) ? id : null, specialties);
+    }
+
+    [HttpGet("professionals")]
+    public Task<SchedulingPage<BookingProfessionalResponse>> Professionals(uint? specialtyId = null, int page = 1, int pageSize = 50, CancellationToken ct = default)
+        => scheduling.SearchProfessionalsAsync(page, pageSize, null, specialtyId, null, null, ct);
+
+    [HttpGet("professionals/{id:long}/specialties")]
+    public async Task<object> ProfessionalSpecialties(ulong id, CancellationToken ct)
+    {
+        if (Professional && id != Actor) throw new AdministratorRuleException(404, "Profissional não encontrado.");
+        var primary = await database.ProfessionalSpecialties.AsNoTracking().Where(x => x.ProfessionalAccountId == id && x.Specialty.IsActive)
+            .OrderByDescending(x => x.IsPrimary).Select(x => (uint?)x.SpecialtyId).FirstOrDefaultAsync(ct);
+        return new { primarySpecialtyId = primary };
     }
 
     [HttpGet("patients")]

@@ -27,37 +27,41 @@ else
                             </div>
                         </details>
                     </div>
-                    <div class="field"><label for="booking-specialty">Especialidade</label><select id="booking-specialty" @bind="SpecialtyId"><option value="0">Selecione</option>@foreach (var specialty in Options?.Specialties ?? []) { <option value="@specialty.Id">@specialty.Name</option> }</select></div>
-                    <div class="field"><label for="booking-category">Tipo</label><select id="booking-category" @bind="Category" @bind:after="CategoryChanged">@foreach (var category in Categories) { <option value="@category.Code">@category.Label</option> }</select></div>
-                    <div class="field"><label for="booking-professional">Profissional</label><select id="booking-professional" @bind="ProfessionalId" @bind:after="ResetSlots" disabled="@IsProfessional"><option value="0">@(IsProfessional ? "Você" : "Selecione")</option>@foreach (var professional in Professionals) { <option value="@professional.AccountId">@professional.FullName</option> }</select></div>
+                    <div class="field"><label for="booking-specialty">Especialidade</label><select id="booking-specialty" @bind="SpecialtyId" disabled="@Busy" @bind:after="SpecialtyChanged"><option value="0">Selecione</option>@foreach (var specialty in Options?.Specialties ?? []) { <option value="@specialty.Id">@specialty.Name</option> }</select></div>
+                    <div class="field"><label for="booking-category">Tipo</label><select id="booking-category" @bind="Category" disabled="@Busy" @bind:after="CategoryChanged">@foreach (var category in Categories) { <option value="@category.Code">@category.Label</option> }</select></div>
+                    <div class="field"><label for="booking-professional">Profissional</label><select id="booking-professional" @bind="ProfessionalId" @bind:after="ResetSlots" disabled="@(IsProfessional || Busy)"><option value="0">@(IsProfessional ? "Você" : "Selecione")</option>@foreach (var professional in Professionals) { <option value="@professional.AccountId">@professional.FullName</option> }</select></div>
                     <div class="field"><label for="booking-form">Forma</label><select id="booking-form" @bind="BillingForm" @bind:after="BillingChanged"><option value="private">Particular</option><option value="insurance">Convênio</option></select></div>
-                    <div class="field"><label for="booking-modality">Modalidade</label><select id="booking-modality" @bind="ModalityCode" @bind:after="ModalityChanged"><option value="in_person">Presencial</option><option value="online">Online</option></select></div>
+                    <div class="field"><label for="booking-modality">Modalidade</label><select id="booking-modality" @bind="ModalityCode" disabled="@Busy" @bind:after="ModalityChanged"><option value="in_person">Presencial</option><option value="online">Online</option></select></div>
                 </div>
                 <section class="appointment-services-section">
-                    <div class="field"><label for="booking-service-search">Serviços (mesmo tipo base)</label><input id="booking-service-search" @bind="ServiceSearch" @bind:event="oninput" placeholder="Pesquisar serviço…" maxlength="100" /></div>
-                    <div class="appointment-service-options">
-                        @foreach (var service in VisibleServices)
-                        {
-                            <label class="appointment-service-option"><input type="checkbox" checked="@SelectedIds.Contains(service.Id)" disabled="@(SelectedIds.Count > 0 && service.ModalityCode != "both" && service.ModalityCode != ModalityCode)" @onchange="() => ToggleService(service)" />
-                                <span><strong>@service.Name</strong><small>@service.DurationMinutes min · @if (BillingForm == "insurance" || !service.RequiresPayment) { <strong>Sem cobrança</strong> } else if (Patient?.IsPremium == true) { <s>@Money(service.BasePrice)</s> <b>@Money(Discounted(service.BasePrice))</b> } else { @Money(service.BasePrice) }</small></span></label>
-                        }
-                        @if (!VisibleServices.Any()) { <p class="field-hint">Nenhum serviço ativo neste tipo.</p> }
+                    <div class="field"><label id="booking-service-label">Pesquisar serviço</label><button id="booking-service-trigger" type="button" class="appointment-service-trigger" aria-labelledby="booking-service-label" @onclick="OpenServices">Pesquisar e selecionar serviços <span aria-hidden="true">⌄</span></button></div>
+                    <div id="booking-service-picker" popover="auto" class="appointment-service-dropdown">
+                        <div class="appointment-service-picker-heading"><strong>Serviços · @Categories.First(x=>x.Code==Category).Label</strong><button type="button" popovertarget="booking-service-picker" popovertargetaction="hide" aria-label="Fechar lista de serviços">×</button></div>
+                        <input aria-label="Pesquisar serviço por nome" @bind="ServiceSearch" @bind:event="oninput" placeholder="Digite para pesquisar…" maxlength="100" />
+                        <div class="appointment-service-matches">
+                            @foreach(var service in VisibleServices)
+                            {
+                                <label class="appointment-service-option @(SelectedIds.Contains(service.Id) ? "appointment-service-option--selected" : null)"><input type="checkbox" checked="@SelectedIds.Contains(service.Id)" disabled="@(Busy || SelectedIds.Count>0 && service.ModalityCode!="both" && service.ModalityCode!=ModalityCode)" @onchange="()=>ToggleService(service)" /><span><strong>@service.Name</strong><small>@service.DurationMinutes min · @if(BillingForm=="insurance" || !service.RequiresPayment){<strong>Sem cobrança</strong>}else if(Patient?.IsPremium==true){<s>@Money(service.BasePrice)</s> <b>@Money(Discounted(service.BasePrice))</b>}else{@Money(service.BasePrice)}</small></span></label>
+                            }
+                            @if(!VisibleServices.Any()){<p class="field-hint">Nenhum serviço ativo para este tipo e especialidade.</p>}
+                        </div>
                     </div>
+                    <ul class="appointment-selected-services" aria-label="Serviços selecionados">@foreach(var service in SelectedServices){<li>@service.Name</li>}</ul>
                 </section>
                 <div class="appointment-date-time-grid">
                     <div class="appointment-date-panel">
                         <strong>Data</strong>
-                        @if (PrimaryId != 0 && (IsProfessional || ProfessionalId != 0) && DurationValid)
+                        @if (ProfessionalId != 0 && DurationValid)
                         {
-                            <BookingAvailabilityCalendar @key="CalendarKey" SlotsApiPrefix="@CalendarApi" InitialDate="InitialDate" Compact="true" DateSelected="SelectDate" />
+                            <BookingAvailabilityCalendar @key="CalendarKey" SlotsApiPrefix="@CalendarApi" InitialDate="Date" ProfessionalId="ProfessionalId" PreviewOnly="@(PrimaryId==0)" Compact="true" DateSelected="SelectDate" />
                         }
                         else { <div class="appointment-calendar-placeholder"><p>Escolha serviço e profissional para consultar as datas disponíveis.</p><input type="date" aria-label="Data selecionada" value="@(InitialDate?.ToString("yyyy-MM-dd"))" disabled /></div> }
                     </div>
                     <div>
-                        <div class="field"><label for="booking-time">Horário</label><select id="booking-time" @bind="SelectedTime"><option value="">Selecione</option>@if(Slots.Count==0 && !string.IsNullOrEmpty(SelectedTime)){<option value="@SelectedTime">@SelectedTime (validar disponibilidade)</option>}@foreach (var slot in Slots) { <option value="@slot.StartsAt.ToString("HH:mm")">@slot.StartsAt.ToString("HH:mm")–@slot.EndsAt.ToString("HH:mm")</option> }</select></div>
+                        <div class="field"><label for="booking-time">Horário</label><select @key='@($"{CalendarKey}-{Slots.Count}")' id="booking-time" @bind="SelectedTime"><option value="">Selecione</option>@if(!string.IsNullOrEmpty(SelectedTime) && !Slots.Any(x=>x.StartsAt.ToString("HH:mm")==SelectedTime)){<option value="@SelectedTime">@SelectedTime (validar disponibilidade)</option>}@foreach (var slot in Slots) { <option value="@slot.StartsAt.ToString("HH:mm")">@slot.StartsAt.ToString("HH:mm")–@slot.EndsAt.ToString("HH:mm")</option> }</select></div>
                         <div class="field"><label for="booking-duration">Tempo (minutos)</label><input id="booking-duration" type="number" min="5" max="720" value="@Duration" disabled="@(SelectedIds.Count < 2)" @onchange="DurationChanged" /></div>
                         <div class="field"><label for="booking-notes">Observações</label><textarea id="booking-notes" @bind="Notes" maxlength="1000" rows="2"></textarea></div>
-                        @if (IsOphthalmology) { <details class="appointment-report-preview"><summary>Laudo oftalmológico</summary><p class="field-hint">Os campos clínicos ficam disponíveis após salvar e confirmar o atendimento.</p></details> }
+
                     </div>
                 </div>
             </div>
@@ -72,7 +76,7 @@ else
                     @if (PointKind != "") { <div class="field"><label for="booking-discount-value">Valor</label><input id="booking-discount-value" type="number" min="0.01" step="0.01" @bind="PointValue" /></div> }
                 }
                 <button type="button" class="button" disabled="@(Busy || PatientIdValue == 0 || PrimaryId == 0 || (!IsProfessional && ProfessionalId == 0) || !Slots.Any(x=>x.StartsAt.ToString("HH:mm")==SelectedTime) || !DurationValid || SpecialtyId == 0)" @onclick="Confirm">Salvar agendamento</button>
-                <a class="button button--secondary" href="@Root/agenda">Voltar à agenda</a>
+                <a class="button button--secondary" href="@ReturnTo">Voltar à agenda</a>
                 <p class="field-hint">Convênio não gera cobrança ao paciente. Particular respeita “Cobrar?” do catálogo. Valores e disponibilidade são validados no servidor.</p>
             </aside>
         </div>
@@ -84,6 +88,8 @@ else
     [Parameter] public string Root { get; set; } = "/gestao";
     [Parameter] public string? DateQuery { get; set; }
     [Parameter] public string? TimeQuery { get; set; }
+    [Parameter] public string? ReturnQuery { get; set; }
+    private string ReturnTo => AppointmentNavigation.AgendaReturn(Root,ReturnQuery);
     [Parameter] public ulong? ProfessionalQuery { get; set; }
     private bool IsProfessional => Root is "/medico" or "/psicologo";
     private string Api => IsProfessional ? "api/v1/doctor" : Root == "/administracao" ? "api/v1/administrator" : "api/v1/manager";
@@ -109,7 +115,7 @@ else
     private uint PrimaryId => SelectedIds.FirstOrDefault();
     private bool DurationValid => SelectedIds.Count <= 1 || Duration is >= 5 and <= 720;
     private IEnumerable<ManagerPatient> MatchingPatients => Patients.Where(x => PatientKeys[x.AccountId].Contains(PatientSearchNormalized, StringComparison.Ordinal)).Take(50);
-    private IEnumerable<ManagerService> VisibleServices => Services.Where(x => x.CategoryCode == Category && (ServiceSearch == "" || PatientSearchKey.Normalize(x.Name).Contains(PatientSearchKey.Normalize(ServiceSearch), StringComparison.Ordinal))).OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase);
+    private IEnumerable<ManagerService> VisibleServices => Services.Where(x => x.CategoryCode == Category && x.SpecialtyId == SpecialtyId && (ServiceSearch == "" || PatientSearchKey.Normalize(x.Name).Contains(PatientSearchKey.Normalize(ServiceSearch), StringComparison.Ordinal))).OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase);
     private IEnumerable<ManagerService> SelectedServices => Services.Where(x => SelectedIds.Contains(x.Id));
     private decimal BaseTotal => SelectedServices.Sum(x => x.RequiresPayment ? x.BasePrice : 0);
     private bool ChargeRequired => BillingForm == "private" && SelectedServices.Any(x => x.RequiresPayment);
@@ -142,7 +148,7 @@ else
             var capabilities = await Get<DoctorCapabilities>("api/v1/doctor/capabilities");
             if (capabilities?.PatientSchedulingEnabled != true) { Navigation.NavigateTo($"{Root}/agenda"); return; }
             var catalog = await Get<IReadOnlyList<ProfessionalService>>($"{Api}/services") ?? [];
-            Services = catalog.Where(x => x.IsActive && x.Offered).Select(x => new ManagerService(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode, x.DurationMinutes, x.PriceAmount, x.RequiresPayment)).ToArray();
+            Services = catalog.Where(x => x.IsActive && x.Offered).Select(x => new ManagerService(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode, x.DurationMinutes, x.PriceAmount, x.RequiresPayment,x.SpecialtyId)).ToArray();
         }
         else
         {
@@ -153,7 +159,8 @@ else
         }
         if (DateOnly.TryParseExact(DateQuery, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var initial) && initial >= Date) InitialDate = initial;
         ProfessionalId = ProfessionalQuery ?? 0;
-        if (Services.FirstOrDefault() is { } first) Category = first.CategoryCode;
+        if(IsProfessional){var me=await Get<WebCurrentAccount>("api/v1/auth/me");ProfessionalId=ulong.TryParse(me?.Id,out var ownId)?ownId:0;var selfProfile=await Get<ProfessionalProfileData>("api/v1/doctor/profile");Professionals=[new WebBookingProfessional(ProfessionalId,selfProfile?.FullName??"Você",null,"","",10,[])];}
+        if(ProfessionalId!=0){var selected=await Get<WebBookingProfessionalSpecialties>($"api/v1/booking-workspace/professionals/{ProfessionalId}/specialties");SpecialtyId=selected?.PrimarySpecialtyId??SpecialtyId;}
         await LoadProfessionals();
         if (InitialDate.HasValue) Date = InitialDate.Value;
         if (TimeOnly.TryParse(TimeQuery, CultureInfo.InvariantCulture, out var initialTime)) SelectedTime = initialTime.ToString("HH:mm");
@@ -167,6 +174,8 @@ else
     }
     private void SearchPatients(ChangeEventArgs e) { PatientSearch = e.Value?.ToString() ?? ""; PatientSearchNormalized = PatientSearchKey.Normalize(PatientSearch); }
     private void ChoosePatient(ManagerPatient patient) { Patient = patient; PatientIdValue = patient.AccountId; PatientPickerRevision++; ResetSlots(); }
+    private Task OpenServices()=>Module!.InvokeVoidAsync("openServicePicker","booking-service-trigger","booking-service-picker").AsTask();
+    private Task SpecialtyChanged()=>Run(async()=>{SelectedIds.Clear();Duration=0;await LoadProfessionals();});
     private Task CategoryChanged() => Run(async () => { SelectedIds.Clear(); ServiceSearch = ""; Duration = 0; await LoadProfessionals(); });
     private Task ToggleService(ManagerService service) => Run(async () =>
     {
@@ -176,17 +185,16 @@ else
     });
     private Task ModalityChanged() => Run(async () => { SelectedIds.RemoveAll(id => Services.Any(x => x.Id == id && x.ModalityCode != "both" && x.ModalityCode != ModalityCode)); Duration = SelectedServices.Sum(x => (int)x.DurationMinutes); await LoadProfessionals(); });
     private void BillingChanged() { PointKind = ""; PointValue = 0; }
-    private void ResetSlots() { Slots = []; SelectedTime = null; }
+    private void ResetSlots() { Slots = []; }
     private void DurationChanged(ChangeEventArgs e) { Duration = int.TryParse(e.Value?.ToString(), out var value) ? value : 0; ResetSlots(); }
     private async Task LoadProfessionals()
     {
         ResetSlots();
         if (IsProfessional) return;
-        if (PrimaryId == 0) { Professionals = []; return; }
         var people = new List<WebBookingProfessional>();
         for (var page = 1; ; page++)
         {
-            var data = await Get<WebPage<WebBookingProfessional>>($"{Api}/booking/professionals?appointmentTypeId={PrimaryId}&modality={ModalityCode}{Extras}&page={page}&pageSize=50");
+            var data = await Get<WebPage<WebBookingProfessional>>($"api/v1/booking-workspace/professionals?specialtyId={SpecialtyId}&page={page}&pageSize=50");
             if (data is null) break;
             people.AddRange(data.Items);
             if (people.Count >= data.TotalCount || data.Items.Count == 0) break;
@@ -197,8 +205,8 @@ else
     private void SelectDate(BookingDaySelection selection)
     {
         Slots = selection.Slots;
-        SelectedTime = null;
         if (selection.Date == default) return;
+        if(Date!=selection.Date)SelectedTime=null;
         Date = selection.Date;
         if (Date == InitialDate && TimeOnly.TryParse(TimeQuery, out var wanted) && Slots.Any(x => x.StartsAt == wanted)) SelectedTime = wanted.ToString("HH:mm");
     }
@@ -207,6 +215,6 @@ else
         var common = new { patientAccountId = PatientIdValue, appointmentTypeId = PrimaryId, additionalAppointmentTypeIds = SelectedIds.Skip(1).ToArray(), modalityCode = ModalityCode, localDate = Date, localStartsAt = TimeOnly.Parse(SelectedTime!, CultureInfo.InvariantCulture), patientNotes = Notes, durationMinutes = SelectedIds.Count > 1 ? (int?)Duration : null, billingFormCode = BillingForm, specialtyId = SpecialtyId };
         var body = IsProfessional ? (object)common : new ManagerAppointmentCreate(PatientIdValue, ProfessionalId, PrimaryId, ModalityCode, Date, common.localStartsAt, Notes, common.additionalAppointmentTypeIds, ChargeRequired && PointKind != "" ? PointKind : null, ChargeRequired && PointKind != "" ? PointValue : null, common.durationMinutes, BillingForm, SpecialtyId);
         var result = await Request<WebAppointment>($"{Api}/appointments", "POST", body, Guid.NewGuid().ToString("N"));
-        Navigation.NavigateTo($"{Root}/atendimentos/{result!.Id}");
+        Navigation.NavigateTo($"{Root}/atendimentos/{result!.Id}?returnTo={Uri.EscapeDataString(ReturnTo)}");
     });
 }

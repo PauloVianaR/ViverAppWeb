@@ -17,7 +17,7 @@ public sealed record ManagerCapabilitiesResponse(bool AppointmentTypesEnabled, b
     bool PremiumManagementEnabled, bool MedicalRecordWriteEnabled, bool CashReopeningEnabled,
     bool CashCumulativeTotalsEnabled, bool PointDiscountsEnabled, decimal PointDiscountMaxPercent);
 public sealed record ManagerServiceOption(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode,
-    ushort DurationMinutes, decimal BasePrice, bool RequiresPayment);
+    ushort DurationMinutes, decimal BasePrice, bool RequiresPayment, uint SpecialtyId = 0);
 public sealed record ManagerReportMetadata(bool Exists, string? StatusCode, uint VersionCount, DateTime? PublishedAtUtc);
 public sealed record ManagerPaymentMetadata(ulong? Id, string StatusCode, string? MethodCode, DateTime? PaidAtUtc,
     string? CardLastFour, string? AuthorizationReference, ulong RowVersion);

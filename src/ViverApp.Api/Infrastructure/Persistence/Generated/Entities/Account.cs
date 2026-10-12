@@ -81,6 +81,10 @@ public partial class Account
 
     public virtual ICollection<Appointment> AppointmentNoShowRecordedByAccounts { get; set; } = new List<Appointment>();
 
+    public virtual ICollection<AppointmentOperationalReviewVersion> AppointmentOperationalReviewVersions { get; set; } = new List<AppointmentOperationalReviewVersion>();
+
+    public virtual ICollection<AppointmentOperationalReview> AppointmentOperationalReviews { get; set; } = new List<AppointmentOperationalReview>();
+
     public virtual ICollection<Appointment> AppointmentPatientAccounts { get; set; } = new List<Appointment>();
 
     public virtual ICollection<Appointment> AppointmentPointDiscountByAccounts { get; set; } = new List<Appointment>();

@@ -402,7 +402,10 @@ internal static partial class Program
         string database,
         CancellationToken cancellationToken)
     {
-        await using var connection = CreateConnection(source, database);
+        // Migrations versionadas podem usar variáveis SQL de sessão (SET/PREPARE).
+        // A opção é local ao executor de migrations, nunca às consultas da API.
+        var migrationSource = new MySqlConnectionStringBuilder(source.ConnectionString) { AllowUserVariables = true };
+        await using var connection = CreateConnection(migrationSource, database);
         await connection.OpenAsync(cancellationToken);
         await AssertServerAsync(connection, cancellationToken);
         await AssertDatabaseAsync(connection, database, cancellationToken);

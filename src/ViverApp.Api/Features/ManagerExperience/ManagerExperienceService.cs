@@ -98,7 +98,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
 
     public async Task<IReadOnlyList<ManagerServiceOption>> ServicesAsync(CancellationToken ct) =>
         await database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).ThenBy(x => x.Id)
-            .Select(x => new ManagerServiceOption(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode, x.DurationMinutes, x.PriceAmount, x.RequiresPayment)).ToArrayAsync(ct);
+            .Select(x => new ManagerServiceOption(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode, x.DurationMinutes, x.PriceAmount, x.RequiresPayment, x.SpecialtyId)).ToArrayAsync(ct);
 
     public async Task<ManagerAgendaResponse> AgendaAsync(DateOnly from, DateOnly to, string? status, string? modality,
         string? category, ulong? doctor, ulong? appointmentNumber, string? payment, TimeOnly? startTime, TimeOnly? endTime, string? search,

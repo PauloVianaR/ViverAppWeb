@@ -87,6 +87,10 @@ public partial class Appointment
 
     public virtual ICollection<AppointmentDocument> AppointmentDocuments { get; set; } = new List<AppointmentDocument>();
 
+    public virtual AppointmentOperationalReview? AppointmentOperationalReview { get; set; }
+
+    public virtual ICollection<AppointmentOperationalReviewVersion> AppointmentOperationalReviewVersions { get; set; } = new List<AppointmentOperationalReviewVersion>();
+
     public virtual ICollection<AppointmentRescheduleHistory> AppointmentRescheduleHistories { get; set; } = new List<AppointmentRescheduleHistory>();
 
     public virtual AppointmentReview? AppointmentReview { get; set; }

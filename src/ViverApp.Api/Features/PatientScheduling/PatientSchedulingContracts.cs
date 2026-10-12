@@ -106,8 +106,8 @@ public sealed record DoctorAppointmentCreateRequest(
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AppointmentPointDiscountRequest(
-    [param: Required, RegularExpression("^(percent|amount)$")] string KindCode,
-    [param: Range(typeof(decimal), "0.01", "99999999",
+    [param: Required, RegularExpression("^(percent|amount|none)$")] string KindCode,
+    [param: Range(typeof(decimal), "0", "99999999",
         ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)] decimal Value,
     [param: Range(1, long.MaxValue)] ulong RowVersion);
 

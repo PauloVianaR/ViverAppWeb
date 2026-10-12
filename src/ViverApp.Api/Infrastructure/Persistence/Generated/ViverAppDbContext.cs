@@ -40,6 +40,10 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<AppointmentNumberSequence> AppointmentNumberSequences { get; set; }
 
+    public virtual DbSet<AppointmentOperationalReview> AppointmentOperationalReviews { get; set; }
+
+    public virtual DbSet<AppointmentOperationalReviewVersion> AppointmentOperationalReviewVersions { get; set; }
+
     public virtual DbSet<AppointmentRescheduleHistory> AppointmentRescheduleHistories { get; set; }
 
     public virtual DbSet<AppointmentReview> AppointmentReviews { get; set; }
@@ -882,6 +886,70 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.NextValue).HasColumnName("next_value");
         });
 
+        modelBuilder.Entity<AppointmentOperationalReview>(entity =>
+        {
+            entity.HasKey(e => e.AppointmentId).HasName("PRIMARY");
+
+            entity.ToTable("appointment_operational_reviews");
+
+            entity.HasIndex(e => e.UpdatedByAccountId, "fk_operational_review_editor");
+
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.Feedback)
+                .HasMaxLength(2000)
+                .HasColumnName("feedback");
+            entity.Property(e => e.Rating).HasColumnName("rating");
+            entity.Property(e => e.RowVersion).HasColumnName("row_version");
+            entity.Property(e => e.UpdatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("updated_at_utc");
+            entity.Property(e => e.UpdatedByAccountId).HasColumnName("updated_by_account_id");
+
+            entity.HasOne(d => d.Appointment).WithOne(p => p.AppointmentOperationalReview)
+                .HasForeignKey<AppointmentOperationalReview>(d => d.AppointmentId)
+                .HasConstraintName("fk_operational_review_appointment");
+
+            entity.HasOne(d => d.UpdatedByAccount).WithMany(p => p.AppointmentOperationalReviews)
+                .HasForeignKey(d => d.UpdatedByAccountId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_operational_review_editor");
+        });
+
+        modelBuilder.Entity<AppointmentOperationalReviewVersion>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("appointment_operational_review_versions");
+
+            entity.HasIndex(e => e.EditorAccountId, "fk_operational_version_editor");
+
+            entity.HasIndex(e => new { e.AppointmentId, e.VersionNumber }, "ux_operational_review_version").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AppointmentId).HasColumnName("appointment_id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.EditorAccountId).HasColumnName("editor_account_id");
+            entity.Property(e => e.EditorRoleCode)
+                .HasMaxLength(20)
+                .HasColumnName("editor_role_code");
+            entity.Property(e => e.Feedback)
+                .HasMaxLength(2000)
+                .HasColumnName("feedback");
+            entity.Property(e => e.Rating).HasColumnName("rating");
+            entity.Property(e => e.VersionNumber).HasColumnName("version_number");
+
+            entity.HasOne(d => d.Appointment).WithMany(p => p.AppointmentOperationalReviewVersions)
+                .HasForeignKey(d => d.AppointmentId)
+                .HasConstraintName("fk_operational_version_appointment");
+
+            entity.HasOne(d => d.EditorAccount).WithMany(p => p.AppointmentOperationalReviewVersions)
+                .HasForeignKey(d => d.EditorAccountId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_operational_version_editor");
+        });
+
         modelBuilder.Entity<AppointmentRescheduleHistory>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
@@ -1034,6 +1102,8 @@ public partial class ViverAppDbContext : DbContext
 
             entity.ToTable("appointment_types");
 
+            entity.HasIndex(e => new { e.SpecialtyId, e.IsActive }, "ix_appointment_types_specialty");
+
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.CategoryCode)
                 .HasMaxLength(20)
@@ -1061,9 +1131,17 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.RowVersion)
                 .HasDefaultValueSql("'1'")
                 .HasColumnName("row_version");
+            entity.Property(e => e.SpecialtyId)
+                .HasDefaultValueSql("'43'")
+                .HasColumnName("specialty_id");
             entity.Property(e => e.UpdatedAtUtc)
                 .HasMaxLength(6)
                 .HasColumnName("updated_at_utc");
+
+            entity.HasOne(d => d.Specialty).WithMany(p => p.AppointmentTypes)
+                .HasForeignKey(d => d.SpecialtyId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("fk_appointment_types_specialty");
         });
 
         modelBuilder.Entity<ArrivalQueueSequence>(entity =>

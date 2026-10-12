@@ -18,7 +18,7 @@ public sealed record ProfessionalProfileResponse(ulong AccountId, string FullNam
     double? AverageRating, int ReviewCount, ulong AccountRowVersion, ulong ProfileRowVersion, ulong PreferenceRowVersion,
     string LicenseTypeCode = "CRM");
 public sealed record ProfessionalServiceResponse(uint Id, string Name, string? Description, string CategoryCode,
-    string ModalityCode, ushort DurationMinutes, decimal PriceAmount, bool RequiresPayment, bool IsActive, bool Offered, ulong RowVersion);
+    string ModalityCode, ushort DurationMinutes, decimal PriceAmount, bool RequiresPayment, bool IsActive, bool Offered, ulong RowVersion, uint SpecialtyId = 0);
 public sealed record DoctorAppointmentResponse(ulong Id, ulong AppointmentNumber, ulong PatientAccountId, string PatientName, int? PatientAge,
     uint AppointmentTypeId, string Service, string CategoryCode, string StatusCode, string ModalityCode, DateTime StartsAtUtc, DateTime EndsAtUtc,
     decimal PriceAmount, decimal BasePriceAmount, decimal DiscountPercent, bool RequiresPayment, string PaymentStatus, string PaymentLocation, string? PatientNotes,

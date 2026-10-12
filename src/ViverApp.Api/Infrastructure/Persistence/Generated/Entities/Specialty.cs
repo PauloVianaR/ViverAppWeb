@@ -19,6 +19,8 @@ public partial class Specialty
 
     public ulong RowVersion { get; set; }
 
+    public virtual ICollection<AppointmentType> AppointmentTypes { get; set; } = new List<AppointmentType>();
+
     public virtual ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
 
     public virtual ICollection<ProfessionalSpecialty> ProfessionalSpecialties { get; set; } = new List<ProfessionalSpecialty>();

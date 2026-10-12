@@ -175,7 +175,7 @@ public sealed class CatalogController(
             return ValidationProblem(ModelState);
         }
 
-        var query = database.AppointmentTypes.AsNoTracking();
+        var query = database.AppointmentTypes.AsNoTracking().Include(x => x.Specialty).AsQueryable();
         if (!includeInactive)
         {
             query = query.Where(item => item.IsActive);
@@ -221,30 +221,11 @@ public sealed class CatalogController(
         [FromBody] AppointmentTypeWriteRequest request,
         CancellationToken cancellationToken)
     {
-        var professionalIds = request.ProfessionalAccountIds?.Distinct().ToArray() ?? [];
-        if (professionalIds.Length > 0 && User.IsInRole(ViverAppRoles.Manager))
-        {
-            var permission = await database.ApplicationSettings.AsNoTracking()
-                .Where(item => item.SettingKey == "manager.professional_services_enabled")
-                .Select(item => item.ValueJson).SingleOrDefaultAsync(cancellationToken);
-            if (permission is null || !ManagerFeatureGateFilter.TryReadBoolean(permission, out var allowed) || !allowed)
-                return Problem(statusCode: StatusCodes.Status403Forbidden,
-                    title: "O vínculo de profissionais está desabilitado para o Gestor.");
-        }
-        if (professionalIds.Length > 0)
-        {
-            var validCount = await database.ProfessionalProfiles.AsNoTracking()
-                .CountAsync(profile => professionalIds.Contains(profile.AccountId)
-                    && profile.Account.StatusCode == "active"
-                    && (profile.Account.RoleCode == ViverAppRoles.Doctor
-                        || profile.Account.RoleCode == ViverAppRoles.Psychologist), cancellationToken);
-            if (validCount != professionalIds.Length)
-            {
-                ModelState.AddModelError(nameof(request.ProfessionalAccountIds),
-                    "Selecione apenas médicos ou psicólogos ativos.");
-                return ValidationProblem(ModelState);
-            }
-        }
+        if (request.ProfessionalAccountIds is { Count: > 0 })
+            return Problem(statusCode: 409, title: "Vincule o atendimento à especialidade; vínculos individuais não são mais permitidos.");
+        var specialtyId = request.SpecialtyId ?? await database.Specialties.Where(x => x.NormalizedName == "OFTALMOLOGIA").Select(x => x.Id).SingleAsync(cancellationToken);
+        if (!await database.Specialties.AnyAsync(x => x.Id == specialtyId && x.IsActive, cancellationToken))
+            return Problem(statusCode: 400, title: "Selecione uma especialidade ativa.");
         if (request.RequiresPayment && request.PriceAmount <= 0)
         {
             ModelState.AddModelError(nameof(request.PriceAmount), "Informe um preço maior que zero para um atendimento cobrado.");
@@ -260,6 +241,7 @@ public sealed class CatalogController(
         var now = DateTime.UtcNow;
         var entity = new AppointmentType
         {
+            SpecialtyId = specialtyId,
             Name = ClinicAdministrationSupport.RequiredText(request.Name),
             Description = ClinicAdministrationSupport.OptionalText(request.Description),
             CategoryCode = request.CategoryCode,
@@ -281,18 +263,6 @@ public sealed class CatalogController(
             return ConflictProblem("Não foi possível cadastrar o tipo de atendimento.");
         }
 
-        foreach (var professionalId in professionalIds)
-            database.ProfessionalServices.Add(new ProfessionalService
-            {
-                ProfessionalAccountId = professionalId,
-                AppointmentTypeId = entity.Id,
-                IsActive = true,
-                CreatedAtUtc = now,
-                UpdatedAtUtc = now,
-                RowVersion = 1,
-            });
-        if (professionalIds.Length > 0 && !await TrySave(cancellationToken))
-            return ConflictProblem("Não foi possível vincular os profissionais. O tipo não foi cadastrado.");
         if (transaction is not null) await transaction.CommitAsync(cancellationToken);
 
         await Audit("catalog.appointment_type.created", "appointment_type", entity.Id.ToString(), cancellationToken);
@@ -343,7 +313,13 @@ public sealed class CatalogController(
             return NotFound();
         }
 
+        if (request.ProfessionalAccountIds is { Count: > 0 })
+            return Problem(statusCode: 409, title: "O vínculo é por especialidade, não por profissional.");
+        var specialtyId = request.SpecialtyId ?? entity.SpecialtyId;
+        if (!await database.Specialties.AnyAsync(x => x.Id == specialtyId && x.IsActive, cancellationToken))
+            return Problem(statusCode: 400, title: "Selecione uma especialidade ativa.");
         ClinicAdministrationSupport.SetConcurrency(database, entity, nameof(AppointmentType.RowVersion), request.RowVersion);
+        entity.SpecialtyId = specialtyId;
         entity.Name = ClinicAdministrationSupport.RequiredText(request.Name);
         entity.Description = ClinicAdministrationSupport.OptionalText(request.Description);
         entity.CategoryCode = request.CategoryCode;
@@ -448,7 +424,7 @@ public sealed class CatalogController(
                 profile.Account.FullName,
                 profile.Account.RoleCode,
                 profile.LicenseTypeCode + " " + profile.LicenseStateCode + " " + profile.LicenseNumber,
-                profile.ProfessionalServices.Any(link => link.AppointmentTypeId == id && link.IsActive)))
+                profile.ProfessionalSpecialties.Any(link => link.SpecialtyId == database.AppointmentTypes.Where(t => t.Id == id).Select(t => t.SpecialtyId).First() && link.Specialty.IsActive)))
             .ToArrayAsync(cancellationToken);
 
         return Ok(professionals);
@@ -457,66 +433,8 @@ public sealed class CatalogController(
     [HttpPut("appointment-types/{id}/professionals")]
     [Authorize(Policy = ViverAppPolicies.Management)]
     [ManagerFeatureGate("manager.professional_services_enabled")]
-    public async Task<ActionResult<IReadOnlyList<AppointmentTypeProfessionalResponse>>> UpdateAppointmentTypeProfessionals(
-        uint id,
-        [FromBody] AppointmentTypeProfessionalsUpdateRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (!await database.AppointmentTypes.AnyAsync(item => item.Id == id, cancellationToken))
-        {
-            return NotFound();
-        }
-
-        var selectedIds = request.ProfessionalAccountIds?.Distinct().ToArray() ?? [];
-        var validIds = await database.ProfessionalProfiles.AsNoTracking()
-            .Where(profile => selectedIds.Contains(profile.AccountId)
-                && profile.Account.StatusCode == "active"
-                && (profile.Account.RoleCode == ViverAppRoles.Doctor
-                    || profile.Account.RoleCode == ViverAppRoles.Psychologist))
-            .Select(profile => profile.AccountId)
-            .ToArrayAsync(cancellationToken);
-        if (validIds.Length != selectedIds.Length)
-        {
-            ModelState.AddModelError(nameof(request.ProfessionalAccountIds),
-                "Um ou mais profissionais não existem, estão inativos ou não são clínicos.");
-            return ValidationProblem(ModelState);
-        }
-
-        var now = DateTime.UtcNow;
-        var existing = await database.ProfessionalServices
-            .Where(link => link.AppointmentTypeId == id)
-            .ToArrayAsync(cancellationToken);
-        foreach (var link in existing)
-        {
-            link.IsActive = selectedIds.Contains(link.ProfessionalAccountId);
-            link.UpdatedAtUtc = now;
-            link.RowVersion++;
-        }
-
-        var existingIds = existing.Select(link => link.ProfessionalAccountId).ToHashSet();
-        foreach (var professionalId in selectedIds.Where(professionalId => !existingIds.Contains(professionalId)))
-        {
-            database.ProfessionalServices.Add(new ProfessionalService
-            {
-                ProfessionalAccountId = professionalId,
-                AppointmentTypeId = id,
-                IsActive = true,
-                CreatedAtUtc = now,
-                UpdatedAtUtc = now,
-                RowVersion = 1,
-            });
-        }
-
-        await database.SaveChangesAsync(cancellationToken);
-        await auditWriter.WriteAsync(
-            "catalog.appointment_type.professionals_updated",
-            ClinicAdministrationSupport.RequireActorId(User),
-            "appointment_type",
-            id.ToString(),
-            new Dictionary<string, string> { ["linkedCount"] = selectedIds.Length.ToString() },
-            cancellationToken);
-        return await GetAppointmentTypeProfessionals(id, cancellationToken);
-    }
+    public IActionResult UpdateAppointmentTypeProfessionals(uint id, [FromBody] AppointmentTypeProfessionalsUpdateRequest request)
+        => Problem(statusCode: 409, title: "O vínculo é automático pela especialidade. Edite a especialidade do atendimento.");
 
     private bool ValidatePagination(int page, int pageSize, string? search)
     {
@@ -586,7 +504,7 @@ public sealed class CatalogController(
         item.IsActive,
         item.DisplayOrder,
         item.RowVersion,
-        canDelete);
+        canDelete, item.SpecialtyId, item.Specialty?.Name ?? "");
 
     private enum SaveResult
     {

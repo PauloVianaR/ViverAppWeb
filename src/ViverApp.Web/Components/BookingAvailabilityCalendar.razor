@@ -36,6 +36,8 @@
 </div>
 
 @code {
+    [Parameter] public bool PreviewOnly { get; set; }
+    [Parameter] public ulong ProfessionalId { get; set; }
     [Parameter, EditorRequired] public string SlotsApiPrefix { get; set; } = "";
     [Parameter] public EventCallback<BookingDaySelection> DateSelected { get; set; }
     [Parameter] public DateOnly? InitialDate { get; set; }
@@ -66,6 +68,7 @@
         if (InitialDate is { } initial && initial >= Today) Month = new(initial.Year, initial.Month, 1);
         await LoadMonth();
         if (InitialDate is { } selected && AvailableDates.Contains(selected)) await SelectDate(selected);
+        await InvokeAsync(StateHasChanged);
     }
     private async Task MoveMonth(int amount)
     {
@@ -77,7 +80,7 @@
     }
     private async Task LoadMonth()
     {
-        if (Module is null || string.IsNullOrWhiteSpace(SlotsApiPrefix)) return;
+        if (Module is null || (!PreviewOnly && string.IsNullOrWhiteSpace(SlotsApiPrefix))) return;
         Loading = true;
         Error = null;
         AvailableDates.Clear();
@@ -85,6 +88,12 @@
         {
             var from = Month <= CurrentMonth ? Today : Month;
             var days = Month.AddMonths(1).DayNumber - from.DayNumber;
+            if (PreviewOnly)
+            {
+                var plan = await Module.InvokeAsync<WebCalendarDayPlan>("get", Backend.BaseUrl.ToString(), $"api/v1/calendar/day-plan?anchor={Month:yyyy-MM-dd}&professionalAccountId={ProfessionalId}");
+                AvailableDates = Enumerable.Range(0, days).Select(i => from.AddDays(i)).Where(d => !plan.UnavailableDays.Contains(d)).ToHashSet();
+                return;
+            }
             var datesApi = SlotsApiPrefix.Replace("/booking/slots?", "/booking/available-dates?", StringComparison.Ordinal);
             var dates = await Module.InvokeAsync<IReadOnlyList<DateOnly>>("get", Backend.BaseUrl.ToString(),
                 $"{datesApi}&from={from:yyyy-MM-dd}&days={days}");
@@ -104,6 +113,7 @@
         if (!AvailableDates.Contains(date) || date < Today || Module is null) return;
         SelectedDate = date;
         await DateSelected.InvokeAsync(new BookingDaySelection(date, []));
+        if (PreviewOnly) return;
         LoadingDay = true;
         Error = null;
         try

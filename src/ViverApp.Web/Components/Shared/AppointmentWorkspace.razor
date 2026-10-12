@@ -16,7 +16,7 @@
         @if (Visited.Contains("Ficha"))
         {
             <div hidden='@(Active != "Ficha")' class="appointment-workspace-record">
-                <PatientRegistrationEditor @key="PatientId" PatientId="PatientId" Saved="RefreshPatient" />
+                <div class="appointment-ficha-grid"><MedicalRecordWorkspace @key='@($"{PatientId}-summary-{PatientRevision}")' PatientId="PatientId" EmbeddedSection="summary" /><PatientRegistrationEditor @key="PatientId" PatientId="PatientId" Saved="RefreshPatient" /></div>
                 <MedicalRecordWorkspace @key='@($"{PatientId}-documents-{PatientRevision}")' PatientId="PatientId" EmbeddedSection="documents" />
             </div>
         }

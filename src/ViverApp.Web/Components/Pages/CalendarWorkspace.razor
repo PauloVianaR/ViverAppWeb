@@ -23,7 +23,7 @@ else if(Data is null){<InterfaceState Title="Agenda indisponível" Description="
 else if(View=="year")
 {
     <section class="calendar-year" aria-label="Agenda anual">
-        @for(var month=1;month<=12;month++)
+        @for(var month=Anchor.Year < ClinicToday.Year ? 13 : Anchor.Year == ClinicToday.Year ? ClinicToday.Month : 1;month<=12;month++)
         {
             var current=month;
             <article class="surface calendar-mini-month">
@@ -37,7 +37,7 @@ else if(View=="year")
                         {
                             var aggregate=Day(day.Value);
                             <button type="button"
-                                    class="calendar-mini-day @(aggregate is null?null:"calendar-mini-day--busy")"
+                                    class="calendar-mini-day @(aggregate is null?null:"calendar-mini-day--busy")" disabled="@(day.Value < ClinicToday)"
                                     aria-label="@(aggregate is null?$"{day:dd/MM}, sem atendimentos":$"{day:dd/MM}, possui atendimentos; abrir dia")"
                                     @onclick="()=>OpenDay(day.Value)"><span>@day.Value.Day</span></button>
                         }
@@ -109,7 +109,7 @@ else if(View=="day" && Role!="patient")
                             <div class="calendar-daily-row appointment-card--@PatientLabels.StatusCss(row.Item.StatusCode)">
                                 <time class="@(IsElapsed(row.Time)?"calendar-time--elapsed":null)">@row.Time.ToString(@"hh\:mm")</time>
                                 <span aria-hidden="true">@PatientLabels.StatusFace(row.Item.StatusCode)</span>
-                                <a href="@Details(row.Item.Id)"><strong>#@row.Item.AppointmentNumber @row.Item.PatientName</strong><small>@row.Item.AppointmentTypeName · @Status(row.Item.StatusCode)</small></a>
+                                <a href="@($"{Details(row.Item.Id)}?returnTo={Uri.EscapeDataString(AgendaState)}")"><strong>#@row.Item.AppointmentNumber @row.Item.PatientName</strong><small>@row.Item.AppointmentTypeName · @Status(row.Item.StatusCode)</small></a>
                                 <small>@Local(row.Item.StartsAtUtc).ToString("HH:mm")–@Local(row.Item.EndsAtUtc).ToString("HH:mm")</small>
                             </div>
                         }
@@ -157,6 +157,10 @@ else
 }
 
 @code {
+    [SupplyParameterFromQuery(Name="view")] public string? ViewQuery { get; set; }
+    [SupplyParameterFromQuery(Name="date")] public string? DateQuery { get; set; }
+    [SupplyParameterFromQuery(Name="professional")] public string? ProfessionalQueryValue { get; set; }
+    private ulong? ProfessionalQuery=>ulong.TryParse(ProfessionalQueryValue,out var id)&&id>0?id:null;
     private WebCalendar? Data;
     private WebCalendarDayPlan? DayPlan;
     private WebCalendarDayPlan? MiniMonthPlan;
@@ -175,13 +179,16 @@ else
     private bool CanChooseProfessional=>Role is "manager" or "administrator";
     private string BookingPath=>Role switch{"doctor"=>"/medico/agendar","psychologist"=>"/psicologo/agendar","manager"=>"/gestao/agendar",_=>"/administracao/agendar"};
     private string BookingLabel(TimeSpan time)=>$"Agendar atendimento para {Anchor:dd/MM/yyyy} às {TimeOnly.FromTimeSpan(time):HH:mm}";
-    private string BookingLink(TimeSpan time)=>$"{BookingPath}?date={Anchor:yyyy-MM-dd}&time={TimeOnly.FromTimeSpan(time):HH:mm}&professional={ProfessionalId}";
+    private string BookingLink(TimeSpan time)=>$"{BookingPath}?date={Anchor:yyyy-MM-dd}&time={TimeOnly.FromTimeSpan(time):HH:mm}&professional={ProfessionalId}&returnTo={Uri.EscapeDataString(AgendaState)}";
+    private string AgendaState=>$"{BookingPath[..^8]}/agenda?view={View}&date={Anchor:yyyy-MM-dd}&professional={ProfessionalId}";
     private DateTime ClinicNow => Local(DateTime.UtcNow);
     private DateOnly ClinicToday => DateOnly.FromDateTime(ClinicNow);
     private bool IsElapsed(TimeSpan time) => Anchor == ClinicToday && time < ClinicNow.TimeOfDay;
     protected override async Task Load()
     {
-        if(!PreferenceLoaded){var preference=await Get<WebCalendarViewPreference>("api/v1/me/preferences/calendar-view");View=preference?.Mode??"month";PreferenceLoaded=true;}
+        if(!PreferenceLoaded){var preference=await Get<WebCalendarViewPreference>("api/v1/me/preferences/calendar-view");View=ViewQuery is "day" or "week" or "month" or "year" ? ViewQuery : preference?.Mode??"month";
+            if(DateOnly.TryParseExact(DateQuery,"yyyy-MM-dd",CultureInfo.InvariantCulture,DateTimeStyles.None,out var date)){Anchor=date;MiniMonth=new(date.Year,date.Month,1);}
+            ProfessionalId=ProfessionalQuery??ProfessionalId;PreferenceLoaded=true;}
         if(CanChooseProfessional&&Professionals.Count==0)Professionals=await Get<IReadOnlyList<WebCalendarProfessional>>("api/v1/calendar/professionals")??[];
         if(View=="day"&&CanChooseProfessional&&ProfessionalId==0)ProfessionalId=Professionals.FirstOrDefault()?.AccountId??0;
         var selected=ProfessionalId==0?"":$"&professionalAccountId={ProfessionalId}";

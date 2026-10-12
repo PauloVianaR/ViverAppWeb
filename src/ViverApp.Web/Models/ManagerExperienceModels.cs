@@ -14,7 +14,7 @@ public sealed record ManagerProfessionalWeeklyHour(ulong Id, byte DayOfWeek, Tim
 public sealed record ManagerCapabilities(bool AppointmentTypesEnabled, bool DoctorSchedulesEnabled, bool ProfessionalServicesEnabled,
     bool PremiumManagementEnabled, bool MedicalRecordWriteEnabled, bool CashReopeningEnabled,
     bool CashCumulativeTotalsEnabled, bool PointDiscountsEnabled = true, decimal PointDiscountMaxPercent = 30);
-public sealed record ManagerService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal BasePrice, bool RequiresPayment);
+public sealed record ManagerService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal BasePrice, bool RequiresPayment, uint SpecialtyId = 0);
 public sealed record ManagerAppointmentCreate(
     [property: JsonPropertyName("patientAccountId")] ulong PatientAccountId,
     [property: JsonPropertyName("professionalAccountId")] ulong ProfessionalAccountId,
