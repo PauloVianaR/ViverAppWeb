@@ -73,10 +73,12 @@ public sealed class BookingWorkspaceController(ViverAppDbContext database, Manag
     [HttpGet("appointments/{id:long}")]
     public async Task<BookingWorkspaceMetadata> Metadata(ulong id, CancellationToken ct)
     {
-        var item = await database.Appointments.AsNoTracking().Include(x => x.Specialty)
-            .SingleOrDefaultAsync(x => x.Id == id && (!Professional || x.ProfessionalAccountId == Actor), ct)
+        return await database.Appointments.AsNoTracking()
+            .Where(x => x.Id == id && (!Professional || x.ProfessionalAccountId == Actor))
+            .Select(x => new BookingWorkspaceMetadata(x.BillingFormCode, x.SpecialtyId, x.RowVersion,
+                x.Specialty == null ? null : x.Specialty.Name))
+            .SingleOrDefaultAsync(ct)
             ?? throw new AdministratorRuleException(404, "Atendimento não encontrado.");
-        return new(item.BillingFormCode, item.SpecialtyId, item.RowVersion, item.Specialty?.Name);
     }
 
     [HttpPut("appointments/{id:long}"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]

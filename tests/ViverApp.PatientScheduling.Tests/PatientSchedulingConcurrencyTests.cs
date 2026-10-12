@@ -99,6 +99,9 @@ public sealed class PatientSchedulingConcurrencyTests
             var controller = new BookingWorkspaceController(database, null!, audit, new FixedTimeProvider(fixture.UtcNow), service)
                 { ControllerContext = new ControllerContext { HttpContext = http } };
             var initial = await controller.Metadata(created.Response.Id, default);
+            Assert.NotNull(initial.SpecialtyId);
+            Assert.Equal(await database.Specialties.Where(x => x.Id == initial.SpecialtyId)
+                .Select(x => x.Name).SingleAsync(), initial.SpecialtyName);
             var deniedSpecialty = await Assert.ThrowsAsync<ViverApp.Api.Features.AdministratorExperience.AdministratorRuleException>(
                 () => controller.Update(created.Response.Id, new("insurance", initial.SpecialtyId + 1, initial.RowVersion), default));
             Assert.Equal(409, deniedSpecialty.StatusCode);
