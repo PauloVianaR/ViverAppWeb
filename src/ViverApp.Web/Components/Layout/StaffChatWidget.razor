@@ -19,7 +19,7 @@
                     @foreach (var alert in Alerts.Take(15))
                     {
                         <a class="staff-alert-row @(alert.IsRead ? "" : "staff-alert-row--unread")" href="/gestao/atendimentos/@alert.AppointmentId">
-                            Atendimento #@alert.AppointmentNumber @(alert.Type == "appointment_started" ? "iniciado" : "concluído")
+                            Atendimento #@alert.AppointmentNumber · @alert.PatientName @(alert.Type == "appointment_started" ? "iniciado" : "concluído")
                             <small>@alert.CreatedAtUtc.ToLocalTime().ToString("dd/MM HH:mm")</small>
                         </a>
                     }
@@ -244,7 +244,7 @@
     public Task OnManagerAlert(ManagerAlertView alert) => InvokeAsync(() =>
     {
         if (Alerts.All(a => a.Id != alert.Id)) Alerts.Insert(0, alert);
-        ErrorNotifier.Notify($"Atendimento #{alert.AppointmentNumber} {(alert.Type == "appointment_started" ? "iniciado" : "concluído")}.");
+        ErrorNotifier.Notify($"Atendimento #{alert.AppointmentNumber} · {alert.PatientName} {(alert.Type == "appointment_started" ? "iniciado" : "concluído")}.");
         StateHasChanged();
     });
     [JSInvokable]

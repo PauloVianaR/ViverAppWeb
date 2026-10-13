@@ -118,7 +118,7 @@ public sealed class PatientSchedulingService(
         }
 
         var (type, _, _, _) = await ResolveServicesAsync(appointmentTypeId, additionalAppointmentTypeIds,
-            modality, doctorId, cancellationToken, durationMinutes);
+            modality, doctorId, cancellationToken, durationMinutes, allowSingleReduction: true);
         await RequireActiveDoctorAsync(doctorId, cancellationToken);
         var (policy, timezoneName, timezone) = await LoadConfigurationAsync(cancellationToken);
         var today = LocalDate(timeProvider.GetUtcNow(), timezone);
@@ -832,7 +832,7 @@ public sealed class PatientSchedulingService(
             .Where(item => item.ProfessionalAccountId == doctorId && item.AvailableDate >= from.ToDateTime(TimeOnly.MinValue)
                 && item.AvailableDate <= until.ToDateTime(TimeOnly.MinValue))
             .ToListAsync(cancellationToken) : [];
-        var clinicHours = modality == "in_person"
+        var clinicHours = modality == "in_person" || policy.AllowElapsedSameDayBooking
             ? await database.ClinicWeeklyHours.AsNoTracking().Where(item => item.IsActive).ToListAsync(cancellationToken)
             : [];
         var holidayEntities = await database.Holidays.AsNoTracking()
@@ -844,7 +844,10 @@ public sealed class PatientSchedulingService(
                 && x.ExceptionDate <= until.ToDateTime(TimeOnly.MinValue)
                 && (x.ModalityCode == modality || x.ModalityCode == "both"))
             .ToListAsync(cancellationToken);
-        var earliest = timeProvider.GetUtcNow().UtcDateTime.AddMinutes(policy.MinimumLeadMinutes);
+        var now = timeProvider.GetUtcNow();
+        var today = LocalDate(now, timezone);
+        var earliest = now.UtcDateTime.AddMinutes(policy.MinimumLeadMinutes);
+        var todayStartUtc = TimeZoneInfo.ConvertTimeToUtc(today.ToDateTime(TimeOnly.MinValue), timezone);
         var limitJson = await database.ApplicationSettings.Where(x => x.SettingKey == "appointments.patient_daily_limit").Select(x => x.ValueJson).SingleOrDefaultAsync(cancellationToken);
         var dailyLimit = int.TryParse(limitJson, out var configuredLimit) && configuredLimit is > 0 and <= 50 ? configuredLimit : 3;
         var patientDates = (await database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == patientId && x.Id != excludedAppointmentId
@@ -900,8 +903,8 @@ public sealed class PatientSchedulingService(
                 clinicWindows,
                 holidayBlocks,
                 busy,
-                earliest,
-                modality == "in_person"));
+                policy.AllowElapsedSameDayBooking && date == today ? todayStartUtc : earliest,
+                modality == "in_person" || policy.AllowElapsedSameDayBooking));
         }
 
         return result;
@@ -939,7 +942,8 @@ public sealed class PatientSchedulingService(
                 ReadInt(values, "appointments.slot_interval_minutes", 10, 5, 120), 0, 10080),
             ReadInt(values, "appointments.cancellation_cutoff_hours", 24, 0, 720),
             ReadInt(values, "appointments.reschedule_cutoff_hours", 24, 0, 720),
-            ReadInt(values, "appointments.slot_interval_minutes", 10, 5, 120)), timezoneName, timezone);
+            ReadInt(values, "appointments.slot_interval_minutes", 10, 5, 120),
+            !values.TryGetValue("appointments.allow_elapsed_same_day_booking", out var elapsed) || elapsed == "true"), timezoneName, timezone);
     }
 
     private async Task<AppointmentType> RequireAppointmentTypeAsync(uint id, string modality, CancellationToken cancellationToken)
@@ -957,7 +961,7 @@ public sealed class PatientSchedulingService(
 
     private async Task<(AppointmentType SlotType, AppointmentServiceItem[] Items, decimal BasePrice, bool RequiresPayment)>
         ResolveServicesAsync(uint primaryId, IReadOnlyList<uint>? additionalIds, string modality,
-            ulong professionalId, CancellationToken cancellationToken, int? durationMinutes = null)
+            ulong professionalId, CancellationToken cancellationToken, int? durationMinutes = null, bool allowSingleReduction = false)
     {
         if (additionalIds is { Count: > 19 })
             throw BadRequest("Selecione no máximo 20 serviços para um atendimento.");
@@ -976,7 +980,7 @@ public sealed class PatientSchedulingService(
             throw Conflict("O profissional selecionado não atende a especialidade dos serviços escolhidos.");
         if (types.Any(type => type.SpecialtyId != types[0].SpecialtyId))
             throw BadRequest("Selecione serviços da mesma especialidade.");
-        if (durationMinutes.HasValue && ids.Length == 1)
+        if (durationMinutes.HasValue && ids.Length == 1 && (!allowSingleReduction || durationMinutes > types[0].DurationMinutes))
             throw BadRequest("A duração de um único serviço é definida pelo catálogo e não pode ser alterada no agendamento.");
         if (durationMinutes is < 5 or > 720)
             throw BadRequest("A duração personalizada deve ficar entre 5 e 720 minutos.");

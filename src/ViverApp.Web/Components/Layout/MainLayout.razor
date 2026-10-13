@@ -46,7 +46,7 @@
                             @foreach(var item in Notifications.Take(10))
                             {
                                 <div class="notification-entry">
-                                    <button class="notification-item @(item.IsRead?"":"notification-item--unread")" @onclick="()=>OpenNotificationAsync(item)"><strong>Atendimento @item.AppointmentNumber</strong><span>@(item.QueueNumber.HasValue?$"Senha {item.QueueNumber} · ":"")@(item.StartsAtUtc?.ToLocalTime().ToString("HH:mm"))</span></button>
+                                    <button class="notification-item @(item.IsRead?"":"notification-item--unread")" @onclick="()=>OpenNotificationAsync(item)"><strong>Atendimento @item.AppointmentNumber · @item.PatientName</strong><span>@(item.QueueNumber.HasValue?$"Senha {item.QueueNumber} · ":"")@(item.StartsAtUtc?.ToLocalTime().ToString("HH:mm"))</span></button>
                                     @if(!item.IsRead)
                                     {
                                         <button class="notification-read" type="button" aria-label="Marcar atendimento @item.AppointmentNumber como lido" @onclick="()=>ReadNotificationAsync(item)">Marcar como lida</button>
@@ -222,10 +222,10 @@
     [JSInvokable]
     public Task ReceiveArrival(DoctorRealtimeNotification message) => InvokeAsync(async () =>
     {
-        var item = new ProfessionalNotification(message.Id, message.AppointmentId, message.AppointmentNumber, message.QueueNumber, message.StartsAtUtc, message.IsRead, message.CreatedAtUtc, message.RowVersion);
+        var item = new ProfessionalNotification(message.Id, message.AppointmentId, message.AppointmentNumber, message.QueueNumber, message.StartsAtUtc, message.IsRead, message.CreatedAtUtc, message.RowVersion, message.PatientName);
         if (Notifications.All(x => x.Id != item.Id)) Notifications.Insert(0, item);
         PopupEnabled = message.PopupEnabled; SoundEnabled = message.SoundEnabled; SoundVolume = message.SoundVolume;
-        if (PopupEnabled) Notices.Notify($"Paciente chegou. Atendimento #{item.AppointmentNumber} · senha {item.QueueNumber}. Confira o sininho.");
+        if (PopupEnabled) Notices.Notify($"Paciente chegou. Atendimento #{item.AppointmentNumber} · {item.PatientName} · senha {item.QueueNumber}. Confira o sininho.");
         if (SoundEnabled && !SoundMuted && notificationModule is not null) await notificationModule.InvokeAsync<bool>("play", SoundVolume);
         await InvokeAsync(StateHasChanged);
     });

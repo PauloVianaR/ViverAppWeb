@@ -7,6 +7,8 @@
         <div class="field"><span>Especialidade</span><strong id="appointment-specialty">@SpecialtyLabel</strong></div>
         <button type="button" class="button button--secondary button--small" @onclick="Save" disabled="@(Busy || !Changed)">Salvar forma</button>
     </section>
+    <AppointmentDurationReduction @key="Metadata.RowVersion" AppointmentId="@((ulong)AppointmentId)" StatusCode="@Metadata.StatusCode"
+        StartsAtUtc="Metadata.StartsAtUtc" EndsAtUtc="Metadata.EndsAtUtc" RowVersion="Metadata.RowVersion" Saved="Saved" />
 }
 @code {
     [Parameter] public long AppointmentId { get; set; }

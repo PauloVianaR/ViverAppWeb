@@ -26,10 +26,10 @@ public sealed record DoctorAppointment(ulong Id, ulong AppointmentNumber, ulong 
     public decimal PointDiscountAmount { get; init; }
 }
 public sealed record ProfessionalNotification(ulong Id, ulong AppointmentId, ulong AppointmentNumber, uint? QueueNumber,
-    DateTime? StartsAtUtc, bool IsRead, DateTime CreatedAtUtc, ulong RowVersion);
+    DateTime? StartsAtUtc, bool IsRead, DateTime CreatedAtUtc, ulong RowVersion, string PatientName = "");
 public sealed record DoctorRealtimeNotification(ulong Id, ulong AppointmentId, ulong AppointmentNumber, uint? QueueNumber,
     DateTime? StartsAtUtc, bool IsRead, DateTime CreatedAtUtc, ulong RowVersion, bool PopupEnabled,
-    bool SoundEnabled, int SoundVolume, string SoundKey);
+    bool SoundEnabled, int SoundVolume, string SoundKey, string PatientName = "");
 public sealed record ProfessionalNotificationsData(int UnreadCount, bool PopupEnabled, bool SoundEnabled, int SoundVolume,
     string SoundKey, bool MarkReadOnOpen, IReadOnlyList<ProfessionalNotification> Items);
 public sealed record DoctorAgendaSources(IReadOnlyList<ulong> Total, IReadOnlyList<ulong> Online,

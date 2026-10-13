@@ -32,7 +32,7 @@ private Task ShowReschedule(){RescheduleOpen=true;return Open("manager-reschedul
 private async Task CloseReschedule(){await Close("manager-reschedule");RescheduleOpen=false;Slots=[];SelectedSlot=null;}
 private string RescheduleExtras=>string.Concat((Item?.Services??[]).Where(x=>x.AppointmentTypeId!=Item!.AppointmentTypeId).Select(x=>$"&additionalAppointmentTypeIds={x.AppointmentTypeId}"));
 private string RescheduleCalendarApi=>$"api/v1/manager/booking/slots?patientAccountId={Item!.PatientAccountId}&doctorAccountId={Item.ProfessionalAccountId}&appointmentTypeId={Item.AppointmentTypeId}&modality={Item.ModalityCode}{RescheduleExtras}{RescheduleDurationQuery}";
-private string RescheduleDurationQuery=>Item!.Services.Count>1?$"&durationMinutes={(int)(Item.EndsAtUtc-Item.StartsAtUtc).TotalMinutes}":"";
+private string RescheduleDurationQuery=>$"&durationMinutes={(int)(Item!.EndsAtUtc-Item.StartsAtUtc).TotalMinutes}";
 private void SelectRescheduleDate(BookingDaySelection selection){Slots=selection.Slots;SelectedSlot=null;if(selection.Date!=default)NewDate=selection.Date.ToDateTime(TimeOnly.MinValue);}
 protected override async Task Load(){Item=await Get<ManagerAppointment>($"api/v1/manager/appointments/{Id}");Capabilities=await Get<ManagerCapabilities>("api/v1/manager/capabilities");if(Item is not null)PaymentRows=[new PaymentPortionEditor{Amount=Item.PriceAmount}];}
 private Task Cancel()=>Run(async()=>{await Request<WebAppointment>($"api/v1/manager/appointments/{Id}/cancel","POST",new{reason=CancelReason,rowVersion=Item!.RowVersion});await Close("manager-cancel");await Load();Notice="Atendimento cancelado.";});

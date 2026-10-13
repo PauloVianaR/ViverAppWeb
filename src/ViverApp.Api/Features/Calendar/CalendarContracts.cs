@@ -28,4 +28,4 @@ public sealed record CalendarResponse(
     DateOnly RangeEnd,
     string TimezoneName,
     IReadOnlyList<CalendarItemResponse> Items,
-    IReadOnlyList<CalendarDayAggregateResponse> Days);
+    IReadOnlyList<CalendarDayAggregateResponse> Days, bool AllowElapsedSameDayBooking = true);

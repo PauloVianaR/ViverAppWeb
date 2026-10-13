@@ -17,7 +17,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
     private static readonly HashSet<string> EditableSettings = new(StringComparer.Ordinal)
     {
         "web.maintenance_mode", "web.desktop_sidebar_enabled", "appointments.allow_clinic_payment", "appointments.online_calls_enabled",
-        "appointments.booking_horizon_days", "appointments.minimum_lead_minutes", "appointments.cancellation_cutoff_hours",
+        "appointments.booking_horizon_days", "appointments.minimum_lead_minutes", "appointments.allow_elapsed_same_day_booking", "appointments.cancellation_cutoff_hours",
         "appointments.reschedule_cutoff_hours", "appointments.slot_interval_minutes", "appointments.patient_daily_limit",
         "appointments.default_consultation_minutes", "appointments.default_examination_minutes", "appointments.default_surgery_minutes",
         "appointments.default_procedure_minutes", "appointments.default_specialty_id", "manager.appointment_types_enabled", "manager.professional_schedules_enabled",
@@ -360,7 +360,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         if (key is "web.maintenance_mode" or "web.desktop_sidebar_enabled" or "appointments.allow_clinic_payment" or "appointments.online_calls_enabled" or "communications.email_enabled" or "communications.sms_enabled" or "premium.manager_can_decide"
             or "manager.appointment_types_enabled" or "manager.professional_schedules_enabled" or "manager.professional_services_enabled" or "professional.patient_scheduling_enabled"
             or "premium.manager_can_manage" or "manager.medical_records_write_enabled" or "manager.point_discounts_enabled"
-            or "cash.manager_can_reopen" or "cash.manager_can_view_cumulative_totals"
+            or "cash.manager_can_reopen" or "cash.manager_can_view_cumulative_totals" or "appointments.allow_elapsed_same_day_booking"
             or "appointments.arrival_notifications_enabled" or "appointments.arrival_popup_enabled" or "appointments.arrival_sound_enabled" or "appointments.arrival_mark_read_on_open")
         { if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw new JsonException(); return; }
         if (key == "appointments.arrival_sound_key")

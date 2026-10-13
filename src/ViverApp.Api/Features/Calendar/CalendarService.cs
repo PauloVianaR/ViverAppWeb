@@ -40,6 +40,10 @@ public sealed class CalendarService(ViverAppDbContext database)
         TimeZoneInfo timezone;
         try { timezone = TimeZoneInfo.FindSystemTimeZoneById(timezoneName); }
         catch (TimeZoneNotFoundException) { throw new CalendarRuleException(503, "O fuso horário da clínica está indisponível."); }
+        var elapsedSetting = await database.ApplicationSettings.AsNoTracking()
+            .Where(s => s.SettingKey == "appointments.allow_elapsed_same_day_booking")
+            .Select(s => s.ValueJson).SingleOrDefaultAsync(cancellationToken);
+        var allowElapsed = elapsedSetting is null || elapsedSetting == "true";
 
         var (start, endExclusive) = Range(view, anchor);
         var startUtc = TimeZoneInfo.ConvertTimeToUtc(start.ToDateTime(TimeOnly.MinValue), timezone);
@@ -47,7 +51,7 @@ public sealed class CalendarService(ViverAppDbContext database)
         var query = database.Appointments.AsNoTracking()
             .Where(item => item.StartsAtUtc < endUtc
                 && item.EndsAtUtc > startUtc
-                && item.StatusCode != "completed"
+                && (view == "day" || item.StatusCode != "completed")
                 && item.StatusCode != "canceled"
                 && item.StatusCode != "no_show"
                 && item.InverseRescheduledFromAppointment == null);
@@ -76,7 +80,7 @@ public sealed class CalendarService(ViverAppDbContext database)
                     group.Count(),
                     group.Select(item => item.StatusCode).Distinct(StringComparer.Ordinal).Order().ToArray()))
                 .ToArray();
-            return new(view, anchor, start, endExclusive.AddDays(-1), timezoneName, [], days);
+            return new(view, anchor, start, endExclusive.AddDays(-1), timezoneName, [], days, allowElapsed);
         }
 
         var rows = await query.OrderBy(item => item.StartsAtUtc).ThenBy(item => item.AppointmentNumber)
@@ -101,7 +105,7 @@ public sealed class CalendarService(ViverAppDbContext database)
             item.ProfessionalName, item.StatusCode, item.CategoryCode, item.AppointmentTypeName,
             item.ModalityCode, DateTime.SpecifyKind(item.StartsAtUtc, DateTimeKind.Utc),
             DateTime.SpecifyKind(item.EndsAtUtc, DateTimeKind.Utc))).ToArray();
-        return new(view, anchor, start, endExclusive.AddDays(-1), timezoneName, items, []);
+        return new(view, anchor, start, endExclusive.AddDays(-1), timezoneName, items, [], allowElapsed);
     }
 
     public async Task<IReadOnlyList<CalendarProfessionalResponse>> ProfessionalsAsync(CancellationToken cancellationToken) =>
