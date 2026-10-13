@@ -16,7 +16,7 @@ namespace ViverApp.Api.Features.StaffCommunication;
 
 public sealed record StaffContact(ulong Id, string FullName, string Role, bool Online, int Unread);
 public sealed record StaffMessageView(ulong Id, ulong SenderId, ulong RecipientId, string Body, DateTime CreatedAtUtc, bool IsRead);
-public sealed record ManagerAlertView(ulong Id, ulong AppointmentId, ulong AppointmentNumber, string Type, DateTime CreatedAtUtc, bool IsRead);
+public sealed record ManagerAlertView(ulong Id, ulong AppointmentId, ulong AppointmentNumber, string Type, DateTime CreatedAtUtc, bool IsRead, string PatientName = "");
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SendStaffMessageRequest(ulong RecipientId, Guid ClientNonce, [Required, StringLength(2000, MinimumLength = 1)] string Body);
 
@@ -137,8 +137,8 @@ public sealed class StaffCommunicationService(
         var alerts = await database.ManagerNotifications.AsNoTracking().Where(n => n.ManagerAccountId == actor)
             .OrderByDescending(n => n.Id).Take(50)
             .Select(n => new ManagerAlertView(n.Id, n.AppointmentId, n.Appointment.AppointmentNumber,
-                n.TypeCode, n.CreatedAtUtc, n.ReadAtUtc != null)).ToArrayAsync(ct);
-        return alerts;
+                n.TypeCode, n.CreatedAtUtc, n.ReadAtUtc != null, n.Appointment.PatientAccount.FullName)).ToArrayAsync(ct);
+        return alerts.Select(a => a with { PatientName = ViverApp.Api.Features.Identity.NotificationPatientName.FirstTwo(a.PatientName) }).ToArray();
     }
     public async Task ReadManagerAlertsAsync(ulong actor, CancellationToken ct)
     {
@@ -160,7 +160,10 @@ public sealed class StaffCommunicationService(
         }).ToArray();
         database.ManagerNotifications.AddRange(entries);
         await database.SaveChangesAsync(ct);
-        return entries.Select(n => new ManagerAlertView(n.Id, n.AppointmentId, appointment.AppointmentNumber, n.TypeCode, now, false)).ToArray();
+        var patientName = await database.Accounts.AsNoTracking().Where(a => a.Id == appointment.PatientAccountId)
+            .Select(a => a.FullName).SingleAsync(ct);
+        return entries.Select(n => new ManagerAlertView(n.Id, n.AppointmentId, appointment.AppointmentNumber, n.TypeCode, now, false,
+            ViverApp.Api.Features.Identity.NotificationPatientName.FirstTwo(patientName))).ToArray();
     }
     public async Task PublishManagerAlertsAsync(IReadOnlyList<ManagerAlertView> alerts)
     {

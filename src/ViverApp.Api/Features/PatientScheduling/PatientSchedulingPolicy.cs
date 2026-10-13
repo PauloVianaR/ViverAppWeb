@@ -5,7 +5,8 @@ internal sealed record SchedulingPolicy(
     int MinimumLeadMinutes,
     int CancellationCutoffHours,
     int RescheduleCutoffHours,
-    int SlotIntervalMinutes);
+    int SlotIntervalMinutes,
+    bool AllowElapsedSameDayBooking = true);
 
 internal sealed record LocalAvailabilityWindow(TimeSpan StartsAt, TimeSpan EndsAt);
 

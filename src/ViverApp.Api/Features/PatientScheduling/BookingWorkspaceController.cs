@@ -18,7 +18,8 @@ namespace ViverApp.Api.Features.PatientScheduling;
 
 public sealed record BookingWorkspaceSpecialty(uint Id, string Name);
 public sealed record BookingWorkspaceOptions(uint? DefaultSpecialtyId, IReadOnlyList<BookingWorkspaceSpecialty> Specialties);
-public sealed record BookingWorkspaceMetadata(string BillingFormCode, uint? SpecialtyId, ulong RowVersion, string? SpecialtyName = null);
+public sealed record BookingWorkspaceMetadata(string BillingFormCode, uint? SpecialtyId, ulong RowVersion, string? SpecialtyName = null,
+    string StatusCode = "", DateTime StartsAtUtc = default, DateTime EndsAtUtc = default);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record BookingWorkspaceUpdate(
     [param: Required, RegularExpression("^(private|insurance)$")] string BillingFormCode,
@@ -76,7 +77,7 @@ public sealed class BookingWorkspaceController(ViverAppDbContext database, Manag
         return await database.Appointments.AsNoTracking()
             .Where(x => x.Id == id && (!Professional || x.ProfessionalAccountId == Actor))
             .Select(x => new BookingWorkspaceMetadata(x.BillingFormCode, x.SpecialtyId, x.RowVersion,
-                x.Specialty == null ? null : x.Specialty.Name))
+                x.Specialty == null ? null : x.Specialty.Name, x.StatusCode, x.StartsAtUtc, x.EndsAtUtc))
             .SingleOrDefaultAsync(ct)
             ?? throw new AdministratorRuleException(404, "Atendimento não encontrado.");
     }
@@ -147,7 +148,6 @@ public sealed class BookingWorkspaceController(ViverAppDbContext database, Manag
         await audit.WriteAsync("appointment.workspace.updated", Actor, "appointment", id.ToString(CultureInfo.InvariantCulture),
             new Dictionary<string, string> { ["billingForm"] = item.BillingFormCode }, ct);
         await transaction.CommitAsync(ct);
-        return new(item.BillingFormCode, item.SpecialtyId, item.RowVersion,
-            await database.Specialties.Where(x => x.Id == item.SpecialtyId).Select(x => x.Name).SingleOrDefaultAsync(ct));
+        return await Metadata(id, ct);
     }
 }

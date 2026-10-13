@@ -20,7 +20,7 @@ public sealed class StaffCommunicationIntegrationTests
         await using var transaction = await db.Database.BeginTransactionAsync();
         var doctor = NewAccount("doctor", "Dr. Chat");
         var manager = NewAccount("manager", "Gestora Chat");
-        var patient = NewAccount("patient", "Paciente Chat");
+        var patient = NewAccount("patient", "Paciente Chat Sobrenome");
         db.Accounts.AddRange(doctor, manager, patient);
         await db.SaveChangesAsync();
         var presence = new StaffPresence();
@@ -54,7 +54,7 @@ public sealed class StaffCommunicationIntegrationTests
         var managerOne = NewAccount("manager", "Gestora Um");
         var managerTwo = NewAccount("manager", "Gestora Dois");
         var doctor = NewAccount("doctor", "Dr. Chat");
-        var patient = NewAccount("patient", "Paciente Chat");
+        var patient = NewAccount("patient", "Paciente Chat Sobrenome");
         db.Accounts.AddRange(managerOne, managerTwo, doctor, patient);
         await db.SaveChangesAsync();
         var now = DateTime.UtcNow;
@@ -115,8 +115,10 @@ public sealed class StaffCommunicationIntegrationTests
         await service.PublishManagerAlertsAsync(queued);
         var activeManagers = await db.Accounts.CountAsync(a => a.RoleCode == "manager" && a.StatusCode == "active");
         Assert.Equal(activeManagers, queued.Count(a => a.AppointmentId == appointment.Id));
+        Assert.All(queued, a => Assert.Equal("Paciente Chat", a.PatientName));
         Assert.Single(await service.ManagerAlertsAsync(managerOne.Id, CancellationToken.None));
         Assert.Single(await service.ManagerAlertsAsync(managerTwo.Id, CancellationToken.None));
+        Assert.All(await service.ManagerAlertsAsync(managerTwo.Id, CancellationToken.None), a => Assert.Equal("Paciente Chat", a.PatientName));
         await service.ReadManagerAlertsAsync(managerOne.Id, CancellationToken.None);
         Assert.All(await service.ManagerAlertsAsync(managerOne.Id, CancellationToken.None), a => Assert.True(a.IsRead));
         Assert.All(await service.ManagerAlertsAsync(managerTwo.Id, CancellationToken.None), a => Assert.False(a.IsRead));

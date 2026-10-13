@@ -1,0 +1,27 @@
+@inherits ViverApp.Web.Components.Pages.ManagerPageBase
+@if (Notice is not null) { <UiNotice Message="@Notice" IsError="NoticeError" /> }
+@if (!Loading && StatusCode == "pending" && CurrentMinutes > 5)
+{
+    <section class="appointment-classification">
+        <div class="field"><label for="appointment-reduced-duration">Duração (minutos)</label><input id="appointment-reduced-duration" type="number" min="5" max="@(CurrentMinutes - 1)" @bind="Minutes" @bind:event="oninput" /><small>Atual: @CurrentMinutes minutos. A redução não altera o preço.</small></div>
+        <button type="button" class="button button--secondary button--small" disabled="@(Busy || Minutes < 5 || Minutes >= CurrentMinutes)" @onclick="Save">Reduzir duração</button>
+    </section>
+}
+@code {
+    [Parameter] public ulong AppointmentId { get; set; }
+    [Parameter] public string StatusCode { get; set; } = "";
+    [Parameter] public DateTime StartsAtUtc { get; set; }
+    [Parameter] public DateTime EndsAtUtc { get; set; }
+    [Parameter] public ulong RowVersion { get; set; }
+    [Parameter] public EventCallback Saved { get; set; }
+    private int Minutes;
+    private int CurrentMinutes => (int)(EndsAtUtc - StartsAtUtc).TotalMinutes;
+    protected override Task Load() { Minutes = CurrentMinutes; return Task.CompletedTask; }
+    private Task Save() => Run(async () =>
+    {
+        await Request<object>($"api/v1/booking-workspace/appointments/{AppointmentId}/duration", "PUT",
+            new { durationMinutes = Minutes, rowVersion = RowVersion });
+        ErrorNotifier.Notify("Duração reduzida. Preço e serviços foram preservados.");
+        await Saved.InvokeAsync();
+    });
+}

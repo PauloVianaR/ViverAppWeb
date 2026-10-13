@@ -1,0 +1,24 @@
+.cash-cumulative-methods {
+    margin-top: 1.25rem;
+}
+
+.cash-cumulative-methods h2 {
+    margin-bottom: .4rem;
+    font-size: 1.1rem;
+}
+
+.cash-method-grid article {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 46rem) {
+    .cash-method-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .cash-method-grid article {
+        padding: .75rem;
+        font-size: .85rem;
+    }
+}

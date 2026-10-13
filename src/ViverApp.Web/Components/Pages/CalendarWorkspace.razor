@@ -187,7 +187,7 @@ else
     private async Task OpenAppointment(ulong id) { await AgendaContext.NavigateAsync(Details(id),Context); }
     private DateTime ClinicNow => Local(DateTime.UtcNow);
     private DateOnly ClinicToday => DateOnly.FromDateTime(ClinicNow);
-    private bool IsElapsed(TimeSpan time) => Anchor == ClinicToday && time < ClinicNow.TimeOfDay;
+    private bool IsElapsed(TimeSpan time) => Anchor < ClinicToday || Data?.AllowElapsedSameDayBooking != true && Anchor == ClinicToday && time < ClinicNow.TimeOfDay;
     protected override async Task Load()
     {
         if(!PreferenceLoaded){var context=await AgendaContext.RestoreAsync(AreaRoot);var preference=await Get<WebCalendarViewPreference>("api/v1/me/preferences/calendar-view");View=ViewQuery is "day" or "week" or "month" or "year" ? ViewQuery : context?.View??preference?.Mode??"month";
