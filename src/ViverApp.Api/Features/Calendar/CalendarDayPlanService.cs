@@ -6,7 +6,7 @@ namespace ViverApp.Api.Features.Calendar;
 
 public sealed record CalendarWindowResponse(TimeSpan Start, TimeSpan End);
 public sealed record CalendarDayPlanResponse(int IntervalMinutes, IReadOnlyList<CalendarWindowResponse> Windows,
-    IReadOnlyList<DateOnly> UnavailableDays);
+    IReadOnlyList<DateOnly> UnavailableDays, bool AllowElapsedSameDayBooking = true);
 
 public sealed class CalendarDayPlanService(ViverAppDbContext database)
 {
@@ -96,6 +96,9 @@ public sealed class CalendarDayPlanService(ViverAppDbContext database)
             if (merged.Count == 0) unavailable.Add(day);
             if (day == date) chosen = merged;
         }
-        return new CalendarDayPlanResponse(interval, chosen, unavailable);
+        var elapsed = await database.ApplicationSettings.AsNoTracking()
+            .Where(s => s.SettingKey == "appointments.allow_elapsed_same_day_booking")
+            .Select(s => s.ValueJson).SingleOrDefaultAsync(ct);
+        return new CalendarDayPlanResponse(interval, chosen, unavailable, elapsed is null || elapsed == "true");
     }
 }

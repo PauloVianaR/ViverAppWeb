@@ -1,0 +1,39 @@
+@using static ViverApp.Web.ManagerLabels
+@if (Summary is not null)
+{
+    <details class="surface patient-panel cash-no-print cash-cumulative">
+        <summary><strong>Totalizadores gerais do caixa</strong><span>Mostrar/ocultar valores acumulados até hoje</span></summary>
+        <section class="cash-summary" aria-label="Totais gerais do caixa">
+            <article class="surface manager-kpi"><span>Entradas de pagamentos</span><strong>@Money(Summary.GrossEntries)</strong></article>
+            <article class="surface manager-kpi"><span>Reversões</span><strong>@Money(Summary.PaymentReversals)</strong></article>
+            <article class="surface manager-kpi"><span>Suprimentos</span><strong>@Money(Summary.Supplies)</strong></article>
+            <article class="surface manager-kpi"><span>Sangrias</span><strong>@Money(Summary.Withdrawals)</strong></article>
+            <article class="surface manager-kpi"><span>Líquido</span><strong>@Money(Summary.NetTotal)</strong></article>
+        </section>
+        <section class="cash-cumulative-methods" aria-labelledby="cash-cumulative-methods-title">
+            <h2 id="cash-cumulative-methods-title">Totais gerais por forma de pagamento</h2>
+            <p class="muted">Acumulado de todas as datas até hoje, sem os filtros do caixa do dia.</p>
+            @if (Summary.ByMethod.Count == 0)
+            {
+                <p class="muted">Sem movimentações acumuladas por forma de pagamento.</p>
+            }
+            else
+            {
+                <div class="cash-method-grid">
+                    @foreach (var item in Summary.ByMethod)
+                    {
+                        <article>
+                            <strong>@CashLabels.Method(item.MethodCode)</strong>
+                            <span>Entradas @Money(item.Entries)</span>
+                            <span>Saídas @Money(item.Outflows)</span>
+                            <b>Líquido @Money(item.Net)</b>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+    </details>
+}
+@code {
+    [Parameter] public CashSummary? Summary { get; set; }
+}

@@ -24,6 +24,9 @@ public sealed record OperationalReviewVersionResponse(ulong Version, byte Rating
 public sealed record OperationalReviewResponse(byte? Rating, string? Feedback, ulong RowVersion,
     IReadOnlyList<OperationalReviewVersionResponse> Versions);
 public sealed record WorkspaceAttachment(ulong Id, string Name, ulong SizeBytes, ulong RowVersion, bool CanDelete);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ShortenAppointmentRequest([param: Range(5, 720)] int DurationMinutes,
+    [param: Range(1, long.MaxValue)] ulong RowVersion);
 
 [ApiController, Route("api/v1/booking-workspace/appointments/{id:long}")]
 [Authorize(Roles = "administrator,manager,doctor,psychologist")]
@@ -38,6 +41,39 @@ public sealed class AppointmentWorkspaceOperationsController(ViverAppDbContext d
         await database.Appointments.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id
             && (!Professional || x.ProfessionalAccountId == Actor), ct)
         ?? throw new AdministratorRuleException(404, "Atendimento não encontrado.");
+
+    [HttpPut("duration"), EnableRateLimiting(SecurityPolicyNames.AuthenticatedOperationRateLimit)]
+    public async Task<IActionResult> ShortenDuration(ulong id, ShortenAppointmentRequest request, CancellationToken ct)
+    {
+        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var appointment = await database.Appointments.FromSqlInterpolated($"SELECT * FROM appointments WHERE id = {id} FOR UPDATE")
+            .AsNoTracking().SingleOrDefaultAsync(ct);
+        if (appointment is null || (Professional && appointment.ProfessionalAccountId != Actor))
+            throw new AdministratorRuleException(404, "Atendimento não encontrado.");
+        if (appointment.RowVersion != request.RowVersion)
+            throw new AdministratorRuleException(409, "O atendimento foi alterado. Atualize antes de salvar a duração.");
+        var previousMinutes = (appointment.EndsAtUtc - appointment.StartsAtUtc).TotalMinutes;
+        if (appointment.StatusCode != "pending")
+            throw new AdministratorRuleException(409, "Só é possível reduzir a duração enquanto o atendimento aguarda pagamento.");
+        if (request.DurationMinutes < 5 || request.DurationMinutes >= previousMinutes)
+            throw new AdministratorRuleException(400, "Informe uma duração de pelo menos 5 minutos, menor que a duração atual.");
+        // Reducing the existing interval cannot introduce an availability conflict.
+        // Keep catalog/service snapshots and every financial value unchanged.
+        var endsAt = appointment.StartsAtUtc.AddMinutes(request.DurationMinutes);
+        var updated = await database.Appointments.Where(a => a.Id == id && a.RowVersion == request.RowVersion && a.StatusCode == "pending")
+            .ExecuteUpdateAsync(s => s.SetProperty(a => a.EndsAtUtc, endsAt)
+                .SetProperty(a => a.UpdatedAtUtc, clock.GetUtcNow().UtcDateTime)
+                .SetProperty(a => a.RowVersion, a => a.RowVersion + 1), ct);
+        if (updated != 1) throw new AdministratorRuleException(409, "O atendimento foi alterado. Atualize antes de salvar a duração.");
+        await audit.WriteAsync("appointment.duration.shortened", Actor, "appointment", id.ToString(CultureInfo.InvariantCulture),
+            new Dictionary<string, string>
+            {
+                ["previousMinutes"] = previousMinutes.ToString(CultureInfo.InvariantCulture),
+                ["durationMinutes"] = request.DurationMinutes.ToString(CultureInfo.InvariantCulture),
+            }, ct);
+        await transaction.CommitAsync(ct);
+        return NoContent();
+    }
 
     [HttpGet("operational-review")]
     public async Task<OperationalReviewResponse> Review(ulong id, CancellationToken ct)

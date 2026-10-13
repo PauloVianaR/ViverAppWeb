@@ -41,8 +41,10 @@ public sealed class CashManagementIntegrationTests
             {
                 Assert.True(range.IsValid(0.01m));
                 Assert.True(range.IsValid(10m));
-                Assert.False(range.IsValid(0m));
+                Assert.False(range.IsValid(-0.01m));
             }
+            Assert.True(ranges[0].IsValid(0m)); // Removing a point discount is an explicit supported operation.
+            Assert.False(ranges[1].IsValid(0m)); // A payment allocation must remain strictly positive.
         }
         finally { CultureInfo.CurrentCulture = previous; }
     }
@@ -267,6 +269,21 @@ public sealed class CashManagementIntegrationTests
         var unfilteredDay = await cash.DayAsync(date, ViverAppRoles.Manager, null, null, null, null, null, null, null, 1, 25, CancellationToken.None);
         Assert.Equal(200m, unfilteredDay.Summary.Withdrawals);
         Assert.Equal(-20m, unfilteredDay.Summary.NetTotal);
+        Assert.NotNull(day.CumulativeSummary);
+        Assert.Equal(unfilteredDay.CumulativeSummary!.ByMethod, day.CumulativeSummary!.ByMethod);
+        Assert.Equal(day.CumulativeSummary.NetTotal, day.CumulativeSummary.ByMethod.Sum(item => item.Net));
+        Assert.All(day.CumulativeSummary.ByMethod, item => Assert.Equal(item.Entries - item.Outflows, item.Net));
+        // The whole cumulative breakdown follows the existing manager permission, not just its net total.
+        var cumulativeSetting = await database.ApplicationSettings.SingleAsync(item => item.SettingKey == "cash.manager_can_view_cumulative_totals");
+        var previousCumulativeValue = cumulativeSetting.ValueJson;
+        cumulativeSetting.ValueJson = "false";
+        await database.SaveChangesAsync();
+        var hiddenCumulative = await cash.DayAsync(date, ViverAppRoles.Manager, null, null, null, null, null, null, null, 1, 25, CancellationToken.None);
+        Assert.Null(hiddenCumulative.CumulativeSummary);
+        var administratorCumulative = await cash.DayAsync(date, ViverAppRoles.Administrator, null, null, null, null, null, null, null, 1, 25, CancellationToken.None);
+        Assert.Equal(day.CumulativeSummary.ByMethod, administratorCumulative.CumulativeSummary!.ByMethod);
+        cumulativeSetting.ValueJson = previousCumulativeValue;
+        await database.SaveChangesAsync();
         Assert.Equal(6, unfilteredDay.Summary.MovementCount);
         Assert.Contains(unfilteredDay.Page.Items, item => item.Id == withdrawal.Id && item.TypeCode == "withdrawal");
         Assert.Equal(unfilteredDay.Page.Items.OrderBy(item => item.OccurredAtUtc).ThenBy(item => item.Id), unfilteredDay.Page.Items);

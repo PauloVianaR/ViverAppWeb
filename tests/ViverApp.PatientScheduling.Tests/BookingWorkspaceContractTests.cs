@@ -17,7 +17,7 @@ public sealed class BookingWorkspaceContractTests
         Assert.Equal(["administrator", "manager", "doctor", "psychologist"], roles.Roles!.Split(','));
         Assert.Contains(type.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.ServiceFilterAttribute), false)
             .Cast<Microsoft.AspNetCore.Mvc.ServiceFilterAttribute>(), x => x.ServiceType == typeof(ViverApp.Api.Features.AdministratorExperience.AdministratorStepUpFilter));
-        foreach (var method in new[] { nameof(AppointmentWorkspaceOperationsController.SaveReview), nameof(AppointmentWorkspaceOperationsController.Upload), nameof(AppointmentWorkspaceOperationsController.Delete) })
+        foreach (var method in new[] { nameof(AppointmentWorkspaceOperationsController.SaveReview), nameof(AppointmentWorkspaceOperationsController.Upload), nameof(AppointmentWorkspaceOperationsController.Delete), nameof(AppointmentWorkspaceOperationsController.ShortenDuration) })
             Assert.Single(type.GetMethod(method)!.GetCustomAttributes(typeof(Microsoft.AspNetCore.RateLimiting.EnableRateLimitingAttribute), false));
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<OperationalReviewWrite>(
             """{"rating":5,"feedback":"teste","rowVersion":0,"updatedByAccountId":1}""",
@@ -74,4 +74,17 @@ public sealed class BookingWorkspaceContractTests
         => Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<BookingWorkspaceUpdate>(
             """{"billingFormCode":"insurance","specialtyId":1,"rowVersion":1,"priceAmount":0,"statusCode":"confirmed"}""",
             new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
+    [Fact]
+    public void DurationCommand_RejectsMassAssignmentAndInvalidRange()
+    {
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ShortenAppointmentRequest>(
+            """{"durationMinutes":10,"rowVersion":1,"priceAmount":0}""",
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        var parameter = typeof(ShortenAppointmentRequest).GetConstructors()[0].GetParameters()[0];
+        var range = Assert.Single(parameter.GetCustomAttributes(typeof(RangeAttribute), false).Cast<RangeAttribute>());
+        Assert.False(range.IsValid(4));
+        Assert.True(range.IsValid(5));
+        Assert.False(range.IsValid(721));
+    }
 }

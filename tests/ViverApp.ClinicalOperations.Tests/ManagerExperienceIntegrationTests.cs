@@ -181,6 +181,8 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         Assert.Equal(1, await verification.AppointmentStatusHistories.CountAsync(x => x.AppointmentId == appointmentId && x.ToStatusCode == "arrived"));
 
         var service = new ArrivalExperienceService(verification, new FixedClock(now), new NoOpAuditWriter(), new NullHubContext(), NullLogger<ArrivalExperienceService>.Instance);
+        var patientName = NotificationPatientName.FirstTwo(await verification.Accounts.Where(a => a.Id == patientId).Select(a => a.FullName).SingleAsync());
+        Assert.Equal(patientName, (await service.NotificationsAsync(doctorId, 1, 10, default)).Items.Single(x => x.Id == notification.Id).PatientName);
         var unreadForAnotherDoctor = await service.NotificationsAsync(doctorId + 1, 1, 10, CancellationToken.None);
         Assert.Empty(unreadForAnotherDoctor.Items);
         var readDenied = await Assert.ThrowsAsync<ArrivalRuleException>(() =>
@@ -270,12 +272,15 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         var arrived = await service.RegisterAsync(managerId, appointmentId, new ArrivalRequest(1), CancellationToken.None);
         using var arrivalMessage = await ReadInvocationAsync(doctorSocket, "PatientArrived");
         Assert.Equal(appointmentId, arrivalMessage.RootElement.GetProperty("arguments")[0].GetProperty("appointmentId").GetUInt64());
+        var patientName = NotificationPatientName.FirstTwo(await db.Accounts.Where(a => a.Id == patientId).Select(a => a.FullName).SingleAsync());
+        Assert.Equal(patientName, arrivalMessage.RootElement.GetProperty("arguments")[0].GetProperty("patientName").GetString());
 
         await service.StartAsync(doctorId, appointmentId, new StartAppointmentRequest(arrived.RowVersion), CancellationToken.None);
         using var startMessage = await ReadInvocationAsync(managerSocket, "ManagerAlert");
         var alert = startMessage.RootElement.GetProperty("arguments")[0];
         Assert.Equal("appointment_started", alert.GetProperty("type").GetString());
         Assert.Equal(appointmentId, alert.GetProperty("appointmentId").GetUInt64());
+        Assert.Equal(patientName, alert.GetProperty("patientName").GetString());
         using var otherStartMessage = await ReadInvocationAsync(otherManagerSocket, "ManagerAlert");
         Assert.Equal("appointment_started", otherStartMessage.RootElement.GetProperty("arguments")[0].GetProperty("type").GetString());
         await doctorSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Teste concluído", CancellationToken.None);

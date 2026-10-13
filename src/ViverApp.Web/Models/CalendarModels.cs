@@ -6,8 +6,8 @@ public sealed record WebCalendarItem(ulong Id, ulong AppointmentNumber, string P
     DateTime StartsAtUtc, DateTime EndsAtUtc);
 public sealed record WebCalendarDay(DateOnly Date, int Count, IReadOnlyList<string> Statuses);
 public sealed record WebCalendar(string View, DateOnly Anchor, DateOnly RangeStart, DateOnly RangeEnd,
-    string TimezoneName, IReadOnlyList<WebCalendarItem> Items, IReadOnlyList<WebCalendarDay> Days);
+    string TimezoneName, IReadOnlyList<WebCalendarItem> Items, IReadOnlyList<WebCalendarDay> Days, bool AllowElapsedSameDayBooking = true);
 public sealed record WebCalendarViewPreference(string Mode, ulong RowVersion);
 public sealed record WebCalendarWindow(TimeSpan Start, TimeSpan End);
 public sealed record WebCalendarDayPlan(int IntervalMinutes, IReadOnlyList<WebCalendarWindow> Windows,
-    IReadOnlyList<DateOnly> UnavailableDays);
+    IReadOnlyList<DateOnly> UnavailableDays, bool AllowElapsedSameDayBooking = true);

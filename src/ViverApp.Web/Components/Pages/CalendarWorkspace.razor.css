@@ -357,3 +357,15 @@
 .calendar-daily-row--elapsed time,.calendar-time--elapsed{text-decoration:line-through;color:#768393}
 .calendar-daily-row--elapsed{opacity:.65}
 .calendar-mini-day:disabled{opacity:.4;cursor:not-allowed}
+.calendar-daily-row.appointment-card--completed,
+.calendar-timeline--day .calendar-event.appointment-card--completed {
+    background: #145b3a;
+    border-color: #0c4329;
+    color: #fff;
+}
+.calendar-daily-row.appointment-card--completed a,
+.calendar-daily-row.appointment-card--completed small,
+.calendar-daily-row.appointment-card--completed time,
+.calendar-timeline--day .calendar-event.appointment-card--completed > * {
+    color: #fff;
+}

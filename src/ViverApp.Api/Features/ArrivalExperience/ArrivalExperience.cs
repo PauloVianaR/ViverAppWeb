@@ -27,12 +27,12 @@ public sealed record AppointmentReopenRequest(
     [param: Range(1, long.MaxValue)] ulong RowVersion,
     [param: Required, StringLength(500, MinimumLength = 5)] string Reason);
 public sealed record ProfessionalNotificationResponse(ulong Id, ulong AppointmentId, ulong AppointmentNumber,
-    uint? QueueNumber, DateTime? StartsAtUtc, bool IsRead, DateTime CreatedAtUtc, ulong RowVersion);
+    uint? QueueNumber, DateTime? StartsAtUtc, bool IsRead, DateTime CreatedAtUtc, ulong RowVersion, string PatientName = "");
 public sealed record ProfessionalNotificationsResponse(int UnreadCount, bool PopupEnabled, bool SoundEnabled,
     int SoundVolume, string SoundKey, bool MarkReadOnOpen, IReadOnlyList<ProfessionalNotificationResponse> Items);
 public sealed record ArrivalRealtimeMessage(ulong Id, ulong AppointmentId, ulong AppointmentNumber,
     uint QueueNumber, DateTime StartsAtUtc, bool IsRead, DateTime CreatedAtUtc, ulong RowVersion,
-    bool PopupEnabled, bool SoundEnabled, int SoundVolume, string SoundKey);
+    bool PopupEnabled, bool SoundEnabled, int SoundVolume, string SoundKey, string PatientName = "");
 
 [Authorize(Policy = ViverAppPolicies.ClinicalProfessional)]
 public sealed class ProfessionalNotificationsHub : Hub
@@ -136,9 +136,11 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
         {
             try
             {
+                var patientName = await database.Accounts.AsNoTracking().Where(a => a.Id == appointment.PatientAccountId)
+                    .Select(a => a.FullName).SingleAsync(ct);
                 await hub.Clients.Group(ProfessionalNotificationsHub.Group(appointment.ProfessionalAccountId)).SendAsync("PatientArrived",
                     new ArrivalRealtimeMessage(notification.Id, appointment.Id, appointment.AppointmentNumber, queueNumber, appointment.StartsAtUtc, false, now, notification.RowVersion,
-                        settings.PopupEnabled, settings.SoundEnabled, settings.SoundVolume, settings.SoundKey), CancellationToken.None);
+                        settings.PopupEnabled, settings.SoundEnabled, settings.SoundVolume, settings.SoundKey, NotificationPatientName.FirstTwo(patientName)), CancellationToken.None);
             }
             catch (Exception exception)
             {
@@ -379,11 +381,11 @@ public sealed class ArrivalExperienceService(ViverAppDbContext database, TimePro
         await database.ProfessionalNotifications.Where(x => x.ProfessionalAccountId == doctor && x.ReadAtUtc != null && x.CreatedAtUtc < cutoff).ExecuteDeleteAsync(ct);
         var unread = await database.ProfessionalNotifications.CountAsync(x => x.ProfessionalAccountId == doctor && x.ReadAtUtc == null, ct);
         var rows = await database.ProfessionalNotifications.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor)
-            .Include(x => x.Appointment).OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(ct);
+            .Include(x => x.Appointment).ThenInclude(x => x.PatientAccount).OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToArrayAsync(ct);
         return new(unread, settings.PopupEnabled, settings.SoundEnabled, settings.SoundVolume, settings.SoundKey,
             settings.MarkReadOnOpen, rows.Select(x => new ProfessionalNotificationResponse(x.Id, x.AppointmentId,
                 x.Appointment.AppointmentNumber, x.Appointment.ArrivalQueueNumber, x.Appointment.StartsAtUtc,
-                x.ReadAtUtc.HasValue, x.CreatedAtUtc, x.RowVersion)).ToArray());
+                x.ReadAtUtc.HasValue, x.CreatedAtUtc, x.RowVersion, NotificationPatientName.FirstTwo(x.Appointment.PatientAccount.FullName))).ToArray());
     }
 
     public async Task ReadAsync(ulong doctor, ulong id, ulong rowVersion, CancellationToken ct)
