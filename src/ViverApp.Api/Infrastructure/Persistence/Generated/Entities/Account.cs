@@ -139,6 +139,8 @@ public partial class Account
 
     public virtual ICollection<Payment> PaymentConfirmedByAccounts { get; set; } = new List<Payment>();
 
+    public virtual ICollection<PaymentPendingDailyNotice> PaymentPendingDailyNotices { get; set; } = new List<PaymentPendingDailyNotice>();
+
     public virtual ICollection<PaymentReversal> PaymentReversals { get; set; } = new List<PaymentReversal>();
 
     public virtual ICollection<Payment> PaymentReversedByAccounts { get; set; } = new List<Payment>();

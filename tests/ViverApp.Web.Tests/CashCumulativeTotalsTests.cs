@@ -26,7 +26,12 @@ public sealed class CashCumulativeTotalsTests
             new("pagbank_online", 30m, 0m, 30m, 1),
             new("other", 10m, 0m, 10m, 1),
         };
-        var html = await Render(new(280m, 70m, 0m, 25m, 0m, 125m, 9, methods));
+        var html = await Render(new(280m, 70m, 0m, 25m, -7m, 125m, 9, methods, -5m));
+        var adjustmentCard = Assert.Single(System.Text.RegularExpressions.Regex.Matches(html,
+            "<article\\b.*?</article>", System.Text.RegularExpressions.RegexOptions.Singleline)
+            .Select(match => match.Value), article => article.Contains("Ajustes Corretivos", StringComparison.Ordinal));
+        Assert.Contains(ManagerLabels.Money(-5m), adjustmentCard);
+        Assert.DoesNotContain(ManagerLabels.Money(-7m), adjustmentCard);
         Assert.Contains("Totalizadores gerais do caixa", html);
         Assert.Contains("Totais gerais por forma de pagamento", html);
         Assert.DoesNotContain(" open", html);

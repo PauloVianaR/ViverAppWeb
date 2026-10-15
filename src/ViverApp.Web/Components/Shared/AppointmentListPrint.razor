@@ -1,0 +1,78 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JavaScript
+@inject WebBackendOptions Backend
+@inject UiErrorNotifier ErrorNotifier
+@using static ViverApp.Web.PatientLabels
+
+<button type="button" class="button button--secondary" disabled="@(Busy || string.IsNullOrEmpty(ListPath))" @onclick="PrintAsync"><AppIcon Name="print" /> Imprimir atendimentos</button>
+@if (Report is not null)
+{
+    <section class="appointment-print-document">
+        <header class="cash-print-header">
+            <div class="cash-print-brand"><img src="/images/logo.png" alt="ViverApp" /><div><strong>ViverApp</strong><span>@Report.ClinicName</span></div></div>
+            <div class="cash-print-title"><p>Relatório operacional</p><h1>Atendimentos</h1></div>
+        </header>
+        <div class="cash-print-metadata">
+            <div><span>Emitido em</span><strong>@Report.LocalIssuedAt.ToString("dd/MM/yyyy HH:mm")</strong></div>
+            <div><span>Responsável</span><strong>@Report.IssuedBy</strong></div>
+            <div><span>Registros</span><strong>@Report.Rows.Count</strong></div>
+            <div><span>Fuso</span><strong>@Report.TimezoneName</strong></div>
+        </div>
+        <p class="cash-print-filter"><strong>Recorte:</strong> @Report.FilterDescription</p>
+        <table class="appointment-print-table">
+            <thead><tr><th>Nº / Data e hora</th><th>Paciente / Profissional</th><th>Serviços / Especialidade</th><th>Forma / Valor</th><th>Pagamento / Situação</th><th>Observação</th></tr></thead>
+            <tbody>
+                @foreach (var row in Report.Rows)
+                {
+                    <tr><td><strong>#@row.Number</strong><small>@row.LocalStartsAt.ToString("dd/MM/yyyy HH:mm")</small></td>
+                        <td><strong>@row.PatientName</strong><small>@row.DoctorName</small></td>
+                        <td>@row.Services<small>@Category(row.CategoryCode) · @row.Specialty</small></td>
+                        <td>@(row.BillingFormCode == "insurance" ? "Convênio" : "Particular")<small>
+                            @if (!row.RequiresPayment) { <span>Sem cobrança</span> }
+                            else { @if (row.BasePriceAmount > row.PriceAmount) { <s>@Money(row.BasePriceAmount)</s><br /><span>Desconto @Money(row.BasePriceAmount-row.PriceAmount)</span><br /> }<strong>@Money(row.PriceAmount)</strong> }
+                        </small></td>
+                        <td>@(row.RequiresPayment ? row.IsPaid ? "Pago" : "Não pago" : "Sem cobrança")<small>@Status(row.StatusCode)</small></td>
+                        <td>@if(row.PaymentDeferred && row.RequiresPayment && !row.IsPaid){<strong>Pagamento Pendente</strong><br /> }@row.Notes</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if(Report.Rows.Count==0){<p class="cash-print-empty">Nenhum atendimento corresponde aos filtros.</p>}
+    </section>
+}
+
+@code {
+    [Parameter] public string ListPath { get; set; } = "";
+    [Parameter] public AppointmentPrintData? Report { get; set; }
+    private IJSObjectReference? Api, Printer;
+    private bool Busy, PrintPending;
+    private async Task PrintAsync()
+    {
+        if (Busy) return;
+        Busy = true;
+        try
+        {
+            Api ??= await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/identity-access.js");
+            Printer ??= await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/print-reports.js");
+            var index = ListPath.IndexOf('?');
+            var query = index < 0 ? "" : ListPath[index..];
+            Report = await Api.InvokeAsync<AppointmentPrintData>("get", Backend.BaseUrl.ToString(), "api/v1/appointment-reports/print" + query);
+            PrintPending = true;
+        }
+        catch (JSException ex) { ErrorNotifier.Show(ex.Message); }
+        catch (Exception) { ErrorNotifier.Show(UiErrorNotifier.UnexpectedMessage); }
+        finally { Busy = false; }
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!PrintPending || Printer is null) return;
+        PrintPending = false;
+        try { await Printer.InvokeVoidAsync("printReport"); }
+        catch (JSException) { ErrorNotifier.Show("Não foi possível abrir a impressão. Tente novamente."); }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        try { if (Api is not null) await Api.DisposeAsync(); if (Printer is not null) await Printer.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+    }
+}

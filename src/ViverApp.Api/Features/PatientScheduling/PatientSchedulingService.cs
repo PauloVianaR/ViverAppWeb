@@ -386,6 +386,9 @@ public sealed class PatientSchedulingService(
         await LockPatientAsync(request.PatientAccountId, cancellationToken);
         var requestHash = HashRequest(managerId, $"manager-create:{request.PatientAccountId}", request);
         var scope = $"appointment.manager-create:{managerId}";
+        if (request.PayLater && !await database.Accounts.AsNoTracking().AnyAsync(a => a.Id == managerId
+            && a.StatusCode == "active" && (a.RoleCode == "manager" || a.RoleCode == "administrator"), cancellationToken))
+            throw new SchedulingRuleException(403, "Somente Gestor e Administrador podem autorizar Pagar Depois.");
         var replay = await TryReplayAsync(scope, idempotencyKey, requestHash, cancellationToken);
         if (replay is not null) { await transaction.CommitAsync(cancellationToken); return (replay, true); }
         await LockDoctorAsync(request.ProfessionalAccountId, cancellationToken);
@@ -413,6 +416,7 @@ public sealed class PatientSchedulingService(
             ProfessionalAccountId = request.ProfessionalAccountId,
             AppointmentTypeId = type.Id,
             CreatedByAccountId = managerId,
+            PaymentDeferred = request.PayLater && requiresPayment,
             BillingFormCode = request.BillingFormCode,
             SpecialtyId = specialtyId,
             StatusCode = requiresPayment ? "pending" : "confirmed",
@@ -431,10 +435,18 @@ public sealed class PatientSchedulingService(
             RowVersion = 1,
         };
         await ApplyPointDiscountAsync(entity, managerId, request.PointDiscountKindCode, request.PointDiscountValue, cancellationToken);
+        if (request.PayLater)
+        {
+            if (!requiresPayment || entity.PriceAmount <= 0)
+                throw BadRequest("Pagar Depois exige um atendimento Particular com cobrança maior que zero.");
+            entity.StatusCode = "confirmed";
+            entity.PaymentLocationCode = "clinic";
+        }
         database.Appointments.Add(entity);
         foreach (var item in serviceItems) entity.AppointmentServiceItems.Add(item);
         await database.SaveChangesAsync(cancellationToken);
-        AddHistory(entity, managerId, null, entity.StatusCode, requiresPayment ? null : "Atendimento sem cobrança confirmado automaticamente", now);
+        AddHistory(entity, managerId, null, entity.StatusCode, request.PayLater ? "Pagar Depois autorizado · Pagamento Pendente"
+            : requiresPayment ? null : "Atendimento sem cobrança confirmado automaticamente", now);
         var response = BuildResponse(entity, doctor.FullName, serviceItems[0].NameSnapshot, timezoneName, timezone, null);
         StoreIdempotency(scope, idempotencyKey, requestHash, response, StatusCodes.Status201Created, now);
         await database.SaveChangesAsync(cancellationToken);
@@ -1237,6 +1249,7 @@ public sealed class PatientSchedulingService(
             PointDiscountKindCode = entity.PointDiscountKindCode,
             PointDiscountValue = entity.PointDiscountKindCode is null ? null : entity.PointDiscountValue,
             PointDiscountAmount = entity.PointDiscountAmount,
+            PaymentDeferred = entity.PaymentDeferred,
         };
     }
 

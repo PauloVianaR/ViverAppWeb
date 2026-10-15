@@ -24,6 +24,7 @@ public sealed record DoctorAppointment(ulong Id, ulong AppointmentNumber, ulong 
     public string? PointDiscountKindCode { get; init; }
     public decimal? PointDiscountValue { get; init; }
     public decimal PointDiscountAmount { get; init; }
+    public bool PendingPayment { get; init; }
 }
 public sealed record ProfessionalNotification(ulong Id, ulong AppointmentId, ulong AppointmentNumber, uint? QueueNumber,
     DateTime? StartsAtUtc, bool IsRead, DateTime CreatedAtUtc, ulong RowVersion, string PatientName = "");

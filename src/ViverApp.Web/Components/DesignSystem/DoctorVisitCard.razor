@@ -7,5 +7,6 @@
     @if(Model.CancellationReason is not null){<p><strong>Motivo:</strong> @Model.CancellationReason</p>}
     <AppointmentRescheduleTimeline Items="Model.RescheduleHistory" />
     <div class="patient-actions">@if(ShowDetailsLink){<a class="button button--secondary button--small" href="@BasePath/atendimentos/@Model.Id">Detalhes e ações</a>}@if(Model.CanJoinOnline){<a class="button button--small" href="@BasePath/online/@Model.Id">Entrar na chamada</a>}@if(Model.RescheduledToAppointmentId is ulong next){<a href="@BasePath/atendimentos/@next">Ver novo horário</a>}</div>
+    @if(Model.PendingPayment){<p class="badge badge--warning">Pagamento Pendente · autorizado Pagar Depois</p>}
 </article>
 @code { [Parameter, EditorRequired] public DoctorAppointment Model { get; set; } = null!; [Parameter] public bool ShowDetailsLink { get; set; } = true; [Parameter] public string BasePath { get; set; } = "/medico"; }

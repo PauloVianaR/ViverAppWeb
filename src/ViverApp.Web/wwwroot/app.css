@@ -79,12 +79,26 @@
 .appointment-slot-option:has(input:focus-visible){outline:3px solid var(--color-focus);outline-offset:3px}
 .appointment-slot-option input{accent-color:currentColor;flex:0 0 auto;margin:0}
 @media(max-width:46rem){.cash-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.appointment-billing-options{display:flex;align-items:flex-end;gap:.75rem;min-width:0;grid-column:span 2}
+.appointment-billing-options>.field{flex:1 1 8rem;min-width:0}
+.appointment-deferred-option{display:flex;align-items:center;gap:.4rem;min-height:2.2rem;margin-bottom:.5rem;cursor:pointer;white-space:nowrap;font-size:.875rem}
+.appointment-deferred-option>input{width:.95rem;height:.95rem;min-height:0;margin:0;accent-color:var(--color-primary)}
+.appointment-print-document{display:none}
 @media print{
 html,body{width:100%;min-height:0!important;background:#fff!important}
 .skip-link,.topbar,.sidebar,.desktop-sidebar,.mobile-navigation,.arrival-toast,#blazor-error-ui,.cash-no-print,.cash-print-area,.cash-summary,.site-footer,dialog{display:none!important}
 .app-shell,.shell-body{display:block!important;min-height:0!important;background:#fff!important}
 .page-container{display:block!important;width:100%!important;max-width:none!important;min-height:0!important;margin:0!important;padding:0!important}
-.page-container>*:not(.cash-print-document){display:none!important}
+.page-container>*:not(.cash-print-document):not(.appointment-print-document){display:none!important}
+#ui-toast-host,.staff-chat-window{display:none!important}
+.appointment-print-document{display:block!important;width:100%;margin:0;color:#172235;background:#fff;font-family:Arial,Helvetica,sans-serif;font-size:8pt}
+.appointment-print-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:7.5pt;line-height:1.25}
+.appointment-print-table thead{display:table-header-group}.appointment-print-table tr{break-inside:avoid;page-break-inside:avoid}
+.appointment-print-table th{padding:1.8mm;background:#172235!important;color:#fff!important;text-align:left;print-color-adjust:exact}
+.appointment-print-table td{padding:1.8mm;border:1px solid #d6dce3;vertical-align:top;overflow-wrap:anywhere}
+.appointment-print-table small{display:block;font-size:7pt;color:#526176;margin-top:.6mm}
+.appointment-print-table th:nth-child(1){width:11%}.appointment-print-table th:nth-child(2){width:22%}.appointment-print-table th:nth-child(3){width:24%}.appointment-print-table th:nth-child(4){width:13%}.appointment-print-table th:nth-child(5){width:13%}.appointment-print-table th:nth-child(6){width:17%}
+.appointment-print-table tbody tr:nth-child(even){background:#f7f8fa!important;print-color-adjust:exact}
 .cash-print-document{display:block!important;width:100%;margin:0;color:#172235;background:#fff;font-family:Arial,Helvetica,sans-serif;font-size:8.5pt}
 .cash-print-header{display:flex;align-items:center;justify-content:space-between;gap:8mm;padding-bottom:4mm;border-bottom:2px solid #e26f2d}
 .cash-print-brand{display:flex;align-items:center;gap:3mm;min-width:45mm}.cash-print-brand img{width:16mm;height:16mm;object-fit:contain}.cash-print-brand div{display:grid;gap:.5mm}.cash-print-brand strong{font-size:15pt;color:#e26f2d}.cash-print-brand span{font-size:8pt;color:#526176}

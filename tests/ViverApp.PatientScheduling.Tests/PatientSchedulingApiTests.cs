@@ -43,6 +43,8 @@ public sealed class PatientSchedulingApiTests : IAsyncLifetime
     [InlineData("/api/v1/booking-workspace/options")]
     [InlineData("/api/v1/booking-workspace/patients")]
     [InlineData("/api/v1/booking-workspace/appointments/1")]
+    [InlineData("/api/v1/appointment-reports/print")]
+    [InlineData("/api/v1/management/payment-pending-notices")]
     public async Task PatientSchedulingEndpoints_RequireAuthentication(string path)
     {
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -81,6 +83,15 @@ public sealed class PatientSchedulingApiTests : IAsyncLifetime
         Assert.All(responseTypes, responseType =>
             Assert.DoesNotContain(responseType.GetProperties(), property =>
                 property.PropertyType.FullName?.Contains("Infrastructure.Persistence.Generated", StringComparison.Ordinal) == true));
+    }
+
+    [Fact]
+    public void PatientAndProfessionalContractsRejectPayLaterMassAssignment()
+    {
+        const string payload = "{\"payLater\":true}";
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<AppointmentCreateRequest>(payload, options));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<DoctorAppointmentCreateRequest>(payload, options));
     }
 
     [Fact]

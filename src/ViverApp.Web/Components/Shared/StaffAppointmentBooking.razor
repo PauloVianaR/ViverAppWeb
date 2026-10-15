@@ -30,8 +30,14 @@ else
                     <div class="field"><label for="booking-specialty">Especialidade</label><select id="booking-specialty" @bind="SpecialtyId" disabled="@Busy" @bind:after="SpecialtyChanged"><option value="0">Selecione</option>@foreach (var specialty in Options?.Specialties ?? []) { <option value="@specialty.Id">@specialty.Name</option> }</select></div>
                     <div class="field"><label for="booking-category">Tipo</label><select id="booking-category" @bind="Category" disabled="@Busy" @bind:after="CategoryChanged">@foreach (var category in Categories) { <option value="@category.Code">@category.Label</option> }</select></div>
                     <div class="field"><label for="booking-professional">Profissional</label><select id="booking-professional" @bind="ProfessionalId" @bind:after="ResetSlots" disabled="@(IsProfessional || Busy)"><option value="0">@(IsProfessional ? "Você" : "Selecione")</option>@foreach (var professional in Professionals) { <option value="@professional.AccountId">@professional.FullName</option> }</select></div>
-                    <div class="field"><label for="booking-form">Forma</label><select id="booking-form" @bind="BillingForm" @bind:after="BillingChanged"><option value="private">Particular</option><option value="insurance">Convênio</option></select></div>
                     <div class="field"><label for="booking-modality">Modalidade</label><select id="booking-modality" @bind="ModalityCode" disabled="@Busy" @bind:after="ModalityChanged"><option value="in_person">Presencial</option><option value="online">Online</option></select></div>
+                    <div class="appointment-billing-options">
+                        <div class="field"><label for="booking-form">Forma</label><select id="booking-form" @bind="BillingForm" @bind:after="BillingChanged"><option value="private">Particular</option><option value="insurance">Convênio</option></select></div>
+                        @if (!IsProfessional && ChargeRequired)
+                        {
+                            <label class="appointment-deferred-option" title="Confirma sem quitar. O pagamento continua devido e pode ser recebido depois."><input type="checkbox" @bind="PayLater" /> <span>Pagar Depois</span></label>
+                        }
+                    </div>
                 </div>
                 <section class="appointment-services-section">
                     <div class="field"><label id="booking-service-label">Pesquisar serviço</label><button id="booking-service-trigger" type="button" class="appointment-service-trigger" aria-labelledby="booking-service-label" @onclick="OpenServices">Pesquisar e selecionar serviços <span aria-hidden="true">⌄</span></button></div>
@@ -69,7 +75,7 @@ else
                 <h2>Resumo e ações</h2>
                 <dl><div><dt>Paciente</dt><dd>@(Patient?.FullName ?? "Selecione")</dd></div><div><dt>Data e hora</dt><dd>@(SelectedTime is null or "" ? "Selecione" : $"{Date:dd/MM/yyyy} às {SelectedTime}")</dd></div><div><dt>Valor base</dt><dd>@Money(BaseTotal)</dd></div>
                     @if (Patient?.IsPremium == true && BaseTotal > 0 && BillingForm == "private") { <div><dt>Valor Premium</dt><dd>@Money(PremiumTotal)</dd></div> }
-                    <div><dt>Total</dt><dd><strong>@Money(FinalPrice)</strong></dd></div><div><dt>Situação inicial</dt><dd>@(ChargeRequired ? "Aguardando Pagamento" : "Confirmado · sem cobrança")</dd></div></dl>
+                    <div><dt>Total</dt><dd><strong>@Money(FinalPrice)</strong></dd></div><div><dt>Situação inicial</dt><dd>@(ChargeRequired ? PayLater ? "Confirmado · Pagamento Pendente" : "Aguardando Pagamento" : "Confirmado · sem cobrança")</dd></div></dl>
                 @if (DiscountAllowed && ChargeRequired)
                 {
                     <div class="field"><label for="booking-discount-kind">Desconto pontual (máx. @MaxDiscount%)</label><select id="booking-discount-kind" @bind="PointKind"><option value="">Sem desconto</option><option value="percent">Porcentagem</option><option value="amount">Reais</option></select></div>
@@ -111,6 +117,7 @@ else
     private string Category = "consultation", ModalityCode = "in_person", BillingForm = "private", ServiceSearch = "", PatientSearch = "", PatientSearchNormalized = "", Notes = "", PointKind = "";
     private decimal PointValue, MaxDiscount = 30;
     private bool DiscountAllowed;
+    private bool PayLater;
     private int PatientPickerRevision;
     private int Duration;
     private DateOnly Date = DateOnly.FromDateTime(DateTime.Today);
@@ -190,7 +197,7 @@ else
         await LoadProfessionals();
     });
     private Task ModalityChanged() => Run(async () => { SelectedIds.RemoveAll(id => Services.Any(x => x.Id == id && x.ModalityCode != "both" && x.ModalityCode != ModalityCode)); Duration = SelectedServices.Sum(x => (int)x.DurationMinutes); await LoadProfessionals(); });
-    private void BillingChanged() { PointKind = ""; PointValue = 0; }
+    private void BillingChanged() { PointKind = ""; PointValue = 0; PayLater = false; }
     private void ResetSlots() { Slots = []; }
     private void DurationChanged(ChangeEventArgs e) { Duration = int.TryParse(e.Value?.ToString(), out var value) ? value : 0; ResetSlots(); }
     private async Task LoadProfessionals()
@@ -219,7 +226,7 @@ else
     private Task Confirm() => Run(async () =>
     {
         var common = new { patientAccountId = PatientIdValue, appointmentTypeId = PrimaryId, additionalAppointmentTypeIds = SelectedIds.Skip(1).ToArray(), modalityCode = ModalityCode, localDate = Date, localStartsAt = TimeOnly.Parse(SelectedTime!, CultureInfo.InvariantCulture), patientNotes = Notes, durationMinutes = SelectedIds.Count > 1 ? (int?)Duration : null, billingFormCode = BillingForm, specialtyId = SpecialtyId };
-        var body = IsProfessional ? (object)common : new ManagerAppointmentCreate(PatientIdValue, ProfessionalId, PrimaryId, ModalityCode, Date, common.localStartsAt, Notes, common.additionalAppointmentTypeIds, ChargeRequired && PointKind != "" ? PointKind : null, ChargeRequired && PointKind != "" ? PointValue : null, common.durationMinutes, BillingForm, SpecialtyId);
+        var body = IsProfessional ? (object)common : new ManagerAppointmentCreate(PatientIdValue, ProfessionalId, PrimaryId, ModalityCode, Date, common.localStartsAt, Notes, common.additionalAppointmentTypeIds, ChargeRequired && PointKind != "" ? PointKind : null, ChargeRequired && PointKind != "" ? PointValue : null, common.durationMinutes, BillingForm, SpecialtyId, PayLater && ChargeRequired);
         var result = await Request<WebAppointment>($"{Api}/appointments", "POST", body, Guid.NewGuid().ToString("N"));
         await AgendaContext.NavigateAsync($"{Root}/atendimentos/{result!.Id}",NavigationContext is null?null:NavigationContext with{Time=null});
     });

@@ -140,8 +140,14 @@ public sealed class CashManagementService(
         return new(clinic.LegalName, date, clinic.TimezoneName, actorAccount.FullName, clock.GetUtcNow().UtcDateTime,
             string.IsNullOrWhiteSpace(filters) ? "Sem filtros adicionais" : filters,
             closure, date < today || closure is not null,
-            await SummaryAsync(query, cancellationToken), cumulative, movements, totalsOnly);
+            WithAllMethods(await SummaryAsync(query, cancellationToken)), cumulative, movements, totalsOnly);
     }
+
+    internal static CashSummaryResponse WithAllMethods(CashSummaryResponse summary) => summary with
+    {
+        ByMethod = Methods.Select(code => summary.ByMethod.SingleOrDefault(total => total.MethodCode == code)
+            ?? new CashMethodTotalResponse(code, 0, 0, 0, 0)).ToArray(),
+    };
 
     public async Task<CashMovementResponse> AddManualAsync(
         ulong actor,
@@ -158,8 +164,6 @@ public sealed class CashManagementService(
             throw Invalid("A direção da movimentação não corresponde ao tipo informado.");
         var reason = Useful(request.Reason, 5, "Informe um motivo com pelo menos 5 caracteres.");
         var description = ManualDescription(request.TypeCode, expectedDirection);
-        if (request.TypeCode == "adjustment" && request.RelatedMovementId is null)
-            throw Invalid("Um ajuste corretivo deve indicar o movimento compensado.");
         if (request.TypeCode != "adjustment" && request.RelatedMovementId is not null)
             throw Invalid("Somente ajustes corretivos podem indicar um movimento relacionado.");
         var now = clock.GetUtcNow().UtcDateTime;
@@ -359,7 +363,7 @@ public sealed class CashManagementService(
         }
 
         var previousAppointmentStatus = appointment.StatusCode;
-        if (previousAppointmentStatus is "confirmed" or "arrived")
+        if (!appointment.PaymentDeferred && previousAppointmentStatus is "confirmed" or "arrived")
         {
             appointment.StatusCode = "pending";
             appointment.ArrivedAtUtc = null;
@@ -386,6 +390,7 @@ public sealed class CashManagementService(
                     .SetProperty(item => item.RowVersion, item => item.RowVersion + 1), cancellationToken);
         }
 
+        if (appointment.PaymentDeferred) { appointment.UpdatedAtUtc = now; appointment.RowVersion++; }
         var date = await OperationalDateAsync(now, cancellationToken);
         foreach (var original in originals) database.CashMovements.Add(new CashMovement
         {
@@ -514,7 +519,9 @@ public sealed class CashManagementService(
             return new CashMethodTotalResponse(group.Key, entries, outflows, entries - outflows, group.Count());
         }).ToArray();
         var net = rows.Sum(item => item.DirectionCode == "entry" ? item.Amount : -item.Amount);
-        return new(gross, reversals, supplies, withdrawals, adjustments, net, rows.Length, methods);
+        var correctiveAdjustments = rows.Where(item => item.TypeCode == "adjustment")
+            .Sum(item => item.DirectionCode == "entry" ? item.Amount : -item.Amount);
+        return new(gross, reversals, supplies, withdrawals, adjustments, net, rows.Length, methods, correctiveAdjustments);
     }
 
     private async Task<CashClosureResponse?> ClosureAsync(DateOnly date, CancellationToken cancellationToken)

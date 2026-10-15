@@ -1,0 +1,11 @@
+<div class="field">
+    <label for="payment-pending-filter">Pagamento Pendente</label>
+    <select id="payment-pending-filter" value="@(Value?.ToString().ToLowerInvariant() ?? "")" @onchange="Changed">
+        <option value="">Todos</option><option value="true">Sim</option><option value="false">Não</option>
+    </select>
+</div>
+@code {
+    [Parameter] public bool? Value { get; set; }
+    [Parameter] public EventCallback<bool?> ValueChanged { get; set; }
+    private Task Changed(ChangeEventArgs e) => ValueChanged.InvokeAsync(bool.TryParse(e.Value?.ToString(), out var value) ? value : null);
+}

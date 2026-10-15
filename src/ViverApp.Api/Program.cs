@@ -86,6 +86,8 @@ builder.Services.AddHttpClient("PostalCodeLookup", client =>
 });
 builder.Services.AddScoped<IPatientSchedulingAuditWriter, PatientSchedulingAuditWriter>();
 builder.Services.AddScoped<PatientSchedulingService>();
+builder.Services.AddScoped<PaymentPendingNoticeService>();
+builder.Services.AddScoped<AppointmentPrintService>();
 builder.Services.AddScoped<CalendarService>();
 builder.Services.AddScoped<CalendarDayPlanService>();
 builder.Services.AddSingleton<StaffPresence>();

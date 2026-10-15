@@ -112,6 +112,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<PaymentEvent> PaymentEvents { get; set; }
 
+    public virtual DbSet<PaymentPendingDailyNotice> PaymentPendingDailyNotices { get; set; }
+
     public virtual DbSet<PaymentReversal> PaymentReversals { get; set; }
 
     public virtual DbSet<PaymentReversalEvent> PaymentReversalEvents { get; set; }
@@ -710,6 +712,7 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.PatientNotes)
                 .HasMaxLength(1000)
                 .HasColumnName("patient_notes");
+            entity.Property(e => e.PaymentDeferred).HasColumnName("payment_deferred");
             entity.Property(e => e.PaymentLocationCode)
                 .HasMaxLength(10)
                 .HasDefaultValueSql("'web'")
@@ -2585,6 +2588,32 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey<PaymentEvent>(d => d.WebhookReceiptId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_payment_events_webhook_receipt");
+        });
+
+        modelBuilder.Entity<PaymentPendingDailyNotice>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("payment_pending_daily_notices");
+
+            entity.HasIndex(e => new { e.AccountId, e.OperationalDate }, "ux_payment_pending_notice_day").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.OperationalDate)
+                .HasColumnType("date")
+                .HasColumnName("operational_date");
+            entity.Property(e => e.PendingCount).HasColumnName("pending_count");
+            entity.Property(e => e.ReadAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("read_at_utc");
+
+            entity.HasOne(d => d.Account).WithMany(p => p.PaymentPendingDailyNotices)
+                .HasForeignKey(d => d.AccountId)
+                .HasConstraintName("fk_payment_pending_notice_account");
         });
 
         modelBuilder.Entity<PaymentReversal>(entity =>
