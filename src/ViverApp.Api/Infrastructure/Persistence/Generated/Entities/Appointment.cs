@@ -85,6 +85,8 @@ public partial class Appointment
 
     public uint? SpecialtyId { get; set; }
 
+    public bool PaymentDeferred { get; set; }
+
     public virtual ICollection<AppointmentDocument> AppointmentDocuments { get; set; } = new List<AppointmentDocument>();
 
     public virtual AppointmentOperationalReview? AppointmentOperationalReview { get; set; }

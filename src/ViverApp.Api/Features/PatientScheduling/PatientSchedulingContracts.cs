@@ -79,6 +79,7 @@ public sealed record AppointmentResponse(
     public string? PointDiscountKindCode { get; init; }
     public decimal? PointDiscountValue { get; init; }
     public decimal PointDiscountAmount { get; init; }
+    public bool PaymentDeferred { get; init; }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

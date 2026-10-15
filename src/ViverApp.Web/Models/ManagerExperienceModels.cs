@@ -25,7 +25,7 @@ public sealed record ManagerAppointmentCreate(
     [property: JsonPropertyName("patientNotes")] string? PatientNotes,
     IReadOnlyList<uint>? AdditionalAppointmentTypeIds = null,
     string? PointDiscountKindCode = null, decimal? PointDiscountValue = null,
-    int? DurationMinutes = null, string BillingFormCode = "private", uint? SpecialtyId = null);
+    int? DurationMinutes = null, string BillingFormCode = "private", uint? SpecialtyId = null, bool PayLater = false);
 public sealed record ManagerReportMetadata(bool Exists, string? StatusCode, uint VersionCount, DateTime? PublishedAtUtc);
 public sealed record ManagerPaymentMetadata(ulong? Id, string StatusCode, string? MethodCode, DateTime? PaidAtUtc,
     string? CardLastFour, string? AuthorizationReference, ulong RowVersion);
@@ -43,6 +43,8 @@ public sealed record ManagerAppointment(ulong Id, ulong AppointmentNumber, ulong
     public string? PointDiscountKindCode { get; init; }
     public decimal? PointDiscountValue { get; init; }
     public decimal PointDiscountAmount { get; init; }
+    public bool PaymentDeferred { get; init; }
+    public bool PendingPayment { get; init; }
 }
 public sealed record ManagerAgendaCounters(int Total, int Online, int InPerson, int Rescheduled, int Paid, int PendingPayment);
 public sealed record ManagerAgendaSources(IReadOnlyList<ulong> Total, IReadOnlyList<ulong> Online,

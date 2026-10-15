@@ -6,7 +6,8 @@ public sealed record CashFilterOptions(IReadOnlyList<CashPersonOption> Professio
 
 public sealed record CashMethodTotal(string MethodCode, decimal Entries, decimal Outflows, decimal Net, int MovementCount);
 public sealed record CashSummary(decimal GrossEntries, decimal PaymentReversals, decimal Supplies, decimal Withdrawals,
-    decimal AdjustmentsNet, decimal NetTotal, int MovementCount, IReadOnlyList<CashMethodTotal> ByMethod);
+    decimal AdjustmentsNet, decimal NetTotal, int MovementCount, IReadOnlyList<CashMethodTotal> ByMethod,
+    decimal CorrectiveAdjustmentsNet = 0);
 public sealed record CashMovement(ulong Id, DateOnly OperationalDate, string DirectionCode, string TypeCode, string MethodCode,
     decimal Amount, ulong? AppointmentId, ulong? AppointmentNumber, ulong? PaymentId, ulong? RelatedMovementId,
     string? PatientName, string? ResponsibleName, string? CardLastFour, string? AuthorizationReference,

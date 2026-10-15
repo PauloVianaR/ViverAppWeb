@@ -11,6 +11,7 @@
         @if (Model.Appointment.ArrivalQueueNumber.HasValue) { <div><dt>Senha de chegada</dt><dd class="arrival-number">@Model.Appointment.ArrivalQueueNumber</dd></div> }
         @if (Clinic is not null && Model.Appointment.ModalityCode == "in_person") { <div class="patient-facts__wide"><dt>Local</dt><dd>@Clinic.Name · @Clinic.Address</dd></div> }
     </dl>
+    @if(Model.Appointment.PaymentDeferred && Model.Appointment.RequiresPayment && Model.PaymentStatus != "paid"){<p class="badge badge--warning">Pagamento Pendente · autorizado Pagar Depois</p>}
     @if (!string.IsNullOrEmpty(Model.Appointment.PatientNotes)) { <p class="patient-notes"><strong>Observações:</strong> @Model.Appointment.PatientNotes</p> }
     @if (Model.Appointment.CancellationReason is not null) { <p><strong>Motivo do cancelamento:</strong> @Model.Appointment.CancellationReason</p> }
     @if (Model.Appointment.RescheduleHistory.Count > 0) { <p class="badge badge--rescheduled">Reagendado @Model.Appointment.RescheduleHistory.Count vez(es)</p> }

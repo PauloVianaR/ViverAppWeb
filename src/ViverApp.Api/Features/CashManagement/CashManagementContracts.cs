@@ -24,7 +24,8 @@ public sealed record CashSummaryResponse(
     decimal AdjustmentsNet,
     decimal NetTotal,
     int MovementCount,
-    IReadOnlyList<CashMethodTotalResponse> ByMethod);
+    IReadOnlyList<CashMethodTotalResponse> ByMethod,
+    decimal CorrectiveAdjustmentsNet = 0);
 
 public sealed record CashMovementResponse(
     ulong Id,

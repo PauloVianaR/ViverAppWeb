@@ -28,7 +28,7 @@ public sealed class TeleconsultationAccess(ViverAppDbContext database, TimeProvi
         var appointment = await database.Appointments.AsNoTracking().Include(x => x.CurrentPayment)
             .SingleOrDefaultAsync(x => x.Id == id, ct);
         return appointment is not null && appointment.ModalityCode == "online" && appointment.StatusCode == "confirmed"
-            && (!appointment.RequiresPayment || appointment.CurrentPayment?.StatusCode == "paid")
+            && (!appointment.RequiresPayment || appointment.PaymentDeferred || appointment.CurrentPayment?.StatusCode == "paid")
             && appointment.StartsAtUtc <= now.AddMinutes(15) && appointment.EndsAtUtc >= now ? appointment : null;
     }
 

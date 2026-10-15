@@ -100,13 +100,14 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
     }
 
     public async Task<SchedulingPage<PatientAppointmentResponse>> AgendaAsync(ulong actor, int page, int pageSize,
-        string view, string? search, ulong? appointmentNumber, DateTime? from, DateTime? until, string? status, string? category, string? modality, CancellationToken ct, uint? specialtyId = null)
+        string view, string? search, ulong? appointmentNumber, DateTime? from, DateTime? until, string? status, string? category, string? modality, CancellationToken ct, uint? specialtyId = null, bool? pendingPayment = null)
     {
         ValidatePage(page, pageSize);
         if (view is not ("future" or "history" or "all")) throw Invalid("Visualização inválida.");
         if (from > until) throw Invalid("O período é inválido.");
         (from, until) = await UtcPeriodAsync(from, until, ct);
         var query = database.Appointments.AsNoTracking().Where(x => x.PatientAccountId == actor && x.InverseRescheduledFromAppointment == null);
+        query = AppointmentPaymentPolicy.FilterPending(query, pendingPayment);
         if (view == "future") query = query.Where(x => (x.StatusCode == "pending" || x.StatusCode == "confirmed" || x.StatusCode == "arrived" || x.StatusCode == "in_progress") && x.EndsAtUtc >= Now);
         if (view == "history") query = query.Where(x => (x.StatusCode != "pending" && x.StatusCode != "confirmed" && x.StatusCode != "arrived" && x.StatusCode != "in_progress") || x.EndsAtUtc < Now);
         if (from.HasValue) query = query.Where(x => x.StartsAtUtc >= from);
@@ -143,7 +144,7 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
             entity.RequiresPayment && active && entity.StartsAtUtc > Now && (entity.CurrentPayment == null || entity.CurrentPayment.StatusCode is "pending" or "failed" or "canceled" or "reversed" or "refunded"),
             active && entity.StartsAtUtc > Now.AddHours(Cutoff("appointments.cancellation_cutoff_hours")),
             active && entity.StartsAtUtc > Now.AddHours(Cutoff("appointments.reschedule_cutoff_hours")),
-            entity.ModalityCode == "online" && entity.StatusCode == "confirmed" && (!entity.RequiresPayment || entity.CurrentPayment?.StatusCode == "paid") && entity.StartsAtUtc <= Now.AddMinutes(15) && entity.EndsAtUtc >= Now,
+            entity.ModalityCode == "online" && entity.StatusCode == "confirmed" && (!entity.RequiresPayment || entity.PaymentDeferred || entity.CurrentPayment?.StatusCode == "paid") && entity.StartsAtUtc <= Now.AddMinutes(15) && entity.EndsAtUtc >= Now,
             entity.MedicalReport?.StatusCode == "published", entity.AppointmentReview?.Rating,
             entity.RequiresPayment && active && entity.StartsAtUtc > Now && entity.ModalityCode == "in_person" && (entity.CurrentPayment == null || entity.CurrentPayment.StatusCode is "reversed" or "refunded" or "canceled" or "failed") && await ClinicPaymentAllowedAsync(ct));
     }

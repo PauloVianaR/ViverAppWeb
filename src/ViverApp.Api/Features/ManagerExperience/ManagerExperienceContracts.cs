@@ -35,6 +35,8 @@ public sealed record ManagerAppointmentResponse(ulong Id, ulong AppointmentNumbe
     public string? PointDiscountKindCode { get; init; }
     public decimal? PointDiscountValue { get; init; }
     public decimal PointDiscountAmount { get; init; }
+    public bool PaymentDeferred { get; init; }
+    public bool PendingPayment { get; init; }
 }
 public sealed record ManagerAgendaCounters(int Total, int Online, int InPerson, int Rescheduled, int Paid, int PendingPayment);
 public sealed record ManagerAgendaSources(IReadOnlyList<ulong> Total, IReadOnlyList<ulong> Online,
@@ -121,7 +123,8 @@ public sealed record ManagerAppointmentCreateRequest([param: Range(1, long.MaxVa
     string? PointDiscountKindCode = null, decimal? PointDiscountValue = null,
     [param: Range(5, 720)] int? DurationMinutes = null,
     [param: RegularExpression("^(private|insurance)$")] string BillingFormCode = "private",
-    [param: Range(1, int.MaxValue)] uint? SpecialtyId = null);
+    [param: Range(1, int.MaxValue)] uint? SpecialtyId = null,
+    bool PayLater = false);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ManagerPremiumDecisionRequest(bool Approve, [param: StringLength(1000)] string? Notes,

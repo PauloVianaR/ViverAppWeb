@@ -87,6 +87,7 @@ public sealed record WebAppointment(
     public string? PointDiscountKindCode { get; init; }
     public decimal? PointDiscountValue { get; init; }
     public decimal PointDiscountAmount { get; init; }
+    public bool PaymentDeferred { get; init; }
 }
 
 public sealed record WebAppointmentCreateRequest(

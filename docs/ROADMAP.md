@@ -467,6 +467,10 @@ Cada fase deve:
 
 **Estado:** em implementação na branch `codex/fase-31-operacao-chat-agenda`, sob solicitação direta do proprietário. Escopo, migration, testes e limitação visual constam em [Fase 31 — Operação, chat e agenda diária](FASE-31-OPERACAO-CHAT-AGENDA.md). Não há merge ou publicação implícitos.
 
+## Fase 32 — Pagamento posterior e impressões operacionais
+
+**Estado:** implementada e validada localmente na branch `codex/fase-32-pagamento-posterior-impressoes`. Commit, integração na main e push autorizados expressamente pelo proprietário em 15/10/2026. Regras, migrations, evidências e limitações externas em [Fase 32 — Pagamento posterior e impressões](FASE-32-PAGAMENTO-POSTERIOR-IMPRESSOES.md); pendências reais mantidas no registro local. A autorização de Git não ativa produção nem antecipa outra fase.
+
 ## Marcos sugeridos
 
 - **Marco A — Base confiável:** Fases 0 a 4.

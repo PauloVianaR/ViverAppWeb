@@ -2,6 +2,7 @@
 @inject IJSRuntime JavaScript
 @inject WebBackendOptions Backend
 @inject UiErrorNotifier ErrorNotifier
+@inject NavigationManager Navigation
 
 <div class="staff-comms">
     @if (Role is "manager" or "administrator")
@@ -13,6 +14,13 @@
             </summary>
             <div class="staff-popover">
                 <h2>Alertas</h2>
+                @foreach (var notice in PaymentNotices)
+                {
+                    <a class="staff-alert-row @(notice.IsRead ? "" : "staff-alert-row--unread")" href="@PendingPaymentsLink" @onclick="() => OpenPendingPayments(notice)" @onclick:preventDefault>
+                        Existem @notice.PendingCount atendimento(s) com pagamentos pendentes.
+                        <small>Conferência de @notice.OperationalDate.ToString("dd/MM/yyyy")</small>
+                    </a>
+                }
                 @if (Role == "manager")
                 {
                     @if (ManagerUnread > 0) { <button class="button button--small button--secondary" @onclick="ReadAlertsAsync">Marcar atendimentos como lidos</button> }
@@ -93,6 +101,8 @@
     private readonly List<StaffContact> Contacts = [];
     private readonly List<StaffMessageView> Messages = [];
     private readonly List<ManagerAlertView> Alerts = [];
+    private readonly List<PaymentPendingNotice> PaymentNotices = [];
+    private string PendingPaymentsLink => (Role == "administrator" ? "/administracao" : "/gestao") + "/atendimentos?pagamentoPendente=sim";
     private StaffContact? Selected;
     private ElementReference AlertsMenu;
     private ElementReference MessagesPanel;
@@ -100,7 +110,7 @@
     private bool ContactsOpen, Minimized, Sending, LoadError;
     private string Search = "", Draft = "";
     private int ChatUnread => Contacts.Sum(c => c.Unread);
-    private int ManagerUnread => Alerts.Count(a => !a.IsRead);
+    private int ManagerUnread => Alerts.Count(a => !a.IsRead) + PaymentNotices.Count(n => !n.IsRead);
     private IEnumerable<StaffContact> FilteredContacts => Contacts.Where(c => c.FullName.Contains(Search, StringComparison.CurrentCultureIgnoreCase))
         .OrderByDescending(c => c.Online).ThenBy(c => c.FullName, StringComparer.Create(new System.Globalization.CultureInfo("pt-BR"), true));
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -133,6 +143,14 @@
             {
                 var alerts = await identity.InvokeAsync<ManagerAlertView[]>("get", Backend.BaseUrl.ToString(), "api/v1/staff/manager-alerts");
                 Alerts.Clear(); Alerts.AddRange(alerts);
+            }
+            if (Role is "manager" or "administrator")
+            {
+                var check = await identity.InvokeAsync<PaymentPendingDailyCheck>("send", Backend.BaseUrl.ToString(), "api/v1/management/payment-pending-notices/daily-check", new { });
+                var notices = await identity.InvokeAsync<PaymentPendingNotice[]>("get", Backend.BaseUrl.ToString(), "api/v1/management/payment-pending-notices");
+                PaymentNotices.Clear(); PaymentNotices.AddRange(notices);
+                if (check.IsNew && check.Notice.PendingCount > 0)
+                    ErrorNotifier.Notify($"Existem {check.Notice.PendingCount} atendimento(s) com pagamentos pendentes. Consulte o sininho para abrir a lista.");
             }
             await ChatUnreadChanged.InvokeAsync(ChatUnread);
             LoadError = false;
@@ -271,10 +289,23 @@
         {
             await identity.InvokeAsync<object?>("send", Backend.BaseUrl.ToString(), "api/v1/staff/manager-alerts/read-all", new { });
             for (var i = 0; i < Alerts.Count; i++) Alerts[i] = Alerts[i] with { IsRead = true };
+            for (var i = 0; i < PaymentNotices.Count; i++)
+            {
+                if (PaymentNotices[i].IsRead) continue;
+                await identity.InvokeAsync<object?>("send", Backend.BaseUrl.ToString(), $"api/v1/management/payment-pending-notices/{PaymentNotices[i].Id}/read", new { });
+                PaymentNotices[i] = PaymentNotices[i] with { IsRead = true };
+            }
         }
         catch (JSException) { ErrorNotifier.Show("Não foi possível marcar os alertas como lidos. Tente novamente."); }
     }
     private static string RoleName(string role) => role switch { "administrator" => "Administrador", "manager" => "Gestor", "doctor" => "Médico", "psychologist" => "Psicólogo", _ => "Equipe" };
+    private async Task OpenPendingPayments(PaymentPendingNotice notice)
+    {
+        if (identity is null) return;
+        try { await identity.InvokeAsync<object?>("send", Backend.BaseUrl.ToString(), $"api/v1/management/payment-pending-notices/{notice.Id}/read", new { }); }
+        catch (JSException) { ErrorNotifier.Show("Não foi possível marcar o aviso como lido. A lista será aberta mesmo assim."); }
+        Navigation.NavigateTo(PendingPaymentsLink, forceLoad: true);
+    }
     public async ValueTask DisposeAsync()
     {
         disposed = true; conversationRequest++;

@@ -100,18 +100,21 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         await database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).ThenBy(x => x.Id)
             .Select(x => new ManagerServiceOption(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode, x.DurationMinutes, x.PriceAmount, x.RequiresPayment, x.SpecialtyId)).ToArrayAsync(ct);
 
-    public async Task<ManagerAgendaResponse> AgendaAsync(DateOnly from, DateOnly to, string? status, string? modality,
+    public async Task<ManagerAgendaResponse> AgendaAsync(DateOnly? from, DateOnly? to, string? status, string? modality,
         string? category, ulong? doctor, ulong? appointmentNumber, string? payment, TimeOnly? startTime, TimeOnly? endTime, string? search,
-        string sort, int page, int pageSize, CancellationToken ct, uint? specialtyId = null)
+        string sort, int page, int pageSize, CancellationToken ct, uint? specialtyId = null, bool? pendingPayment = null)
     {
-        Page(page, pageSize); if (to < from || to.DayNumber - from.DayNumber > 366) throw Invalid("O período deve ter no máximo 367 dias.");
+        Page(page, pageSize); if (to < from || from.HasValue && to.HasValue && to.Value.DayNumber - from.Value.DayNumber > 366) throw Invalid("O período deve ter no máximo 367 dias.");
         if (status is not null && !AppointmentStatuses.Contains(status, StringComparer.Ordinal)) throw Invalid("Estado inválido.");
         if (modality is not null && modality is not ("online" or "in_person")) throw Invalid("Modalidade inválida.");
         if (category is not null && category is not ("consultation" or "examination" or "surgery" or "procedure")) throw Invalid("Tipo inválido.");
         if (payment is not null && !PaymentFilters.Contains(payment, StringComparer.Ordinal)) throw Invalid("Filtro de pagamento inválido.");
         if (startTime.HasValue != endTime.HasValue || startTime >= endTime) throw Invalid("O intervalo de horário é inválido.");
-        var timezone = await TimezoneAsync(ct); var fromUtc = StartUtc(from, timezone); var toUtc = StartUtc(to.AddDays(1), timezone);
-        var query = AppointmentQuery().Where(x => x.StartsAtUtc >= fromUtc && x.StartsAtUtc < toUtc);
+        var timezone = await TimezoneAsync(ct);
+        var query = AppointmentQuery();
+        if (from.HasValue) { var fromUtc = StartUtc(from.Value, timezone); query = query.Where(x => x.StartsAtUtc >= fromUtc); }
+        if (to.HasValue) { var toUtc = StartUtc(to.Value.AddDays(1), timezone); query = query.Where(x => x.StartsAtUtc < toUtc); }
+        query = AppointmentPaymentPolicy.FilterPending(query, pendingPayment);
         if (status == "rescheduled") query = query.Where(x => x.AppointmentRescheduleHistories.Any() || x.RescheduledFromAppointmentId != null);
         else if (status is not null) query = query.Where(x => x.StatusCode == status);
         if (modality is not null) query = query.Where(x => x.ModalityCode == modality);
@@ -456,9 +459,10 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         if (stored is not null) { if (!CryptographicOperations.FixedTimeEquals(stored.RequestHash, hash)) throw Conflict("A chave de idempotência já foi usada com outros dados."); var replay = JsonSerializer.Deserialize<ManagerPaymentResponse>(stored.ResponseBodyJson!); if (transaction is not null) await transaction.CommitAsync(ct); return replay ?? throw Conflict("Resposta idempotente inválida."); }
         var appointment = await database.Appointments.FromSqlInterpolated($"SELECT * FROM appointments WHERE id={appointmentId} FOR UPDATE").SingleOrDefaultAsync(ct) ?? throw Missing();
         if (appointment.RowVersion != request.AppointmentRowVersion) throw Conflict("O atendimento foi alterado por outra sessão.");
-        if (appointment.ModalityCode != "in_person" || appointment.PaymentLocationCode != "clinic") throw Conflict("Somente pagamentos presenciais escolhidos para a clínica podem ser confirmados manualmente.");
-        if (appointment.StatusCode is not ("pending" or "confirmed")) throw Conflict("O atendimento não aceita confirmação de pagamento.");
+        if (appointment.PaymentLocationCode != "clinic" || !appointment.PaymentDeferred && appointment.ModalityCode != "in_person") throw Conflict("Somente recebimentos escolhidos para a clínica podem ser confirmados manualmente.");
+        if (!appointment.PaymentDeferred && appointment.StatusCode is not ("pending" or "confirmed")) throw Conflict("O atendimento não aceita confirmação de pagamento.");
         if (!appointment.RequiresPayment) throw Conflict("Este atendimento não possui cobrança.");
+        if (appointment.PriceAmount <= 0) throw Conflict("O valor do recebimento deve ser maior que zero.");
         if (request.Allocations is { Count: > 0 })
         {
             if (allocations.Any(portion => portion.Amount <= 0) || allocations.Sum(portion => portion.Amount) != appointment.PriceAmount)
@@ -474,7 +478,8 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         var previous = appointment.StatusCode; if (appointment.StatusCode == "pending") { appointment.StatusCode = "confirmed"; appointment.UpdatedAtUtc = now; appointment.RowVersion++; database.AppointmentStatusHistories.Add(new AppointmentStatusHistory { AppointmentId = appointment.Id, ActorAccountId = actor, FromStatusCode = previous, ToStatusCode = "confirmed", Reason = "Pagamento presencial confirmado", StartsAtUtc = appointment.StartsAtUtc, EndsAtUtc = appointment.EndsAtUtc, OccurredAtUtc = now }); }
         await database.SaveChangesAsync(ct);
         appointment.CurrentPaymentId = payment.Id;
-        if (cash is not null) await cash.RecordPaymentReceivedAsync(payment, actor, paidAt, ct,
+        if (previous != "pending") { appointment.UpdatedAtUtc = now; appointment.RowVersion++; }
+        if (cash is not null) await cash.RecordPaymentReceivedAsync(payment, actor, appointment.PaymentDeferred ? now : paidAt, ct,
             allocations.Select(portion => (portion.MethodCode, portion.Amount, portion.CardLastFour, portion.AuthorizationReference)).ToArray());
         database.PaymentEvents.Add(new PaymentEvent { PaymentId = payment.Id, SourceCode = "manual", ProviderStatusCode = payment.MethodCode, NormalizedStatusCode = "paid", EventFingerprint = SHA256.HashData(Encoding.UTF8.GetBytes($"{actor}:{appointmentId}:{key}")), ProviderOccurredAtUtc = paidAt, OccurredAtUtc = now, WasApplied = true });
         var response = new ManagerPaymentResponse(payment.Id, appointmentId, payment.StatusCode, payment.Amount, payment.MethodCode!, paidAt, payment.CardLastFour, payment.AuthorizationReference, payment.RowVersion)
@@ -504,7 +509,7 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         x.ModalityCode == "in_person" && x.StatusCode == "confirmed", x.StatusCode == "arrived", x.StatusCode is "pending" or "confirmed", x.StatusCode is "pending" or "confirmed",
         x.StatusCode is "confirmed" or "arrived" or "in_progress", x.StatusCode == "completed",
         x.RequiresPayment && x.CurrentPayment?.StatusCode == "paid" && x.StatusCode is ("confirmed" or "arrived" or "no_show"),
-        x.RequiresPayment && x.ModalityCode == "in_person" && x.PaymentLocationCode == "clinic" && x.StatusCode is "pending" or "confirmed" && x.CurrentPayment?.StatusCode is not ("paid" or "reversal_pending"), x.RowVersion)
+        AppointmentPaymentPolicy.CanReceiveManually(x), x.RowVersion)
     {
         Services = x.AppointmentServiceItems.OrderBy(item => item.Ordinal)
             .Select(item => new AppointmentServiceResponse(item.AppointmentTypeId, item.NameSnapshot,
@@ -512,6 +517,8 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         PointDiscountKindCode = x.PointDiscountKindCode,
         PointDiscountValue = x.PointDiscountKindCode is null ? null : x.PointDiscountValue,
         PointDiscountAmount = x.PointDiscountAmount,
+        PaymentDeferred = x.PaymentDeferred,
+        PendingPayment = AppointmentPaymentPolicy.DeferredOutstanding(x),
     };
     private static ManagerProfileResponse MapProfile(Account x) => new(x.Id, x.FullName, x.Email, x.PhoneE164, x.TaxId, x.EmailVerified, x.PhoneVerified,
         x.ManagerPreference?.EmailEnabled ?? true, x.ManagerPreference?.SmsEnabled ?? true, x.RowVersion, x.ManagerPreference?.RowVersion ?? 1);

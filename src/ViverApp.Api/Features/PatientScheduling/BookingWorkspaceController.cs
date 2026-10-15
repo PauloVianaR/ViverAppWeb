@@ -106,6 +106,8 @@ public sealed class BookingWorkspaceController(ViverAppDbContext database, Manag
             if (!await database.AppointmentServiceItems.AnyAsync(x => x.AppointmentId == id, ct))
                 catalogCharge = await database.AppointmentTypes.Where(x => x.Id == item.AppointmentTypeId).Select(x => x.RequiresPayment).SingleAsync(ct);
             item.RequiresPayment = PatientSchedulingService.ApplyBillingForm(request.BillingFormCode, catalogCharge);
+            if (!item.RequiresPayment) item.PaymentDeferred = false;
+            if (!item.PaymentDeferred && item.ModalityCode == "online") item.PaymentLocationCode = "web";
             if (item.RequiresPayment)
             {
                 item.DiscountPercent = await database.PremiumMemberships.AsNoTracking()
@@ -139,7 +141,8 @@ public sealed class BookingWorkspaceController(ViverAppDbContext database, Manag
         // as constraints reais do MySQL e só ocorre sem pagamentos dependentes.
         var updated = await database.Database.ExecuteSqlInterpolatedAsync($@"UPDATE appointments
             SET billing_form_code = {item.BillingFormCode}, specialty_id = {item.SpecialtyId},
-                requires_payment = {item.RequiresPayment}, discount_percent = {item.DiscountPercent},
+                requires_payment = {item.RequiresPayment}, payment_deferred = {item.PaymentDeferred},
+                payment_location_code = {item.PaymentLocationCode}, discount_percent = {item.DiscountPercent},
                 point_discount_amount = {item.PointDiscountAmount}, price_amount = {item.PriceAmount},
                 status_code = {item.StatusCode}, updated_at_utc = {now}, row_version = {item.RowVersion}
             WHERE id = {id} AND row_version = {request.RowVersion}", ct);

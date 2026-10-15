@@ -20,6 +20,89 @@ namespace ViverApp.PatientScheduling.Tests;
 
 public sealed class PatientSchedulingConcurrencyTests
 {
+    [Theory]
+    [InlineData("manager")]
+    [InlineData("administrator")]
+    public async Task PayLaterCreatesConfirmedDebtAndInsuranceRemovesIt(string role)
+    {
+        var configuration = LoadConfiguration();
+        var fixture = await CreateFixtureAsync(configuration);
+        ulong actorId = 0;
+        try
+        {
+            await using var database = CreateContext(configuration);
+            var actor = NewAccount(role, "QA Gestão Pagamento Posterior", $"deferred-{Guid.NewGuid():N}@phase32.example.test", fixture.UtcNow.UtcDateTime);
+            database.Accounts.Add(actor); await database.SaveChangesAsync(); actorId = actor.Id;
+            var scheduling = new PatientSchedulingService(database, new NullAuditWriter(), new FixedTimeProvider(fixture.UtcNow));
+            var key = Guid.NewGuid().ToString("N");
+            var request = new ManagerAppointmentCreateRequest(fixture.PatientId, fixture.DoctorId, fixture.AppointmentTypeId,
+                "online", fixture.LocalDate, new TimeOnly(10, 0), "Observação preservada", PointDiscountKindCode: "percent", PointDiscountValue: 10, PayLater: true);
+            var created = await scheduling.CreateForManagerAsync(actor.Id, key, request, default);
+            Assert.Equal("confirmed", created.Response.StatusCode);
+            Assert.True(created.Response.PaymentDeferred);
+            Assert.True(created.Response.RequiresPayment);
+            Assert.Equal(100, created.Response.BasePriceAmount);
+            Assert.Equal(90, created.Response.PriceAmount);
+            Assert.Equal("Observação preservada", created.Response.PatientNotes);
+            Assert.False(await database.Payments.AnyAsync(p => p.AppointmentId == created.Response.Id));
+            Assert.False(await database.CashMovements.AnyAsync(m => m.AppointmentId == created.Response.Id));
+            var room = new ViverApp.Api.Features.PatientExperience.TeleconsultationAccess(database,
+                new FixedTimeProvider(created.Response.StartsAtUtc.AddMinutes(-5)));
+            Assert.NotNull(await room.RequireAppointmentAsync(created.Response.Id, default));
+            var replay = await scheduling.CreateForManagerAsync(actor.Id, key, request, default);
+            Assert.True(replay.Replayed); Assert.Equal(created.Response.Id, replay.Response.Id);
+            var manager = new ManagerExperienceService(database, null!, null!, null!, new FixedTimeProvider(fixture.UtcNow));
+            var filtered = await manager.AgendaAsync(null, null, null, null, null, fixture.DoctorId,
+                created.Response.AppointmentNumber, null, null, null, null, "date_asc", 1, 1, default, pendingPayment: true);
+            Assert.Single(filtered.Page.Items); Assert.Equal(1, filtered.Counters.PendingPayment);
+            Assert.True(filtered.Page.Items[0].PendingPayment);
+            Assert.True(filtered.Page.Items[0].CanConfirmPayment);
+            var identity = new ClaimsIdentity([new(ClaimTypes.NameIdentifier, actor.Id.ToString()), new(ClaimTypes.Role, role)], "test");
+            var accessor = new HttpContextAccessor { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) } };
+            var identityAudit = new IdentityAuditWriter(database, accessor, IdentitySecurityOptions.Load(configuration, true));
+            var controller = new BookingWorkspaceController(database, manager, identityAudit, new FixedTimeProvider(fixture.UtcNow), scheduling)
+            { ControllerContext = new ControllerContext { HttpContext = accessor.HttpContext } };
+            var metadata = await controller.Metadata(created.Response.Id, default);
+            await controller.Update(created.Response.Id, new("insurance", metadata.SpecialtyId, metadata.RowVersion), default);
+            var updated = await database.Appointments.AsNoTracking().SingleAsync(a => a.Id == created.Response.Id);
+            Assert.False(updated.PaymentDeferred); Assert.False(updated.RequiresPayment);
+            Assert.Equal(0, updated.PriceAmount); Assert.Equal("confirmed", updated.StatusCode);
+            var excluded = await manager.AgendaAsync(null, null, null, null, null, fixture.DoctorId,
+                created.Response.AppointmentNumber, null, null, null, null, "date_asc", 1, 1, default, pendingPayment: true);
+            Assert.Empty(excluded.Page.Items); Assert.Empty(excluded.Sources.PendingPayment);
+            var invalid = await Assert.ThrowsAsync<SchedulingRuleException>(() => scheduling.CreateForManagerAsync(actor.Id,
+                Guid.NewGuid().ToString("N"), request with { LocalStartsAt = new TimeOnly(11, 0), BillingFormCode = "insurance", PointDiscountKindCode = null, PointDiscountValue = null }, default));
+            Assert.Equal(400, invalid.StatusCode);
+        }
+        finally
+        {
+            if (actorId != 0)
+            {
+                await using var database = CreateContext(configuration);
+                await database.IdempotencyRecords.Where(r => r.ScopeCode == $"appointment.manager-create:{actorId}").ExecuteDeleteAsync();
+            }
+            await DeleteFixtureAsync(configuration, fixture);
+            if (actorId != 0) { await using var database = CreateContext(configuration); await database.Accounts.Where(a => a.Id == actorId).ExecuteDeleteAsync(); }
+        }
+    }
+
+    [Fact]
+    public async Task ProfessionalCannotAuthorizePayLaterEvenCallingTheServiceDirectly()
+    {
+        var configuration = LoadConfiguration(); var fixture = await CreateFixtureAsync(configuration);
+        try
+        {
+            await using var database = CreateContext(configuration);
+            var service = new PatientSchedulingService(database, new NullAuditWriter(), new FixedTimeProvider(fixture.UtcNow));
+            var error = await Assert.ThrowsAsync<SchedulingRuleException>(() => service.CreateForManagerAsync(fixture.DoctorId,
+                Guid.NewGuid().ToString("N"), new(fixture.PatientId, fixture.DoctorId, fixture.AppointmentTypeId,
+                    "online", fixture.LocalDate, new TimeOnly(10, 0), null, PayLater: true), default));
+            Assert.Equal(403, error.StatusCode);
+            Assert.False(await database.Appointments.AnyAsync(a => a.PatientAccountId == fixture.PatientId));
+        }
+        finally { await DeleteFixtureAsync(configuration, fixture); }
+    }
+
     [Fact]
     public async Task SpecialtyFilter_UsesSnapshotAndFiltersPagesCountersAndOwnership()
     {

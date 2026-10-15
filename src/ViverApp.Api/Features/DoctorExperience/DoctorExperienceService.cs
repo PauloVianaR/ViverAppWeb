@@ -115,7 +115,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         => throw Conflict("Os serviços são definidos automaticamente pelas especialidades. Altere a especialidade do catálogo, não o profissional.");
 
     public async Task<DoctorAgendaResponse> AgendaAsync(ulong doctor, DateOnly from, DateOnly to, string? status,
-        string? modality, string? category, ulong? appointmentNumber, string? search, int page, int pageSize, CancellationToken ct, uint? specialtyId = null)
+        string? modality, string? category, ulong? appointmentNumber, string? search, int page, int pageSize, CancellationToken ct, uint? specialtyId = null, bool? pendingPayment = null)
     {
         Page(page, pageSize); if (to < from || to.DayNumber - from.DayNumber > 366) throw Invalid("Período inválido.");
         if (status is not null && !AppointmentStatuses.Contains(status)) throw Invalid("Estado inválido.");
@@ -123,6 +123,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         if (category is not null && !Categories.Contains(category)) throw Invalid("Tipo inválido.");
         var timezone = await TimezoneAsync(ct); var start = StartUtc(from, timezone); var end = StartUtc(to.AddDays(1), timezone);
         var query = database.Appointments.AsNoTracking().Where(x => x.ProfessionalAccountId == doctor && x.StartsAtUtc >= start && x.StartsAtUtc < end && x.InverseRescheduledFromAppointment == null);
+        query = AppointmentPaymentPolicy.FilterPending(query, pendingPayment);
         if (status == "rescheduled") query = query.Where(x => x.AppointmentRescheduleHistories.Any() || x.RescheduledFromAppointmentId != null);
         else if (status is not null) query = query.Where(x => x.StatusCode == status);
         if (modality is not null) query = query.Where(x => x.ModalityCode == modality);
@@ -374,7 +375,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
             x.ArrivedAtUtc, x.ArrivalQueueNumber,
             x.AppointmentRescheduleHistories.OrderBy(h => h.SequenceNumber).Select(h => new AppointmentRescheduleHistoryResponse(h.SequenceNumber,
                 h.PreviousStartsAtUtc, h.PreviousEndsAtUtc, h.NewStartsAtUtc, h.NewEndsAtUtc, h.Reason, h.OccurredAtUtc)).ToArray(),
-            x.ModalityCode == "online" && x.StatusCode == "confirmed" && (!x.RequiresPayment || x.CurrentPayment?.StatusCode == "paid") && x.StartsAtUtc <= now.AddMinutes(15) && x.EndsAtUtc >= now,
+            x.ModalityCode == "online" && x.StatusCode == "confirmed" && (!x.RequiresPayment || x.PaymentDeferred || x.CurrentPayment?.StatusCode == "paid") && x.StartsAtUtc <= now.AddMinutes(15) && x.EndsAtUtc >= now,
             x.StatusCode is "pending" or "confirmed", x.StatusCode is "pending" or "confirmed",
             x.StatusCode is "confirmed" or "arrived", x.StatusCode == "in_progress",
             x.StatusCode is "confirmed" or "arrived" or "in_progress", x.RowVersion)
@@ -385,6 +386,7 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
             PointDiscountKindCode = x.PointDiscountKindCode,
             PointDiscountValue = x.PointDiscountKindCode is null ? null : x.PointDiscountValue,
             PointDiscountAmount = x.PointDiscountAmount,
+            PendingPayment = AppointmentPaymentPolicy.DeferredOutstanding(x),
         };
     }
     private async Task EnsureLinkAsync(ulong doctor, ulong patient, ulong creator, CancellationToken ct)
