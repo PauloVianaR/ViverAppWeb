@@ -14,6 +14,25 @@ public sealed class DatabaseContractTests
     private const string ExpectedVersion = "8.0.41";
 
     [Fact]
+    public async Task Appointment_start_uniqueness_only_reserves_active_statuses()
+    {
+        await using var context = CreateContext();
+        await context.Database.OpenConnectionAsync();
+        var connection = context.Database.GetDbConnection();
+        foreach (var index in new[] { "ux_appointments_doctor_start", "ux_appointments_patient_start" })
+        {
+            var expression = await ExecuteScalarAsync(connection,
+                $"SELECT expression FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='appointments' AND index_name='{index}' AND seq_in_index=3 AND non_unique=0");
+            foreach (var status in new[] { "pending", "confirmed", "arrived", "in_progress" })
+            {
+                Assert.Contains($"'{status}'", expression, StringComparison.Ordinal);
+            }
+            Assert.Contains("else NULL", expression, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("'canceled'", expression, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public async Task Connects_only_to_expected_mysql_database()
     {
         await using var context = CreateContext();
@@ -117,7 +136,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal(string.Join(",", Enumerable.Range(1, 61).Select(id => id.ToString("D4", System.Globalization.CultureInfo.InvariantCulture))), migrations);
+        Assert.Equal(string.Join(",", Enumerable.Range(1, 62).Select(id => id.ToString("D4", System.Globalization.CultureInfo.InvariantCulture))), migrations);
 
         var calendarIndex = await ExecuteScalarAsync(connection,
             "SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ',') FROM information_schema.statistics WHERE table_schema='viverappweb' AND table_name='appointments' AND index_name='ix_appointments_start_id'");
