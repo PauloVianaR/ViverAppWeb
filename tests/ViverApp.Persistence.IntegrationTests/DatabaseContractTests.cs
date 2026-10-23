@@ -23,6 +23,7 @@ public sealed class DatabaseContractTests
         {
             var expression = await ExecuteScalarAsync(connection,
                 $"SELECT expression FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='appointments' AND index_name='{index}' AND seq_in_index=3 AND non_unique=0");
+            expression = expression.Replace("\\'", "'", StringComparison.Ordinal);
             foreach (var status in new[] { "pending", "confirmed", "arrived", "in_progress" })
             {
                 Assert.Contains($"'{status}'", expression, StringComparison.Ordinal);
