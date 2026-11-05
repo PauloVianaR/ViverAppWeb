@@ -102,7 +102,7 @@ public sealed class AuthController(
             Email = request.Email?.Trim(),
             NormalizedEmail = email,
             PhoneNumber = phone,
-            TaxId = request.TaxId,
+            TaxId = string.IsNullOrWhiteSpace(request.TaxId) ? null : request.TaxId,
             BirthDate = request.BirthDate.ToDateTime(TimeOnly.MinValue),
             PreferredRecoveryChannel = request.VerificationChannel,
         };
@@ -169,7 +169,8 @@ public sealed class AuthController(
             .OrderBy(item => item.Name)
             .Select(item => new RegistrationOption(item.Id, item.Name))
             .ToListAsync(cancellationToken);
-        return Ok(new RegistrationOptionsResponse(LegalDocumentVersions.Current, LegalDocumentVersions.Current, specialties));
+        return Ok(new RegistrationOptionsResponse(LegalDocumentVersions.Current, LegalDocumentVersions.Current, specialties,
+            await PatientRegistrationPolicy.AllowsWithoutCpfAsync(database, cancellationToken)));
     }
 
     [AllowAnonymous]
@@ -650,7 +651,7 @@ public sealed class AuthController(
             NormalizedEmail = normalizedEmail,
             EmailConfirmed = true,
             PhoneNumber = phone,
-            TaxId = request.TaxId,
+            TaxId = string.IsNullOrWhiteSpace(request.TaxId) ? null : request.TaxId,
             BirthDate = request.BirthDate.ToDateTime(TimeOnly.MinValue),
             PreferredRecoveryChannel = "email",
         };
@@ -940,7 +941,7 @@ public sealed class AuthController(
 
     private async Task<bool> ValidateRegistrationAsync(
         string roleCode,
-        string taxId,
+        string? taxId,
         DateOnly birthDate,
         bool termsAccepted,
         RegistrationAddressRequest? address,
@@ -952,7 +953,7 @@ public sealed class AuthController(
             ModelState.AddModelError(nameof(roleCode), "O papel escolhido não permite cadastro público.");
         }
 
-        if (!BrazilianDocumentValidator.IsValidCpf(taxId))
+        if (!await PatientRegistrationPolicy.IsValidCpfAsync(database, roleCode, taxId, cancellationToken))
         {
             ModelState.AddModelError(nameof(taxId), "Informe um CPF válido.");
         }
@@ -1019,7 +1020,7 @@ public sealed class AuthController(
     private async Task AddRegistrationDetailsAsync(
         ulong accountId,
         string roleCode,
-        string taxId,
+        string? taxId,
         DateOnly birthDate,
         RegistrationAddressRequest? address,
         DoctorRegistrationRequest? doctor,
@@ -1041,7 +1042,7 @@ public sealed class AuthController(
             database.PatientProfiles.Add(new PatientProfile
             {
                 AccountId = accountId,
-                TaxId = taxId,
+                TaxId = string.IsNullOrWhiteSpace(taxId) ? null : taxId,
                 BirthDate = birthDate.ToDateTime(TimeOnly.MinValue),
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now,

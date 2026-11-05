@@ -297,6 +297,57 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync($"/api/v1/patient/experience/appointments/{appointment}/pay-at-clinic", new { })).StatusCode);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LocalAndGooglePatientRegistrationUseTheAdministrativeCpfPolicy(bool google)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ViverAppDbContext>();
+        var setting = await db.ApplicationSettings.SingleAsync(x => x.SettingKey == PatientRegistrationPolicy.AllowWithoutCpfKey);
+        var original = setting.ValueJson;
+        using var client = factory.CreateClient(new() { BaseAddress = new("https://localhost"), AllowAutoRedirect = false });
+        await Csrf(client);
+        var onboardingToken = scope.ServiceProvider.GetRequiredService<GoogleOnboardingProtector>()
+            .Protect("qa-cpf-" + marker, "cpf-" + marker + "@example.test", "Paciente CPF sintético", "patient");
+        try
+        {
+            foreach (var enabled in new[] { false, true })
+            {
+                setting.ValueJson = enabled ? "true" : "false";
+                await db.SaveChangesAsync();
+                var options = await client.GetFromJsonAsync<RegistrationOptionsResponse>("/api/v1/auth/registration/options");
+                Assert.Equal(enabled, options!.AllowPatientWithoutCpf);
+                object payload = google
+                    ? new { onboardingToken, phone = "+5511999999999", taxId = (string?)null, birthDate = "1990-01-01", termsAccepted = true }
+                    : new
+                    {
+                        fullName = "Paciente CPF sintético",
+                        email = "cpf-" + marker + "@example.test",
+                        phone = "+5511999999999",
+                        password = Password,
+                        verificationChannel = "email",
+                        roleCode = "patient",
+                        taxId = (string?)null,
+                        birthDate = "1990-01-01",
+                        termsAccepted = true
+                    };
+                // Endereço ausente impede criação/entrega externa; valida a resposta HTTP real de ambos os fluxos.
+                using var response = await client.PostAsJsonAsync(google ? "/api/v1/auth/google/register" : "/api/v1/auth/register", payload);
+                Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+                var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+                var errors = body.GetProperty("errors").EnumerateObject().Select(x => x.Name.ToLowerInvariant()).ToArray();
+                Assert.Contains("address", errors);
+                Assert.Equal(!enabled, errors.Contains("taxid"));
+            }
+        }
+        finally
+        {
+            setting.ValueJson = original;
+            await db.SaveChangesAsync();
+        }
+    }
+
     [Fact]
     public async Task Profile_preferences_persist_and_stale_updates_are_rejected()
     {
@@ -316,6 +367,21 @@ public sealed class PatientExperienceTests : IAsyncLifetime
         Assert.Equal("MG", after.Address!.StateCode); Assert.Equal(before.RowVersion + 1, after.RowVersion);
         Assert.Equal(409, (await Assert.ThrowsAsync<PatientExperienceException>(() => service.UpdateProfileAsync(patient, request, default))).StatusCode);
         Assert.NotEqual(after.FullName, (await service.ProfileAsync(other, default)).FullName);
+    }
+
+    [Fact]
+    public async Task PatientAlreadyWithoutCpfCanUpdateProfileWithoutConflictingWithOtherMissingDocuments()
+    {
+        using var scope = factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<PatientExperienceService>();
+        var before = await service.ProfileAsync(patient, default);
+        Assert.Null(before.TaxId);
+        await service.UpdateProfileAsync(patient, new PatientProfileRequest("Paciente sintético sem CPF", null,
+            new(1990, 1, 1), new("30140071", "Rua Teste", "10", null, "Centro", "Belo Horizonte", "MG"),
+            true, false, before.RowVersion), default);
+        var after = await service.ProfileAsync(patient, default);
+        Assert.Null(after.TaxId);
+        Assert.Equal("Paciente sintético sem CPF", after.FullName);
     }
 
     [Fact]

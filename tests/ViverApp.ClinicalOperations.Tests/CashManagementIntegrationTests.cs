@@ -255,6 +255,20 @@ public sealed class CashManagementIntegrationTests
             RowVersion = 1
         };
         database.AppointmentTypes.Add(type); await database.SaveChangesAsync();
+        var procedure = new AppointmentType
+        {
+            Name = "__phase33_secondary_" + marker,
+            CategoryCode = "procedure",
+            SpecialtyId = type.SpecialtyId,
+            ModalityCode = "in_person",
+            DurationMinutes = 5,
+            RequiresPayment = false,
+            IsActive = true,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+            RowVersion = 1,
+        };
+        database.AppointmentTypes.Add(procedure); await database.SaveChangesAsync();
         for (var i = 0; i < 25; i++) database.Appointments.Add(new()
         {
             AppointmentNumber = BitConverter.ToUInt64(Guid.NewGuid().ToByteArray()) | (1UL << 63),
@@ -276,6 +290,10 @@ public sealed class CashManagementIntegrationTests
             DiscountPercent = 20,
             CurrencyCode = "BRL",
             PatientNotes = "<script>não executar</script>",
+            AppointmentServiceItems = [
+                new() { AppointmentTypeId = type.Id, Ordinal = 1, NameSnapshot = type.Name, CategoryCode = "examination", DurationMinutes = 5, BasePriceAmount = 100, RequiresPayment = true },
+                new() { AppointmentTypeId = procedure.Id, Ordinal = 2, NameSnapshot = procedure.Name, CategoryCode = "procedure", DurationMinutes = 5, BasePriceAmount = 0, RequiresPayment = false },
+            ],
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
             RowVersion = 1,
@@ -296,6 +314,39 @@ public sealed class CashManagementIntegrationTests
         Assert.Equal(20, (await reports.PrintAsync(accounts[2].Id, filter, default)).Rows.Count);
         Assert.Equal(22, (await reports.PrintAsync(accounts[4].Id, filter, default)).Rows.Count);
         Assert.Equal(3, (await reports.PrintAsync(accounts[5].Id, filter, default)).Rows.Count);
+        filter.Category = "procedure";
+        var secondaryReport = await reports.PrintAsync(accounts[0].Id, filter, default);
+        Assert.Equal(25, secondaryReport.Rows.Count);
+        Assert.All(secondaryReport.Rows, r => Assert.Equal(new[] { "examination", "procedure" }, r.CategoryCodes));
+        var secondaryPage = await manager.AgendaAsync(filter.From, filter.To, null, null, "procedure", null, null, null, null, null,
+            marker, "date_asc", 1, 12, default);
+        Assert.Equal(25, secondaryPage.Page.TotalCount);
+        Assert.Equal(12, secondaryPage.Page.Items.Count);
+        var doctor = new ViverApp.Api.Features.DoctorExperience.DoctorExperienceService(database, null!, null!, audit, clock);
+        Assert.Equal(22, (await doctor.AgendaAsync(accounts[4].Id, filter.From!.Value, filter.To!.Value,
+            null, null, "procedure", null, marker, 1, 12, default)).Page.TotalCount);
+        var scheduling = new PatientSchedulingService(database, null!, clock);
+        var patient = new ViverApp.Api.Features.PatientExperience.PatientExperienceService(database, scheduling, null!, clock, configuration);
+        Assert.Equal(20, (await patient.AgendaAsync(accounts[2].Id, 1, 12, "all", marker, null,
+            null, null, null, "procedure", null, default)).TotalCount);
+        var catalog = await patient.ServicesAsync(accounts[2].Id, 1, 50, null, marker, default, ["examination", "procedure"]);
+        Assert.Equal(2, catalog.TotalCount);
+        Assert.Equal(2, catalog.Items.Select(s => s.CategoryCode).Distinct().Count());
+        var analyticsService = new ViverApp.Api.Features.AdministratorExperience.AdministratorExperienceService(database, manager, null!, clock);
+        var analytics = await analyticsService.AnalyticsAsync(filter.From.Value, filter.To.Value, default);
+        var analyticsZone = TimeZoneInfo.FindSystemTimeZoneById(await database.Clinics.Select(c => c.TimezoneName).SingleAsync());
+        var analyticsStart = TimeZoneInfo.ConvertTimeToUtc(filter.From.Value.ToDateTime(TimeOnly.MinValue), analyticsZone);
+        var analyticsEnd = TimeZoneInfo.ConvertTimeToUtc(filter.To.Value.AddDays(1).ToDateTime(TimeOnly.MinValue), analyticsZone);
+        var expectedAnalytics = database.Appointments.Where(a => a.StartsAtUtc >= analyticsStart && a.StartsAtUtc < analyticsEnd
+            && a.InverseRescheduledFromAppointment == null);
+        Assert.Equal(await expectedAnalytics.CountAsync(), analytics.Appointments);
+        Assert.True(analytics.AppointmentsByCategory.Single(c => c.Label == "Procedimentos").Count >= 25);
+        Assert.True(analytics.AppointmentsByCategory.Single(c => c.Label == "Exames").Count >= 25);
+        Assert.Equal(await expectedAnalytics.SumAsync(a => a.PriceAmount), analytics.AppointmentsByCategory.Sum(c => c.Value));
+        Assert.Equal(analytics.AppointmentsByCategory.Sum(c => c.Value), analytics.AppointmentsByService.Sum(c => c.Value));
+        filter.Search = procedure.Name;
+        Assert.Equal(25, (await reports.PrintAsync(accounts[0].Id, filter, default)).Rows.Count);
+        filter.Search = marker; filter.Category = null;
         filter.DoctorAccountId = accounts[4].Id;
         Assert.Empty((await reports.PrintAsync(accounts[5].Id, filter, default)).Rows);
         filter.DoctorAccountId = null; filter.PendingPayment = false;

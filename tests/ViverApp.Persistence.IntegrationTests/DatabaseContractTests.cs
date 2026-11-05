@@ -137,7 +137,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal(string.Join(",", Enumerable.Range(1, 62).Select(id => id.ToString("D4", System.Globalization.CultureInfo.InvariantCulture))), migrations);
+        Assert.Equal(string.Join(",", Enumerable.Range(1, 63).Select(id => id.ToString("D4", System.Globalization.CultureInfo.InvariantCulture))), migrations);
 
         var calendarIndex = await ExecuteScalarAsync(connection,
             "SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ',') FROM information_schema.statistics WHERE table_schema='viverappweb' AND table_name='appointments' AND index_name='ix_appointments_start_id'");

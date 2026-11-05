@@ -544,8 +544,93 @@ public sealed class PatientSchedulingConcurrencyTests
         }
     }
 
+    [Theory]
+    [InlineData("patient")]
+    [InlineData("doctor")]
+    [InlineData("psychologist")]
+    [InlineData("manager")]
+    [InlineData("administrator")]
+    public async Task FourCategories_PreserveCompositionAcrossCreationReplayAvailabilityAndReschedule(string role)
+    {
+        var configuration = LoadConfiguration();
+        var fixture = await CreateFixtureAsync(configuration, professionalRole: role == "psychologist" ? role : "doctor");
+        uint[] extraIds = []; ulong staffId = 0;
+        try
+        {
+            await using var database = CreateContext(configuration);
+            var now = fixture.UtcNow.UtcDateTime;
+            var primary = await database.AppointmentTypes.AsNoTracking().SingleAsync(t => t.Id == fixture.AppointmentTypeId);
+            var extras = new[] { ("examination", 10, 20m), ("surgery", 15, 30m), ("procedure", 5, 0m) }
+                .Select(x => new AppointmentType
+                {
+                    Name = $"QA33 {x.Item1} {Guid.NewGuid():N}",
+                    CategoryCode = x.Item1,
+                    SpecialtyId = primary.SpecialtyId,
+                    ModalityCode = "online",
+                    DurationMinutes = (ushort)x.Item2,
+                    PriceAmount = x.Item3,
+                    RequiresPayment = x.Item3 > 0,
+                    IsActive = true,
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now,
+                    RowVersion = 1,
+                }).ToArray();
+            database.AppointmentTypes.AddRange(extras); await database.SaveChangesAsync(); extraIds = extras.Select(t => t.Id).ToArray();
+            if (role is "manager" or "administrator")
+            {
+                var staff = NewAccount(role, "QA33 Equipe", $"qa33-{Guid.NewGuid():N}@example.test", now);
+                database.Accounts.Add(staff); await database.SaveChangesAsync(); staffId = staff.Id;
+            }
+            var service = new PatientSchedulingService(database, new NullAuditWriter(), new FixedTimeProvider(fixture.UtcNow));
+            var professionals = await service.SearchProfessionalsAsync(1, 50, null, null, primary.Id, "online", default, extraIds);
+            Assert.Contains(professionals.Items, p => p.AccountId == fixture.DoctorId);
+            var slots = await service.GetAvailableSlotsAsync(fixture.PatientId, fixture.DoctorId, primary.Id, "online", fixture.LocalDate, 1, default, extraIds);
+            Assert.Contains(slots, s => s.StartsAt == new TimeOnly(9, 0) && s.EndsAt == new TimeOnly(10, 0));
+            var key = $"qa33-{Guid.NewGuid():N}";
+            Task<(AppointmentResponse Response, bool Replayed)> Create() => role switch
+            {
+                "patient" => service.CreateAsync(fixture.PatientId, key, new(fixture.DoctorId, primary.Id, "online", fixture.LocalDate, new(9, 0), "QA33", extraIds), default),
+                "doctor" or "psychologist" => service.CreateForDoctorAsync(fixture.DoctorId, key, new(fixture.PatientId, primary.Id, "online", fixture.LocalDate, new(9, 0), "QA33", extraIds), default),
+                _ => service.CreateForManagerAsync(staffId, key, new(fixture.PatientId, fixture.DoctorId, primary.Id, "online", fixture.LocalDate, new(9, 0), "QA33", extraIds), default),
+            };
+            var created = await Create();
+            Assert.False(created.Replayed); Assert.Equal(150m, created.Response.PriceAmount);
+            Assert.Equal(60, (created.Response.EndsAtUtc - created.Response.StartsAtUtc).TotalMinutes);
+            Assert.Equal(AppointmentCategoryPolicy.Codes, created.Response.Services.Select(s => s.CategoryCode));
+            Assert.True((await Create()).Replayed);
+            foreach (var code in AppointmentCategoryPolicy.Codes)
+                Assert.True(await AppointmentCategoryPolicy.Filter(database.Appointments.Where(a => a.Id == created.Response.Id), code).AnyAsync());
+            slots = await service.GetAvailableSlotsAsync(fixture.PatientId, fixture.DoctorId, primary.Id, "online", fixture.LocalDate, 1, default, extraIds);
+            Assert.DoesNotContain(slots, s => s.StartsAt == new TimeOnly(9, 0));
+            var request = new AppointmentRescheduleRequest(fixture.LocalDate, new(8, 0), "QA33 reagendamento", created.Response.RowVersion);
+            var moved = role switch
+            {
+                "patient" => await service.RescheduleAsync(fixture.PatientId, created.Response.Id, $"qa33-{Guid.NewGuid():N}", request, default),
+                "doctor" or "psychologist" => await service.RescheduleForDoctorAsync(fixture.DoctorId, created.Response.Id, $"qa33-{Guid.NewGuid():N}", request, default),
+                _ => await service.RescheduleForManagerAsync(staffId, created.Response.Id, $"qa33-{Guid.NewGuid():N}", request, default),
+            };
+            Assert.Equal(created.Response.Id, moved.Response.Id); Assert.Equal(4, moved.Response.Services.Count);
+            Assert.Equal(150m, moved.Response.PriceAmount); Assert.Equal(60, (moved.Response.EndsAtUtc - moved.Response.StartsAtUtc).TotalMinutes);
+            var invalid = await Assert.ThrowsAnyAsync<Exception>(() => service.GetAvailableSlotsAsync(fixture.PatientId, fixture.DoctorId,
+                primary.Id, "online", fixture.LocalDate, 1, default, [primary.Id]));
+            Assert.Contains("duas vezes", invalid.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (staffId != 0)
+            {
+                await using var cleanup = CreateContext(configuration);
+                await cleanup.IdempotencyRecords.Where(r => r.ScopeCode.EndsWith($":{staffId}")).ExecuteDeleteAsync();
+            }
+            await DeleteFixtureAsync(configuration, fixture);
+            await using var cleanupTypes = CreateContext(configuration);
+            await cleanupTypes.AppointmentTypes.Where(t => extraIds.Contains(t.Id)).ExecuteDeleteAsync();
+            if (staffId != 0) await cleanupTypes.Accounts.Where(a => a.Id == staffId).ExecuteDeleteAsync();
+        }
+    }
+
     [Fact]
-    public async Task CombinedServices_SumDurationAndPrice_AndRejectMixedBaseCategories()
+    public async Task CombinedServices_SumDurationAndPrice_AndAcceptMixedBaseCategories()
     {
         var configuration = LoadConfiguration();
         var fixture = await CreateFixtureAsync(configuration);
@@ -655,13 +740,14 @@ public sealed class PatientSchedulingConcurrencyTests
                 Assert.Equal(175m, managed.Response.PriceAmount);
                 Assert.Equal(40, (managed.Response.EndsAtUtc - managed.Response.StartsAtUtc).TotalMinutes);
             }
-            var invalid = await AttemptCreateAsync(configuration, fixture.PatientId,
+            var mixed = await AttemptCreateAsync(configuration, fixture.PatientId,
                 $"mixed-category-{Guid.NewGuid():N}",
                 new AppointmentCreateRequest(fixture.DoctorId, fixture.AppointmentTypeId,
-                    "online", fixture.LocalDate, new TimeOnly(11, 0), null, [procedureId]),
+                    "online", fixture.LocalDate, new TimeOnly(8, 0), null, [procedureId]),
                 fixture.UtcNow, CancellationToken.None);
-            Assert.Null(invalid.Response);
-            Assert.Contains("mesmo tipo base", invalid.Error, StringComparison.OrdinalIgnoreCase);
+            Assert.NotNull(mixed.Response);
+            Assert.Equal(180m, mixed.Response.PriceAmount);
+            Assert.Equal(new[] { "consultation", "examination" }, mixed.Response.Services.Select(s => s.CategoryCode));
         }
         finally
         {

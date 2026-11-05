@@ -15,7 +15,10 @@ namespace ViverApp.Api.Features.PatientScheduling;
 public sealed record AppointmentPrintRow(ulong Number, string PatientName, string DoctorName, string Services,
     string CategoryCode, string Specialty, DateTime LocalStartsAt, string BillingFormCode,
     decimal BasePriceAmount, decimal PriceAmount, bool RequiresPayment, bool IsPaid, bool PaymentDeferred,
-    string? Notes, string StatusCode);
+    string? Notes, string StatusCode)
+{
+    public IReadOnlyList<string> CategoryCodes { get; init; } = [];
+}
 public sealed record AppointmentPrintResponse(string ClinicName, string IssuedBy, DateTime LocalIssuedAt,
     string TimezoneName, string FilterDescription, IReadOnlyList<AppointmentPrintRow> Rows);
 
@@ -62,7 +65,10 @@ public sealed class AppointmentPrintService(ViverAppDbContext database, TimeProv
             a.AppointmentServiceItems.Count > 0 ? string.Join(" + ", a.AppointmentServiceItems.OrderBy(s => s.Ordinal).Select(s => s.NameSnapshot)) : a.AppointmentType.Name,
             a.AppointmentType.CategoryCode, a.Specialty?.Name ?? "Não informada", Local(a.StartsAtUtc, zone),
             a.BillingFormCode, a.BasePriceAmount ?? a.PriceAmount, a.PriceAmount, a.RequiresPayment,
-            a.CurrentPayment?.StatusCode == "paid", a.PaymentDeferred, a.PatientNotes, a.StatusCode)).ToArray();
+            a.CurrentPayment?.StatusCode == "paid", a.PaymentDeferred, a.PatientNotes, a.StatusCode)
+        {
+            CategoryCodes = AppointmentCategoryPolicy.Categories(a.AppointmentServiceItems.Select(s => s.CategoryCode), a.AppointmentType.CategoryCode),
+        }).ToArray();
         await audit.WriteAsync("appointments.list_printed", actor, "appointments", "filtered",
             new Dictionary<string, string> { ["count"] = result.Length.ToString(CultureInfo.InvariantCulture) }, ct);
         return new(clinic.LegalName, account.FullName, Local(clock.GetUtcNow().UtcDateTime, zone), clinic.TimezoneName,
@@ -94,7 +100,7 @@ public sealed class AppointmentPrintService(ViverAppDbContext database, TimeProv
         else if (status is not null) query = query.Where(a => a.StatusCode == status);
         var category = Text(filter.Category);
         if (category is not null && category is not ("consultation" or "examination" or "surgery" or "procedure")) throw Invalid(400, "Tipo inválido.");
-        if (category is not null) query = query.Where(a => a.AppointmentType.CategoryCode == category);
+        query = AppointmentCategoryPolicy.Filter(query, category);
         var modality = Text(filter.Modality);
         if (modality is not null && modality is not ("online" or "in_person")) throw Invalid(400, "Modalidade inválida.");
         if (modality is not null) query = query.Where(a => a.ModalityCode == modality);
@@ -114,9 +120,9 @@ public sealed class AppointmentPrintService(ViverAppDbContext database, TimeProv
             var isNumber = ulong.TryParse(search, out var number);
             query = role switch
             {
-                "patient" => query.Where(a => a.AppointmentType.Name.Contains(search) || a.ProfessionalAccount.Account.FullName.Contains(search) || isNumber && a.AppointmentNumber == number),
-                "doctor" or "psychologist" => query.Where(a => a.AppointmentType.Name.Contains(search) || a.PatientAccount.FullName.Contains(search) || isNumber && a.AppointmentNumber == number),
-                _ => query.Where(a => a.AppointmentType.Name.Contains(search) || a.PatientAccount.FullName.Contains(search) || a.ProfessionalAccount.Account.FullName.Contains(search) || isNumber && a.AppointmentNumber == number),
+                "patient" => query.Where(a => (a.AppointmentType.Name.Contains(search) || a.AppointmentServiceItems.Any(s => s.NameSnapshot.Contains(search))) || a.ProfessionalAccount.Account.FullName.Contains(search) || isNumber && a.AppointmentNumber == number),
+                "doctor" or "psychologist" => query.Where(a => (a.AppointmentType.Name.Contains(search) || a.AppointmentServiceItems.Any(s => s.NameSnapshot.Contains(search))) || a.PatientAccount.FullName.Contains(search) || isNumber && a.AppointmentNumber == number),
+                _ => query.Where(a => (a.AppointmentType.Name.Contains(search) || a.AppointmentServiceItems.Any(s => s.NameSnapshot.Contains(search))) || a.PatientAccount.FullName.Contains(search) || a.ProfessionalAccount.Account.FullName.Contains(search) || isNumber && a.AppointmentNumber == number),
             };
         }
         return filter.Sort switch

@@ -38,7 +38,7 @@ public sealed class PatientExperienceController(PatientExperienceService service
     [HttpGet("clinic")]
     public Task<PatientClinicResponse> Clinic(CancellationToken ct) => service.ClinicAsync(ct);
     [HttpGet("services")]
-    public Task<SchedulingPage<PatientServiceResponse>> Services(int page = 1, int pageSize = 20, string? category = null, string? search = null, CancellationToken ct = default) => service.ServicesAsync(Actor, page, pageSize, category, search, ct);
+    public Task<SchedulingPage<PatientServiceResponse>> Services(int page = 1, int pageSize = 20, string? category = null, string? search = null, CancellationToken ct = default, [FromQuery] string[]? categories = null) => service.ServicesAsync(Actor, page, pageSize, category, search, ct, Request.Query.ContainsKey("categories") ? categories : null);
     [HttpGet("agenda")]
     public Task<SchedulingPage<PatientAppointmentResponse>> Agenda(int page = 1, int pageSize = 12, string view = "future", string? search = null, ulong? appointmentNumber = null, DateTime? from = null, DateTime? until = null, string? status = null, string? category = null, string? modality = null, CancellationToken ct = default, uint? specialtyId = null, bool? pendingPayment = null) => service.AgendaAsync(Actor, page, pageSize, view, search, appointmentNumber, from, until, status, category, modality, ct, specialtyId, pendingPayment);
     [HttpGet("services/{id:int}")]

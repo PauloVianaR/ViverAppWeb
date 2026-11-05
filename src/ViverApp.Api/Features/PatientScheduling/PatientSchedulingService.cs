@@ -41,9 +41,10 @@ public sealed class PatientSchedulingService(
             var types = await database.AppointmentTypes.AsNoTracking()
                 .Where(item => ids.Contains(item.Id) && item.IsActive).ToArrayAsync(cancellationToken);
             requiredSpecialties = types.Select(x => x.SpecialtyId).Distinct().ToArray();
-            if (types.Length != ids.Length || types.Any(type => type.CategoryCode != types[0].CategoryCode
-                || modality is not null && !SupportsModality(type.ModalityCode, modality)))
-                throw Conflict("Os serviços devem ter o mesmo tipo base e oferecer a modalidade selecionada.");
+            if (types.Length != ids.Length || types.Any(type => modality is not null && !SupportsModality(type.ModalityCode, modality)))
+                throw Conflict("Todos os serviços devem estar ativos e oferecer a modalidade selecionada.");
+            if (requiredSpecialties.Length != 1)
+                throw BadRequest("Selecione serviços da mesma especialidade.");
         }
 
         var query = database.Accounts.AsNoTracking()
@@ -983,8 +984,6 @@ public sealed class PatientSchedulingService(
         var types = new List<AppointmentType>(ids.Length);
         foreach (var id in ids)
             types.Add(await RequireAppointmentTypeAsync(id, modality, cancellationToken));
-        if (types.Any(type => type.CategoryCode != types[0].CategoryCode))
-            throw BadRequest("Todos os serviços do atendimento devem ser do mesmo tipo base.");
         var specialties = await database.ProfessionalSpecialties.AsNoTracking()
             .Where(link => link.ProfessionalAccountId == professionalId && link.Specialty.IsActive)
             .Select(link => link.SpecialtyId).ToArrayAsync(cancellationToken);

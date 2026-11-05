@@ -94,6 +94,7 @@ public sealed class CalendarService(ViverAppDbContext database)
                 item.StatusCode,
                 item.AppointmentType.CategoryCode,
                 AppointmentTypeName = item.AppointmentType.Name,
+                Services = item.AppointmentServiceItems.OrderBy(s => s.Ordinal).Select(s => s.NameSnapshot).ToArray(),
                 item.ModalityCode,
                 item.StartsAtUtc,
                 item.EndsAtUtc,
@@ -102,7 +103,7 @@ public sealed class CalendarService(ViverAppDbContext database)
 
         var items = rows.Select(item => new CalendarItemResponse(
             item.Id, item.AppointmentNumber, item.PatientName, item.ProfessionalAccountId,
-            item.ProfessionalName, item.StatusCode, item.CategoryCode, item.AppointmentTypeName,
+            item.ProfessionalName, item.StatusCode, item.CategoryCode, item.Services.Length > 0 ? string.Join(" + ", item.Services) : item.AppointmentTypeName,
             item.ModalityCode, DateTime.SpecifyKind(item.StartsAtUtc, DateTimeKind.Utc),
             DateTime.SpecifyKind(item.EndsAtUtc, DateTimeKind.Utc))).ToArray();
         return new(view, anchor, start, endExclusive.AddDays(-1), timezoneName, items, [], allowElapsed);

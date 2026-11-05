@@ -1,7 +1,7 @@
 namespace ViverApp.Web;
 
 public sealed record PatientClinic(string Name, string Address, string? Phone, string? RouteUrl, string Timezone);
-public sealed record PatientService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal BasePrice, decimal DiscountPercent, decimal PriceAmount, bool RequiresPayment);
+public sealed record PatientService(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode, ushort DurationMinutes, decimal BasePrice, decimal DiscountPercent, decimal PriceAmount, bool RequiresPayment, uint SpecialtyId = 0);
 public sealed record PatientPromotion(string Title, string Description, string? Url);
 public sealed record PatientHomeData(string FullName, bool IsPremium, PatientClinic Clinic, PatientAppointment? NextAppointment, IReadOnlyList<PatientPromotion> Promotions);
 public sealed record PatientAppointment(WebAppointment Appointment, string CategoryCode, string Specialties, string PaymentStatus,
@@ -21,6 +21,15 @@ public sealed record PatientApiResult<T>(bool Ok, T? Data, string? Error, int St
 
 public static class PatientLabels
 {
+    public static string CombinedCategories(IEnumerable<string> categories, string fallback)
+    {
+        var selected = categories.ToHashSet(StringComparer.Ordinal);
+        if (selected.Count == 0) selected.Add(fallback);
+        var labels = new[] { "consultation", "examination", "surgery", "procedure" }
+            .Where(selected.Contains).Select(Category).ToArray();
+        return labels.Length == 0 ? Category(fallback) : string.Join(" + ", labels);
+    }
+
     public static string Status(string code) => code switch
     {
         "pending" => "Aguardando Pagamento",

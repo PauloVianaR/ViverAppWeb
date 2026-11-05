@@ -23,7 +23,8 @@ public sealed record WebRegistrationOption(uint Id, string Name);
 public sealed record WebRegistrationOptions(
     string TermsVersion,
     string PrivacyVersion,
-    IReadOnlyList<WebRegistrationOption> Specialties);
+    IReadOnlyList<WebRegistrationOption> Specialties,
+    bool AllowPatientWithoutCpf = false);
 
 public sealed record WebRegistrationCompleted(
     string Status,

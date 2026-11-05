@@ -11,7 +11,7 @@ public sealed record RegisterRequest(
     [param: Required, StringLength(128, MinimumLength = 8)] string Password,
     [param: Required, RegularExpression("^(email|sms)$")] string VerificationChannel,
     [param: Required, RegularExpression("^(patient|doctor|psychologist|manager)$")] string RoleCode,
-    [param: Required, RegularExpression("^[0-9]{11}$")] string TaxId,
+    [param: RegularExpression("^[0-9]{11}$")] string? TaxId,
     DateOnly BirthDate,
     bool TermsAccepted,
     RegistrationAddressRequest? Address,
@@ -40,7 +40,7 @@ public sealed record DoctorRegistrationRequest(
 public sealed record GoogleRegistrationRequest(
     [param: Required, StringLength(8192)] string OnboardingToken,
     [param: Required, StringLength(16)] string Phone,
-    [param: Required, RegularExpression("^[0-9]{11}$")] string TaxId,
+    [param: RegularExpression("^[0-9]{11}$")] string? TaxId,
     DateOnly BirthDate,
     bool TermsAccepted,
     RegistrationAddressRequest? Address,
@@ -99,7 +99,8 @@ public sealed record RegistrationOption(uint Id, string Name);
 public sealed record RegistrationOptionsResponse(
     string TermsVersion,
     string PrivacyVersion,
-    IReadOnlyList<RegistrationOption> Specialties);
+    IReadOnlyList<RegistrationOption> Specialties,
+    bool AllowPatientWithoutCpf = false);
 
 public sealed record RegistrationCompletedResponse(
     string Status,

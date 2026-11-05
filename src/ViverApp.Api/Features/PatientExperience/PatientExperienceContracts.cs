@@ -7,7 +7,7 @@ namespace ViverApp.Api.Features.PatientExperience;
 
 public sealed record PatientClinicResponse(string Name, string Address, string? Phone, string? RouteUrl, string Timezone);
 public sealed record PatientServiceResponse(uint Id, string Name, string? Description, string CategoryCode, string ModalityCode,
-    ushort DurationMinutes, decimal BasePrice, decimal DiscountPercent, decimal PriceAmount, bool RequiresPayment);
+    ushort DurationMinutes, decimal BasePrice, decimal DiscountPercent, decimal PriceAmount, bool RequiresPayment, uint SpecialtyId = 0);
 public sealed record PatientPromotionResponse(string Title, string Description, string? Url);
 public sealed record PatientHomeResponse(string FullName, bool IsPremium, PatientClinicResponse Clinic,
     PatientAppointmentResponse? NextAppointment, IReadOnlyList<PatientPromotionResponse> Promotions);
@@ -31,7 +31,7 @@ public sealed record PatientDocumentResponse(Guid Id, string Name, string Conten
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PatientProfileRequest(
     [param: Required, StringLength(200, MinimumLength = 3)] string FullName,
-    [param: Required, RegularExpression("^[0-9]{11}$")] string TaxId, DateOnly BirthDate,
+    [param: RegularExpression("^[0-9]{11}$")] string? TaxId, DateOnly BirthDate,
     [param: Required] RegistrationAddressRequest Address, bool EmailEnabled, bool SmsEnabled,
     [param: Range(1, long.MaxValue)] ulong RowVersion);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
