@@ -127,12 +127,12 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
         if (status == "rescheduled") query = query.Where(x => x.AppointmentRescheduleHistories.Any() || x.RescheduledFromAppointmentId != null);
         else if (status is not null) query = query.Where(x => x.StatusCode == status);
         if (modality is not null) query = query.Where(x => x.ModalityCode == modality);
-        if (category is not null) query = query.Where(x => x.AppointmentType.CategoryCode == category);
+        query = AppointmentCategoryPolicy.Filter(query, category);
         if (specialtyId == 0) throw Invalid("Selecione uma especialidade válida.");
         if (specialtyId.HasValue) query = query.Where(x => x.SpecialtyId == specialtyId);
         if (appointmentNumber.HasValue) query = query.Where(x => x.AppointmentNumber == appointmentNumber);
         var term = Text(search); if (term is { Length: > 120 }) throw Invalid("A busca deve ter no máximo 120 caracteres.");
-        if (term is not null) { var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.PatientAccount.FullName.Contains(term) || x.AppointmentType.Name.Contains(term) || isNumber && x.AppointmentNumber == number); }
+        if (term is not null) { var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.PatientAccount.FullName.Contains(term) || (x.AppointmentType.Name.Contains(term) || x.AppointmentServiceItems.Any(s => s.NameSnapshot.Contains(term))) || isNumber && x.AppointmentNumber == number); }
         var totalNumbers = await query.Select(x => x.AppointmentNumber).ToArrayAsync(ct);
         var countersSource = query;
         var sourceRows = await countersSource.Select(x => new { x.AppointmentNumber, x.ModalityCode, Rescheduled = x.AppointmentRescheduleHistories.Any() || x.RescheduledFromAppointmentId != null }).ToArrayAsync(ct);

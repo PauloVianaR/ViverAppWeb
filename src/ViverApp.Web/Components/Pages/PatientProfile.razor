@@ -11,7 +11,7 @@ else if (Profile is not null)
     <section id="dados" class="surface patient-panel patient-section"><h2>Dados pessoais</h2><form @onsubmit="Save" @onsubmit:preventDefault>
         <div class="patient-filter-grid">
             <div class="field"><label for="profile-name">Nome completo</label><input id="profile-name" @bind="FullName" autocomplete="name" required minlength="3" maxlength="200" /></div>
-            <div class="field"><label for="profile-cpf">CPF</label><input id="profile-cpf" @bind="TaxId" inputmode="numeric" required maxlength="14" /></div>
+            <div class="field"><label for="profile-cpf">CPF@(RegistrationOptions?.AllowPatientWithoutCpf == true || string.IsNullOrWhiteSpace(Profile.TaxId) ? " (opcional)" : "")</label><input id="profile-cpf" @bind="TaxId" inputmode="numeric" required="@(RegistrationOptions?.AllowPatientWithoutCpf != true && !string.IsNullOrWhiteSpace(Profile.TaxId))" maxlength="14" /></div>
             <div class="field"><label for="profile-birth">Nascimento</label><input id="profile-birth" type="date" @bind="BirthDate" required /></div>
             <div class="field"><label for="profile-cep">CEP</label><input id="profile-cep" value="@PostalCode" @oninput="PostalInput" inputmode="numeric" autocomplete="postal-code" maxlength="9" required /><p class="field-hint" role="status">@PostalNotice</p></div>
             <div class="field"><label for="profile-street">Rua / Avenida</label><input id="profile-street" @bind="Street" autocomplete="address-line1" required maxlength="200" /></div>
@@ -59,6 +59,7 @@ else if (Profile is not null)
 }
 @code {
     private PatientProfileData? Profile;
+    private WebRegistrationOptions? RegistrationOptions;
     private PatientPremium? Premium;
     private PatientSecurity? Security;
     private string FullName="", TaxId="", PostalCode="", Street="", Number="", Complement="", District="", City="", StateCode="";
@@ -72,6 +73,7 @@ else if (Profile is not null)
     private static readonly string[] States=["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
     protected override async Task Load()
     {
+        RegistrationOptions=await Get<WebRegistrationOptions>("api/v1/auth/registration/options");
         Profile=await Get<PatientProfileData>("api/v1/patient/experience/profile"); Premium=await Get<PatientPremium>("api/v1/patient/experience/premium"); Security=await Get<PatientSecurity>("api/v1/patient/account/security");
         if(Profile is not null){FullName=Profile.FullName;TaxId=Profile.TaxId??"";BirthDate=Profile.BirthDate?.ToDateTime(TimeOnly.MinValue);EmailEnabled=Profile.EmailEnabled;SmsEnabled=Profile.SmsEnabled;var a=Profile.Address;PostalCode=Mask(a?.PostalCode??"");Street=a?.Street??"";Number=a?.Number??"";Complement=a?.Complement??"";District=a?.District??"";City=a?.City??"";StateCode=a?.StateCode??"";}
         PlanId=Premium?.Plans.FirstOrDefault()?.Id??0;
@@ -85,7 +87,7 @@ else if (Profile is not null)
         try{var address=await Get<WebPostalCode>($"api/v1/registration/postal-code/{digits}");if(version!=PostalVersion)return;if(address is not null){Street=address.Street;District=address.District;City=address.City;StateCode=address.StateCode;PostalNotice="Endereço preenchido. Confira o número e complemento.";}}
         catch(Exception error) when(error is PatientUiException or JSException){if(version==PostalVersion)PostalNotice="Não foi possível buscar. Preencha o endereço manualmente.";}
     }
-    private Task Save()=>Run(async()=>{if(BirthDate is null)throw new PatientUiException("Informe o nascimento.");await Request<object>("api/v1/patient/experience/profile","PUT",new{fullName=FullName,taxId=Digits(TaxId),birthDate=DateOnly.FromDateTime(BirthDate.Value),address=new PatientAddress(Digits(PostalCode),Street,Number,Complement,District,City,StateCode),emailEnabled=EmailEnabled,smsEnabled=Backend.SmsEnabled && SmsEnabled,rowVersion=Profile!.RowVersion});await Load();Notice="Dados atualizados.";});
+    private Task Save()=>Run(async()=>{if(BirthDate is null)throw new PatientUiException("Informe o nascimento.");await Request<object>("api/v1/patient/experience/profile","PUT",new{fullName=FullName,taxId=string.IsNullOrWhiteSpace(TaxId)?null:Digits(TaxId),birthDate=DateOnly.FromDateTime(BirthDate.Value),address=new PatientAddress(Digits(PostalCode),Street,Number,Complement,District,City,StateCode),emailEnabled=EmailEnabled,smsEnabled=Backend.SmsEnabled && SmsEnabled,rowVersion=Profile!.RowVersion});await Load();Notice="Dados atualizados.";});
     private Task RequestContact()=>Run(async()=>{var result=await Request<WebChallengeResult>("api/v1/patient/account/contact/request","POST",new{channel=Channel,destination=Destination});ContactRequest=result!.RequestId;Notice=result.Message;});
     private Task ConfirmContact()=>Run(async()=>{await Request<object>("api/v1/patient/account/contact/confirm","POST",new{requestId=ContactRequest,code=ContactCode});Navigation.NavigateTo("/acesso",true);});
     private Task RevokeOthers()=>Run(async()=>{await Request<object>("api/v1/patient/account/sessions/revoke-others","POST",new{});Notice="Outras sessões encerradas. Este dispositivo continua conectado.";});

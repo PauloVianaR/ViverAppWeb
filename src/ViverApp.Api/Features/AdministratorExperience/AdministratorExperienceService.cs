@@ -23,7 +23,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         "appointments.default_procedure_minutes", "appointments.default_specialty_id", "manager.appointment_types_enabled", "manager.professional_schedules_enabled",
         "manager.professional_services_enabled", "manager.point_discounts_enabled", "appointments.point_discount_max_percent",
         "professional.patient_scheduling_enabled", "premium.manager_can_manage", "manager.medical_records_write_enabled",
-        "cash.manager_can_reopen", "cash.manager_can_view_cumulative_totals",
+        "cash.manager_can_reopen", "cash.manager_can_view_cumulative_totals", PatientRegistrationPolicy.AllowWithoutCpfKey,
         "appointments.interval_minutes", "communications.email_enabled", "communications.sms_enabled", "premium.manager_can_decide",
         "appointments.arrival_notifications_enabled", "appointments.arrival_popup_enabled", "appointments.arrival_sound_enabled",
         "appointments.arrival_sound_volume", "appointments.arrival_sound_key",
@@ -141,10 +141,41 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
             .Select(g => new { Label = g.Key, Value = g.Sum(x => x.Amount), Count = g.Count() }).OrderByDescending(x => x.Count).ToListAsync(ct);
         var statusRows = await query.GroupBy(x => x.StatusCode).Select(g => new { Label = g.Key, Count = g.Count() }).OrderByDescending(x => x.Count).ToListAsync(ct);
         var methodRows = await paid.GroupBy(x => x.MethodCode ?? "not_informed").Select(g => new { Label = g.Key, Value = g.Sum(x => x.Amount), Count = g.Count() }).OrderByDescending(x => x.Value).ToListAsync(ct);
-        var serviceRows = await query.GroupBy(x => x.AppointmentType.Name)
-            .Select(g => new { Label = g.Key, Value = g.Sum(x => x.PriceAmount), Count = g.Count() }).OrderByDescending(x => x.Count).ToListAsync(ct);
-        var categoryRows = await query.GroupBy(x => x.AppointmentType.CategoryCode)
-            .Select(g => new { Label = g.Key, Value = g.Sum(x => x.PriceAmount), Count = g.Count() }).OrderByDescending(x => x.Count).ToListAsync(ct);
+        var compositions = await query.Select(x => new
+        {
+            x.Id,
+            x.PriceAmount,
+            x.AppointmentType.Name,
+            x.AppointmentType.CategoryCode,
+            Items = x.AppointmentServiceItems.OrderBy(s => s.Ordinal)
+                .Select(s => new { s.NameSnapshot, s.CategoryCode, s.BasePriceAmount }).ToArray(),
+        }).ToArrayAsync(ct);
+        // Counts are category participations, not extra appointments. Only this chart is multi-valued.
+        // Distribute the final price proportionally; never duplicate a combined total per service/category.
+        var compositionRows = new List<(ulong AppointmentId, string Service, string Category, decimal Value)>();
+        foreach (var composition in compositions)
+        {
+            if (composition.Items.Length == 0)
+            {
+                compositionRows.Add((composition.Id, composition.Name, composition.CategoryCode, composition.PriceAmount));
+                continue;
+            }
+            var totalBase = composition.Items.Sum(s => s.BasePriceAmount);
+            var remaining = composition.PriceAmount;
+            var lastCharged = Array.FindLastIndex(composition.Items, s => s.BasePriceAmount > 0);
+            for (var i = 0; i < composition.Items.Length; i++)
+            {
+                var item = composition.Items[i];
+                var value = totalBase > 0 ? i == lastCharged ? remaining : composition.PriceAmount * item.BasePriceAmount / totalBase
+                    : i == composition.Items.Length - 1 ? remaining : 0;
+                remaining -= value;
+                compositionRows.Add((composition.Id, item.NameSnapshot, item.CategoryCode, value));
+            }
+        }
+        var serviceRows = compositionRows.GroupBy(x => x.Service).Select(g => new
+        { Label = g.Key, Value = g.Sum(x => x.Value), Count = g.Select(x => x.AppointmentId).Distinct().Count() }).OrderByDescending(x => x.Count).ToArray();
+        var categoryRows = compositionRows.GroupBy(x => x.Category).Select(g => new
+        { Label = g.Key, Value = g.Sum(x => x.Value), Count = g.Select(x => x.AppointmentId).Distinct().Count() }).OrderByDescending(x => x.Count).ToArray();
         var doctorRows = await query.GroupBy(x => x.ProfessionalAccount.Account.FullName).Select(g => new
         {
             Label = g.Key,
@@ -361,6 +392,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
             or "manager.appointment_types_enabled" or "manager.professional_schedules_enabled" or "manager.professional_services_enabled" or "professional.patient_scheduling_enabled"
             or "premium.manager_can_manage" or "manager.medical_records_write_enabled" or "manager.point_discounts_enabled"
             or "cash.manager_can_reopen" or "cash.manager_can_view_cumulative_totals" or "appointments.allow_elapsed_same_day_booking"
+            or PatientRegistrationPolicy.AllowWithoutCpfKey
             or "appointments.arrival_notifications_enabled" or "appointments.arrival_popup_enabled" or "appointments.arrival_sound_enabled" or "appointments.arrival_mark_read_on_open")
         { if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw new JsonException(); return; }
         if (key == "appointments.arrival_sound_key")

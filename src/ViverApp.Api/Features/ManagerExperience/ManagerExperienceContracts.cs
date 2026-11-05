@@ -75,7 +75,7 @@ public sealed record ManagerProfileUpdateRequest([param: Required, StringLength(
 public sealed record ManagerPatientCreateRequest(
     [param: Required, StringLength(200, MinimumLength = 3)] string FullName,
     [param: StringLength(120)] string? PreferredName,
-    [param: Required, RegularExpression("^[0-9]{11}$")] string TaxId,
+    [param: RegularExpression("^[0-9]{11}$")] string? TaxId,
     DateOnly BirthDate,
     [param: EmailAddress, StringLength(254)] string? Email,
     [param: StringLength(20)] string? PhoneE164,

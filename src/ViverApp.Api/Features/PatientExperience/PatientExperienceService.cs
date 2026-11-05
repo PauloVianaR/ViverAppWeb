@@ -75,19 +75,25 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
             && (x.EndsAtUtc == null || x.EndsAtUtc > Now) && x.PremiumPlan.IsActive, ct);
     public static decimal DiscountedPrice(decimal price, decimal discount) => price - decimal.Round(price * discount / 100m, 2, MidpointRounding.AwayFromZero);
 
-    public async Task<SchedulingPage<PatientServiceResponse>> ServicesAsync(ulong actor, int page, int pageSize, string? category, string? search, CancellationToken ct)
+    public async Task<SchedulingPage<PatientServiceResponse>> ServicesAsync(ulong actor, int page, int pageSize, string? category, string? search, CancellationToken ct, IReadOnlyList<string>? categories = null)
     {
         ValidatePage(page, pageSize);
         if (category is not (null or "" or "consultation" or "examination" or "surgery" or "procedure")) throw Invalid("Tipo inválido.");
         var query = database.AppointmentTypes.AsNoTracking().Where(x => x.IsActive);
         if (!string.IsNullOrEmpty(category)) query = query.Where(x => x.CategoryCode == category);
+        if (categories is not null)
+        {
+            if (categories.Count > 4 || categories.Any(code => !AppointmentCategoryPolicy.Codes.Contains(code, StringComparer.Ordinal)))
+                throw Invalid("Selecione tipos de atendimento válidos.");
+            query = query.Where(x => categories.Contains(x.CategoryCode));
+        }
         if (!string.IsNullOrWhiteSpace(search)) query = query.Where(x => x.Name.Contains(search.Trim()));
         var total = await query.CountAsync(ct);
         var discount = await DiscountAsync(actor, ct);
         var items = await query.OrderBy(x => x.Name).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
         return new(items.Select(x => new PatientServiceResponse(x.Id, x.Name, x.Description, x.CategoryCode, x.ModalityCode,
             x.DurationMinutes, x.RequiresPayment ? x.PriceAmount : 0, x.RequiresPayment ? discount : 0,
-            x.RequiresPayment ? DiscountedPrice(x.PriceAmount, discount) : 0, x.RequiresPayment)).ToArray(), page, pageSize, total);
+            x.RequiresPayment ? DiscountedPrice(x.PriceAmount, discount) : 0, x.RequiresPayment, x.SpecialtyId)).ToArray(), page, pageSize, total);
     }
 
     public async Task<PatientServiceResponse> ServiceAsync(ulong actor, uint id, CancellationToken ct)
@@ -96,7 +102,7 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
         var discount = await DiscountAsync(actor, ct);
         return new(item.Id, item.Name, item.Description, item.CategoryCode, item.ModalityCode, item.DurationMinutes,
             item.RequiresPayment ? item.PriceAmount : 0, item.RequiresPayment ? discount : 0,
-            item.RequiresPayment ? DiscountedPrice(item.PriceAmount, discount) : 0, item.RequiresPayment);
+            item.RequiresPayment ? DiscountedPrice(item.PriceAmount, discount) : 0, item.RequiresPayment, item.SpecialtyId);
     }
 
     public async Task<SchedulingPage<PatientAppointmentResponse>> AgendaAsync(ulong actor, int page, int pageSize,
@@ -114,12 +120,12 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
         if (until.HasValue) query = query.Where(x => x.StartsAtUtc < until);
         if (status == "rescheduled") query = query.Where(x => x.AppointmentRescheduleHistories.Any() || x.RescheduledFromAppointmentId != null);
         else if (!string.IsNullOrEmpty(status)) query = query.Where(x => x.StatusCode == status);
-        if (!string.IsNullOrEmpty(category)) query = query.Where(x => x.AppointmentType.CategoryCode == category);
+        query = AppointmentCategoryPolicy.Filter(query, category);
         if (!string.IsNullOrEmpty(modality)) query = query.Where(x => x.ModalityCode == modality);
         if (specialtyId == 0) throw Invalid("Selecione uma especialidade válida.");
         if (specialtyId.HasValue) query = query.Where(x => x.SpecialtyId == specialtyId);
         if (appointmentNumber.HasValue) query = query.Where(x => x.AppointmentNumber == appointmentNumber);
-        if (!string.IsNullOrWhiteSpace(search)) { var term = search.Trim(); var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.ProfessionalAccount.Account.FullName.Contains(term) || x.AppointmentType.Name.Contains(term) || isNumber && x.AppointmentNumber == number); }
+        if (!string.IsNullOrWhiteSpace(search)) { var term = search.Trim(); var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.ProfessionalAccount.Account.FullName.Contains(term) || (x.AppointmentType.Name.Contains(term) || x.AppointmentServiceItems.Any(s => s.NameSnapshot.Contains(term))) || isNumber && x.AppointmentNumber == number); }
         var total = await query.CountAsync(ct);
         query = view == "history" ? query.OrderByDescending(x => x.StartsAtUtc).ThenByDescending(x => x.Id) : query.OrderBy(x => x.StartsAtUtc).ThenBy(x => x.Id);
         var ids = await query.Skip((page - 1) * pageSize).Take(pageSize).Select(x => x.Id).ToArrayAsync(ct);
@@ -172,18 +178,21 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
 
     public async Task UpdateProfileAsync(ulong actor, PatientProfileRequest request, CancellationToken ct)
     {
-        if (!BrazilianDocumentValidator.IsValidCpf(request.TaxId) || request.BirthDate > DateOnly.FromDateTime(Now) || request.BirthDate < DateOnly.FromDateTime(Now).AddYears(-125)) throw Invalid("Confira CPF e nascimento.");
+        var taxId = string.IsNullOrWhiteSpace(request.TaxId) ? null : request.TaxId;
+        if (taxId is not null && !BrazilianDocumentValidator.IsValidCpf(taxId) || request.BirthDate > DateOnly.FromDateTime(Now) || request.BirthDate < DateOnly.FromDateTime(Now).AddYears(-125)) throw Invalid("Confira CPF e nascimento.");
         if (request.FullName.Trim().Length < 3 || new[] { request.Address.Street, request.Address.Number, request.Address.District, request.Address.City }.Any(string.IsNullOrWhiteSpace)
             || !new[] { "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO" }.Contains(request.Address.StateCode)) throw Invalid("Confira nome e endereço completo.");
-        if (await database.Accounts.AnyAsync(x => x.Id != actor && x.TaxId == request.TaxId, ct)) throw Conflict("Não foi possível salvar os dados informados.");
+        if (taxId is not null && await database.Accounts.AnyAsync(x => x.Id != actor && x.TaxId == taxId, ct)) throw Conflict("Não foi possível salvar os dados informados.");
         await using var tx = await database.Database.BeginTransactionAsync(ct);
         var account = await database.Accounts.FromSqlInterpolated($"SELECT * FROM accounts WHERE id={actor} FOR UPDATE").SingleAsync(ct);
         if (account.RowVersion != request.RowVersion) throw Conflict("O perfil mudou. Atualize a página antes de salvar.");
+        if (taxId is null && account.TaxId is not null && !await PatientRegistrationPolicy.AllowsWithoutCpfAsync(database, ct))
+            throw Invalid("Informe o CPF. A dispensa de CPF para pacientes não está habilitada.");
         account.FullName = request.FullName.Trim(); account.UpdatedAtUtc = Now; account.RowVersion++;
-        account.TaxId = request.TaxId; account.BirthDate = request.BirthDate.ToDateTime(TimeOnly.MinValue);
+        account.TaxId = taxId; account.BirthDate = request.BirthDate.ToDateTime(TimeOnly.MinValue);
         var profile = await database.PatientProfiles.SingleOrDefaultAsync(x => x.AccountId == actor, ct);
         if (profile is null) { profile = new() { AccountId = actor, CreatedAtUtc = Now }; database.PatientProfiles.Add(profile); }
-        profile.TaxId = request.TaxId; profile.BirthDate = request.BirthDate.ToDateTime(TimeOnly.MinValue); profile.UpdatedAtUtc = Now;
+        profile.TaxId = taxId; profile.BirthDate = request.BirthDate.ToDateTime(TimeOnly.MinValue); profile.UpdatedAtUtc = Now;
         var address = await database.AccountAddresses.SingleOrDefaultAsync(x => x.AccountId == actor, ct);
         if (address is null) { address = new() { AccountId = actor }; database.AccountAddresses.Add(address); }
         address.PostalCode = request.Address.PostalCode; address.Street = request.Address.Street.Trim(); address.Number = request.Address.Number.Trim();
@@ -249,9 +258,9 @@ public sealed class PatientExperienceService(ViverAppDbContext database, Patient
         if (!string.IsNullOrEmpty(status)) query = status == "unpaid" ? query.Where(x => x.CurrentPayment == null) : query.Where(x => x.CurrentPayment != null && x.CurrentPayment.StatusCode == status);
         var total = await query.CountAsync(ct);
         var clinicAllowed = await ClinicPaymentAllowedAsync(ct);
-        var entities = await query.Include(x => x.CurrentPayment).Include(x => x.AppointmentType).Include(x => x.ProfessionalAccount.Account)
+        var entities = await query.Include(x => x.CurrentPayment).Include(x => x.AppointmentType).Include(x => x.AppointmentServiceItems).Include(x => x.ProfessionalAccount.Account)
             .OrderByDescending(x => x.StartsAtUtc).ThenByDescending(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
-        return new(entities.Select(x => new PatientPaymentItem(x.Id, x.CurrentPayment?.Id, x.AppointmentType.Name, x.ProfessionalAccount.Account.FullName,
+        return new(entities.Select(x => new PatientPaymentItem(x.Id, x.CurrentPayment?.Id, x.AppointmentServiceItems.Count > 0 ? string.Join(" + ", x.AppointmentServiceItems.OrderBy(s => s.Ordinal).Select(s => s.NameSnapshot)) : x.AppointmentType.Name, x.ProfessionalAccount.Account.FullName,
             DateTime.SpecifyKind(x.StartsAtUtc, DateTimeKind.Utc), x.CurrentPayment?.StatusCode ?? "unpaid", x.CurrentPayment?.Amount ?? x.PriceAmount, x.CurrentPayment?.MethodCode,
             x.PaymentLocationCode, x.CurrentPayment?.PaidAtUtc, clinicAllowed && x.ModalityCode == "in_person" && (x.CurrentPayment == null || x.CurrentPayment.StatusCode is "reversed" or "refunded" or "canceled" or "failed"),
             (x.StatusCode is "pending" or "confirmed") && x.StartsAtUtc > Now && (x.CurrentPayment == null || x.CurrentPayment.StatusCode is "pending" or "failed" or "canceled" or "reversed" or "refunded"), x.ModalityCode)).ToArray(), page, pageSize, total);

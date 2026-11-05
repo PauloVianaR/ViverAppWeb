@@ -118,14 +118,14 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         if (status == "rescheduled") query = query.Where(x => x.AppointmentRescheduleHistories.Any() || x.RescheduledFromAppointmentId != null);
         else if (status is not null) query = query.Where(x => x.StatusCode == status);
         if (modality is not null) query = query.Where(x => x.ModalityCode == modality);
-        if (category is not null) query = query.Where(x => x.AppointmentType.CategoryCode == category);
+        query = AppointmentCategoryPolicy.Filter(query, category);
         if (doctor.HasValue) query = query.Where(x => x.ProfessionalAccountId == doctor);
         if (specialtyId == 0) throw Invalid("Selecione uma especialidade válida.");
         if (specialtyId.HasValue) query = query.Where(x => x.SpecialtyId == specialtyId);
         if (appointmentNumber.HasValue) query = query.Where(x => x.AppointmentNumber == appointmentNumber);
         if (payment == "paid") query = query.Where(x => x.CurrentPayment != null && x.CurrentPayment.StatusCode == "paid");
         if (payment == "pending") query = query.Where(x => x.RequiresPayment && (x.CurrentPayment == null || x.CurrentPayment.StatusCode != "paid"));
-        var term = Text(search); if (term is not null) { if (term.Length > 120) throw Invalid("A busca deve ter no máximo 120 caracteres."); var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.PatientAccount.FullName.Contains(term) || x.ProfessionalAccount.Account.FullName.Contains(term) || x.AppointmentType.Name.Contains(term) || isNumber && x.AppointmentNumber == number); }
+        var term = Text(search); if (term is not null) { if (term.Length > 120) throw Invalid("A busca deve ter no máximo 120 caracteres."); var isNumber = ulong.TryParse(term, out var number); query = query.Where(x => x.PatientAccount.FullName.Contains(term) || x.ProfessionalAccount.Account.FullName.Contains(term) || (x.AppointmentType.Name.Contains(term) || x.AppointmentServiceItems.Any(s => s.NameSnapshot.Contains(term))) || isNumber && x.AppointmentNumber == number); }
         query = sort switch { "date_desc" => query.OrderByDescending(x => x.StartsAtUtc), "patient" => query.OrderBy(x => x.PatientAccount.FullName).ThenBy(x => x.StartsAtUtc), "doctor" => query.OrderBy(x => x.ProfessionalAccount.Account.FullName).ThenBy(x => x.StartsAtUtc), _ => query.OrderBy(x => x.StartsAtUtc) };
         var summaries = await query.Select(x => new ManagerAgendaSummary(
             x.Id, x.AppointmentNumber, x.StartsAtUtc, x.ModalityCode, x.RequiresPayment,
@@ -217,7 +217,8 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
     public async Task<ManagerPatientResponse> CreatePatientAsync(ulong actor, ManagerPatientCreateRequest request, CancellationToken ct)
     {
         var taxId = Text(request.TaxId);
-        if (taxId is null || !BrazilianDocumentValidator.IsValidCpf(taxId)) throw Invalid("O CPF informado é inválido.");
+        if (!await PatientRegistrationPolicy.IsValidCpfAsync(database, ViverAppRoles.Patient, taxId, ct))
+            throw Invalid(taxId is null ? "Informe o CPF do paciente. O cadastro sem CPF não está habilitado." : "O CPF informado é inválido.");
         var now = clock.GetUtcNow().UtcDateTime;
         var today = DateOnly.FromDateTime(now);
         if (request.BirthDate > today || request.BirthDate < today.AddYears(-125)) throw Invalid("A data de nascimento é inválida.");
@@ -226,8 +227,8 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         var rawPhone = Text(request.PhoneE164); var phone = rawPhone is null ? null : IdentifierNormalizer.NormalizePhone(rawPhone);
         if (rawPhone is not null && phone is null) throw Invalid("Informe um telefone brasileiro válido com DDD e 10 ou 11 dígitos.");
         if (request.SendOnboarding && email is null && phone is null) throw Invalid("Informe um e-mail ou telefone para enviar o onboarding.");
-        if (await database.Accounts.AnyAsync(x => x.TaxId == taxId || email != null && x.NormalizedEmail == email || phone != null && x.PhoneE164 == phone, ct)
-            || await database.PatientProfiles.AnyAsync(x => x.TaxId == taxId, ct))
+        if (await database.Accounts.AnyAsync(x => taxId != null && x.TaxId == taxId || email != null && x.NormalizedEmail == email || phone != null && x.PhoneE164 == phone, ct)
+            || taxId is not null && await database.PatientProfiles.AnyAsync(x => x.TaxId == taxId, ct))
             throw Conflict("CPF, e-mail ou telefone já pertence a outro paciente. Nenhuma alteração foi feita.");
         await using var transaction = await database.Database.BeginTransactionAsync(ct);
         var channel = email is not null ? "email" : "sms";

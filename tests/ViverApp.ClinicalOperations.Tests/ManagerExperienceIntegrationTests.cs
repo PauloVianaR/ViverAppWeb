@@ -33,6 +33,7 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
     private IConfiguration configuration = null!;
     private ulong managerId, doctorId, patientId, appointmentId, offlinePatientId, extraManagerId;
     private string offlinePatientTaxId = null!;
+    private readonly List<ulong> registeredPatientIds = [];
     private DateTime now;
     private DateOnly appointmentLocalDate;
 
@@ -150,6 +151,81 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
         var persisted = await db.Accounts.SingleAsync(x => x.Id == patient.AccountId);
         Assert.False(persisted.PortalAccessEnabled);
         Assert.Equal("Paciente prefere atendimento pela manhã.", (await db.PatientProfiles.SingleAsync(x => x.AccountId == patient.AccountId)).AdministrativeNotes);
+    }
+
+    [Theory]
+    [InlineData("manager")]
+    [InlineData("administrator")]
+    public async Task OptionalPatientCpfRequiresOptInAndStillRejectsInvalidOrDuplicateDocuments(string actorRole)
+    {
+        await using var db = CreateContext();
+        var setting = await db.ApplicationSettings.SingleAsync(x => x.SettingKey == PatientRegistrationPolicy.AllowWithoutCpfKey);
+        var original = setting.ValueJson;
+        var actor = await db.Accounts.SingleAsync(x => x.Id == managerId);
+        actor.RoleCode = actorRole;
+        var service = CreateService(db);
+        ManagerPatientCreateRequest Request(string? cpf) => new("__phase33_cpf_test__ Paciente", null, cpf,
+            new DateOnly(1990, 1, 1), null, null, null, false);
+        try
+        {
+            setting.ValueJson = "false";
+            await db.SaveChangesAsync();
+            var required = await Assert.ThrowsAsync<ManagerRuleException>(() => service.CreatePatientAsync(managerId, Request(null), CancellationToken.None));
+            Assert.Equal(400, required.StatusCode);
+
+            setting.ValueJson = "true";
+            await db.SaveChangesAsync();
+            foreach (var cpf in new string?[] { null, "" })
+            {
+                var patient = await service.CreatePatientAsync(managerId, Request(cpf), CancellationToken.None);
+                registeredPatientIds.Add(patient.AccountId);
+                Assert.Null(patient.TaxId);
+                Assert.False(patient.PortalAccessEnabled);
+                Assert.Null((await db.PatientProfiles.SingleAsync(x => x.AccountId == patient.AccountId)).TaxId);
+            }
+            var withCpf = await service.CreatePatientAsync(managerId, Request(offlinePatientTaxId), CancellationToken.None);
+            registeredPatientIds.Add(withCpf.AccountId);
+            var duplicate = await Assert.ThrowsAsync<ManagerRuleException>(() => service.CreatePatientAsync(managerId, Request(offlinePatientTaxId), CancellationToken.None));
+            Assert.Equal(409, duplicate.StatusCode);
+            var invalid = await Assert.ThrowsAsync<ManagerRuleException>(() => service.CreatePatientAsync(managerId, Request("11111111111"), CancellationToken.None));
+            Assert.Equal(400, invalid.StatusCode);
+
+            setting.ValueJson = "false";
+            await db.SaveChangesAsync();
+            Assert.NotNull(await service.PatientAsync(registeredPatientIds[0], CancellationToken.None));
+            await Assert.ThrowsAsync<ManagerRuleException>(() => service.CreatePatientAsync(managerId, Request(null), CancellationToken.None));
+        }
+        finally
+        {
+            setting.ValueJson = original;
+            await db.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
+    public async Task PatientCpfPolicyDefaultsToRequiredAndNeverRelaxesStaffRegistration()
+    {
+        await using var db = CreateContext();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        await db.ApplicationSettings.Where(x => x.SettingKey == PatientRegistrationPolicy.AllowWithoutCpfKey).ExecuteDeleteAsync();
+        Assert.False(await PatientRegistrationPolicy.IsValidCpfAsync(db, "patient", null, CancellationToken.None));
+        db.ApplicationSettings.Add(new ApplicationSetting
+        {
+            SettingKey = PatientRegistrationPolicy.AllowWithoutCpfKey,
+            ValueJson = "true",
+            UpdatedAtUtc = now,
+            RowVersion = 1
+        });
+        await db.SaveChangesAsync();
+        Assert.True(await PatientRegistrationPolicy.IsValidCpfAsync(db, "patient", null, CancellationToken.None));
+        foreach (var role in new[] { "doctor", "psychologist", "manager", "administrator" })
+            Assert.False(await PatientRegistrationPolicy.IsValidCpfAsync(db, role, null, CancellationToken.None));
+        Assert.False(await PatientRegistrationPolicy.IsValidCpfAsync(db, "patient", "11111111111", CancellationToken.None));
+        Assert.True(await PatientRegistrationPolicy.IsValidCpfAsync(db, "patient", offlinePatientTaxId, CancellationToken.None));
+        await db.ApplicationSettings.Where(x => x.SettingKey == PatientRegistrationPolicy.AllowWithoutCpfKey)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.ValueJson, "\"true\""));
+        Assert.False(await PatientRegistrationPolicy.IsValidCpfAsync(db, "patient", null, CancellationToken.None));
+        await transaction.RollbackAsync();
     }
 
     [Fact]
@@ -386,7 +462,7 @@ public sealed class ManagerExperienceIntegrationTests : IAsyncLifetime
     private async Task CleanupAsync()
     {
         if (configuration is null) return; await using var db = CreateContext();
-        var accountIds = new[] { managerId, doctorId, patientId, offlinePatientId, extraManagerId }.Where(x => x != 0).Distinct().ToArray();
+        var accountIds = new[] { managerId, doctorId, patientId, offlinePatientId, extraManagerId }.Concat(registeredPatientIds).Where(x => x != 0).Distinct().ToArray();
         if (accountIds.Length == 0) return;
         var allAppointmentIds = await db.Appointments.Where(x => accountIds.Contains(x.PatientAccountId) || accountIds.Contains(x.ProfessionalAccountId) || accountIds.Contains(x.CreatedByAccountId)).Select(x => x.Id).ToArrayAsync();
         var retainedAppointmentIds = await db.CashMovements.Where(x => x.AppointmentId.HasValue && allAppointmentIds.Contains(x.AppointmentId.Value)).Select(x => x.AppointmentId!.Value).Distinct().ToArrayAsync();

@@ -1,0 +1,105 @@
+.appointment-category-field {
+    min-width: 0;
+    position: relative;
+}
+
+.appointment-category-label {
+    font-size: .8rem;
+    font-weight: 700;
+}
+
+.appointment-category-picker > summary {
+    align-items: center;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    font-size: .875rem;
+    gap: .5rem;
+    justify-content: space-between;
+    list-style: none;
+    min-height: 2.2rem;
+    padding: .4rem .65rem;
+}
+
+.appointment-category-picker > summary::-webkit-details-marker {
+    display: none;
+}
+
+.appointment-category-picker > summary > span {
+    color: var(--color-text-muted);
+    flex: 0 0 auto;
+    transition: transform var(--motion-fast);
+}
+
+.appointment-category-picker[open] > summary > span {
+    transform: rotate(180deg);
+}
+
+.appointment-category-options {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    display: grid;
+    gap: .15rem;
+    inset-inline: 0;
+    padding: .35rem;
+    position: absolute;
+    top: calc(100% + .3rem);
+    z-index: 35;
+}
+
+.appointment-category-options .appointment-category-option {
+    align-items: center;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: grid;
+    font-size: .875rem;
+    font-weight: 500;
+    gap: .65rem;
+    grid-template-columns: 1.1rem minmax(0, 1fr);
+    margin: 0;
+    min-height: 2.75rem;
+    padding: .5rem .65rem;
+    text-align: left;
+    transition: background var(--motion-fast);
+}
+
+.appointment-category-option:hover {
+    background: var(--color-surface-muted);
+}
+
+.appointment-category-options .appointment-category-option:has(input:checked) {
+    background: var(--color-brand-soft);
+    color: var(--color-brand-strong);
+    font-weight: 700;
+}
+
+.appointment-category-option:has(input:focus-visible) {
+    outline: 2px solid var(--color-focus);
+    outline-offset: -2px;
+}
+
+.appointment-category-options input[type="checkbox"] {
+    accent-color: var(--color-brand);
+    height: 1.1rem;
+    margin: 0;
+    min-height: 0;
+    min-width: 0;
+    padding: 0;
+    width: 1.1rem;
+}
+
+.appointment-category-option:has(input:disabled) {
+    cursor: default;
+    opacity: .6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .appointment-category-picker > summary > span,
+    .appointment-category-option {
+        transition: none;
+    }
+}

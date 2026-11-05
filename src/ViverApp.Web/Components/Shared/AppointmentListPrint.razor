@@ -26,7 +26,7 @@
                 {
                     <tr><td><strong>#@row.Number</strong><small>@row.LocalStartsAt.ToString("dd/MM/yyyy HH:mm")</small></td>
                         <td><strong>@row.PatientName</strong><small>@row.DoctorName</small></td>
-                        <td>@row.Services<small>@Category(row.CategoryCode) · @row.Specialty</small></td>
+                        <td>@row.Services<small>@CombinedCategories(row.CategoryCodes,row.CategoryCode) · @row.Specialty</small></td>
                         <td>@(row.BillingFormCode == "insurance" ? "Convênio" : "Particular")<small>
                             @if (!row.RequiresPayment) { <span>Sem cobrança</span> }
                             else { @if (row.BasePriceAmount > row.PriceAmount) { <s>@Money(row.BasePriceAmount)</s><br /><span>Desconto @Money(row.BasePriceAmount-row.PriceAmount)</span><br /> }<strong>@Money(row.PriceAmount)</strong> }

@@ -35,7 +35,7 @@
 
 .booking-layout { align-items: start; display: grid; gap: var(--space-5); grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem); }
 .booking-main { display: grid; gap: var(--space-5); min-width: 0; }
-.booking-panel, .booking-summary, .cancel-panel { padding: var(--space-5); }
+.booking-panel, .booking-summary, .cancel-panel { padding: var(--space-5); min-width: 0; overflow-wrap: anywhere; }
 .section-heading { align-items: flex-start; display: flex; gap: var(--space-4); justify-content: space-between; margin-bottom: var(--space-5); }
 .section-heading h2, .booking-summary h2, .cancel-panel h2 { font-size: var(--text-xl); margin: 0; }
 .filter-grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -51,7 +51,8 @@
     color: var(--color-text);
     display: grid;
     gap: var(--space-3);
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
     min-height: 5.5rem;
     padding: var(--space-4);
     text-align: left;
@@ -92,7 +93,7 @@
 .cancel-panel .panel-actions { grid-column: 1 / -1; }
 
 @media (max-width: 68rem) {
-    .booking-layout { grid-template-columns: 1fr; }
+    .booking-layout { grid-template-columns: minmax(0, 1fr); }
     .booking-summary { position: static; }
 }
 

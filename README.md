@@ -34,6 +34,8 @@ O EF Core é **DB-First**: a estrutura de `viverappweb` é a fonte dos modelos g
 
 Pré-requisitos: versão **exata** do SDK definida em [global.json](global.json) (.NET 10), MySQL Community Server **8.0.41** e PowerShell 7 para os scripts. Verifique com `./scripts/assert-dotnet-sdk.ps1`. Atualizações do SDK devem ser deliberadas, com revisão dos lock files: o roll-forward automático pode mudar dependências implícitas do Blazor e impedir a restauração travada na CI. O banco de desenvolvimento é `viverappweb`; nunca aponte os comandos abaixo para produção ou para o banco legado.
 
+O SDK fixado é **10.0.403**. Abra `ViverApp.slnx` em um Visual Studio compatível com esse SDK. Se a solução estava aberta antes de instalar/atualizar o SDK ou alterar `global.json`, feche e reabra a solução para recarregar os projetos. SDK e lock file dos assets do Blazor são atualizados juntos; não use uma cópia antiga do SDK para restaurar este checkout.
+
 Configure fora do Git os user-secrets da API, sobretudo `ConnectionStrings:LocalConnection` e `Authentication:ChallengePepper`. Google OAuth, SMTP, SMSBarato, PagBank e R2 precisam de suas próprias credenciais somente quando suas jornadas forem habilitadas. Não coloque valores em `appsettings*.json`, no README ou em comandos compartilhados. A Web tem configuração local de `Backend:BaseUrl` em `appsettings.Development.json`.
 
 Na raiz do repositório:

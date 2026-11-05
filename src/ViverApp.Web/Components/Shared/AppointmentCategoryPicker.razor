@@ -1,0 +1,21 @@
+<div class="field appointment-category-field">
+    <span id="@LabelId" class="appointment-category-label">Tipos de atendimento</span>
+    <details class="appointment-category-picker">
+        <summary aria-labelledby="@LabelId" title="@SelectionLabels">@Summary <span aria-hidden="true">⌄</span></summary>
+        <div class="appointment-category-options" role="group" aria-label="Tipos de atendimento disponíveis">
+            @foreach (var code in Codes)
+            {
+                <label class="appointment-category-option"><input type="checkbox" checked="@Selected.Contains(code)" disabled="@Disabled" @onchange="() => Toggle.InvokeAsync(code)" /><span>@PatientLabels.Category(code)</span></label>
+            }
+        </div>
+    </details>
+</div>
+@code {
+    [Parameter] public IReadOnlyCollection<string> Selected { get; set; } = [];
+    [Parameter] public EventCallback<string> Toggle { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    private readonly string LabelId = $"appointment-categories-{Guid.NewGuid():N}";
+    private static readonly string[] Codes = ["consultation", "examination", "surgery", "procedure"];
+    private string SelectionLabels => Selected.Count == 0 ? "Selecione os tipos" : string.Join(" + ", Codes.Where(Selected.Contains).Select(PatientLabels.Category));
+    private string Summary => Selected.Count >= 2 ? $"{Selected.Count} tipos selecionados" : SelectionLabels;
+}

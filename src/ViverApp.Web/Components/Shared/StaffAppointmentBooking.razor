@@ -28,7 +28,7 @@ else
                         </details>
                     </div>
                     <div class="field"><label for="booking-specialty">Especialidade</label><select id="booking-specialty" @bind="SpecialtyId" disabled="@Busy" @bind:after="SpecialtyChanged"><option value="0">Selecione</option>@foreach (var specialty in Options?.Specialties ?? []) { <option value="@specialty.Id">@specialty.Name</option> }</select></div>
-                    <div class="field"><label for="booking-category">Tipo</label><select id="booking-category" @bind="Category" disabled="@Busy" @bind:after="CategoryChanged">@foreach (var category in Categories) { <option value="@category.Code">@category.Label</option> }</select></div>
+                    <AppointmentCategoryPicker Selected="CategorySelection" Toggle="CategoryChanged" Disabled="Busy" />
                     <div class="field"><label for="booking-professional">Profissional</label><select id="booking-professional" @bind="ProfessionalId" @bind:after="ResetSlots" disabled="@(IsProfessional || Busy)"><option value="0">@(IsProfessional ? "Você" : "Selecione")</option>@foreach (var professional in Professionals) { <option value="@professional.AccountId">@professional.FullName</option> }</select></div>
                     <div class="field"><label for="booking-modality">Modalidade</label><select id="booking-modality" @bind="ModalityCode" disabled="@Busy" @bind:after="ModalityChanged"><option value="in_person">Presencial</option><option value="online">Online</option></select></div>
                     <div class="appointment-billing-options">
@@ -42,12 +42,12 @@ else
                 <section class="appointment-services-section">
                     <div class="field"><label id="booking-service-label">Pesquisar serviço</label><button id="booking-service-trigger" type="button" class="appointment-service-trigger" aria-labelledby="booking-service-label" @onclick="OpenServices">Pesquisar e selecionar serviços <span aria-hidden="true">⌄</span></button></div>
                     <div id="booking-service-picker" popover="auto" class="appointment-service-dropdown">
-                        <div class="appointment-service-picker-heading"><strong>Serviços · @Categories.First(x=>x.Code==Category).Label</strong><button type="button" popovertarget="booking-service-picker" popovertargetaction="hide" aria-label="Fechar lista de serviços">×</button></div>
+                        <div class="appointment-service-picker-heading"><strong>Serviços · @PatientLabels.CombinedCategories(CategorySelection, "consultation")</strong><button type="button" popovertarget="booking-service-picker" popovertargetaction="hide" aria-label="Fechar lista de serviços">×</button></div>
                         <input aria-label="Pesquisar serviço por nome" @bind="ServiceSearch" @bind:event="oninput" placeholder="Digite para pesquisar…" maxlength="100" />
                         <div class="appointment-service-matches">
                             @foreach(var service in VisibleServices)
                             {
-                                <label class="appointment-service-option @(SelectedIds.Contains(service.Id) ? "appointment-service-option--selected" : null)"><input type="checkbox" checked="@SelectedIds.Contains(service.Id)" disabled="@(Busy || SelectedIds.Count>0 && service.ModalityCode!="both" && service.ModalityCode!=ModalityCode)" @onchange="()=>ToggleService(service)" /><span><strong>@service.Name</strong><small>@service.DurationMinutes min · @if(BillingForm=="insurance" || !service.RequiresPayment){<strong>Sem cobrança</strong>}else if(Patient?.IsPremium==true){<s>@Money(service.BasePrice)</s> <b>@Money(Discounted(service.BasePrice))</b>}else{@Money(service.BasePrice)}</small></span></label>
+                                <label class="appointment-service-option @(SelectedIds.Contains(service.Id) ? "appointment-service-option--selected" : null)"><input type="checkbox" checked="@SelectedIds.Contains(service.Id)" disabled="@(Busy || !SelectedIds.Contains(service.Id) && (SelectedIds.Count>=20 || SelectedIds.Count>0 && service.ModalityCode!="both" && service.ModalityCode!=ModalityCode))" @onchange="()=>ToggleService(service)" /><span><strong>@service.Name</strong><small>@PatientLabels.Category(service.CategoryCode) · @service.DurationMinutes min · @if(BillingForm=="insurance" || !service.RequiresPayment){<strong>Sem cobrança</strong>}else if(Patient?.IsPremium==true){<s>@Money(service.BasePrice)</s> <b>@Money(Discounted(service.BasePrice))</b>}else{@Money(service.BasePrice)}</small></span></label>
                             }
                             @if(!VisibleServices.Any()){<p class="field-hint">Nenhum serviço ativo para este tipo e especialidade.</p>}
                         </div>
@@ -114,7 +114,8 @@ else
     private readonly List<uint> SelectedIds = [];
     private ulong PatientIdValue, ProfessionalId;
     private uint SpecialtyId;
-    private string Category = "consultation", ModalityCode = "in_person", BillingForm = "private", ServiceSearch = "", PatientSearch = "", PatientSearchNormalized = "", Notes = "", PointKind = "";
+    private readonly HashSet<string> CategorySelection = ["consultation"];
+    private string ModalityCode = "in_person", BillingForm = "private", ServiceSearch = "", PatientSearch = "", PatientSearchNormalized = "", Notes = "", PointKind = "";
     private decimal PointValue, MaxDiscount = 30;
     private bool DiscountAllowed;
     private bool PayLater;
@@ -123,11 +124,10 @@ else
     private DateOnly Date = DateOnly.FromDateTime(DateTime.Today);
     private DateOnly? InitialDate;
     private string? SelectedTime;
-    private static readonly (string Code, string Label)[] Categories = [("consultation", "Consulta"), ("examination", "Exame"), ("surgery", "Cirurgia"), ("procedure", "Procedimento")];
     private uint PrimaryId => SelectedIds.FirstOrDefault();
     private bool DurationValid => SelectedIds.Count <= 1 || Duration is >= 5 and <= 720;
     private IEnumerable<ManagerPatient> MatchingPatients => Patients.Where(x => PatientKeys[x.AccountId].Contains(PatientSearchNormalized, StringComparison.Ordinal)).Take(50);
-    private IEnumerable<ManagerService> VisibleServices => Services.Where(x => x.CategoryCode == Category && x.SpecialtyId == SpecialtyId && (ServiceSearch == "" || PatientSearchKey.Normalize(x.Name).Contains(PatientSearchKey.Normalize(ServiceSearch), StringComparison.Ordinal))).OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase);
+    private IEnumerable<ManagerService> VisibleServices => Services.Where(x => CategorySelection.Contains(x.CategoryCode) && x.SpecialtyId == SpecialtyId && (ServiceSearch == "" || PatientSearchKey.Normalize(x.Name).Contains(PatientSearchKey.Normalize(ServiceSearch), StringComparison.Ordinal))).OrderBy(x => x.Name, StringComparer.CurrentCultureIgnoreCase);
     private IEnumerable<ManagerService> SelectedServices => Services.Where(x => SelectedIds.Contains(x.Id));
     private decimal BaseTotal => SelectedServices.Sum(x => x.RequiresPayment ? x.BasePrice : 0);
     private bool ChargeRequired => BillingForm == "private" && SelectedServices.Any(x => x.RequiresPayment);
@@ -189,7 +189,14 @@ else
     private void ChoosePatient(ManagerPatient patient) { Patient = patient; PatientIdValue = patient.AccountId; PatientPickerRevision++; ResetSlots(); }
     private Task OpenServices()=>Module!.InvokeVoidAsync("openServicePicker","booking-service-trigger","booking-service-picker").AsTask();
     private Task SpecialtyChanged()=>Run(async()=>{SelectedIds.Clear();Duration=0;await LoadProfessionals();});
-    private Task CategoryChanged() => Run(async () => { SelectedIds.Clear(); ServiceSearch = ""; Duration = 0; await LoadProfessionals(); });
+    private Task CategoryChanged(string category) => Run(async () =>
+    {
+        if (CategorySelection.Add(category)) return;
+        CategorySelection.Remove(category);
+        if (SelectedIds.RemoveAll(id => Services.Any(s => s.Id == id && s.CategoryCode == category)) == 0) return;
+        Duration = SelectedServices.Sum(x => (int)x.DurationMinutes);
+        await LoadProfessionals();
+    });
     private Task ToggleService(ManagerService service) => Run(async () =>
     {
         if (!SelectedIds.Remove(service.Id)) { if (SelectedIds.Count == 0) ModalityCode = service.ModalityCode == "online" ? "online" : "in_person"; SelectedIds.Add(service.Id); }

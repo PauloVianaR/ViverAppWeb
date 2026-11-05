@@ -154,9 +154,18 @@ public sealed class MedicalRecordService(
             && (x.StatusCode == "confirmed" || x.StatusCode == "arrived" || x.StatusCode == "in_progress" || x.StatusCode == "completed"));
         if (IsClinicalProfessional(roleCode))
             query = query.Where(x => x.ProfessionalAccountId == actorId);
-        return await query.OrderByDescending(x => x.StartsAtUtc).Take(100)
-            .Select(x => new MedicalRecordAppointmentOption(x.Id, x.AppointmentNumber, x.StartsAtUtc,
-                x.StatusCode, x.AppointmentType.Name)).ToArrayAsync(ct);
+        var rows = await query.OrderByDescending(x => x.StartsAtUtc).Take(100)
+            .Select(x => new
+            {
+                x.Id,
+                x.AppointmentNumber,
+                x.StartsAtUtc,
+                x.StatusCode,
+                x.AppointmentType.Name,
+                Services = x.AppointmentServiceItems.OrderBy(s => s.Ordinal).Select(s => s.NameSnapshot).ToArray()
+            }).ToArrayAsync(ct);
+        return rows.Select(x => new MedicalRecordAppointmentOption(x.Id, x.AppointmentNumber, x.StartsAtUtc,
+            x.StatusCode, x.Services.Length > 0 ? string.Join(" + ", x.Services) : x.Name)).ToArray();
     }
 
     public async Task<MedicalRecordPage<MedicalRecordAppointmentReport>> AppointmentReportsAsync(
@@ -173,6 +182,7 @@ public sealed class MedicalRecordService(
         var appointments = await query
             .Include(x => x.ProfessionalAccount).ThenInclude(x => x.Account)
             .Include(x => x.AppointmentType)
+            .Include(x => x.AppointmentServiceItems)
             .Include(x => x.Specialty)
             .Include(x => x.MedicalReport)
             .OrderByDescending(x => x.StartsAtUtc).ThenByDescending(x => x.Id)
@@ -193,7 +203,7 @@ public sealed class MedicalRecordService(
         await AuthorizeAsync(actorId, roleCode, recentAuthentication, patientId, "pdf", null, ct);
         var query = database.Appointments.AsNoTracking()
             .Include(x => x.ProfessionalAccount).ThenInclude(x => x.Account)
-            .Include(x => x.AppointmentType).Include(x => x.MedicalReport)
+            .Include(x => x.AppointmentType).Include(x => x.AppointmentServiceItems).Include(x => x.MedicalReport)
             .Where(x => x.Id == appointmentId && x.PatientAccountId == patientId
                 && x.StatusCode != "pending" && x.StatusCode != "canceled");
         if (IsClinicalProfessional(roleCode))
@@ -216,7 +226,7 @@ public sealed class MedicalRecordService(
                 ?? new OphthalmologyReportFields(report.ClinicalSummary, null, null, null, null, null)
             : null;
         return new(appointment.Id, appointment.AppointmentNumber, appointment.StartsAtUtc,
-            appointment.StatusCode, appointment.AppointmentType.Name,
+            appointment.StatusCode, appointment.AppointmentServiceItems.Count > 0 ? string.Join(" + ", appointment.AppointmentServiceItems.OrderBy(s => s.Ordinal).Select(s => s.NameSnapshot)) : appointment.AppointmentType.Name,
             appointment.ProfessionalAccount.Account.FullName, ophthalmology,
             ophthalmology ? null : report?.ClinicalSummary, report?.Recommendations, fields);
     }

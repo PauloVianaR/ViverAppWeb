@@ -471,6 +471,10 @@ Cada fase deve:
 
 **Estado:** implementada e validada localmente na branch `codex/fase-32-pagamento-posterior-impressoes`. Commit, integração na main e push autorizados expressamente pelo proprietário em 15/10/2026. Regras, migrations, evidências e limitações externas em [Fase 32 — Pagamento posterior e impressões](FASE-32-PAGAMENTO-POSTERIOR-IMPRESSOES.md); pendências reais mantidas no registro local. A autorização de Git não ativa produção nem antecipa outra fase.
 
+## Fase 33 — Agendamentos com tipos combinados
+
+**Estado:** implementada e validada na branch `codex/fase-33-agendamentos-tipos-combinados`, após atualização da main. Commit e integração na main autorizados expressamente pelo proprietário, incluindo os complementos de CPF opcional, compatibilidade com Visual Studio e layout do seletor. Plano, evidências e limites em [Fase 33 — Tipos combinados](FASE-33-TIPOS-COMBINADOS.md). Permite combinar as quatro categorias, preservando especialidade, profissional, modalidade e regras financeiras. A integração exige PR e check `portable` aprovado; não ativa produção nem antecipa outra fase.
+
 ## Marcos sugeridos
 
 - **Marco A — Base confiável:** Fases 0 a 4.

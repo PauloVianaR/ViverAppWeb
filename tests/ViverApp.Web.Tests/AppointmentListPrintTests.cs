@@ -13,6 +13,18 @@ namespace ViverApp.Web.Tests;
 public sealed class AppointmentListPrintTests
 {
     [Fact]
+    public async Task PrintShowsEveryDistinctCategoryEvenWhenOnlyTheSecondaryCategoryWasFiltered()
+    {
+        var row = new AppointmentPrintRow(133, "QA33 Paciente", "QA33 Profissional", "Consulta + Procedimento", "consultation", "Oftalmologia", DateTime.Today,
+            "private", 200, 160, true, false, true, "QA33", "confirmed")
+        { CategoryCodes = ["consultation", "examination", "surgery", "procedure"] };
+        var html = System.Net.WebUtility.HtmlDecode(await Render(new("QA33", "Gestor QA33", DateTime.Today, "America/Sao_Paulo", "Tipo: Procedimento", [row])));
+        Assert.Contains("Consulta + Exame + Cirurgia + Procedimento", html);
+        Assert.Contains("Tipo: Procedimento", html);
+        Assert.Contains("#133", html);
+    }
+
+    [Fact]
     public async Task CompactPrintContainsHeaderEveryRowDiscountsAndEscapedNotes()
     {
         var rows = Enumerable.Range(100, 25).Select(number => new AppointmentPrintRow((ulong)number,
