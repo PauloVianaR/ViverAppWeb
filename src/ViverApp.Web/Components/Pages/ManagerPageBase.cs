@@ -48,11 +48,17 @@ public abstract class ManagerPageBase : ComponentBase, IAsyncDisposable
     }
     protected abstract Task Load();
     protected Task<T?> Get<T>(string path) => Request<T>(path, "GET", null);
+    protected async Task<T?> GetStreamed<T>(string path) => ResultData(
+        await BrowserApiResponseStream.GetAsync<T>(JavaScript, Backend.BaseUrl.ToString(), path));
     protected async Task LoadAppointmentViewAsync() { if (appointmentViewLoaded) return; var preference = await Get<AppointmentViewPreference>("api/v1/me/preferences/appointment-view"); AppointmentViewMode = preference?.Mode == "compact" ? "compact" : "cards"; appointmentViewLoaded = true; }
     protected Task ChangeAppointmentView(string mode) => Run(async () => { var preference = await Request<AppointmentViewPreference>("api/v1/me/preferences/appointment-view", "PUT", new { mode }); AppointmentViewMode = preference?.Mode == "compact" ? "compact" : "cards"; });
     protected async Task<T?> Request<T>(string path, string method, object? data, string? key = null)
     {
         var result = await Module!.InvokeAsync<PatientApiResult<T>>("request", Backend.BaseUrl.ToString(), path, method, data, key);
+        return ResultData(result);
+    }
+    private T? ResultData<T>(PatientApiResult<T> result)
+    {
         if (!result.Ok) { if (result.Status == 401) Navigation.NavigateTo("/acesso?estado=sessao-expirada", true); throw new ManagerUiException(result.Error ?? "Não foi possível concluir."); }
         return result.Data;
     }

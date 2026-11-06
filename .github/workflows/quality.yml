@@ -29,7 +29,7 @@ jobs:
       - name: Verify formatting
         run: dotnet format ViverApp.slnx --verify-no-changes --no-restore
       - name: Scheduling navigation JavaScript tests
-        run: node --test tests/ViverApp.Web.Tests/appointment-navigation.test.mjs
+        run: node --test tests/ViverApp.Web.Tests/appointment-navigation.test.mjs tests/ViverApp.Web.Tests/booking-api-stream.test.mjs
       - name: Security, Web and Identity tests without database
         shell: pwsh
         run: |
