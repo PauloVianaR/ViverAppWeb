@@ -35,7 +35,7 @@ jobs:
         shell: pwsh
         run: ./scripts/assert-dotnet-sdk.ps1
       - name: Scheduling navigation JavaScript tests
-        run: node --test tests/ViverApp.Web.Tests/appointment-navigation.test.mjs
+        run: node --test tests/ViverApp.Web.Tests/appointment-navigation.test.mjs tests/ViverApp.Web.Tests/booking-api-stream.test.mjs
       - name: Restore, build, format and portable tests
         shell: pwsh
         run: |

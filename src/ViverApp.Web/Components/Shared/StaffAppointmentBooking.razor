@@ -147,7 +147,7 @@ else
         var people = new List<ManagerPatient>();
         for (var page = 1; ; page++)
         {
-            var data = await Get<ManagerPatientsData>($"api/v1/booking-workspace/patients?page={page}&pageSize=100");
+            var data = await GetStreamed<ManagerPatientsData>($"api/v1/booking-workspace/patients?page={page}&pageSize=100");
             if (data is null) break;
             people.AddRange(data.Page.Items);
             if (people.Count >= data.Page.TotalCount || data.Page.Items.Count == 0) break;
