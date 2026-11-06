@@ -1,8 +1,8 @@
 import { request } from "./patient-experience.js";
 
-// Return only the stream reference through SignalR. Blazor transfers the JSON
-// in bounded chunks instead of closing the circuit on a large patient page.
+// InvokeAsync<IJSStreamReference> wraps this Blob in a stream reference itself.
+// Returning an already wrapped reference would fail the framework's Blob check.
 export async function get(base, path) {
     const response = await request(base, path);
-    return DotNet.createJSStreamReference(new Blob([JSON.stringify(response)], { type: "application/json" }));
+    return new Blob([JSON.stringify(response)], { type: "application/json" });
 }

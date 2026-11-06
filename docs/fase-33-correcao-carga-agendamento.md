@@ -25,6 +25,11 @@ limite total de 1 MiB e liberação das referências e do stream também em falh
 Autorização, cookies, `no-store`, erros HTTP e paginação existente são mantidos.
 Não há aumento do limite global SignalR, migration ou alteração de dados.
 
+A chamada tipada `InvokeAsync<IJSStreamReference>` faz o encapsulamento no
+framework. A função JavaScript precisa devolver o Blob diretamente, sem chamar
+`DotNet.createJSStreamReference` outra vez. O teste JavaScript exige esse tipo de
+retorno; um mock de referência pronta não cobre esse contrato de interoperabilidade.
+
 O mecanismo é o streaming de JS para .NET documentado pela
 [Microsoft para Blazor](https://learn.microsoft.com/en-us/aspnet/core/blazor/javascript-interoperability/call-dotnet-from-javascript?view=aspnetcore-10.0#stream-from-javascript-to-net).
 
