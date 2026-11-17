@@ -62,6 +62,7 @@ public sealed class IdentityApiSecurityTests : IAsyncLifetime
     [InlineData("/api/v1/staff/messages/1")]
     [InlineData("/api/v1/staff/manager-alerts")]
     [InlineData("/api/v1/staff/patient-birthdays")]
+    [InlineData("/api/v1/administrator/accounts/1")]
     [InlineData("/api/v1/calendar/day-plan?anchor=2026-10-09&professionalAccountId=1")]
     public async Task StaffAndDailyScheduleEndpoints_RejectAnonymousAccess(string path)
     {

@@ -1,0 +1,1 @@
+ALTER TABLE accounts DROP CHECK ck_accounts_admin_email_pending, DROP COLUMN admin_email_verification_pending;

@@ -13,7 +13,8 @@ public sealed class SmtpIdentitySender(IdentityDeliveryOptions options)
         string subject,
         string body,
         CancellationToken cancellationToken,
-        Guid? idempotencyKey = null)
+        Guid? idempotencyKey = null,
+        string? htmlBody = null)
     {
         var message = new MimeMessage
         {
@@ -23,6 +24,8 @@ public sealed class SmtpIdentitySender(IdentityDeliveryOptions options)
                 Text = body,
             },
         };
+        if (htmlBody is not null)
+            message.Body = new BodyBuilder { TextBody = body, HtmlBody = htmlBody }.ToMessageBody();
         if (idempotencyKey.HasValue)
             message.MessageId = $"{idempotencyKey.Value:N}@viveralmenara.com";
         message.From.Add(MailboxAddress.Parse(options.SmtpUser));

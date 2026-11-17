@@ -61,6 +61,8 @@ public sealed class ViverAppUserStore(
             TaxId = user.TaxId,
             BirthDate = user.BirthDate,
             PasswordHash = user.PasswordHash,
+            PasswordSetupRequired = user.PasswordSetupRequired,
+            AdminEmailVerificationPending = user.AdminEmailVerificationPending && !user.EmailConfirmed,
             EmailVerified = user.EmailConfirmed,
             PhoneVerified = user.PhoneNumberConfirmed,
             PreferredRecoveryChannel = user.PreferredRecoveryChannel,
@@ -121,6 +123,8 @@ public sealed class ViverAppUserStore(
         account.TaxId = user.TaxId;
         account.BirthDate = user.BirthDate;
         account.PasswordHash = user.PasswordHash;
+        account.PasswordSetupRequired = user.PasswordSetupRequired;
+        account.AdminEmailVerificationPending = user.AdminEmailVerificationPending && !user.EmailConfirmed;
         account.EmailVerified = user.EmailConfirmed;
         account.PhoneVerified = user.PhoneNumberConfirmed;
         account.PreferredRecoveryChannel = user.PreferredRecoveryChannel;
@@ -237,6 +241,7 @@ public sealed class ViverAppUserStore(
     {
         ArgumentNullException.ThrowIfNull(user);
         user.PasswordHash = passwordHash;
+        if (passwordHash is not null) user.PasswordSetupRequired = false;
         return Task.CompletedTask;
     }
 
@@ -828,6 +833,8 @@ public sealed class ViverAppUserStore(
             BirthDate = account.BirthDate,
             PreferredRecoveryChannel = account.PreferredRecoveryChannel,
             PasswordHash = account.PasswordHash,
+            PasswordSetupRequired = account.PasswordSetupRequired,
+            AdminEmailVerificationPending = account.AdminEmailVerificationPending,
             SecurityStamp = Convert.ToHexString(account.SecurityStamp),
             AccessFailedCount = account.FailedLoginCount,
             LockoutEnd = account.LockoutEndUtc is null

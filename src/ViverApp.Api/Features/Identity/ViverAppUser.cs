@@ -34,6 +34,10 @@ public sealed class ViverAppUser
 
     public string? PasswordHash { get; set; }
 
+    public bool PasswordSetupRequired { get; set; }
+
+    public bool AdminEmailVerificationPending { get; set; }
+
     public string SecurityStamp { get; set; } = string.Empty;
 
     public int AccessFailedCount { get; set; }

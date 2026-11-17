@@ -54,6 +54,8 @@ public sealed class DatabaseContractTests
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
         Assert.Equal(74, applicationEntities.Length);
         Assert.NotNull(context.Model.FindEntityType(typeof(PatientBirthdayDailyNotice)));
+        Assert.False(context.Model.FindEntityType(typeof(Account))!.FindProperty(nameof(Account.PasswordSetupRequired))!.IsNullable);
+        Assert.False(context.Model.FindEntityType(typeof(Account))!.FindProperty(nameof(Account.AdminEmailVerificationPending))!.IsNullable);
         Assert.NotNull(context.Model.FindEntityType(typeof(PaymentPendingDailyNotice)));
         Assert.False(context.Model.FindEntityType(typeof(Appointment))!.FindProperty(nameof(Appointment.PaymentDeferred))!.IsNullable);
         Assert.NotNull(context.Model.FindEntityType(typeof(AppointmentOperationalReview)));
@@ -138,7 +140,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal(string.Join(",", Enumerable.Range(1, 64).Select(id => id.ToString("D4", System.Globalization.CultureInfo.InvariantCulture))), migrations);
+        Assert.Equal(string.Join(",", Enumerable.Range(1, 66).Select(id => id.ToString("D4", System.Globalization.CultureInfo.InvariantCulture))), migrations);
 
         var calendarIndex = await ExecuteScalarAsync(connection,
             "SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ',') FROM information_schema.statistics WHERE table_schema='viverappweb' AND table_name='appointments' AND index_name='ix_appointments_start_id'");

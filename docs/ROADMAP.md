@@ -479,6 +479,10 @@ Cada fase deve:
 
 **Estado:** implementada e validada localmente na branch `codex/fase-34-aniversariantes-falta-pagamento`, criada da main sincronizada com o GitHub. Commit e integração na main local autorizados pelo proprietário após as validações. Tela mensal de aniversariantes, aviso diário por usuário e configuração administrativa desativada por padrão para marcar falta em atendimentos Aguardando Pagamento. Migration 0064 aplicada no MySQL local e EF regenerado por DB-First. Evidências e limites em [Fase 34 — Aniversariantes e falta pendente](FASE-34-ANIVERSARIANTES-E-FALTA-PENDENTE.md). Push, ativação de produção e avanço de fase permanecem separados.
 
+## Fase 35 — Cadastro e edição de usuários pelo Administrador
+
+**Estado:** implementada e validada na branch `codex/fase-35-cadastro-edicao-usuarios-admin`, criada da main atualizada. Commit, merge na main e envio ao GitHub autorizados pelo proprietário após as validações, seguindo PR e check `portable`. Cadastro ativo e sem senha dos cinco perfis, e-mail de boas-vindas configurável e edição dos dados de qualquer cadastro, preservando papéis e segurança. Plano e evidências em [Fase 35 — Cadastro e edição administrativa](FASE-35-CADASTRO-EDICAO-USUARIOS-ADMIN.md). Migrations 0065/0066 aplicadas no MySQL local pelo fluxo DB-First. Inspeção visual integrada e entrega SMTP externa registradas nas pendências locais; ativação de produção e avanço de fase permanecem separados.
+
 ## Marcos sugeridos
 
 - **Marco A — Base confiável:** Fases 0 a 4.

@@ -88,6 +88,7 @@ builder.Services.AddScoped<IPatientSchedulingAuditWriter, PatientSchedulingAudit
 builder.Services.AddScoped<PatientSchedulingService>();
 builder.Services.AddScoped<PaymentPendingNoticeService>();
 builder.Services.AddScoped<PatientBirthdayService>();
+builder.Services.AddScoped<AdministratorAccountService>();
 builder.Services.AddAuthorization(options => options.AddPolicy(PatientBirthdayService.AccessPolicy,
     policy => policy.RequireAuthenticatedUser().RequireAssertion(context =>
         context.User.IsInRole(ViverAppRoles.Manager) || context.User.IsInRole(ViverAppRoles.Doctor)
