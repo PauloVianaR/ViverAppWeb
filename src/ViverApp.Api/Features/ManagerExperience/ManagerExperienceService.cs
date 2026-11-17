@@ -164,8 +164,15 @@ public sealed class ManagerExperienceService(ViverAppDbContext database, UserMan
         return new(counters, sources, new(rows.Select(MapAppointment).ToArray(), page, pageSize, total));
     }
 
-    public async Task<ManagerAppointmentResponse> AppointmentAsync(ulong id, CancellationToken ct) =>
-        MapAppointment(await AppointmentQuery().SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw Missing());
+    public async Task<ManagerAppointmentResponse> AppointmentAsync(ulong id, CancellationToken ct)
+    {
+        var item = await AppointmentQuery().SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw Missing();
+        return MapAppointment(item) with
+        {
+            CanMarkNoShow = AppointmentNoShowPolicy.CanMark(item.StatusCode, item.StartsAtUtc, clock.GetUtcNow().UtcDateTime,
+                await AppointmentNoShowPolicy.AllowsPendingAsync(database, ct))
+        };
+    }
 
     public async Task<ManagerPatientsResponse> PatientsAsync(string? search, string? status, bool? premium, int page, int pageSize, CancellationToken ct)
     {

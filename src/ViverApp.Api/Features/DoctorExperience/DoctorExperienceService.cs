@@ -158,7 +158,12 @@ public sealed class DoctorExperienceService(ViverAppDbContext database, UserMana
             .OrderByDescending(x => x.CreatedAtUtc).Select(x => new DoctorDocumentResponse(x.Id, x.OriginalFileName, x.ContentType,
                 x.SizeBytes, x.CreatedAtUtc, x.RowVersion)).ToArrayAsync(ct);
         if (item.MedicalReport is not null) await audit.WriteAsync("medical_report.viewed", doctor, "medical_report", item.MedicalReport.Id.ToString(), null, ct);
-        return new(MapAppointment(item, now), versions, documents);
+        var mapped = MapAppointment(item, now) with
+        {
+            CanMarkNoShow = AppointmentNoShowPolicy.CanMark(item.StatusCode, item.StartsAtUtc, now,
+                await AppointmentNoShowPolicy.AllowsPendingAsync(database, ct))
+        };
+        return new(mapped, versions, documents);
     }
 
     public async Task<DoctorPatientsResponse> PatientsAsync(ulong doctor, string? search, string? status, bool? premium,

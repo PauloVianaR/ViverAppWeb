@@ -1,0 +1,77 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JavaScript
+@inject WebBackendOptions Backend
+@inject UiErrorNotifier Notices
+@inject NavigationManager Navigation
+
+@if (Notice is { BirthdayCount: > 0 })
+{
+    <a class="birthday-notice @(Notice.IsRead ? "" : "birthday-notice--unread")" href="@Destination" @onclick="OpenAsync" @onclick:preventDefault>
+        <AppIcon Name="calendar" />
+        <span><strong>Hoje existem @Notice.BirthdayCount paciente(s) fazendo aniversário.</strong><small>Ver aniversariantes de @Notice.OperationalDate.ToString("MMMM", Culture)</small></span>
+    </a>
+}
+@code {
+    [Parameter, EditorRequired] public string Role { get; set; } = "";
+    [Parameter] public EventCallback<int> UnreadChanged { get; set; }
+    private static readonly System.Globalization.CultureInfo Culture = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+    private readonly CancellationTokenSource Lifetime = new();
+    private IJSObjectReference? module;
+    private BirthdayNotice? Notice;
+    private Task? polling;
+    private bool disposed;
+    private string Destination => Role switch { "manager" => "/gestao/pacientes/aniversariantes", "administrator" => "/administracao/pacientes/aniversariantes", "psychologist" => "/psicologo/pacientes/aniversariantes", _ => "/medico/pacientes/aniversariantes" };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        module = await JavaScript.InvokeAsync<IJSObjectReference>("import", "/js/identity-access.js");
+        await RefreshAsync();
+        polling = PollAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (module is null || disposed) return;
+        try
+        {
+            var check = await module.InvokeAsync<BirthdayDailyCheck>("send", Backend.BaseUrl.ToString(), "api/v1/staff/patient-birthdays/daily-check", new { });
+            if (disposed) return;
+            Notice = check.Notice;
+            await UnreadChanged.InvokeAsync(Notice.BirthdayCount > 0 && !Notice.IsRead ? 1 : 0);
+            if (check.IsNew && Notice.BirthdayCount > 0)
+                Notices.Notify($"Hoje existem {Notice.BirthdayCount} paciente(s) fazendo aniversário. Abra os aniversariantes pelo sininho.");
+            StateHasChanged();
+        }
+        catch (JSException) { if (!disposed) Notices.Show("Não foi possível atualizar o aviso de aniversários. A lista continua disponível em Pacientes."); }
+    }
+
+    private async Task PollAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+        try { while (await timer.WaitForNextTickAsync(Lifetime.Token)) await InvokeAsync(RefreshAsync); }
+        catch (OperationCanceledException) when (Lifetime.IsCancellationRequested) { }
+    }
+
+    private async Task OpenAsync()
+    {
+        if (module is null || Notice is null) return;
+        try
+        {
+            await module.InvokeAsync<object?>("send", Backend.BaseUrl.ToString(), $"api/v1/staff/patient-birthdays/notices/{Notice.Id}/read", new { });
+            Notice = Notice with { IsRead = true };
+            await UnreadChanged.InvokeAsync(0);
+        }
+        catch (JSException) { Notices.Show("Não foi possível confirmar a leitura do aviso. A lista será aberta mesmo assim."); }
+        Navigation.NavigateTo(Destination, forceLoad: true);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        await Lifetime.CancelAsync();
+        if (polling is not null) await polling;
+        Lifetime.Dispose();
+        if (module is not null) try { await module.DisposeAsync(); } catch (JSDisconnectedException) { }
+    }
+}

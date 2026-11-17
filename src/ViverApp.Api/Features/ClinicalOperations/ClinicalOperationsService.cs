@@ -112,8 +112,9 @@ public sealed class ClinicalOperationsService(
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToArrayAsync(cancellationToken);
+        var allowPendingNoShow = await AppointmentNoShowPolicy.AllowsPendingAsync(database, cancellationToken);
         return new ClinicalPage<ClinicalAppointmentResponse>(
-            appointments.Select(item => MapAppointment(item, actorId, roleCode, includeReportContent: false)).ToArray(),
+            appointments.Select(item => MapAppointment(item, actorId, roleCode, includeReportContent: false, allowPendingNoShow)).ToArray(),
             page,
             pageSize,
             total);
@@ -148,7 +149,8 @@ public sealed class ClinicalOperationsService(
                 cancellationToken);
         }
 
-        return MapAppointment(appointment, actorId, roleCode, includeReportContent)
+        return MapAppointment(appointment, actorId, roleCode, includeReportContent,
+            await AppointmentNoShowPolicy.AllowsPendingAsync(database, cancellationToken))
             with
         { IsOphthalmology = isOphthalmology };
     }
@@ -464,9 +466,10 @@ public sealed class ClinicalOperationsService(
         }
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
-        if (appointment.StatusCode is not ("confirmed" or "arrived"))
+        if (!(appointment.StatusCode is "confirmed" or "arrived"
+            || appointment.StatusCode == "pending" && await AppointmentNoShowPolicy.AllowsPendingAsync(database, cancellationToken)))
         {
-            throw Conflict("Somente uma consulta confirmada pode ser marcada como falta.");
+            throw Conflict("O estado do atendimento não permite registrar falta. A dispensa de confirmação por pagamento depende de configuração administrativa.");
         }
 
         if (appointment.StartsAtUtc > now)
@@ -558,7 +561,8 @@ public sealed class ClinicalOperationsService(
         Appointment appointment,
         ulong actorId,
         string roleCode,
-        bool includeReportContent)
+        bool includeReportContent,
+        bool allowPendingNoShow = false)
     {
         var isAssignedDoctor = IsClinicalProfessional(roleCode) && appointment.ProfessionalAccountId == actorId;
         var now = timeProvider.GetUtcNow().UtcDateTime;
@@ -580,7 +584,7 @@ public sealed class ClinicalOperationsService(
             appointment.RowVersion,
             appointment.MedicalReport is null ? null : MapReport(appointment.MedicalReport, includeReportContent),
             isAssignedDoctor && appointment.StatusCode is ("confirmed" or "arrived" or "in_progress"),
-            appointment.StatusCode is ("confirmed" or "arrived") && appointment.StartsAtUtc <= now
+            AppointmentNoShowPolicy.CanMark(appointment.StatusCode, appointment.StartsAtUtc, now, allowPendingNoShow)
                 && (isAssignedDoctor || roleCode is ViverAppRoles.Manager or ViverAppRoles.Administrator));
     }
 

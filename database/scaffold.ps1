@@ -62,6 +62,7 @@ $tables = @(
     'professional_notifications',
     'manager_notifications',
     'payment_pending_daily_notices',
+    'patient_birthday_daily_notices',
     'staff_messages',
     'medical_reports',
     'medical_report_versions',
