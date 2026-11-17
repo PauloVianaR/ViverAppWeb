@@ -1,0 +1,16 @@
+.admin-account-form { padding:clamp(1rem,2.5vw,2rem); max-width:78rem; }
+.admin-account-form fieldset { border:0; padding:0; margin:0 0 1.5rem; min-width:0; }
+.admin-account-form legend { font-weight:750; font-size:1.15rem; margin-bottom:1rem; }
+.admin-account-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; }
+.admin-account-wide { grid-column:span 2; }
+.admin-account-full { grid-column:1/-1; }
+.admin-account-section { padding:1rem; margin-bottom:1.5rem; border:1px solid var(--color-border); border-radius:var(--radius-md); }
+.admin-account-section > summary { cursor:pointer; font-weight:700; }
+.admin-account-section[open] > summary { margin-bottom:1rem; }
+.admin-specialty-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(15rem,100%),1fr)); gap:.5rem; max-height:22rem; overflow:auto; }
+.admin-specialty-list label { display:flex; gap:.6rem; align-items:center; min-height:44px; padding:.5rem; }
+.admin-specialty-list input { flex:0 0 auto; width:1.1rem; height:1.1rem; padding:0; }
+.admin-account-hint { background:var(--color-surface-muted); padding:1rem; border-radius:var(--radius-md); }
+.admin-account-actions { display:flex; gap:.75rem; flex-wrap:wrap; margin-top:1.5rem; }
+@media(max-width:850px) { .admin-account-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:540px) { .admin-account-grid { grid-template-columns:minmax(0,1fr); } .admin-account-wide { grid-column:auto; } .admin-account-actions > * { flex:1; justify-content:center; } }

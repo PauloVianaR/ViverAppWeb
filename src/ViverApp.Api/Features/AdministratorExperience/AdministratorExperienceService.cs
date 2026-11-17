@@ -24,7 +24,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
         "appointments.default_procedure_minutes", "appointments.default_specialty_id", "manager.appointment_types_enabled", "manager.professional_schedules_enabled",
         "manager.professional_services_enabled", "manager.point_discounts_enabled", "appointments.point_discount_max_percent",
         "professional.patient_scheduling_enabled", "premium.manager_can_manage", "manager.medical_records_write_enabled",
-        "cash.manager_can_reopen", "cash.manager_can_view_cumulative_totals", PatientRegistrationPolicy.AllowWithoutCpfKey, AppointmentNoShowPolicy.AllowPendingKey,
+        "cash.manager_can_reopen", "cash.manager_can_view_cumulative_totals", PatientRegistrationPolicy.AllowWithoutCpfKey, AppointmentNoShowPolicy.AllowPendingKey, AdministratorAccountService.WelcomeEmailKey,
         "appointments.interval_minutes", "communications.email_enabled", "communications.sms_enabled", "premium.manager_can_decide",
         "appointments.arrival_notifications_enabled", "appointments.arrival_popup_enabled", "appointments.arrival_sound_enabled",
         "appointments.arrival_sound_volume", "appointments.arrival_sound_key",
@@ -395,6 +395,7 @@ public sealed class AdministratorExperienceService(ViverAppDbContext database, M
             or "cash.manager_can_reopen" or "cash.manager_can_view_cumulative_totals" or "appointments.allow_elapsed_same_day_booking"
             or PatientRegistrationPolicy.AllowWithoutCpfKey
             or AppointmentNoShowPolicy.AllowPendingKey
+            or AdministratorAccountService.WelcomeEmailKey
             or "appointments.arrival_notifications_enabled" or "appointments.arrival_popup_enabled" or "appointments.arrival_sound_enabled" or "appointments.arrival_mark_read_on_open")
         { if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw new JsonException(); return; }
         if (key == "appointments.arrival_sound_key")

@@ -1,0 +1,150 @@
+@page "/administracao/usuarios/novo"
+@page "/administracao/usuarios/{AccountId:long}/editar"
+@inherits AdministratorPageBase
+<PageTitle>@(Item is null ? "Cadastrar usuário" : "Editar cadastro") | ViverApp</PageTitle>
+<header class="workspace-heading"><div><p class="eyebrow">Administrador · Usuários</p><h1 class="page-title">@(Item is null ? "Cadastrar usuário" : "Editar cadastro")</h1><p class="page-description">@(Item is null ? "Crie um acesso ativo, sem senha e sem aprovação posterior." : "Atualize os dados cadastrais, preservando o papel, o estado e as proteções da conta.")</p></div><a class="button button--secondary" href="/administracao/usuarios">Voltar aos usuários</a></header>
+@if (Notice is not null) { <UiNotice Message="@Notice" IsError="NoticeError" /> }
+@if (Loading) { <LoadingSkeleton Lines="7" /> }
+else if (Ready)
+{
+    <form class="surface admin-account-form" @onsubmit="Save" @onsubmit:preventDefault>
+        <fieldset disabled="@Busy">
+            <legend>Dados do usuário</legend>
+            <div class="admin-account-grid">
+                <div class="field"><label for="account-role">Tipo de usuário</label><select id="account-role" value="@RoleCode" @onchange="ChangeRole" disabled="@(Item is not null)"><option value="patient">Paciente</option><option value="doctor">Médico</option><option value="psychologist">Psicólogo</option><option value="manager">Gestor</option><option value="administrator">Administrador</option></select></div>
+                <div class="field admin-account-wide"><label for="account-name">Nome completo</label><input id="account-name" @bind="FullName" @bind:event="oninput" required minlength="3" maxlength="200" autocomplete="name" /></div>
+                <div class="field"><label for="account-email">E-mail@(EmailRequired ? "" : " (opcional)")</label><input id="account-email" type="email" @bind="Email" @bind:event="oninput" required="@EmailRequired" maxlength="254" autocomplete="email" /></div>
+                <div class="field"><label for="account-phone">Telefone@(IsStaff ? "" : " (opcional)")</label><input id="account-phone" type="tel" value="@Phone" @oninput="PhoneChanged" required="@IsStaff" maxlength="16" placeholder="(XX) 9XXXX-XXXX" autocomplete="tel-national" /></div>
+                <div class="field"><label for="account-cpf">CPF@(CpfRequired ? "" : " (opcional)")</label><input id="account-cpf" value="@MaskedCpf" @oninput="CpfChanged" inputmode="numeric" maxlength="14" required="@CpfRequired" placeholder="000.000.000-00" /></div>
+                <div class="field"><label for="account-birth">Data de nascimento@(BirthRequired ? "" : " (opcional)")</label><input id="account-birth" type="date" @bind="Birth" required="@BirthRequired" max="@DateTime.Today.ToString("yyyy-MM-dd")" min="1900-01-01" /></div>
+            </div>
+        </fieldset>
+        @if (RoleCode == "patient")
+        {
+            <fieldset disabled="@Busy"><legend>Cadastro do paciente</legend><div class="admin-account-grid">
+                <div class="field"><label for="account-preferred">Nome preferido</label><input id="account-preferred" @bind="PreferredName" maxlength="120" /></div>
+                <div class="field admin-account-wide"><label for="account-notes">Observação</label><textarea id="account-notes" @bind="Notes" rows="2" maxlength="2000"></textarea></div>
+            </div></fieldset>
+            <details class="admin-account-section"><summary>Endereço do paciente (opcional)</summary><div class="admin-account-grid">
+                <div class="field"><label for="account-postal">CEP</label><input id="account-postal" value="@MaskedPostal" @oninput="PostalChanged" inputmode="numeric" maxlength="9" placeholder="00000-000" /></div>
+                <div class="field admin-account-wide"><label for="account-street">Logradouro</label><input id="account-street" @bind="Street" maxlength="200" /></div>
+                <div class="field"><label for="account-number">Número</label><input id="account-number" @bind="Number" maxlength="20" /></div>
+                <div class="field"><label for="account-complement">Complemento</label><input id="account-complement" @bind="Complement" maxlength="100" /></div>
+                <div class="field"><label for="account-district">Bairro</label><input id="account-district" @bind="District" maxlength="100" /></div>
+                <div class="field"><label for="account-city">Cidade</label><input id="account-city" @bind="City" maxlength="100" /></div>
+                <div class="field"><label for="account-state">UF</label><select id="account-state" @bind="State"><option value="">Selecione</option>@foreach (var state in States) { <option value="@state">@state</option> }</select></div>
+            </div></details>
+        }
+        @if (IsProfessional)
+        {
+            <fieldset disabled="@Busy"><legend>Dados profissionais</legend><div class="admin-account-grid">
+                <div class="field"><label for="account-title">Título</label><select id="account-title" @bind="Title">@if (RoleCode == "doctor") { <option>Dr.</option><option>Dra.</option> } else { <option>Psic.</option><option>Psicóloga</option> }</select></div>
+                <div class="field"><label for="account-license-state">UF do @(RoleCode == "psychologist" ? "CRP" : "CRM")</label><select id="account-license-state" @bind="LicenseState" required><option value="">Selecione</option>@foreach (var state in States) { <option value="@state">@state</option> }</select></div>
+                <div class="field"><label for="account-license">Número do @(RoleCode == "psychologist" ? "CRP" : "CRM")</label><input id="account-license" @bind="License" required maxlength="30" /></div>
+                <div class="field"><label for="account-experience">Anos de experiência</label><input id="account-experience" type="number" @bind="Experience" min="0" max="80" required /></div>
+                <div class="field"><label for="account-duration">Duração padrão (minutos)</label><input id="account-duration" type="number" @bind="Duration" min="5" max="240" required /></div>
+                <div class="field"><label for="account-primary">Especialidade principal</label><select id="account-primary" value="@Primary" @onchange="PrimaryChanged" required><option value="0">Selecione</option>@foreach (var specialty in Options?.Specialties ?? []) { <option value="@specialty.Id">@specialty.Name</option> }</select></div>
+                <div class="field admin-account-full"><label for="account-bio">Apresentação profissional</label><textarea id="account-bio" @bind="Biography" rows="3" maxlength="4000"></textarea></div>
+            </div>
+            <details class="admin-account-section"><summary>Outras especialidades</summary><div class="admin-specialty-list">@foreach (var specialty in Options?.Specialties ?? []) { <label><input type="checkbox" checked="@Specialties.Contains(specialty.Id)" disabled="@(specialty.Id == Primary)" @onchange="e=>ToggleSpecialty(specialty.Id,e.Value is true)" /><span>@specialty.Name</span></label> }</div></details>
+            </fieldset>
+        }
+        @if (Item is null)
+        {
+            <p class="admin-account-hint">A pessoa definirá sua senha em <strong>Esqueci a senha</strong>, usando o e-mail cadastrado. O envio do e-mail de boas-vindas segue a configuração administrativa. Não é necessário informar uma senha aqui.</p>
+        }
+        else
+        {
+            <p class="admin-account-hint">@(Item.PasswordSetupRequired ? "Esta conta ainda precisa definir a primeira senha pelo e-mail cadastrado. " : "")Alterar contatos invalida sessões e códigos antigos; a posse do novo e-mail será confirmada na recuperação de senha. O envio de boas-vindas ocorre somente na criação.</p>
+        }
+        @if (RoleCode == "administrator") { <p class="field-hint">O acesso administrativo continua exigindo MFA. Seus próprios contatos devem ser alterados em Segurança da conta.</p> }
+        <div class="admin-account-actions"><button class="button" disabled="@Busy"><AppIcon Name="check" />@(Busy ? "Salvando…" : Item is null ? "Cadastrar usuário" : "Salvar cadastro")</button><a class="button button--secondary" href="/administracao/usuarios">Voltar</a></div>
+    </form>
+}
+@code {
+    [Parameter] public long? AccountId { get; set; }
+    private static readonly string[] States = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".Split(' ');
+    private AdminAccountDetails? Item;
+    private WebRegistrationOptions? Options;
+    private bool Ready;
+    private string RoleCode = "patient", FullName = "", Email = "", Phone = "", Cpf = "", PreferredName = "", Notes = "";
+    private string Postal = "", Street = "", Number = "", Complement = "", District = "", City = "", State = "";
+    private string Title = "Dr.", LicenseState = "", License = "", Biography = "";
+    private ushort Experience, Duration = 10;
+    private DateTime? Birth;
+    private uint Primary;
+    private readonly HashSet<uint> Specialties = [];
+    private bool IsStaff => RoleCode is "doctor" or "psychologist" or "manager";
+    private bool IsProfessional => RoleCode is "doctor" or "psychologist";
+    private bool EmailRequired => Item is null || Item.PasswordSetupRequired;
+    private bool CpfRequired => RoleCode != "administrator" && (RoleCode != "patient" || Options?.AllowPatientWithoutCpf != true);
+    private bool BirthRequired => IsStaff || Item is null && RoleCode == "patient";
+    private static string Digits(string? value) => new((value ?? "").Where(char.IsAsciiDigit).ToArray());
+    private static string? Empty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private string MaskedCpf => Cpf.Length <= 3 ? Cpf : Cpf.Length <= 6 ? $"{Cpf[..3]}.{Cpf[3..]}" : Cpf.Length <= 9 ? $"{Cpf[..3]}.{Cpf[3..6]}.{Cpf[6..]}" : $"{Cpf[..3]}.{Cpf[3..6]}.{Cpf[6..9]}-{Cpf[9..]}";
+    private string MaskedPostal => Postal.Length > 5 ? $"{Postal[..5]}-{Postal[5..]}" : Postal;
+    private void CpfChanged(ChangeEventArgs e) => Cpf = new string(Digits(e.Value?.ToString()).Take(11).ToArray());
+    private void PhoneChanged(ChangeEventArgs e) => Phone = BrazilianPhoneInput.Mask(e.Value?.ToString());
+    private void ChangeRole(ChangeEventArgs e) { RoleCode = e.Value?.ToString() ?? "patient"; Title = RoleCode == "psychologist" ? "Psic." : "Dr."; Primary = 0; Specialties.Clear(); ChooseDefaultSpecialty(); }
+    private void ChooseDefaultSpecialty()
+    {
+        if (!IsProfessional) return;
+        var key = RoleCode == "psychologist" ? "Psicologia" : "Oftalmologia";
+        Primary = Options?.Specialties.FirstOrDefault(s => s.Name.Equals(key, StringComparison.OrdinalIgnoreCase))?.Id ?? 0;
+        if (Primary > 0) Specialties.Add(Primary);
+    }
+    private void PrimaryChanged(ChangeEventArgs e) { Primary = uint.TryParse(e.Value?.ToString(), out var id) ? id : 0; if (Primary > 0) Specialties.Add(Primary); }
+    private void ToggleSpecialty(uint id, bool selected) { if (selected) Specialties.Add(id); else if (id != Primary) Specialties.Remove(id); }
+    protected override async Task Load()
+    {
+        Ready = false;
+        Options = await Get<WebRegistrationOptions>("api/v1/auth/registration/options");
+        if (AccountId.HasValue) Apply(await Get<AdminAccountDetails>($"api/v1/administrator/accounts/{AccountId}"));
+        else
+        {
+            Item = null; RoleCode = "patient"; FullName = Email = Phone = Cpf = PreferredName = Notes = "";
+            Postal = Street = Number = Complement = District = City = State = "";
+            Title = "Dr."; LicenseState = License = Biography = ""; Experience = 0; Duration = 10; Birth = null; Primary = 0; Specialties.Clear();
+        }
+        Ready = true;
+    }
+    private void Apply(AdminAccountDetails? item)
+    {
+        Item = item ?? throw new AdministratorUiException("Usuário não encontrado.");
+        RoleCode = item.RoleCode; var data = item.Data;
+        FullName = data.FullName; Email = data.Email ?? ""; Phone = BrazilianPhoneInput.Mask(data.Phone); Cpf = Digits(data.TaxId); Birth = data.BirthDate?.ToDateTime(TimeOnly.MinValue);
+        PreferredName = data.Patient?.PreferredName ?? ""; Notes = data.Patient?.AdministrativeNotes ?? "";
+        var address = data.Patient?.Address;
+        Postal = address?.PostalCode ?? ""; Street = address?.Street ?? ""; Number = address?.Number ?? ""; Complement = address?.Complement ?? ""; District = address?.District ?? ""; City = address?.City ?? ""; State = address?.StateCode ?? "";
+        var p = data.Professional;
+        Title = p?.Registration.ProfessionalTitle ?? (RoleCode == "psychologist" ? "Psic." : "Dr."); License = p?.Registration.LicenseNumber ?? ""; LicenseState = p?.Registration.LicenseStateCode ?? "";
+        Experience = p?.Registration.YearsExperience ?? 0; Duration = p?.DefaultAppointmentDurationMinutes ?? 10; Biography = p?.Biography ?? ""; Primary = p?.Registration.PrimarySpecialtyId ?? 0;
+        Specialties.Clear(); if (p is not null) foreach (var id in p.SpecialtyIds) Specialties.Add(id);
+    }
+    private Task PostalChanged(ChangeEventArgs e)
+    {
+        Postal = new string(Digits(e.Value?.ToString()).Take(8).ToArray());
+        var requestedPostal = Postal;
+        if (Postal.Length != 8 || Busy) return Task.CompletedTask;
+        return Run(async () =>
+        {
+            var address = await Get<WebPostalCode>($"api/v1/postal-codes/{requestedPostal}");
+            if (Postal == requestedPostal && address is not null) { Street = address.Street; District = address.District; City = address.City; State = address.StateCode; Complement = address.Complement ?? Complement; }
+        });
+    }
+    private Task Save() => Run(async () =>
+    {
+        var hasAddress = new[] { Postal, Street, Number, Complement, District, City, State }.Any(s => !string.IsNullOrWhiteSpace(s));
+        var patient = RoleCode == "patient" ? new AdminPatientData(Empty(PreferredName), Empty(Notes), hasAddress ? new(Empty(Postal), Empty(Street), Empty(Number), Empty(Complement), Empty(District), Empty(City), Empty(State)) : null) : null;
+        var professional = IsProfessional ? new AdminProfessionalData(new(Title, LicenseState, License, Experience, Primary), Empty(Biography), Duration, Specialties.Order().ToArray(), Item?.Data.Professional?.RowVersion) : null;
+        var data = new AdminAccountData(FullName.Trim(), Empty(Email), Empty(Phone), Empty(Cpf), Birth.HasValue ? DateOnly.FromDateTime(Birth.Value) : null, patient, professional);
+        if (Item is null)
+        {
+            var saved = await Request<AdminAccountSaved>("api/v1/administrator/accounts", "POST", new { roleCode = RoleCode, data });
+            Apply(saved?.Account);
+            Notice = saved!.WelcomeEmailQueued ? "Usuário cadastrado. O e-mail de boas-vindas foi colocado na fila de envio." : "Usuário cadastrado. O e-mail de boas-vindas está desativado na configuração administrativa.";
+            Navigation.NavigateTo($"/administracao/usuarios/{Item!.Id}/editar");
+        }
+        else { Apply(await Request<AdminAccountDetails>($"api/v1/administrator/accounts/{Item.Id}", "PUT", new { data, rowVersion = Item.RowVersion })); Notice = "Cadastro atualizado."; }
+    });
+}

@@ -25,6 +25,10 @@ public partial class Account
 
     public string? PasswordHash { get; set; }
 
+    public bool PasswordSetupRequired { get; set; }
+
+    public bool AdminEmailVerificationPending { get; set; }
+
     public bool EmailVerified { get; set; }
 
     public bool PhoneVerified { get; set; }

@@ -141,6 +141,22 @@ public sealed partial class IdentityOutboxWorker(
         var wrapper = JsonSerializer.Deserialize<ProtectedPayloadEnvelope>(message.PayloadJson)
             ?? throw new InvalidOperationException("identity_payload_envelope_invalid");
         var protectedPayload = Convert.FromBase64String(wrapper.ProtectedPayload);
+        if (message.TemplateKey == "identity.administrator_registration")
+        {
+            if (message.ChannelCode != "email") throw new InvalidOperationException("identity_welcome_channel_invalid");
+            var welcome = JsonSerializer.Deserialize<AdministratorWelcomePayload>(payloadProtector.Unprotect(protectedPayload))
+                ?? throw new InvalidOperationException("identity_welcome_payload_invalid");
+            if (welcome.ExpiresAtUtc <= DateTime.UtcNow) throw new InvalidOperationException("identity_payload_expired");
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var database = scope.ServiceProvider.GetRequiredService<ViverAppDbContext>();
+            var normalized = IdentifierNormalizer.NormalizeEmail(message.Recipient);
+            if (!await database.Accounts.AsNoTracking().AnyAsync(a => a.Id == message.AccountId && a.StatusCode == "active"
+                && a.PortalAccessEnabled && a.NormalizedEmail == normalized, cancellationToken))
+                throw new InvalidOperationException("identity_welcome_destination_changed");
+            var rendered = AdministratorWelcomeEmail.Render(welcome);
+            await emailSender.SendAsync(message.Recipient, rendered.Subject, rendered.TextBody, cancellationToken, message.IdempotencyKey, rendered.HtmlBody);
+            return;
+        }
         var payload = JsonSerializer.Deserialize<IdentityMessagePayload>(
                 payloadProtector.Unprotect(protectedPayload))
             ?? throw new InvalidOperationException("identity_payload_invalid");

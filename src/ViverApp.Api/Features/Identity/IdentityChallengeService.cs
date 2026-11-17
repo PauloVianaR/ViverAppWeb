@@ -124,6 +124,15 @@ public sealed class IdentityChallengeService(
             return ChallengeVerificationResult.Failed;
         }
 
+        if (purpose == "password_reset")
+        {
+            var contact = await database.Accounts.AsNoTracking().Where(a => a.Id == challenge.AccountId)
+                .Select(a => new { a.NormalizedEmail, a.PhoneE164 }).SingleOrDefaultAsync(cancellationToken);
+            var destination = challenge.ChannelCode == "email" ? contact?.NormalizedEmail : contact?.PhoneE164;
+            if (destination is null || !CryptographicOperations.FixedTimeEquals(HashDestination(destination), challenge.DestinationHash))
+                return ChallengeVerificationResult.Failed;
+        }
+
         var consumed = await database.AccountChallenges
             .Where(item => item.Id.SequenceEqual(id)
                 && item.PurposeCode == purpose

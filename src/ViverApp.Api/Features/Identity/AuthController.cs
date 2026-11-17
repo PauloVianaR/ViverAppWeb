@@ -408,6 +408,12 @@ public sealed class AuthController(
         }
 
         var token = await userManager.GeneratePasswordResetTokenAsync(user);
+        // O código enviado ao e-mail definido pelo Administrador comprova a posse do contato.
+        if (user.AdminEmailVerificationPending && verification.Channel == "email")
+        {
+            user.EmailConfirmed = true;
+            user.AdminEmailVerificationPending = false;
+        }
         var reset = await userManager.ResetPasswordAsync(user, token, request.NewPassword);
         if (!reset.Succeeded)
         {
@@ -1133,7 +1139,9 @@ public sealed class AuthController(
         else if (user is not null
             && user.StatusCode == requiredStatus
             && destination is not null
-            && (!requireVerifiedContact || verified))
+            && (!requireVerifiedContact || verified
+                || purpose == "password_reset" && request.Channel == "email" && user.PortalAccessEnabled
+                    && user.AdminEmailVerificationPending && normalized == user.NormalizedEmail))
         {
             requestId = await challengeService.CreateAsync(
                 user,

@@ -177,6 +177,7 @@ public partial class ViverAppDbContext : DbContext
             entity.HasIndex(e => e.TaxId, "ux_accounts_tax_id").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AdminEmailVerificationPending).HasColumnName("admin_email_verification_pending");
             entity.Property(e => e.BirthDate)
                 .HasColumnType("date")
                 .HasColumnName("birth_date");
@@ -203,6 +204,7 @@ public partial class ViverAppDbContext : DbContext
             entity.Property(e => e.PasswordHash)
                 .HasMaxLength(512)
                 .HasColumnName("password_hash");
+            entity.Property(e => e.PasswordSetupRequired).HasColumnName("password_setup_required");
             entity.Property(e => e.PhoneE164)
                 .HasMaxLength(16)
                 .HasColumnName("phone_e164");
