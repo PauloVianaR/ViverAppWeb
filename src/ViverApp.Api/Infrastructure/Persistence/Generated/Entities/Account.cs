@@ -133,6 +133,8 @@ public partial class Account
 
     public virtual ICollection<OutboxMessage> OutboxMessages { get; set; } = new List<OutboxMessage>();
 
+    public virtual ICollection<PatientBirthdayDailyNotice> PatientBirthdayDailyNotices { get; set; } = new List<PatientBirthdayDailyNotice>();
+
     public virtual PatientPreference? PatientPreference { get; set; }
 
     public virtual PatientProfile? PatientProfile { get; set; }

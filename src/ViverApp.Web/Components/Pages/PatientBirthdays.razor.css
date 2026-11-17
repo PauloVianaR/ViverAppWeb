@@ -1,0 +1,12 @@
+.birthday-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; margin-bottom:1rem; }
+.birthday-summary > div { display:grid; gap:.3rem; padding:1rem; }
+.birthday-summary strong { color:var(--color-brand); font-size:1.8rem; }
+.birthday-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(22rem,100%),1fr)); gap:1rem; margin-block:1.25rem; }
+.birthday-card { display:grid; grid-template-columns:auto minmax(0,1fr); gap:.85rem; align-items:start; padding:1rem; }
+.birthday-card h2 { font-size:1.1rem; margin:0; overflow-wrap:anywhere; }
+.birthday-card p { margin:.35rem 0; color:var(--color-text-muted); }
+.birthday-card > a { grid-column:2; justify-self:start; }
+.birthday-card--today { border-color:var(--color-brand); background:var(--color-brand-soft); }
+.birthday-day { display:grid; justify-items:center; padding:.5rem .7rem; border-radius:var(--radius-md); background:var(--color-surface-muted); }
+.birthday-day strong { font-size:1.5rem; color:var(--color-brand-strong); }
+.birthday-day span { font-size:.8rem; text-transform:uppercase; color:var(--color-text-muted); }

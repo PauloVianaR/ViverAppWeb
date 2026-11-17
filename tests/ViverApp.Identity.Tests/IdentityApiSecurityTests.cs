@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Claims;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
@@ -60,12 +61,31 @@ public sealed class IdentityApiSecurityTests : IAsyncLifetime
     [InlineData("/api/v1/staff/contacts")]
     [InlineData("/api/v1/staff/messages/1")]
     [InlineData("/api/v1/staff/manager-alerts")]
+    [InlineData("/api/v1/staff/patient-birthdays")]
     [InlineData("/api/v1/calendar/day-plan?anchor=2026-10-09&professionalAccountId=1")]
     public async Task StaffAndDailyScheduleEndpoints_RejectAnonymousAccess(string path)
     {
         using var client = CreateClient();
         using var response = await client.GetAsync(path);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("patient", false, false)]
+    [InlineData("doctor", false, true)]
+    [InlineData("psychologist", false, true)]
+    [InlineData("manager", false, true)]
+    [InlineData("administrator", false, false)]
+    [InlineData("administrator", true, true)]
+    public async Task BirthdaysRequireStaffAndAdministrativeMfa(string role, bool mfa, bool allowed)
+    {
+        using var scope = factory.Services.CreateScope();
+        var authorization = scope.ServiceProvider.GetRequiredService<IAuthorizationService>();
+        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, "1"), new(ClaimTypes.Role, role) };
+        if (mfa) claims.Add(new(ViverAppClaimTypes.MfaSatisfied, bool.TrueString));
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+        var result = await authorization.AuthorizeAsync(principal, null, PatientBirthdayService.AccessPolicy);
+        Assert.Equal(allowed, result.Succeeded);
     }
 
     [Fact]

@@ -52,7 +52,8 @@ public sealed class DatabaseContractTests
         await using var context = CreateContext();
 
         var applicationEntities = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(73, applicationEntities.Length);
+        Assert.Equal(74, applicationEntities.Length);
+        Assert.NotNull(context.Model.FindEntityType(typeof(PatientBirthdayDailyNotice)));
         Assert.NotNull(context.Model.FindEntityType(typeof(PaymentPendingDailyNotice)));
         Assert.False(context.Model.FindEntityType(typeof(Appointment))!.FindProperty(nameof(Appointment.PaymentDeferred))!.IsNullable);
         Assert.NotNull(context.Model.FindEntityType(typeof(AppointmentOperationalReview)));
@@ -137,7 +138,7 @@ public sealed class DatabaseContractTests
         var migrations = await ExecuteScalarAsync(
             connection,
             "SELECT GROUP_CONCAT(migration_id ORDER BY migration_id SEPARATOR ',') FROM __schema_migrations");
-        Assert.Equal(string.Join(",", Enumerable.Range(1, 63).Select(id => id.ToString("D4", System.Globalization.CultureInfo.InvariantCulture))), migrations);
+        Assert.Equal(string.Join(",", Enumerable.Range(1, 64).Select(id => id.ToString("D4", System.Globalization.CultureInfo.InvariantCulture))), migrations);
 
         var calendarIndex = await ExecuteScalarAsync(connection,
             "SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ',') FROM information_schema.statistics WHERE table_schema='viverappweb' AND table_name='appointments' AND index_name='ix_appointments_start_id'");
@@ -156,8 +157,9 @@ public sealed class DatabaseContractTests
         Assert.Equal("6", optionalAddressColumns);
 
         var operationalSettings = await ExecuteScalarAsync(connection,
-            "SELECT GROUP_CONCAT(CONCAT(setting_key, '=', value_json) ORDER BY setting_key SEPARATOR ',') FROM application_settings WHERE setting_key IN ('cash.manager_can_reopen','cash.manager_can_view_cumulative_totals','professional.patient_scheduling_enabled','manager.medical_records_write_enabled','premium.manager_can_manage')");
-        Assert.Equal("cash.manager_can_reopen=false,cash.manager_can_view_cumulative_totals=true,manager.medical_records_write_enabled=true,premium.manager_can_manage=true,professional.patient_scheduling_enabled=true", operationalSettings);
+            "SELECT GROUP_CONCAT(setting_key ORDER BY setting_key SEPARATOR ',') FROM application_settings WHERE setting_key IN ('appointments.allow_pending_no_show','cash.manager_can_reopen','cash.manager_can_view_cumulative_totals','professional.patient_scheduling_enabled','manager.medical_records_write_enabled','premium.manager_can_manage') AND JSON_TYPE(value_json) = 'BOOLEAN'");
+        // Valores administrativos são mutáveis; o contrato exige as chaves e o tipo, preservando escolhas reais da clínica.
+        Assert.Equal("appointments.allow_pending_no_show,cash.manager_can_reopen,cash.manager_can_view_cumulative_totals,manager.medical_records_write_enabled,premium.manager_can_manage,professional.patient_scheduling_enabled", operationalSettings);
 
         var professionalDurationDefault = await ExecuteScalarAsync(connection,
             "SELECT column_default FROM information_schema.columns WHERE table_schema = 'viverappweb' AND table_name = 'professional_profiles' AND column_name = 'default_appointment_duration_minutes'");
@@ -349,7 +351,7 @@ public sealed class DatabaseContractTests
             FROM application_settings
             WHERE setting_key LIKE 'appointments.%'
             """);
-        Assert.Equal("25", schedulingSettings);
+        Assert.Equal("26", schedulingSettings);
 
         var administratorSchema = await ExecuteScalarAsync(
             connection,

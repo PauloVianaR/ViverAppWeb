@@ -87,6 +87,12 @@ builder.Services.AddHttpClient("PostalCodeLookup", client =>
 builder.Services.AddScoped<IPatientSchedulingAuditWriter, PatientSchedulingAuditWriter>();
 builder.Services.AddScoped<PatientSchedulingService>();
 builder.Services.AddScoped<PaymentPendingNoticeService>();
+builder.Services.AddScoped<PatientBirthdayService>();
+builder.Services.AddAuthorization(options => options.AddPolicy(PatientBirthdayService.AccessPolicy,
+    policy => policy.RequireAuthenticatedUser().RequireAssertion(context =>
+        context.User.IsInRole(ViverAppRoles.Manager) || context.User.IsInRole(ViverAppRoles.Doctor)
+        || context.User.IsInRole(ViverAppRoles.Psychologist)
+        || context.User.IsInRole(ViverAppRoles.Administrator) && context.User.HasClaim(ViverAppClaimTypes.MfaSatisfied, bool.TrueString))));
 builder.Services.AddScoped<AppointmentPrintService>();
 builder.Services.AddScoped<CalendarService>();
 builder.Services.AddScoped<CalendarDayPlanService>();

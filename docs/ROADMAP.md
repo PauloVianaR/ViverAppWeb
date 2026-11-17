@@ -475,6 +475,10 @@ Cada fase deve:
 
 **Estado:** implementada e validada na branch `codex/fase-33-agendamentos-tipos-combinados`, após atualização da main. Commit e integração na main autorizados expressamente pelo proprietário, incluindo os complementos de CPF opcional, compatibilidade com Visual Studio e layout do seletor. Plano, evidências e limites em [Fase 33 — Tipos combinados](FASE-33-TIPOS-COMBINADOS.md). Permite combinar as quatro categorias, preservando especialidade, profissional, modalidade e regras financeiras. A integração exige PR e check `portable` aprovado; não ativa produção nem antecipa outra fase.
 
+## Fase 34 — Aniversariantes e falta com pagamento pendente
+
+**Estado:** implementada e validada localmente na branch `codex/fase-34-aniversariantes-falta-pagamento`, criada da main sincronizada com o GitHub. Commit e integração na main local autorizados pelo proprietário após as validações. Tela mensal de aniversariantes, aviso diário por usuário e configuração administrativa desativada por padrão para marcar falta em atendimentos Aguardando Pagamento. Migration 0064 aplicada no MySQL local e EF regenerado por DB-First. Evidências e limites em [Fase 34 — Aniversariantes e falta pendente](FASE-34-ANIVERSARIANTES-E-FALTA-PENDENTE.md). Push, ativação de produção e avanço de fase permanecem separados.
+
 ## Marcos sugeridos
 
 - **Marco A — Base confiável:** Fases 0 a 4.

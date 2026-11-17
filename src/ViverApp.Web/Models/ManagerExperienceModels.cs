@@ -44,6 +44,7 @@ public sealed record ManagerAppointment(ulong Id, ulong AppointmentNumber, ulong
     public decimal? PointDiscountValue { get; init; }
     public decimal PointDiscountAmount { get; init; }
     public bool PaymentDeferred { get; init; }
+    public bool CanMarkNoShow { get; init; }
     public bool PendingPayment { get; init; }
 }
 public sealed record ManagerAgendaCounters(int Total, int Online, int InPerson, int Rescheduled, int Paid, int PendingPayment);
