@@ -33,6 +33,7 @@ public sealed record DoctorAppointmentResponse(ulong Id, ulong AppointmentNumber
     public decimal? PointDiscountValue { get; init; }
     public decimal PointDiscountAmount { get; init; }
     public bool PendingPayment { get; init; }
+    public bool CanMarkNoShow { get; init; }
 }
 public sealed record DoctorAgendaResponse(DoctorAgendaCounters Counters, DoctorAgendaSources Sources,
     SchedulingPage<DoctorAppointmentResponse> Page);

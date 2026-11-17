@@ -1,0 +1,47 @@
+@page "/gestao/pacientes/aniversariantes"
+@page "/administracao/pacientes/aniversariantes"
+@page "/medico/pacientes/aniversariantes"
+@page "/psicologo/pacientes/aniversariantes"
+@inherits ManagerPageBase
+<PageTitle>Aniversariantes do mês | ViverApp</PageTitle>
+<header class="workspace-heading">
+    <div><p class="eyebrow">Pacientes da clínica</p><h1 class="page-title">Aniversariantes do mês</h1><p class="page-description">@(Data is null ? "Consulte os aniversários deste mês." : $"{MonthName} de {Data.Today.Year} · datas no fuso da clínica.")</p></div>
+    <a class="button button--secondary" href="@PatientsLink">Voltar aos pacientes</a>
+</header>
+@if (Notice is not null) { <UiNotice Message="@Notice" IsError="NoticeError" /> }
+@if (Loading) { <LoadingSkeleton Lines="5" /> }
+else if (Data is not null)
+{
+    <section class="birthday-summary" aria-label="Resumo dos aniversariantes"><div class="surface"><strong>@Data.TotalCount</strong><span>Aniversariantes no mês</span></div><div class="surface"><strong>@Data.TodayCount</strong><span>Fazem aniversário hoje</span></div></section>
+    <p class="field-hint">Pacientes sem data de nascimento não aparecem nesta lista. A idade indicada é a que completam neste mês.</p>
+    @if (Data.Items.Count == 0) { <InterfaceState Title="Nenhum aniversariante neste mês" Description="Confira as datas de nascimento no cadastro dos pacientes." Icon="calendar" /> }
+    else
+    {
+        <section class="birthday-grid" aria-label="Aniversariantes por dia">
+            @foreach (var patient in Data.Items)
+            {
+                <article class="surface birthday-card @(patient.IsToday ? "birthday-card--today" : "")">
+                    <div class="birthday-day"><strong>@patient.Day.ToString("00")</strong><span>@ShortMonth</span></div>
+                    <div><h2>@patient.FullName</h2><p>Completa @patient.TurningAge ano(s)</p>@if (patient.IsToday) { <span class="badge badge--success">🎂 Aniversário hoje</span> }</div>
+                    <a class="button button--secondary button--small" href="@($"{Area}/prontuario/{patient.AccountId}")">Ver paciente</a>
+                </article>
+            }
+        </section>
+    }
+    @if (Data.TotalCount > 24)
+    {
+        <nav class="patient-pagination" aria-label="Páginas de aniversariantes"><button class="button button--secondary" disabled="@(Page == 1 || Busy)" @onclick="Previous">Anterior</button><span>Página @Page</span><button class="button button--secondary" disabled="@(Busy || Page * 24 >= Data.TotalCount)" @onclick="Next">Próxima</button></nav>
+    }
+}
+@code {
+    private PatientBirthdaysData? Data;
+    private int Page = 1;
+    private static readonly System.Globalization.CultureInfo Culture = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+    private string Area => "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('/')[0];
+    private string PatientsLink => Area + "/pacientes";
+    private string MonthName => Data!.Today.ToString("MMMM", Culture);
+    private string ShortMonth => Data!.Today.ToString("MMM", Culture);
+    protected override async Task Load() => Data = await Get<PatientBirthdaysData>($"api/v1/staff/patient-birthdays?page={Page}&pageSize=24");
+    private Task Previous() => Run(async () => { Page--; await Load(); });
+    private Task Next() => Run(async () => { Page++; await Load(); });
+}

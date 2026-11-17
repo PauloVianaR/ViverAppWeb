@@ -14,6 +14,7 @@
             </summary>
             <div class="staff-popover">
                 <h2>Alertas</h2>
+                <PatientBirthdayNotice @key="AccountId" Role="@Role" UnreadChanged="count=>BirthdayUnread=count" />
                 @foreach (var notice in PaymentNotices)
                 {
                     <a class="staff-alert-row @(notice.IsRead ? "" : "staff-alert-row--unread")" href="@PendingPaymentsLink" @onclick="() => OpenPendingPayments(notice)" @onclick:preventDefault>
@@ -23,7 +24,7 @@
                 }
                 @if (Role == "manager")
                 {
-                    @if (ManagerUnread > 0) { <button class="button button--small button--secondary" @onclick="ReadAlertsAsync">Marcar atendimentos como lidos</button> }
+                    @if (Alerts.Any(a => !a.IsRead) || PaymentNotices.Any(n => !n.IsRead)) { <button class="button button--small button--secondary" @onclick="ReadAlertsAsync">Marcar atendimentos como lidos</button> }
                     @foreach (var alert in Alerts.Take(15))
                     {
                         <a class="staff-alert-row @(alert.IsRead ? "" : "staff-alert-row--unread")" href="/gestao/atendimentos/@alert.AppointmentId">
@@ -110,7 +111,8 @@
     private bool ContactsOpen, Minimized, Sending, LoadError;
     private string Search = "", Draft = "";
     private int ChatUnread => Contacts.Sum(c => c.Unread);
-    private int ManagerUnread => Alerts.Count(a => !a.IsRead) + PaymentNotices.Count(n => !n.IsRead);
+    private int BirthdayUnread;
+    private int ManagerUnread => Alerts.Count(a => !a.IsRead) + PaymentNotices.Count(n => !n.IsRead) + BirthdayUnread;
     private IEnumerable<StaffContact> FilteredContacts => Contacts.Where(c => c.FullName.Contains(Search, StringComparison.CurrentCultureIgnoreCase))
         .OrderByDescending(c => c.Online).ThenBy(c => c.FullName, StringComparer.Create(new System.Globalization.CultureInfo("pt-BR"), true));
     protected override async Task OnAfterRenderAsync(bool firstRender)

@@ -300,6 +300,57 @@ public sealed class ClinicalOperationsIntegrationTests : IAsyncLifetime
             item => item.AppointmentId == fixture.OtherAppointmentId && item.ToStatusCode == "no_show"));
     }
 
+    [Theory]
+    [InlineData("manager")]
+    [InlineData("administrator")]
+    [InlineData("doctor")]
+    [InlineData("psychologist")]
+    public async Task PendingNoShowRequiresConfigurationElapsedTimeOwnershipAndCurrentVersion(string role)
+    {
+        await using var context = CreateContext(configuration);
+        var setting = await context.ApplicationSettings.SingleAsync(s => s.SettingKey == AppointmentNoShowPolicy.AllowPendingKey);
+        var original = setting.ValueJson;
+        var actor = role switch { "manager" => fixture.ManagerId, "administrator" => fixture.AdministratorId, _ => fixture.DoctorId };
+        if (role == "psychologist") await context.Accounts.Where(a => a.Id == actor).ExecuteUpdateAsync(s => s.SetProperty(a => a.RoleCode, role));
+        await context.Appointments.Where(a => a.Id == fixture.AppointmentId).ExecuteUpdateAsync(s => s.SetProperty(a => a.StatusCode, "pending"));
+        var service = CreateService(context, fixture.NowUtc);
+        try
+        {
+            setting.ValueJson = "false";
+            await context.SaveChangesAsync();
+            Assert.False((await service.GetAppointmentAsync(actor, role, fixture.AppointmentId, default)).CanMarkNoShow);
+            Assert.Equal(409, (await Assert.ThrowsAsync<ClinicalRuleException>(() => service.RecordNoShowAsync(actor, role, fixture.AppointmentId, new(1), default))).StatusCode);
+            setting.ValueJson = "true";
+            await context.SaveChangesAsync();
+            Assert.True((await service.GetAppointmentAsync(actor, role, fixture.AppointmentId, default)).CanMarkNoShow);
+            if (role is "doctor" or "psychologist")
+                Assert.Equal(404, (await Assert.ThrowsAsync<ClinicalRuleException>(() => service.RecordNoShowAsync(actor, role, fixture.OtherAppointmentId, new(1), default))).StatusCode);
+            await context.Appointments.Where(a => a.Id == fixture.AppointmentId).ExecuteUpdateAsync(s => s
+                .SetProperty(a => a.StartsAtUtc, fixture.NowUtc.AddHours(1)).SetProperty(a => a.EndsAtUtc, fixture.NowUtc.AddHours(2)));
+            context.ChangeTracker.Clear();
+            Assert.False((await service.GetAppointmentAsync(actor, role, fixture.AppointmentId, default)).CanMarkNoShow);
+            Assert.Equal(409, (await Assert.ThrowsAsync<ClinicalRuleException>(() => service.RecordNoShowAsync(actor, role, fixture.AppointmentId, new(1), default))).StatusCode);
+            await context.Appointments.Where(a => a.Id == fixture.AppointmentId).ExecuteUpdateAsync(s => s
+                .SetProperty(a => a.StartsAtUtc, fixture.NowUtc.AddHours(-2)).SetProperty(a => a.EndsAtUtc, fixture.NowUtc.AddHours(-1)));
+            context.ChangeTracker.Clear();
+            Assert.Equal(409, (await Assert.ThrowsAsync<ClinicalRuleException>(() => service.RecordNoShowAsync(actor, role, fixture.AppointmentId, new(999), default))).StatusCode);
+            context.ChangeTracker.Clear();
+            var changed = await service.RecordNoShowAsync(actor, role, fixture.AppointmentId, new(1), default);
+            Assert.Equal("no_show", changed.StatusCode);
+            var row = await context.Appointments.AsNoTracking().SingleAsync(a => a.Id == fixture.AppointmentId);
+            Assert.True(row.RequiresPayment);
+            Assert.Equal(100m, row.PriceAmount);
+            Assert.Null(row.CurrentPaymentId);
+            Assert.Equal(actor, row.NoShowRecordedByAccountId);
+            Assert.True(await context.AppointmentStatusHistories.AnyAsync(h => h.AppointmentId == row.Id && h.FromStatusCode == "pending" && h.ToStatusCode == "no_show"));
+        }
+        finally
+        {
+            await context.ApplicationSettings.Where(s => s.SettingKey == AppointmentNoShowPolicy.AllowPendingKey)
+                .ExecuteUpdateAsync(s => s.SetProperty(v => v.ValueJson, original));
+        }
+    }
+
     [Fact]
     public async Task DoctorExperience_RestrictsAppointmentsButListsAllClinicPatients()
     {

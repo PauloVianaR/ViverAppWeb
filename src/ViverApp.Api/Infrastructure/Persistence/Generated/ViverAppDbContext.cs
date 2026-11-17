@@ -104,6 +104,8 @@ public partial class ViverAppDbContext : DbContext
 
     public virtual DbSet<OutboxMessage> OutboxMessages { get; set; }
 
+    public virtual DbSet<PatientBirthdayDailyNotice> PatientBirthdayDailyNotices { get; set; }
+
     public virtual DbSet<PatientPreference> PatientPreferences { get; set; }
 
     public virtual DbSet<PatientProfile> PatientProfiles { get; set; }
@@ -2333,6 +2335,32 @@ public partial class ViverAppDbContext : DbContext
                 .HasForeignKey(d => d.AccountId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("fk_outbox_messages_account");
+        });
+
+        modelBuilder.Entity<PatientBirthdayDailyNotice>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.ToTable("patient_birthday_daily_notices");
+
+            entity.HasIndex(e => new { e.AccountId, e.OperationalDate }, "ux_patient_birthday_notice_day").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.BirthdayCount).HasColumnName("birthday_count");
+            entity.Property(e => e.CreatedAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("created_at_utc");
+            entity.Property(e => e.OperationalDate)
+                .HasColumnType("date")
+                .HasColumnName("operational_date");
+            entity.Property(e => e.ReadAtUtc)
+                .HasMaxLength(6)
+                .HasColumnName("read_at_utc");
+
+            entity.HasOne(d => d.Account).WithMany(p => p.PatientBirthdayDailyNotices)
+                .HasForeignKey(d => d.AccountId)
+                .HasConstraintName("fk_patient_birthday_notice_account");
         });
 
         modelBuilder.Entity<PatientPreference>(entity =>

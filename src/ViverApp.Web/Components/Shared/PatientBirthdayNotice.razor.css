@@ -1,0 +1,5 @@
+.birthday-notice { display:flex; gap:.7rem; align-items:flex-start; padding:.8rem; margin-block:.5rem; border:1px solid var(--color-border); border-radius:var(--radius-md); color:var(--color-text); text-decoration:none; }
+.birthday-notice span { display:grid; gap:.3rem; min-width:0; }
+.birthday-notice small { color:var(--color-text-muted); }
+.birthday-notice--unread { background:var(--color-brand-soft); border-color:var(--color-brand); }
+.birthday-notice:focus-visible { outline:3px solid var(--color-focus); outline-offset:2px; }
